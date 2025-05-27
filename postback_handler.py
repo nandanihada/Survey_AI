@@ -8,7 +8,7 @@ from firebase_admin import credentials, firestore
 # Create blueprint
 postback_bp = Blueprint('postback_bp', __name__)
 
-# Get Firestore client (Firebase should already be initialized in main app)
+
 def get_db():
     return firestore.client()
 
@@ -19,14 +19,16 @@ def handle_postback():
     reward = request.args.get("reward")
     currency = request.args.get("currency")
     sid1 = request.args.get("sid1")
+    clicked_at = request.args.get("clicked_at")
+    username = request.args.get("username")
 
     if not all([transaction_id, status, reward, currency, sid1]):
         return "Missing required parameters", 400
 
-    if 'pepeleads' not in request.headers.get('User-Agent', '').lower():
-        return "Unauthorized", 403
+    # if 'pepeleads' not in request.headers.get('User-Agent', '').lower():
+    #     return "Unauthorized", 403
 
-    print("✅ Postback received from PepeLeads")
+    # print("✅ Postback received from PepeLeads")
 
     try:
         db = get_db()
@@ -56,7 +58,7 @@ def handle_postback():
         response_doc.reference.update({"status": "confirmed"})
 
         return "Survey forwarded to SurveyTitans", 200
-
+    
     except Exception as e:
         print("Error handling postback:", e)
         return "Internal server error", 500

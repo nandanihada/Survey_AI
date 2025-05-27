@@ -31,8 +31,7 @@
     <h2 class="mb-4">🔁 Postback URL Generator</h2>
 
     <div class="form-section">
-      <label for="subid" class="form-label">Enter Sub ID</label>
-      <input type="text" id="subid" class="form-control" placeholder="e.g., abc123" />
+     <div class="form-section"> <label for="sid" class="form-label">Survey ID (sid)</label> <input type="text" id="sid" class="form-control" placeholder="e.g., xyz123" /> </div> <div class="form-section"> <label for="uid" class="form-label">User ID (uid)</label> <input type="text" id="uid" class="form-control" placeholder="e.g., u456" /> </div> <div class="form-section"> <label for="status" class="form-label">Status</label> <input type="text" id="status" class="form-control" value="complete" /> </div>
     </div>
 
     <div class="form-section">
@@ -50,22 +49,28 @@
   </div>
 
   <script>
-    const BASE_URL = 'https://pepperads.com/postback-handler';
+    const BASE_URL = 'https://stmr.com/pepperads/postback';
     const subidInput = document.getElementById('subid');
     const postbackUrlInput = document.getElementById('postbackUrl');
     const generateBtn = document.getElementById('generateBtn');
     const copyBtn = document.getElementById('copyBtn');
     const testBtn = document.getElementById('testBtn');
     const messageBox = document.getElementById('messageBox');
+    const sidInput = document.getElementById('sid');
+const uidInput = document.getElementById('uid');
+const statusInput = document.getElementById('status');
 
     generateBtn.addEventListener('click', () => {
-      const subid = subidInput.value.trim();
-      if (!subid) {
-        showMessage("Please enter a Sub ID", "danger");
-        return;
-      }
+      const sid = sidInput.value.trim();
+      const uid = uidInput.value.trim();
+      const status = statusInput.value.trim();
+      
+      if (!sid || !uid || !status) {
+showMessage("Please fill in all fields (sid, uid, status)", "danger");
+return;
+}
 
-      const url = `${BASE_URL}?subid=${encodeURIComponent(subid)}`;
+      const url = `${BASE_URL}?sid=${encodeURIComponent(sid)}&uid=${encodeURIComponent(uid)}&status=${encodeURIComponent(status)}`;
       postbackUrlInput.value = url;
       showMessage("✅ Postback URL generated successfully!", "success");
     });
