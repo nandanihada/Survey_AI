@@ -256,12 +256,12 @@
           viewResultsLink.href = `https://pepperadsresponses.web.app/index.html?id=${surveyId}#responses`;
 
           // Redirect to PepeLeads postback URL after a short delay
-          setTimeout(() => {
-            const target = `https://pepeleads.com/offer?oid=cjxd&subid=${trackingId}`;
-            window.location.href = `loading.html?target=${encodeURIComponent(
-              target
-            )}`;
-          }, 1000);
+          // setTimeout(() => {
+          //   const target = `https://pepeleads.com/offer?oid=cjxd&subid=${trackingId}`;
+          //   window.location.href = `loading.html?target=${encodeURIComponent(
+          //     target
+          //   )}`;
+          // }, 1000);
         } catch (error) {
           displayError(`Submission failed: ${error.message}`);
         } finally {
