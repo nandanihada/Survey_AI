@@ -163,7 +163,7 @@ def submit_response():
             "survey_id": survey_id,
             "responses": responses,
             "submitted_at": firestore.SERVER_TIMESTAMP,
-            "status": "pending"  # Mark as pending initially
+             "status": "submitted"
         }
         if email:
             response_data["email"] = email
@@ -261,7 +261,8 @@ def submit_public_response(survey_id):
             "survey_id": survey_id,
             "responses": responses,
             "submitted_at": firestore.SERVER_TIMESTAMP,
-            "is_public": True
+            "is_public": True,
+            "status": "submitted"
         }
         if email:
             response_data["email"] = email
