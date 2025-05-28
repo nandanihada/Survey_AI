@@ -173,6 +173,17 @@ def submit_response():
             response_data["tracking_id"] = tracking_id
 
         db.collection("survey_responses").document(response_id).set(response_data)
+        if tracking_id:
+            tracking_ref = db.collection("survey_tracking").document(tracking_id)
+            if tracking_ref.get().exists:
+                tracking_ref.update({
+                    "submitted": True,
+                    "submitted_at": firestore.SERVER_TIMESTAMP,
+                    "response_id": response_id
+ })
+            print(f"Tracking ID {tracking_id} marked as submitted")
+        else:
+            print(f"Tracking ID {tracking_id} not found")
 
         return jsonify({"message": "Response submitted and pending verification", "response_id": response_id})
 
