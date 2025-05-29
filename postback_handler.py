@@ -2,9 +2,9 @@ import os
 import json
 from flask import Blueprint, request, jsonify
 import requests
-import firebase_admin
-from firebase_admin import credentials, firestore
 from integrations import forward_survey_data_to_partners
+from firebase_config import db
+
 # Create blueprint
 postback_bp = Blueprint('postback_bp', __name__)
 

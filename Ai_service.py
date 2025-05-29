@@ -1,8 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import google.generativeai as genai
-import firebase_admin
-from firebase_admin import credentials, firestore
 import uuid
 import json
 import re
@@ -12,6 +10,7 @@ import os
 from integrations import forward_survey_data_to_partners
 from postback_handler import postback_bp
 
+from firebase_config import db
 
 
 BASE_URL = "https://pepperadsresponses.web.app"
@@ -24,21 +23,7 @@ genai.configure(api_key="AIzaSyAxEoutxU_w1OamJUe4FMOzr5ZdUyz8R4k")
 model = genai.GenerativeModel("gemini-1.5-flash-latest")
 
 # Firebase Setup - Initialize only once
-db = None
-try:
-    # Check if Firebase is already initialized
-    if not firebase_admin._apps:
-        cred_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
-        if not cred_json:
-            raise Exception("GOOGLE_APPLICATION_CREDENTIALS_JSON env var is missing or empty.")
-        cred = credentials.Certificate(json.loads(cred_json))
-        firebase_admin.initialize_app(cred)
-    
-    db = firestore.client()
-    print("Firebase connected successfully")
-except Exception as e:
-    print(f"Firebase initialization error: {e}")
-    db = None
+
 
 # Register blueprint after Firebase initialization
 app.register_blueprint(postback_bp)
