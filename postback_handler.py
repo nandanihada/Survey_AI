@@ -9,26 +9,25 @@ from integrations import forward_survey_data_to_partners
 postback_bp = Blueprint('postback_bp', __name__)
 
 
-def get_db():
-    return firestore.client()
+
 
 @postback_bp.route('/postback-handler', methods=['GET'])
 def handle_postback():
     transaction_id = request.args.get("transaction_id")
-    status = request.args.get("status")
-    reward = request.args.get("reward")
-    currency = request.args.get("currency")
+    status = request.args.get("status","confirmed")
+    reward = request.args.get("reward",0)
+    currency = request.args.get("currency","USD")
     sid1 = request.args.get("sid1")
     clicked_at = request.args.get("clicked_at")
-    username = request.args.get("username")
+    username = request.args.get("username","unknown")
 
-    if not all([transaction_id, status, reward, currency, sid1]):
-        return "Missing required parameters", 400
+    if not sid1:
+        return jsonify({"error": "Missing required parameter: sid1 (tracking_id)"}), 400
 
 
 
     try:
-        db = get_db()
+        
         responses_ref = db.collection("survey_responses") \
             .where("tracking_id", "==", sid1) \
             .where("status", "==", "pending") \
@@ -49,7 +48,7 @@ def handle_postback():
             "reward": reward,
             "currency": currency,
             "clicked_at": clicked_at,
-            "status": "confirmed"
+            "status": status
                              })
 
         forward_survey_data_to_partners(response_data)
@@ -64,7 +63,7 @@ def handle_postback():
         titan_response = requests.post(surveytitans_url, json=payload)
         print(f"SurveyTitans response: {titan_response.status_code} - {titan_response.text}")
 
-        response_doc.reference.update({"status": "confirmed"})
+        response_doc.reference.update({"status": status})
 
         return jsonify({"message": "Survey forwarded to SurveyTitans"}), 200
     
