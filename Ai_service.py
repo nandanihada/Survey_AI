@@ -184,6 +184,9 @@ def submit_response():
             print(f"Tracking ID {tracking_id} marked as submitted")
         else:
             print(f"Tracking ID {tracking_id} not found")
+            
+        forward_survey_data_to_partners(response_data)
+
 
         return jsonify({"message": "Response submitted and pending verification", "response_id": response_id})
 
