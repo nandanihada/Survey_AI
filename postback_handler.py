@@ -4,7 +4,7 @@ from flask import Blueprint, request, jsonify
 import requests
 import firebase_admin
 from firebase_admin import credentials, firestore
-
+from integrations import forward_survey_data_to_partners
 # Create blueprint
 postback_bp = Blueprint('postback_bp', __name__)
 
@@ -25,10 +25,7 @@ def handle_postback():
     if not all([transaction_id, status, reward, currency, sid1]):
         return "Missing required parameters", 400
 
-    # if 'pepeleads' not in request.headers.get('User-Agent', '').lower():
-    #     return "Unauthorized", 403
 
-    # print("✅ Postback received from PepeLeads")
 
     try:
         db = get_db()
@@ -44,6 +41,9 @@ def handle_postback():
 
         response_doc = results[0]
         response_data = response_doc.to_dict()
+        response_data["username"] = username or "unknown"
+
+        forward_survey_data_to_partners(response_data)
 
         surveytitans_url = "https://surveytitans.com/track"
         payload = {
