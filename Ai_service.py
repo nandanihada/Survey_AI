@@ -12,7 +12,6 @@ from postback_handler import postback_bp
 
 from firebase_config import db
 
-
 BASE_URL = "https://pepperadsresponses.web.app"
 
 app = Flask(__name__)
