@@ -28,8 +28,8 @@ model = genai.GenerativeModel("gemini-1.5-flash-latest")
 app.register_blueprint(postback_bp)
 
 @app.route('/')
-def index():
-    return "Welcome to Survey AI Backend!"
+def home():
+    return "Hello Azure!"
 
 @app.route('/save-email', methods=['POST'])
 def save_email():
@@ -425,6 +425,6 @@ def list_surveys():
         print("Error fetching surveys:", e)
         return jsonify({"error": str(e)}), 500
 
-
-if __name__ == '__main__':
-    app.run(debug=True)
+if __name__ == "__main__":
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
