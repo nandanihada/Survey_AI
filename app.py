@@ -37,20 +37,9 @@ model = genai.GenerativeModel("gemini-1.5-flash-latest")
 response = model.generate_content("Hello, how are you?")
 print(response.text)
 
-# Firebase Setup - Initialize only once
 
-# Initialize Firebase properly
-def initialize_firebase():
-    try:
-        if not firebase_admin._apps:
-            # For Render, you'll need to handle the service account key differently
-            service_account_info = json.loads(os.getenv("FIREBASE_SERVICE_ACCOUNT"))
-            cred = credentials.Certificate(service_account_info)
-            firebase_admin.initialize_app(cred)
-        return firestore.client()
-    except Exception as e:
-        print(f"Firebase initialization error: {e}")
-        raise
+
+
 
 # Register blueprint after Firebase initialization
 app.register_blueprint(postback_bp)
