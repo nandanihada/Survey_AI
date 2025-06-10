@@ -18,18 +18,21 @@ else:
     BASE_URL = "https://survey-ai-033z.onrender.com"
 
 app = Flask(__name__)
-CORS(app, resources={
-    r"/api/*": {
-        "origins": [
-            "https://pepperadsresponses.web.app",
-            "https://pepperadsresponses.firebaseapp.com",
-            "http://localhost:3000"
-        ],
-        "methods": ["GET", "POST", "OPTIONS", "PUT", "DELETE"],
-        "allow_headers": ["Content-Type", "Authorization"],
-        "supports_credentials": True
-    }
-})
+
+CORS(app, origins=[
+    "https://pepperadsresponses.web.app",
+    "https://pepperadsresponses.firebaseapp.com",
+    "http://localhost:3000"
+],
+    allow_headers=["Content-Type", "Authorization"],
+    supports_credentials=True,
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+)
+@app.before_request
+def log_request_info():
+    print("Received request:", request.method, request.path)
+    print("Headers:", dict(request.headers))
+
 
 # Gemini API Configuration
 genai.configure(api_key="AIzaSyAxEoutxU_w1OamJUe4FMOzr5ZdUyz8R4k")
