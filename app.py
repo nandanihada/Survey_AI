@@ -9,10 +9,10 @@ import threading
 import os
 from integrations import forward_survey_data_to_partners
 from postback_handler import postback_bp
-
 from firebase_config import db
+from firebase_admin import firestore
 
-BASE_URL = "https://pepperadsresponses.web.app"
+BASE_URL = "http://127.0.0.1:5000"
 
 app = Flask(__name__)
 CORS(app)
@@ -20,6 +20,8 @@ CORS(app)
 # Gemini API Configuration
 genai.configure(api_key="AIzaSyAxEoutxU_w1OamJUe4FMOzr5ZdUyz8R4k")
 model = genai.GenerativeModel("gemini-1.5-flash-latest")
+response = model.generate_content("Hello, how are you?")
+print(response.text)
 
 # Firebase Setup - Initialize only once
 
@@ -61,29 +63,34 @@ def webhook():
 
 def parse_survey_response(response_text):
     questions = []
-    lines = response_text.split('\n')
+    lines = response_text.strip().split('\n')
     current_question = None
 
     for line in lines:
         line = line.strip()
-        question_match = re.match(r'^(\d+\.\s*)(.*)', line)
-        if question_match:
+
+        # Detect new question
+        if re.match(r"^\d+\.\s", line):
             if current_question:
                 questions.append(current_question)
             current_question = {
-                "question": question_match.group(2),
+                "question": re.sub(r"^\d+\.\s*", "", line),
                 "options": []
             }
-            continue
 
-        option_match = re.match(r'^([A-D])\)\s*(.*)', line)
-        if option_match and current_question:
-            current_question["options"].append(option_match.group(2))
+        # Detect options A) to D)
+        elif re.match(r"^[A-D]\)", line) and current_question:
+            option = re.sub(r"^[A-D]\)\s*", "", line)
+            current_question["options"].append(option)
 
-    if current_question:
+    if current_question and len(current_question["options"]) == 4:
         questions.append(current_question)
 
+    # Filter only valid complete questions
+    questions = [q for q in questions if len(q["options"]) == 4]
+
     return questions
+
 
 @app.route('/generate', methods=['POST'])
 def generate_survey():
@@ -96,15 +103,28 @@ def generate_survey():
 
     try:
         ai_prompt = f"""
-        Generate a survey with 10 questions about {prompt}. 
-        For each question, provide 4 multiple-choice options (A-D).
+        Generate exactly 10 multiple-choice survey questions about "{prompt}".
+        Each question should be formatted exactly like this:
+
+        1. What is your favorite color?
+        A) Red
+        B) Blue
+        C) Green
+        D) Yellow
+
+        No explanations. No introduction or closing. Just 10 questions with 4 options each.
         """
 
         response = model.generate_content(ai_prompt)
+        if not response.text:
+            raise ValueError("Gemini returned empty response")
+
+        print("Raw Gemini response:\n", response.text)
+
         questions = parse_survey_response(response.text)
 
-        if not questions:
-            return jsonify({"error": "Failed to generate valid questions"}), 500
+        if not questions or len(questions) < 5:
+            raise ValueError("Failed to parse enough valid questions from AI response")
 
         survey_id = str(uuid.uuid4())
         survey_data = {
@@ -425,6 +445,5 @@ def list_surveys():
         print("Error fetching surveys:", e)
         return jsonify({"error": str(e)}), 500
 
-if __name__ == "__main__":
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+if __name__ == '__main__':
+    app.run()
