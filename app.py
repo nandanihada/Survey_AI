@@ -12,10 +12,24 @@ from postback_handler import postback_bp
 from firebase_config import db
 from firebase_admin import firestore
 
-BASE_URL = "http://127.0.0.1:5000"
+if os.getenv("FLASK_ENV") == "development":
+    BASE_URL = "http://127.0.0.1:5000"
+else:
+    BASE_URL = "https://survey-ai-033z.onrender.com"
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={
+    r"/api/*": {
+        "origins": [
+            "https://pepperadsresponses.web.app",
+            "https://pepperadsresponses.firebaseapp.com",
+            "http://localhost:3000"
+        ],
+        "methods": ["GET", "POST", "OPTIONS", "PUT", "DELETE"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True
+    }
+})
 
 # Gemini API Configuration
 genai.configure(api_key="AIzaSyAxEoutxU_w1OamJUe4FMOzr5ZdUyz8R4k")
@@ -25,7 +39,9 @@ print(response.text)
 
 # Firebase Setup - Initialize only once
 
-
+if not firestore._apps:
+    cred = credentials.Certificate("https://github.com/nandanihada/Survey_AI/blob/f4665d22dc526d0b5337346eabe7351985c05fb8/serviceAccountKey.json")
+    initialize_app(cred)
 # Register blueprint after Firebase initialization
 app.register_blueprint(postback_bp)
 
