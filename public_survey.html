@@ -497,6 +497,8 @@ const savedUsername = localStorage.getItem("username");
         if (!surveyId) return;
 
         try {
+          console.log("Fetching from:", SERVER_URL);
+
           const response = await fetch(`${SERVER_URL}/track/survey/open`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },

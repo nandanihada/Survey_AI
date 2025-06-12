@@ -10,7 +10,7 @@ import os
 from integrations import forward_survey_data_to_partners
 from postback_handler import postback_bp
 from firebase_config import db
-from firebase_admin import credentials ,firestore
+from firebase_admin import credentials, firestore
 
 if os.getenv("FLASK_ENV") == "development":
     BASE_URL = "http://127.0.0.1:5000"
@@ -18,16 +18,18 @@ else:
     BASE_URL = "https://survey-ai-033z.onrender.com"
 
 app = Flask(__name__)
+CORS(app)
+# CORS(app, origins=[
+#     "https://pepperadsresponses.web.app",
+#     "https://pepperadsresponses.firebaseapp.com",
+#     "http://127.0.0.1:5501"
+# ],
+#      allow_headers=["Content-Type", "Authorization"],
+#      supports_credentials=True,
+#      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+#      )
 
-CORS(app, origins=[
-    "https://pepperadsresponses.web.app",
-    "https://pepperadsresponses.firebaseapp.com",
-    "http://localhost:3000"
-],
-    allow_headers=["Content-Type", "Authorization"],
-    supports_credentials=True,
-    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-)
+
 @app.before_request
 def log_request_info():
     print("Received request:", request.method, request.path)
@@ -40,16 +42,14 @@ model = genai.GenerativeModel("gemini-1.5-flash-latest")
 response = model.generate_content("Hello, how are you?")
 print(response.text)
 
-
-
-
-
 # Register blueprint after Firebase initialization
 app.register_blueprint(postback_bp)
+
 
 @app.route('/')
 def home():
     return "Hello Azure!"
+
 
 @app.route('/save-email', methods=['POST'])
 def save_email():
@@ -72,12 +72,14 @@ def save_email():
         print(f"Error saving email: {e}")
         return jsonify({"error": str(e)}), 500
 
+
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.json
     print("Received data:", data)
     db.collection('clicks').add(data)
     return {"status": "success"}, 200
+
 
 def parse_survey_response(response_text):
     questions = []
@@ -112,7 +114,8 @@ def parse_survey_response(response_text):
 
 @app.route('/generate', methods=['POST'])
 def generate_survey():
-    data = request.json
+    data = request.get_json()
+
     prompt = data.get("prompt", "")
     response_type = data.get("response_type", "multiple_choice")
 
@@ -153,14 +156,18 @@ def generate_survey():
             "created_at": firestore.SERVER_TIMESTAMP,
             "shareable_link": f"{BASE_URL}/survey/{survey_id}/respond"
         }
+        try:
+             db.collection("surveys").document(survey_id).set(survey_data)
+             return jsonify({"survey_id": survey_id, "questions": questions})  # ✅ Success response
+        except Exception as firestore_error:
+            print("❌ Firestore write failed:", firestore_error)
+            return jsonify({"error": "Failed to save survey"}), 500  # ✅ Error fallback
 
-        db.collection("surveys").document(survey_id).set(survey_data)
-
-        return jsonify({"survey_id": survey_id, "questions": questions})
 
     except Exception as e:
         print(f"Survey generation error: {e}")
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/submit', methods=['POST'])
 def submit_response():
@@ -185,7 +192,7 @@ def submit_response():
             "survey_id": survey_id,
             "responses": responses,
             "submitted_at": firestore.SERVER_TIMESTAMP,
-             "status": "submitted"
+            "status": "submitted"
         }
         if email:
             response_data["email"] = email
@@ -202,13 +209,12 @@ def submit_response():
                     "submitted": True,
                     "submitted_at": firestore.SERVER_TIMESTAMP,
                     "response_id": response_id
- })
+                })
             print(f"Tracking ID {tracking_id} marked as submitted")
         else:
             print(f"Tracking ID {tracking_id} not found")
-            
-        forward_survey_data_to_partners(response_data)
 
+        forward_survey_data_to_partners(response_data)
 
         return jsonify({"message": "Response submitted and pending verification", "response_id": response_id})
 
@@ -216,12 +222,17 @@ def submit_response():
         print(f"Response submission error: {e}")
         return jsonify({"error": str(e)}), 500
 
+
 @app.route('/track/survey/open', methods=['POST'])
 def track_survey_open():
-    data = request.json
-    survey_id = data.get("survey_id")
-    email = data.get("email")
-    username = data.get("username")
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid JSON request"}), 400
+
+    survey_id = data.get('survey_id')
+    username = data.get('username')
+    email = data.get('email')
+
 
     if not survey_id:
         return jsonify({"error": "Survey ID is required"}), 400
@@ -238,13 +249,19 @@ def track_survey_open():
             "email": email,
             "username": username
         }
-        db.collection("survey_tracking").document(tracking_id).set(tracking_data)
+        try:
+            db.collection("survey_tracking").document(tracking_id).set(tracking_data)
+            return jsonify({"tracking_id": tracking_id, "message": "Survey opening tracked successfully"})
+        except Exception as e:
+            app.logger.error(f"Survey tracking error: {e}")  # Log error in Flask
+            return jsonify({"error": "Failed to save tracking data"}), 500
 
         return jsonify({"tracking_id": tracking_id, "message": "Survey opening tracked successfully"})
 
     except Exception as e:
         print(f"Survey tracking error: {e}")
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/survey/<survey_id>', methods=['GET'])
 def get_survey(survey_id):
@@ -274,6 +291,7 @@ def get_survey(survey_id):
     except Exception as e:
         print(f"Survey fetch error: {e}")
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/survey/<survey_id>/respond', methods=['POST'])
 def submit_public_response(survey_id):
@@ -308,7 +326,7 @@ def submit_public_response(survey_id):
         db.collection("survey_responses").document(response_id).set(response_data)
         forward_success = forward_survey_data_to_partners(response_data)
         if not forward_success:
-         print("Survey forwarding failed (SurveyTitans)")
+            print("Survey forwarding failed (SurveyTitans)")
 
         if tracking_id:
             tracking_ref = db.collection("survey_tracking").document(tracking_id)
@@ -324,6 +342,7 @@ def submit_public_response(survey_id):
     except Exception as e:
         print(f"Public response submission error: {e}")
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/insights', methods=['POST'])
 def generate_insights():
@@ -362,6 +381,7 @@ def generate_insights():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @app.route('/check-logic', methods=['POST'])
 def check_logic():
     data = request.json
@@ -374,6 +394,7 @@ def check_logic():
         return jsonify({"next_page": "https://jobfinder-efe0e.web.app/public_survey.html?id=abc123"})
     else:
         return jsonify({"next_page": "thankyou.html"})
+
 
 @app.route('/survey/<survey_id>/tracking', methods=['GET'])
 def get_survey_tracking(survey_id):
@@ -409,9 +430,10 @@ def get_survey_tracking(survey_id):
         print(f"Survey tracking stats error: {e}")
         return jsonify({"error": str(e)}), 500
 
+
 @app.route('/survey/<survey_id>/view', methods=['GET'])
 def view_survey(survey_id):
-    try: 
+    try:
         # Get email and username from query params
         email = request.args.get("email")
         username = request.args.get("username")
@@ -446,6 +468,7 @@ def view_survey(survey_id):
         print(f"Survey view error: {e}")
         return jsonify({"error": "Something went wrong", "details": str(e)}), 500
 
+
 @app.route('/surveys', methods=['GET'])
 def list_surveys():
     try:
@@ -463,5 +486,6 @@ def list_surveys():
         print("Error fetching surveys:", e)
         return jsonify({"error": str(e)}), 500
 
+
 if __name__ == '__main__':
-    app.run()
+  app.run()
