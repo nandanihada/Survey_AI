@@ -15,7 +15,7 @@ from bson import ObjectId
 if os.getenv("FLASK_ENV") == "development":
     BASE_URL = "http://127.0.0.1:5000"
 else:
-    BASE_URL = "https://survey-ai-033z.onrender.com"
+    BASE_URL = "https://pepper-flask-app.onrender.com"
 
 app = Flask(__name__)
 CORS(app)

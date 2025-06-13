@@ -1,10 +1,9 @@
-from pymongo.mongo_client import MongoClient
-from pymongo.server_api import ServerApi
+from pymongo import MongoClient
 from dotenv import load_dotenv
 import os
 
 load_dotenv()
 
-uri = os.getenv("MONGO_URI")
-client = MongoClient(uri, server_api=ServerApi('1'))
-db = client["pepperads_db"]
+MONGO_URI = os.getenv("MONGO_URI")
+client = MongoClient(MONGO_URI)
+db = client["pepper_database"]  # Use your actual DB name
