@@ -244,108 +244,6 @@
   background-color: #a4031f;
 }
 
-.theme-customer_feedback .survey-header {
-background-color: #e3f2fd;
-color: #0d47a1;
-}
-
-.theme-product_review .survey-header {
-background-color: #fce4ec;
-color: #880e4f;
-}
-
-.theme-employee_checkin .survey-header {
-background-color: #e8f5e9;
-color: #2e7d32;
-}
-
-.theme-event_feedback .survey-header {
-background-color: #fff3e0;
-color: #ef6c00;
-}
-
-.theme-casual .survey-header {
-background-color: #f3e5f5;
-color: #6a1b9a;
-font-family: Comic Sans MS, cursive, sans-serif;
-}
-.theme-option {
-transition: all 0.3s ease-in-out;
-}
-.theme-option:hover {
-box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
-transform: translateY(-3px);
-}
-.theme-option.border-primary {
-border: 2px solid #d90429 !important;
-}
-.floating-theme-popup {
-  position: fixed;
-  bottom: 20px;
-  left: 20px;
-  z-index: 9999;
-  max-width: 360px;
-  animation: slideInLeft 0.4s ease-out;
-}
-
-@keyframes slideInLeft {
-  from {
-    transform: translateX(-120%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0%);
-    opacity: 1;
-  }
-}
-
-.cute-window-style {
-  border-radius: 12px;
-  overflow: hidden;
-  background: #fff;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-  border: 2px solid #ddd;
-  font-family: "Poppins", sans-serif;
-}
-
-.popup-header {
-  background-color: #ebebeb;
-  padding: 8px 12px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border-bottom: 1px solid #ccc;
-  font-size: 14px;
-}
-
-.dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  display: inline-block;
-}
-.dot.red {
-  background-color: #ff5f56;
-}
-.dot.yellow {
-  background-color: #ffbd2e;
-}
-.dot.green {
-  background-color: #27c93f;
-}
-
-.popup-title {
-  margin-left: auto;
-  font-weight: 500;
-  color: #333;
-}
-
-.popup-content {
-  padding: 18px;
-}
-
-
-
   </style>
 </head>
 
@@ -375,195 +273,66 @@ border: 2px solid #d90429 !important;
     </ul>
 
     <div class="tab-content">
-  <!-- Create Survey Tab -->
-<div class="tab-pane fade show active" id="create">
-  <div class="card">
-    <div class="card-body">
-      <h3 class="card-title mb-4">Generate AI Survey</h3>
-
-      <!-- Survey Prompt and Type -->
-      <div class="row">
-        <div class="col-md-8 mb-3">
-          <input type="text" id="surveyTopic" class="form-control"
-            placeholder="Enter survey topic (e.g., Customer Satisfaction)" />
-        </div>
-        <div class="col-md-4 mb-3">
-          <select id="responseType" class="form-select">
-            <option value="multiple_choice">Multiple Choice</option>
-            <option value="likert_scale">Likert Scale</option>
-            <option value="yes_no">Yes/No</option>
-          </select>
-        </div>
-      </div>
-<div class="mb-3">
-  <label class="form-label">How many questions do you want?</label>
-  <input type="number" id="questionCount" class="form-control" value="10" min="1" max="30">
-</div>
-<div class="mb-3 mt-4">
-  <label class="form-label fw-bold">Choose a Design Template</label>
-  <select id="designTemplate" class="form-select">
-    <option value="modern">✨ Modern</option>
-    <option value="nature">🌿 Nature</option>
-    <option value="paper">📄 Paper Notebook</option>
-  </select>
-</div>
-      <!-- Template Selection -->
-      <div class="mt-3">
-        <label class="form-label fw-bold">Choose a Template</label>
-        <div class="row g-3" id="templateSelector">
-          <div class="col-md-4">
-            <div class="card theme-option h-100" data-template="customer_feedback" style="cursor: pointer; border-left: 5px solid #0d47a1;">
-              <div class="card-body">
-                <h6 class="card-title text-primary mb-1"><i class="bi bi-emoji-smile"></i> Customer Feedback</h6>
-                <p class="card-text small text-muted">Get opinions on customer satisfaction and service.</p>
+      <!-- Create Survey Tab -->
+      <div class="tab-pane fade show active" id="create">
+        <div class="card">
+          <div class="card-body">
+            <h3 class="card-title mb-4">Generate AI Survey</h3>
+            <div class="row">
+              <div class="col-md-8 mb-3">
+                <input type="text" id="surveyTopic" class="form-control"
+                  placeholder="Enter survey topic (e.g., Customer Satisfaction)" />
+              </div>
+              <div class="col-md-4 mb-3">
+                <select id="responseType" class="form-select">
+                  <option value="multiple_choice">Multiple Choice</option>
+                  <option value="likert_scale">Likert Scale</option>
+                  <option value="yes_no">Yes/No</option>
+                </select>
               </div>
             </div>
+            <button id="generateSurveyBtn" class="btn btn-primary w-100">
+              <i class="bi bi-magic me-2"></i>Generate Survey
+            </button>
           </div>
-          <div class="col-md-4">
-            <div class="card theme-option h-100" data-template="employee_checkin" style="cursor: pointer; border-left: 5px solid #2e7d32;">
-              <div class="card-body">
-                <h6 class="card-title text-success mb-1"><i class="bi bi-person-badge"></i> Employee Check-In</h6>
-                <p class="card-text small text-muted">Gauge how your team is doing this week.</p>
+        </div>
+
+        <div id="surveyPreview" class="mt-4" style="display: none">
+          <div class="survey-container mt-5">
+            <div class="survey-header">
+              <h1><i class="bi bi-stars"></i> Share Your Thoughts</h1>
+              <p>We're here to listen. Please take a moment to respond — your voice helps us make better decisions for everyone involved.</p>
+            </div>
+
+            <div class="share-link-container mb-4">
+              <h5>🔗 Share this survey:</h5>
+              <div class="input-group mb-3">
+                <input type="text" id="surveyShareLink" class="form-control share-link-input" readonly />
+                <button class="btn btn-outline-secondary" type="button" id="copyLinkBtn">
+                  <i class="bi bi-clipboard"></i> Copy
+                </button>
               </div>
             </div>
-          </div>
-          <div class="col-md-4">
-            <div class="card theme-option h-100" data-template="event_feedback" style="cursor: pointer; border-left: 5px solid #ef6c00;">
-              <div class="card-body">
-                <h6 class="card-title text-warning mb-1"><i class="bi bi-calendar-event"></i> Event Feedback</h6>
-                <p class="card-text small text-muted">Find out how your attendees felt about the event.</p>
+
+            <form id="surveyForm">
+              <div id="questionContainer">
+                <!-- Questions injected dynamically -->
               </div>
-            </div>
+              <div class="text-center">
+                <button type="submit" class="btn btn-submit mt-4">
+                  <i class="bi bi-send me-2"></i> Submit Survey Responses
+                </button>
+              </div>
+            </form>
+            <div class="text-center mt-4">
+            <a id="view-results" href="#" style="display: none;" class="btn btn-outline-primary">
+                <i class="bi bi-bar-chart"></i> View Results
+            </a>
+        </div>
+
           </div>
         </div>
-      </div>
-
-    <!-- 🌈 Live Theme Preview -->
-
-<div id="themePreviewBox" class="floating-theme-popup" style="display: none;">
-  <div id="themePreviewCard" class="cute-window-style">
-    <div class="popup-header">
-      <span class="dot red"></span>
-      <span class="dot yellow"></span>
-      <span class="dot green"></span>
-      <span class="popup-title">Live Theme Preview</span>
-    </div>
-    <div class="popup-content">
-      <h6 id="themeName" class="fw-bold mb-2">Elegant Theme</h6>
-      <p id="themeDescription" class="small text-muted mb-3">
-        This is how your survey will look visually when shared.
-      </p>
-      <div id="previewQuestion" class="border rounded p-3">
-        <p class="mb-2">1. How satisfied are you with the product quality?</p>
-        <div class="form-check">
-          <input type="radio" class="form-check-input" name="previewQ" id="opt1" disabled>
-          <label class="form-check-label" for="opt1">A) Very Satisfied</label>
-        </div>
-        <div class="form-check">
-          <input type="radio" class="form-check-input" name="previewQ" id="opt2" disabled>
-          <label class="form-check-label" for="opt2">B) Satisfied</label>
-        </div>
-        <div class="form-check">
-          <input type="radio" class="form-check-input" name="previewQ" id="opt3" disabled>
-          <label class="form-check-label" for="opt3">C) Neutral</label>
-        </div>
-        <div class="form-check">
-          <input type="radio" class="form-check-input" name="previewQ" id="opt4" disabled>
-          <label class="form-check-label" for="opt4">D) Not satisfied</label>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-
-      <!-- 📝 Sample question -->
-      
-
-
-      <!-- 🎨 Theme Customization Options -->
-      <div class="row mt-4">
-        <div class="col-md-4">
-          <label class="form-label">Primary Color</label>
-          <input type="color" id="primaryColor" class="form-control form-control-color" value="#d90429">
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">Background Color</label>
-          <input type="color" id="backgroundColor" class="form-control form-control-color" value="#fff0f0">
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">Text Color</label>
-          <input type="color" id="textColor" class="form-control form-control-color" value="#1a1a1a">
-        </div>
-      </div>
-
-      <div class="row mt-3">
-        <div class="col-md-6">
-          <label class="form-label">Font Style</label>
-          <select id="fontSelector" class="form-select">
-            <option value="Poppins, sans-serif">Poppins</option>
-            <option value="Georgia, serif">Georgia</option>
-            <option value="'Courier New', monospace">Courier New</option>
-            <option value="'Comic Sans MS', cursive">Comic Sans MS</option>
-            <option value="'Roboto Slab', serif">Roboto Slab</option>
-          </select>
-        </div>
-        <div class="col-md-6">
-          <label class="form-label">Design Intent</label>
-          <select id="designIntent" class="form-select">
-            <option value="professional">Professional</option>
-            <option value="minimal">Minimal</option>
-            <option value="playful">Playful</option>
-            <option value="elegant">Elegant</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- Generate Button -->
-      <button id="generateSurveyBtn" class="btn btn-primary w-100 mt-4">
-        <i class="bi bi-magic me-2"></i>Generate Survey
-      </button>
-    </div>
-  </div>
-
-  <!-- Preview Section -->
-  <div id="surveyPreview" class="mt-4" style="display: none">
-    <div class="survey-container mt-5">
-      <div class="survey-header">
-        <h1 id="surveyThemeTitle"><i class="bi bi-stars"></i> Share Your Thoughts</h1>
-        <p id="subtitleText">We're here to listen. Please take a moment to respond — your voice helps us make better decisions for everyone involved.</p>
-      </div>
-
-      <div class="share-link-container mb-4">
-        <h5>🔗 Share this survey:</h5>
-        <div class="input-group mb-3">
-          <input type="text" id="surveyShareLink" class="form-control share-link-input" readonly />
-          <button class="btn btn-outline-secondary" type="button" id="copyLinkBtn">
-            <i class="bi bi-clipboard"></i> Copy
-          </button>
-        </div>
-      </div>
-
-      <form id="surveyForm">
-        <div id="questionContainer">
-          <!-- Questions injected dynamically -->
-        </div>
-        <div class="text-center">
-          <button type="submit" class="btn btn-submit mt-4">
-            <i class="bi bi-send me-2"></i> Submit Survey Responses
-          </button>
-        </div>
-      </form>
-      <div class="text-center mt-4">
-        <a id="view-results" href="#" style="display: none;" class="btn btn-outline-primary">
-          <i class="bi bi-bar-chart"></i> View Results
-        </a>
-      </div>
-    </div>
-  </div>
-</div> <!-- END #create -->
-
-
+      </div> <!-- END #create -->
 
       <!-- Surveys Tab -->
       <div class="tab-pane fade" id="surveys">
@@ -701,44 +470,6 @@ border: 2px solid #d90429 !important;
                 showPostbackMessage("✅ Postback URL generated!", "success");
             });
 
-            //template selector
-            let selectedTemplate = "default";
-
-document.querySelectorAll(".theme-option").forEach((card) => {
-
-card.addEventListener("click", function () {
-document.querySelectorAll(".theme-option").forEach(c => c.classList.remove("border-primary"));
-this.classList.add("border-primary");
-selectedTemplate = this.dataset.template;
-
-// Optional: live preview
-const previewBox = document.getElementById("themePreviewBox");
-const previewCard = document.getElementById("themePreviewCard");
-const themeName = document.getElementById("themeName");
-const themeDescription = document.getElementById("themeDescription");
-
-previewBox.style.display = "block";
-
-if (selectedTemplate === "customer_feedback") {
-  previewCard.style.backgroundColor = "#e3f2fd";
-  themeName.textContent = "Customer Feedback";
-  themeDescription.textContent = "Gather insights from customers about their experience.";
-} else if (selectedTemplate === "employee_checkin") {
-  previewCard.style.backgroundColor = "#e8f5e9";
-  themeName.textContent = "Employee Check-In";
-  themeDescription.textContent = "Check how your team is doing week to week.";
-} else if (selectedTemplate === "event_feedback") {
-  previewCard.style.backgroundColor = "#fff3e0";
-  themeName.textContent = "Event Feedback";
-  themeDescription.textContent = "Learn how participants felt about your event.";
-} else {
-  previewCard.style.backgroundColor = "#f8f9fa";
-  themeName.textContent = "Default";
-  themeDescription.textContent = "Standard survey layout.";
-}
-});
-});
-
             function showPostbackMessage(message, type = "info") {
                 postbackMessage.className = `alert alert-${type}`;
                 postbackMessage.textContent = message;
@@ -774,39 +505,6 @@ if (selectedTemplate === "customer_feedback") {
                 toastInstance.show();
             }
 
-
-            // theme preview
- function updateThemePreview() {
-  const primary = document.getElementById("primaryColor").value;
-  const background = document.getElementById("backgroundColor").value;
-  const text = document.getElementById("textColor").value;
-  const font = document.getElementById("fontSelector").value;
-  const intent = document.getElementById("designIntent").value;
-
-  const previewBox = document.getElementById("themePreviewBox");
-  const previewCard = document.getElementById("themePreviewCard");
-  const themeTitle = document.getElementById("themeName");
-  const themeDescription = document.getElementById("themeDescription");
-  const previewQuestion = document.getElementById("previewQuestion");
-
-  previewBox.style.display = "block";
-
-  previewCard.style.backgroundColor = background;
-  previewCard.style.color = text;
-  previewCard.style.fontFamily = font;
-  previewCard.style.borderLeft = `6px solid ${primary}`;
-
-  previewQuestion.style.borderColor = primary;
-  previewQuestion.style.backgroundColor = "#ffffff";
-  previewQuestion.style.fontFamily = font;
-
-  themeTitle.textContent = `Preview: ${intent.charAt(0).toUpperCase() + intent.slice(1)} Theme`;
-  themeDescription.textContent = "This is how your survey will look visually when shared.";
-}
-
-
-
-
             function displaySuccessToast(message) {
                 const toastContainer = document.createElement("div");
                 toastContainer.className =
@@ -832,35 +530,14 @@ if (selectedTemplate === "customer_feedback") {
             }
 
             // Survey Generation
-           generateSurveyBtn.addEventListener("click", async () => {
+            generateSurveyBtn.addEventListener("click", async () => {
   const topic = surveyTopic.value.trim();
   const type = responseType.value;
-const count = parseInt(document.getElementById("questionCount").value) || 10;
-const design_template = document.getElementById("designTemplate").value;
+
   if (!topic) {
     displayErrorToast("Please enter a survey topic");
     return;
   }
-
-  // ✅ Collect selected template
-  const templateType = selectedTemplate;
-
-  // ✅ Collect theme customizations
-  const primaryColor = document.getElementById("primaryColor").value;
-  const backgroundColor = document.getElementById("backgroundColor").value;
-  const textColor = document.getElementById("textColor").value;
-  const font = document.getElementById("fontSelector").value;
-  const designIntent = document.getElementById("designIntent").value;
-
-  const theme = {
-    font: font,
-    intent: designIntent,
-    colors: {
-      primary: primaryColor,
-      background: backgroundColor,
-      text: textColor
-    }
-  };
 
   try {
     showLoading();
@@ -871,10 +548,6 @@ const design_template = document.getElementById("designTemplate").value;
       body: JSON.stringify({
         prompt: topic,
         response_type: type,
-        template_type: templateType,
-         question_count: count,
-        design_template: design_template,
-        theme: theme
       }),
     });
 
@@ -888,24 +561,28 @@ const design_template = document.getElementById("designTemplate").value;
     currentSurveyId = data.survey_id;
     currentSurveyData = data.questions;
 
-    // Render preview
+    // Render preview in UI
     renderSurveyPreview(data);
 
-    // Build share URL
+    // Get stored user info
     const username = localStorage.getItem("username");
     const email = localStorage.getItem("email");
+
+    // Build share URL
     const queryParams = new URLSearchParams({
       id: currentSurveyId,
       username: username || "",
-      email: email || ""
+      email: email || "",
     });
 
     const baseUrl = location.hostname === "localhost" || location.hostname === "127.0.0.1"
       ? "http://localhost:5501"
       : "https://pepperadsresponses.web.app";
 
+      const viewResultsLink = document.getElementById("view-results");
+    // Assign links
     surveyShareLink.value = `${baseUrl}/public_survey.html?${queryParams.toString()}`;
-    document.getElementById("view-results").href = `${baseUrl}/index.html?id=${currentSurveyId}#responses`;
+    viewResultsLink.href = `${baseUrl}/index.html?id=${currentSurveyId}#responses`;
 
   } catch (error) {
     displayErrorToast(`Survey Generation Failed: ${error.message}`);
@@ -914,7 +591,6 @@ const design_template = document.getElementById("designTemplate").value;
     hideLoading();
   }
 });
-
 
 
             // Copy Survey Link
@@ -935,86 +611,49 @@ const design_template = document.getElementById("designTemplate").value;
             });
 
             // Render Survey Preview
-function renderSurveyPreview(survey) {
-const container = document.getElementById("questionContainer");
-const previewSection = document.getElementById("surveyPreview");
-previewSection.style.display = "block";
-container.innerHTML = "";
+           function renderSurveyPreview(survey) {
+  const container = document.getElementById("questionContainer");
+  const previewSection = document.getElementById("surveyPreview");
+  previewSection.style.display = "block";
+  container.innerHTML = "";
 
-// ✅ Use selectedTemplate instead of getting from DOM
-const templateType = selectedTemplate;
+  survey.questions.forEach((question, index) => {
+    const section = document.createElement("div");
+    section.className = "question-section";
 
-// Clear previous theme classes
-previewSection.classList.remove(
-"theme-customer_feedback",
-"theme-product_review",
-"theme-employee_checkin",
-"theme-event_feedback",
-"theme-casual"
-);
+    const q = document.createElement("h5");
+    q.textContent = question.question; // ❌ No numbering
+    section.appendChild(q);
 
-if (templateType && templateType !== "default") {
-previewSection.classList.add(`theme-${templateType}`);
+    const optionsContainer = document.createElement("div");
+    optionsContainer.className = "option-group";
+
+    question.options.forEach((option, optionIndex) => {
+      const optionWrapper = document.createElement("div");
+      optionWrapper.className = "form-check";
+
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.className = "form-check-input";
+      input.name = `question-${index}`;
+      input.id = `question-${index}-option-${optionIndex}`;
+      input.value = option;
+      input.required = true;
+
+      const label = document.createElement("label");
+      label.className = "form-check-label";
+      label.htmlFor = input.id;
+      label.textContent = option;
+
+      optionWrapper.appendChild(input);
+      optionWrapper.appendChild(label);
+      optionsContainer.appendChild(optionWrapper);
+    });
+
+    section.appendChild(optionsContainer);
+    container.appendChild(section);
+  });
 }
-
-// Optional update header
-const themeTitle = document.getElementById("surveyThemeTitle");
-const subtitleText = document.getElementById("subtitleText");
-
-if (themeTitle) {
-themeTitle.innerHTML = `📝 ${survey.prompt || "Survey"}`;
-}
-
-if (subtitleText) {
-if (templateType === "customer_feedback") {
-subtitleText.textContent = "We value your feedback! Help us serve you better.";
-} else if (templateType === "employee_checkin") {
-subtitleText.textContent = "Let us know how your experience at work has been lately.";
-} else if (templateType === "event_feedback") {
-subtitleText.textContent = "Tell us what you thought about the event — we’d love to improve!";
-} else {
-subtitleText.textContent = "We're here to listen. Please take a moment to respond.";
-}
-}
-
-survey.questions.forEach((question, index) => {
-const section = document.createElement("div");
-section.className = "question-section";
-
-const q = document.createElement("h5");
-q.textContent = question.question;
-section.appendChild(q);
-
-const optionsContainer = document.createElement("div");
-optionsContainer.className = "option-group";
-
-question.options.forEach((option, optionIndex) => {
-  const optionWrapper = document.createElement("div");
-  optionWrapper.className = "form-check";
-
-  const input = document.createElement("input");
-  input.type = "radio";
-  input.className = "form-check-input";
-  input.name = `question-${index}`;
-  input.id = `question-${index}-option-${optionIndex}`;
-  input.value = option;
-  input.required = true;
-
-  const label = document.createElement("label");
-  label.className = "form-check-label";
-  label.htmlFor = input.id;
-  label.textContent = option;
-
-  optionWrapper.appendChild(input);
-  optionWrapper.appendChild(label);
-  optionsContainer.appendChild(optionWrapper);
-});
-
-section.appendChild(optionsContainer);
-container.appendChild(section);
-});
-}
-
 
             // Submit Survey Responses
             surveyForm.addEventListener("submit", async (e) => {
@@ -1345,10 +984,6 @@ container.appendChild(section);
                     });
                 });
             }
-            ["primaryColor", "backgroundColor", "textColor", "fontSelector", "designIntent"].forEach(id => {
-  document.getElementById(id).addEventListener("change", updateThemePreview);
-});
-  updateThemePreview();
 
             // Initialize Existing Surveys on page load
             loadExistingSurveys();

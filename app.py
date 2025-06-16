@@ -99,6 +99,8 @@ def webhook():
     return {"status": "success"}, 200
 
 
+import re
+
 def parse_survey_response(response_text):
     questions = []
     lines = response_text.strip().split('\n')
@@ -107,8 +109,9 @@ def parse_survey_response(response_text):
     for line in lines:
         line = line.strip()
 
-        # Detect new question
+        # 🟡 Detect new question like "1. What's your opinion?"
         if re.match(r"^\d+\.\s", line):
+            # Save previous question if exists
             if current_question:
                 questions.append(current_question)
             current_question = {
@@ -116,16 +119,17 @@ def parse_survey_response(response_text):
                 "options": []
             }
 
-        # Detect options A) to D)
+        # 🟢 Detect MCQ options like "A) Something"
         elif re.match(r"^[A-D]\)", line) and current_question:
             option = re.sub(r"^[A-D]\)\s*", "", line)
             current_question["options"].append(option)
 
-    if current_question and len(current_question["options"]) == 4:
+    # Add the last question (MCQ or short)
+    if current_question:
         questions.append(current_question)
 
-    # Filter only valid complete questions
-    questions = [q for q in questions if len(q["options"]) == 4]
+    # ✅ Optional: Filter out malformed questions (empty string)
+    questions = [q for q in questions if q["question"]]
 
     return questions
 
@@ -135,32 +139,70 @@ def generate_survey():
     data = request.get_json()
 
     prompt = data.get("prompt", "")
+    question_count = int(data.get("question_count", 10))
     response_type = data.get("response_type", "multiple_choice")
+    template_type = data.get("template_type", "default")
+    theme = data.get("theme", {})
+    design_template = data.get("design_template", "modern")
 
     if not prompt:
         return jsonify({"error": "Prompt is required"}), 400
 
+    # ✅ Template to Prompt Generator Map
+    prompt_templates = {
+        "customer_feedback": f"""
+Generate {question_count} customer feedback questions about "{prompt}".
+Mix multiple-choice and short-answer. Format MCQs like:
+1. Question text?
+A) Option
+B) Option
+C) Option
+D) Option
+
+And short-answer like:
+2. What suggestions do you have?
+""",
+        "product_review": f"""
+Generate {question_count} product review questions for "{prompt}".
+Use a friendly tone. Mix MCQs and short-answer.
+""",
+        "employee_checkin": f"""
+Generate {question_count} weekly check-in questions for employees working on "{prompt}".
+Include both MCQs and short-text questions.
+""",
+        "event_feedback": f"""
+Generate {question_count} post-event feedback questions for "{prompt}".
+Mix both MCQs and short-answer formats.
+""",
+        "casual": f"""
+Generate {question_count} casual and emoji-filled fun survey questions on "{prompt}".
+Make a mix of MCQs and open-ended questions.
+""",
+        "default": f"""
+Generate {question_count} general-purpose survey questions on "{prompt}".
+Include a mix of multiple choice and short answer. Format examples:
+
+1. What's your favorite feature?
+A) Option 1
+B) Option 2
+C) Option 3
+D) Option 4
+
+2. What would you improve about it?
+"""
+    }
+
+    # ✅ Get the AI prompt from template or fallback
+    ai_prompt = prompt_templates.get(template_type, prompt_templates["default"])
+
     try:
-        ai_prompt = f"""
-        Generate exactly 10 multiple-choice survey questions about "{prompt}".
-        Each question should be formatted exactly like this:
-
-        1. What is your favorite color?
-        A) Red
-        B) Blue
-        C) Green
-        D) Yellow
-
-        No explanations. No introduction or closing. Just 10 questions with 4 options each.
-        """
-
         response = model.generate_content(ai_prompt)
         if not response.text:
             raise ValueError("Gemini returned empty response")
 
         print("Raw Gemini response:\n", response.text)
 
-        questions = parse_survey_response(response.text)
+        questions = parse_survey_response(response.text)  # You can update this next to support MCQ + short
 
         if not questions or len(questions) < 5:
             raise ValueError("Failed to parse enough valid questions from AI response")
@@ -171,16 +213,21 @@ def generate_survey():
             "id": survey_id,
             "prompt": prompt,
             "response_type": response_type,
+            # "template_type": template_type,
             "questions": questions,
+            # "theme": theme,
+            "design_template": design_template,
             "created_at": datetime.utcnow(),
             "shareable_link": f"{BASE_URL}/survey/{survey_id}/respond"
         }
-        try:
-            db["surveys"].insert_one(survey_data)
-            return jsonify({"survey_id": survey_id, "questions": questions})  # ✅ Success response
-        except Exception as mongodb_error:
-            print("❌ MongoDB write failed:", mongodb_error)
-            return jsonify({"error": "Failed to save survey"}), 500  # ✅ Error fallback
+
+        db["surveys"].insert_one(survey_data)
+
+        return jsonify({
+            "survey_id": survey_id,
+            "questions": questions,
+            "theme": theme
+        })
 
     except Exception as e:
         print(f"Survey generation error: {e}")
@@ -517,6 +564,9 @@ def list_surveys():
     except Exception as e:
         print("Error fetching surveys:", e)
         return jsonify({"error": str(e)}), 500
+
+
+
 
 
 if __name__ == '__main__':
