@@ -1,0 +1,228 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --primary-red: #d90429;
+  --dark-red: #a3021f;
+  --light-red: #ff4d6d;
+  --pale-red: #fff0f3;
+  --white: #ffffff;
+  --black: #1a1a1a;
+  --gray: #6c757d;
+  --light-gray: #f8f9fa;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Poppins', sans-serif;
+  line-height: 1.6;
+  color: var(--black);
+  background-color: var(--light-gray);
+  margin: 0;
+  padding: 0;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--primary-red);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--dark-red);
+}
+
+/* Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(217, 4, 41, 0.2);
+  }
+  70% {
+    box-shadow: 0 0 0 15px rgba(217, 4, 41, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(217, 4, 41, 0);
+  }
+}
+
+@keyframes sparkleGlow {
+  0% {
+    transform: rotate(0deg) scale(1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: rotate(15deg) scale(1.2);
+    opacity: 1;
+  }
+}
+
+.animate-fadeInUp {
+  animation: fadeInUp 0.8s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+.animate-pulse-custom {
+  animation: pulse 2s infinite;
+}
+
+.animate-sparkle {
+  animation: sparkleGlow 1.2s infinite alternate ease-in-out;
+}
+
+/* Glass morphism effect */
+.glass {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Chilli pepper bullet points */
+.chilli-list li::marker {
+  content: "🌶️ ";
+}
+
+/* Custom button hover effects */
+.btn-chilli {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.btn-chilli::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transition: all 0.6s;
+}
+
+.btn-chilli:hover::before {
+  left: 100%;
+}
+
+/* Form input focus effects */
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(217, 4, 41, 0.1);
+}
+
+/* Custom shadows */
+.shadow-chilli {
+  box-shadow: 0 10px 25px rgba(217, 4, 41, 0.1);
+}
+
+.shadow-chilli-lg {
+  box-shadow: 0 15px 35px rgba(217, 4, 41, 0.15);
+}
+
+/* Responsive typography */
+@media (max-width: 768px) {
+  .text-responsive-xl {
+    font-size: 1.5rem;
+  }
+  
+  .text-responsive-2xl {
+    font-size: 1.75rem;
+  }
+  
+  .text-responsive-3xl {
+    font-size: 2rem;
+  }
+}
+
+/* Loading states */
+.loading-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Chart styles */
+.recharts-tooltip-wrapper {
+  outline: none !important;
+}
+
+.recharts-tooltip-content {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 1px solid rgba(217, 4, 41, 0.2) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  body {
+    background: white !important;
+    font-size: 12pt;
+  }
+  
+  .bg-gradient-to-br,
+  .bg-gradient-to-r {
+    background: white !important;
+  }
+}
+@keyframes fadeInChar {
+  to {
+    opacity: 1;
+  }
+}
+.preview-wrapper * {
+  opacity: 1 !important;
+  filter: none !important;
+}
+.preview-clean {
+  background: #ffffff !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1px solid #e5e7eb !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
