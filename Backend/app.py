@@ -20,7 +20,7 @@ else:
     BASE_URL = "https://pepper-flask-app.onrender.com"
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:5173"], supports_credentials=True)
+CORS(app) 
 
 
 @app.before_request
