@@ -20,7 +20,12 @@ else:
     BASE_URL = "https://pepper-flask-app.onrender.com"
 
 app = Flask(__name__)
-CORS(app) 
+# CORS(app, origins=["http://localhost:5173"], supports_credentials=True) local
+CORS(
+    app,
+    supports_credentials=True,
+    origins=["https://pepperadsresponses.web.app"]
+)
 
 
 @app.before_request
@@ -221,7 +226,7 @@ def validate_color(color):
         
     return f"#{color.lower()}"
 
-@app.route('/generate', methods=['POST'])
+@app.route('/generate', methods=['POST', 'OPTIONS'])
 def generate_survey():
     template_type = "customer_feedback"
     raw_response = ""
