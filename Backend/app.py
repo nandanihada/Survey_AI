@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask_cors import CORS ,cross_origin
 import google.generativeai as genai
 import uuid
 import json
@@ -227,7 +227,10 @@ def validate_color(color):
     return f"#{color.lower()}"
 
 @app.route('/generate', methods=['POST', 'OPTIONS'])
+@cross_origin(supports_credentials=True, origins=["https://pepperadsresponses.web.app"])
 def generate_survey():
+    if request.method == 'OPTIONS':
+        return '', 200
     template_type = "customer_feedback"
     raw_response = ""
     question_count = 10
