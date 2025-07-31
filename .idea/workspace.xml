@@ -4,44 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="bbe779bd-d937-43a2-a891-54e9d6982d2b" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/Survey_AI.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/AI_Prompt_PepperAds.iml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/Ai_wala_jsx_part2.iml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Backend/.env" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/.env" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Backend/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/app.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Backend/integrations.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/integrations.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Backend/postback_handler.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/postback_handler.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backup_index.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/.bolt/config.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/.bolt/prompt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/project/index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/project/package-lock.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/project/package.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/App.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/components/PostbackGenerator.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/PostbackGenerator.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/components/PublicSurveyPage.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/PublicSurveyPage.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/components/ResponseAnalytics.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/ResponseAnalytics.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/components/SurveyForm.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/SurveyForm.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/components/SurveyList.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/SurveyList.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/components/SurveyPreview.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/SurveyPreview.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/components/SurveyViewer.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/SurveyViewer.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/components/TemplateSelector.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/TemplateSelector.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/components/ThemeSelector.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/ThemeSelector.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/components/ui/Tabs.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/ui/Tabs.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/index.css" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/index.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/main.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/main.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/templates/CustomerFeedbackTemplate.css" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/templates/CustomerFeedbackTemplate.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/templates/CustomerFeedbackTemplate.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/templates/CustomerFeedbackTemplate.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/types/Survey.ts" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/types/Survey.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/utils/api.ts" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/utils/api.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/vite.config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/project/vite.config.ts" afterDir="false" />
-    </list>
+    <list default="true" id="bbe779bd-d937-43a2-a891-54e9d6982d2b" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -50,24 +13,24 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "customColor": "",
-  "associatedIndex": 8
-}]]></component>
+  <component name="ProjectColorInfo">{
+  &quot;customColor&quot;: &quot;&quot;,
+  &quot;associatedIndex&quot;: 8
+}</component>
   <component name="ProjectId" id="30aAU0P0hHgtY6k2GJH3y06Tdq9" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Python.app.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "git-widget-placeholder": "main",
-    "last_opened_file_path": "D:/pepeleads/blank/Survey_AI"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Python.app.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;last_opened_file_path&quot;: &quot;D:/pepeleads/blank/Survey_AI&quot;
   }
-}]]></component>
+}</component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
