@@ -4,9 +4,9 @@ const SERVER_URL = window.location.hostname.includes('localhost') || window.loca
 
 export interface SurveyRequest {
   prompt: string;
-  response_type: string;
+  response_type?: string;
   template_type: string;
-  question_count: number;
+  question_count?: number;
   theme: {
     font: string;
     intent: string;
@@ -19,13 +19,22 @@ export interface SurveyRequest {
 }
 
 export const generateSurvey = async (data: SurveyRequest) => {
+  // Add default values for missing optional fields
+  const requestData = {
+    ...data,
+    response_type: data.response_type || 'multiple_choice',
+    question_count: data.question_count || (data.template_type === 'custom' ? 20 : 10)
+  };
+  
+  console.log('Sending request to backend:', requestData);
+  
   const response = await fetch(`${SERVER_URL}/generate`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Accept': 'application/json'
     },
-    body: JSON.stringify(data),
+    body: JSON.stringify(requestData),
     credentials: 'include'
   });
 
@@ -40,6 +49,8 @@ export const generateSurvey = async (data: SurveyRequest) => {
   }
 
   const result = await response.json();
+  
+  console.log('Backend response:', result);
   
   if (result.error) {
     throw new Error(result.error);

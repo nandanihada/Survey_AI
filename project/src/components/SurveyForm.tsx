@@ -3,8 +3,8 @@ import TemplateSelector from './TemplateSelector';
 import ThemeSelector from './ThemeSelector';
 import SurveyPreview from './SurveyPreview';
 import { generateSurvey } from '../utils/api';
-import { Sparkles, Loader2 } from 'lucide-react';
-
+import { Sparkles, Loader2, MessageSquare} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 interface Question {
   id: string;
   text: string;
@@ -29,20 +29,23 @@ interface SurveyData {
   animationSpeed: number;
 }
 
-const SurveyForm = () => {
+interface SurveyFormProps {
+  isDarkMode?: boolean;
+}
+
+const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
+  const navigate = useNavigate();
   const [surveyTopic, setSurveyTopic] = useState('');
-  const [questionCount, setQuestionCount] = useState(10);
-  const [responseType, setResponseType] = useState('multiple_choice');
-  const [selectedTemplate, setSelectedTemplate] = useState('customer_feedback');
+  const [selectedTemplate, setSelectedTemplate] = useState('custom');
   const [theme, setTheme] = useState({
     font: 'Poppins, sans-serif',
     intent: 'professional',
-     animationSpeed: 0.08,
+    animationSpeed: 0.08,
     colors: {
       primary: '#d90429',
       background: '#ffffff',
-      text: '#1a1a1a'
-    }
+      text: '#1a1a1a',
+    },
   });
   const [isLoading, setIsLoading] = useState(false);
   const [generatedSurvey, setGeneratedSurvey] = useState<SurveyData | null>(null);
@@ -60,13 +63,13 @@ const SurveyForm = () => {
     try {
       const requestData = {
         prompt: surveyTopic,
-        response_type: responseType,
         template_type: selectedTemplate,
-        question_count: questionCount,
-        theme
+        theme,
       };
 
       const result = await generateSurvey(requestData);
+      console.log('Generated survey result:', result);
+      console.log('Questions in result:', result.questions);
       setGeneratedSurvey(result);
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -80,119 +83,234 @@ const SurveyForm = () => {
   };
 
   return (
-    <div className="space-y-8">
-      {/* Survey Configuration */}
-      <div className="bg-white rounded-2xl p-6 shadow-lg border border-red-100">
-        <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-          <span className="text-2xl">🌶️</span>
-          Generate AI Survey
-        </h3>
-
-        <div className="space-y-6">
-          {/* Topic and Settings */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Survey Topic
-              </label>
-              <input
-                type="text"
-                value={surveyTopic}
-                onChange={(e) => setSurveyTopic(e.target.value)}
-                placeholder="Enter survey topic (e.g., Customer Satisfaction)"
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Response Type
-              </label>
-              <select
-                value={responseType}
-                onChange={(e) => setResponseType(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
-              >
-                <option value="multiple_choice">Multiple Choice</option>
-                <option value="likert_scale">Likert Scale</option>
-                <option value="yes_no">Yes/No</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Question Count */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Number of Questions
-            </label>
-            <input
-              type="number"
-              value={questionCount}
-              onChange={(e) => setQuestionCount(parseInt(e.target.value) || 10)}
-              min="1"
-              max="30"
-              className="w-32 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
-            />
-          </div>
-
-          {/* Template Selector */}
-          <TemplateSelector
-            selectedTemplate={selectedTemplate}
-            onSelectTemplate={setSelectedTemplate}
-          />
-
-          {/* Theme Selector */}
+    <div className="grid grid-cols-12 px-0 gap-4 py-6">
+      {/* Left Sidebar - Theme */}
+      <div className="col-span-3">
+        <div
+          className={`rounded-xl border transition-all duration-300 ${
+            isDarkMode
+              ? 'bg-slate-800/50 border-slate-700'
+              : 'bg-white border-stone-200 shadow-sm'
+          }`}
+        >
           <ThemeSelector
             theme={theme}
             onThemeChange={setTheme}
+            isDarkMode={isDarkMode}
           />
-
-          {/* Generate Button */}
-          <button
-            onClick={handleGenerateSurvey}
-            disabled={isLoading || !surveyTopic.trim()}
-            className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white font-semibold py-4 px-8 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl disabled:cursor-not-allowed"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="animate-spin" size={20} />
-                Generating Survey...
-              </>
-            ) : (
-              <>
-                <Sparkles size={20} />
-                Generate Survey
-              </>
-            )}
-          </button>
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">
-              {error}
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Survey Preview */}
-      {generatedSurvey && (
-        <SurveyPreview
-          survey={{
-            ...generatedSurvey,
-            questions: generatedSurvey.questions.map((q) => ({
-              question: q.text,
-              type:
-                q.type === 'likert_scale'
-                  ? 'rating'
-                  : q.type === 'multiple_choice'
-                  ? 'multiple_choice'
-                  : q.type === 'yes_no'
-                  ? 'yes_no'
-                  : 'short_answer',
-              options: q.options,
-            })),
-          }}
-        />
-      )}
+      {/* Center Content */}
+      <div className="col-span-6 space-y-6">
+        {/* Form Card */}
+        <div
+          className={`rounded-xl border p-6 transition-all duration-300 ${
+            isDarkMode
+              ? 'bg-slate-800/50 border-slate-700'
+              : 'bg-white border-stone-200 shadow-sm'
+          }`}
+        >
+          <div className="flex items-center gap-2 mb-6">
+            <div
+              className={`w-6 h-6 rounded-md flex items-center justify-center text-xs ${
+                isDarkMode ? 'bg-red-500/20 text-red-400' : 'bg-red-50 text-red-600'
+              }`}
+            >
+              <Sparkles size={14} />
+            </div>
+            <h2
+              className={`text-lg font-medium ${
+                isDarkMode ? 'text-white' : 'text-stone-800'
+              }`}
+            >
+              Generate Survey
+            </h2>
+          </div>
+
+          <div className="space-y-5">
+            {/* Topic */}
+            <div>
+              <label
+                className={`block text-sm font-medium mb-2 flex items-center gap-1.5 ${
+                  isDarkMode ? 'text-slate-300' : 'text-stone-700'
+                }`}
+              >
+                <MessageSquare size={14} />
+                Survey Topic
+              </label>
+              <textarea
+                value={surveyTopic}
+                onChange={(e) => setSurveyTopic(e.target.value)}
+                placeholder="Describe your survey topic (e.g., Customer feedback on food delivery app)"
+                className={`w-full px-3 py-3 border rounded-lg text-sm focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-colors resize-none ${
+                  isDarkMode
+                    ? 'bg-slate-700/50 border-slate-600 text-white placeholder-slate-400'
+                    : 'bg-stone-50 border-stone-300 placeholder-stone-500'
+                }`}
+                rows={3}
+              />
+            </div>
+
+            {/* Settings */}
+            {/* <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label
+                  className={`block text-sm font-medium mb-2 flex items-center gap-1.5 ${
+                    isDarkMode ? 'text-slate-300' : 'text-stone-700'
+                  }`}
+                >
+                  <Settings size={14} />
+                  Response Type
+                </label>
+                <select
+                  value={responseType}
+                  onChange={(e) => setResponseType(e.target.value)}
+                  className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-colors ${
+                    isDarkMode
+                      ? 'bg-slate-700/50 border-slate-600 text-white'
+                      : 'bg-stone-50 border-stone-300'
+                  }`}
+                >
+                  <option value="multiple_choice">Multiple Choice</option>
+                  <option value="likert_scale">Likert Scale</option>
+                  <option value="yes_no">Yes/No</option>
+                </select>
+              </div>
+
+              <div>
+                <label
+                  className={`block text-sm font-medium mb-2 flex items-center gap-1.5 ${
+                    isDarkMode ? 'text-slate-300' : 'text-stone-700'
+                  }`}
+                >
+                  <Hash size={14} />
+                  Questions
+                </label>
+                <input
+                  type="number"
+                  value={questionCount}
+                  onChange={(e) =>
+                    setQuestionCount(parseInt(e.target.value) || 10)
+                  }
+                  min="1"
+                  max="30"
+                  className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-colors ${
+                    isDarkMode
+                      ? 'bg-slate-700/50 border-slate-600 text-white'
+                      : 'bg-stone-50 border-stone-300'
+                  }`}
+                />
+              </div>
+            </div> */}
+
+            {/* Generate Button */}
+            <button
+              onClick={handleGenerateSurvey}
+              disabled={isLoading || !surveyTopic.trim()}
+              className="w-full bg-red-600 hover:bg-red-700 disabled:bg-stone-400 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 text-sm disabled:cursor-not-allowed"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="animate-spin" size={16} />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles size={16} />
+                  Generate Survey
+                </>
+              )}
+            </button>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm">
+                {error}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Template Selector */}
+        <div
+          className={`rounded-xl border transition-all duration-300 ${
+            isDarkMode
+              ? 'bg-slate-800/50 border-slate-700'
+              : 'bg-white border-stone-200 shadow-sm'
+          }`}
+        >
+          <TemplateSelector
+            selectedTemplate={selectedTemplate}
+            onSelectTemplate={setSelectedTemplate}
+            isDarkMode={isDarkMode}
+          />
+        </div>
+      </div>
+
+       {/* Right Sidebar - Preview */}
+      <div className="col-span-3">
+        {generatedSurvey ? (
+          <>
+            <SurveyPreview
+              survey={{
+                survey_id: generatedSurvey.survey_id,
+                template_type: generatedSurvey.template_type,
+                theme: generatedSurvey.theme,
+                prompt: generatedSurvey.prompt,
+              }}
+            />
+
+            <div className="mt-4 space-y-2">
+              <button
+                onClick={() => navigate(`/preview/${generatedSurvey.survey_id}`)}
+                className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition-all"
+              >
+                Preview Survey
+              </button>
+              <button
+                onClick={() => navigate(`/edit/${generatedSurvey.survey_id}`)}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-all"
+              >
+                Edit Survey
+              </button>
+            </div>
+          </>
+        ) : (
+          <div
+            className={`rounded-xl border h-96 flex items-center justify-center transition-all duration-300 ${
+              isDarkMode
+                ? 'bg-slate-800/50 border-slate-700'
+                : 'bg-white border-stone-200 shadow-sm'
+            }`}
+          >
+            <div className="text-center">
+              <div
+                className={`w-12 h-12 rounded-lg mx-auto mb-3 flex items-center justify-center ${
+                  isDarkMode
+                    ? 'bg-slate-700 text-slate-400'
+                    : 'bg-stone-100 text-stone-400'
+                }`}
+              >
+                <MessageSquare size={20} />
+              </div>
+              <p
+                className={`text-sm font-medium ${
+                  isDarkMode ? 'text-slate-300' : 'text-stone-600'
+                }`}
+              >
+                Survey Preview
+              </p>
+              <p
+                className={`text-xs mt-1 ${
+                  isDarkMode ? 'text-slate-400' : 'text-stone-500'
+                }`}
+              >
+                Generate a survey to see preview
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

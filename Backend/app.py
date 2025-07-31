@@ -11,8 +11,16 @@ from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
 from integrations import forward_survey_data_to_partners
 from postback_handler import postback_bp
+from postback_api import postback_api_bp
 from mongodb_config import db
 from bson import ObjectId
+
+# Load environment variables
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    print("python-dotenv not installed. Using default environment variables.")
 
 if os.getenv("FLASK_ENV") == "development":
     BASE_URL = "http://127.0.0.1:5000"
@@ -20,12 +28,12 @@ else:
     BASE_URL = "https://pepper-flask-app.onrender.com"
 
 app = Flask(__name__)
-# CORS(app, origins=["http://localhost:5173"], supports_credentials=True) local
-CORS(
-    app,
-    supports_credentials=True,
-    origins=["https://pepperadsresponses.web.app"]
-)
+CORS(app, supports_credentials=True)
+# CORS(
+#     app,
+#     supports_credentials=True,
+#     origins=["https://pepperadsresponses.web.app"]
+# )
 
 
 @app.before_request
@@ -35,13 +43,17 @@ def log_request_info():
 
 
 # Gemini API Configuration
-genai.configure(api_key="AIzaSyAxEoutxU_w1OamJUe4FMOzr5ZdUyz8R4k")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyB5qCIodAB4-2W9O_gllY4rbNW2P16U0lc")
+print(f"Using Gemini API Key: {GEMINI_API_KEY[:20]}...")
+genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-1.5-flash-latest")
-response = model.generate_content("Hello, how are you?")
-print(response.text)
 
-# Register blueprint after MongoDB initialization
+# Test API connection on startup (removed to avoid quota issues)
+print("Gemini API configured successfully")
+
+# Register blueprints after MongoDB initialization
 app.register_blueprint(postback_bp)
+app.register_blueprint(postback_api_bp)
 
 
 # Helper function to convert ObjectId to string
@@ -227,7 +239,14 @@ def validate_color(color):
     return f"#{color.lower()}"
 
 @app.route('/generate', methods=['POST', 'OPTIONS'])
-@cross_origin(supports_credentials=True, origins=["https://pepperadsresponses.web.app"])
+@cross_origin(
+    supports_credentials=True,
+    origins=[
+        "http://localhost:5173",         # For local testing
+        "https://pepperadsresponses.web.app"  # For production
+    ],
+    allow_headers=["Content-Type"]
+)
 def generate_survey():
     if request.method == 'OPTIONS':
         return '', 200
@@ -246,26 +265,75 @@ def generate_survey():
         data = request.get_json()
         if not data:
             return jsonify({"error": "No data provided"}), 400
+            
+        print(f"\n=== SURVEY GENERATION REQUEST ===")
+        print(f"Raw request data: {data}")
 
         # Extract and validate required fields
         prompt = data.get("prompt", "").strip()
         if not prompt:
             return jsonify({"error": "Prompt is required and cannot be empty"}), 400
 
-        # Get question count
+        # Get template type first
+        template_type = data.get("template_type", "customer_feedback")
+        response_type = data.get("response_type", "multiple_choice")
+        theme = data.get("theme") or {}
+        
+        print(f"Template type: {template_type}")
+        print(f"Response type: {response_type}")
+        print(f"Prompt: {prompt[:100]}...")
+
+        # Get question count - allow more for custom template
         try:
             question_count = int(data.get("question_count", 10))
-            if question_count < 1 or question_count > 50:
-                return jsonify({"error": "Question count must be between 1 and 50"}), 400
+            if template_type == "custom":
+                # For custom template, allow more questions
+                if question_count < 5 or question_count > 100:
+                    return jsonify({"error": "For custom surveys, question count must be between 5 and 100"}), 400
+            else:
+                # For regular templates, keep existing limit
+                if question_count < 1 or question_count > 50:
+                    return jsonify({"error": "Question count must be between 1 and 50"}), 400
         except ValueError:
             return jsonify({"error": "Invalid question count"}), 400
 
-        response_type = data.get("response_type", "multiple_choice")
-        template_type = data.get("template_type", "customer_feedback")
-        theme = data.get("theme") or {}
-
         # Define prompt templates with the current question_count and prompt
         prompt_templates = {
+            "custom": f"""
+            Generate a comprehensive survey about "{prompt}" with as many questions as needed to thoroughly explore this topic.
+            
+            Create between 10 questions that cover all important aspects. Be creative and thorough.
+            
+            Use this exact format:
+            
+            1. Question text here (Multiple Choice)
+            A) Option 1
+            B) Option 2
+            C) Option 3
+            D) Option 4
+            
+            2. Question text here (Rating 1-10)
+            
+            3. Question text here (Yes/No)
+            A) Yes
+            B) No
+            
+            4. Question text here (Short Answer)
+            
+            5. Question text here (Opinion Scale 1-5)
+            
+            Important Rules:
+            - Start each question with a number and period (1. 2. 3. etc)
+            - Include the question type in parentheses
+            - Multiple Choice = 4 options (A-D)
+            - Yes/No = Only two options: A) Yes, B) No
+            - Rating, Short Answer, and Opinion Scale = No options needed
+            - Ask follow-up questions, demographic questions, suggestions, and detailed feedback
+            - Cover different angles: satisfaction, recommendations, improvements, future needs, etc.
+            
+            Generate a thorough, comprehensive survey - don't limit yourself to just 10 questions!
+            """,
+            
             "customer_feedback": f"""
             Generate exactly 10 survey questions for customer feedback about "{prompt}".
 
@@ -428,13 +496,22 @@ def generate_survey():
 
             # Save to database without timeout parameter
             db["surveys"].insert_one(survey_data)
+            
+            print(f"\n=== SURVEY GENERATION SUCCESS ===")
+            print(f"Survey ID: {survey_id}")
+            print(f"Template: {template_type}")
+            print(f"Questions generated: {len(questions)}")
+            print(f"Questions: {[q.get('question', 'No question text') for q in questions[:3]]}...")
 
-            return jsonify({
+            response_data = {
                 "survey_id": survey_id,
                 "questions": questions,
                 "template_type": template_type,
                 "theme": complete_theme
-            })
+            }
+            
+            print(f"Response data structure: {list(response_data.keys())}")
+            return jsonify(response_data)
 
         except Exception as db_error:
             print(f"Database error: {db_error}")
@@ -536,13 +613,33 @@ def submit_public_response(survey_id):
             print(f"DATABASE ERROR: {db_error}")
             return jsonify({"error": f"Database error: {str(db_error)}"}), 500
 
-        # Forward to partners (optional)
+        # Forward to partners (optional) - Prepare postback data
         try:
-            forward_success = forward_survey_data_to_partners(response_data)
-            if not forward_success:
-                print("WARNING: Survey forwarding failed (SurveyTitans)")
+            # Create postback data with required fields
+            postback_data = {
+                "transaction_id": response_id,  # Use response ID as transaction ID
+                "survey_id": survey_id,
+                "email": response_data.get("email", ""),
+                "username": response_data.get("username", "anonymous"),
+                "responses": responses,
+                "status": "completed",
+                "reward": "0.1",  # Default reward amount
+                "currency": "USD",
+                "session_id": response_id,
+                "complete_id": response_id,
+                "submitted_at": response_data["submitted_at"]
+            }
+            
+            print(f"🔥 TRIGGERING POSTBACK: Sending postback data for survey {survey_id}")
+            print(f"Postback data: {postback_data}")
+            
+            forward_success = forward_survey_data_to_partners(postback_data)
+            if forward_success:
+                print("✅ SUCCESS: Postback forwarding completed successfully")
+            else:
+                print("⚠️ WARNING: Survey forwarding failed to all partners")
         except Exception as forward_error:
-            print(f"WARNING: Partner forwarding error: {forward_error}")
+            print(f"❌ ERROR: Partner forwarding error: {forward_error}")
 
         # Handle tracking (optional)
         if tracking_id:
@@ -626,6 +723,141 @@ def check_logic():
         return jsonify({"next_page": "https://jobfinder-efe0e.web.app/public_survey.html?id=abc123"})
     else:
         return jsonify({"next_page": "thankyou.html"})
+
+
+@app.route('/survey/<survey_id>/branching', methods=['POST'])
+def get_branching_logic(survey_id):
+    """Handle branching logic for surveys - progressive question display"""
+    try:
+        data = request.json
+        question_id = data.get("question_id")
+        answer = data.get("answer")
+        current_visible = data.get("current_visible_questions", [])
+        
+        print(f"Branching logic - Survey: {survey_id}, Question: {question_id}, Answer: {answer}")
+        print(f"Current visible questions: {current_visible}")
+        
+        # Find the survey to get questions structure
+        survey = db["surveys"].find_one({"$or": [{"_id": survey_id}, {"id": survey_id}]})
+        if not survey:
+            return jsonify({"error": "Survey not found"}), 404
+        
+        questions = survey.get("questions", [])
+        all_question_ids = [q.get("id") for q in questions if q.get("id")]
+        
+        # Find current question index
+        current_question_index = -1
+        for i, q in enumerate(questions):
+            if q.get("id") == question_id:
+                current_question_index = i
+                break
+        
+        if current_question_index == -1:
+            return jsonify({"error": "Question not found"}), 404
+        
+        # Get the question text to understand context
+        current_question = questions[current_question_index]
+        question_text = current_question.get("question", "").lower()
+        answer_str = str(answer).lower().strip()
+        
+        print(f"Question text: {question_text}")
+        print(f"Answer: {answer_str}")
+        
+        # Progressive question display logic
+        next_questions = list(current_visible) if current_visible else []
+        
+        # Determine how many questions to show next based on the answer
+        questions_to_add = 1  # Default: show next question
+        
+        # Smart branching logic
+        if "satisfaction" in question_text or "satisfied" in question_text:
+            if answer_str in ["no", "very dissatisfied", "dissatisfied", "poor", "1", "2"]:
+                # Negative feedback - show more questions to understand issues
+                questions_to_add = 2
+            else:
+                # Positive feedback - show next question normally
+                questions_to_add = 1
+                
+        elif "recommend" in question_text:
+            if answer_str in ["no", "never", "unlikely", "0", "1", "2", "3", "4"]:
+                # Low recommendation - show improvement-focused questions
+                questions_to_add = 2
+            else:
+                # High recommendation - normal flow
+                questions_to_add = 1
+                
+        elif "rating" in question_text or "rate" in question_text:
+            try:
+                rating = float(answer_str)
+                if rating <= 5:  # Low rating
+                    # Show more questions to understand issues
+                    questions_to_add = 2
+                else:  # High rating
+                    # Normal flow
+                    questions_to_add = 1
+            except ValueError:
+                questions_to_add = 1
+                
+        elif "product" in question_text or "service" in question_text:
+            if answer_str in ["no", "poor", "bad", "terrible", "awful"]:
+                # Skip some questions, focus on feedback
+                questions_to_add = 1
+            else:
+                questions_to_add = 1
+        
+        # Add next questions progressively
+        for i in range(questions_to_add):
+            next_index = current_question_index + i + 1
+            if next_index < len(all_question_ids):
+                next_question_id = all_question_ids[next_index]
+                if next_question_id not in next_questions:
+                    next_questions.append(next_question_id)
+        
+        # Ensure we don't exceed total questions
+        next_questions = [q for q in next_questions if q in all_question_ids]
+        
+        print(f"Next questions to show: {next_questions}")
+        
+        return jsonify({
+            "next_questions": next_questions,
+            "message": f"Based on your answer '{answer}', showing {len(next_questions)} questions",
+            "total_questions": len(all_question_ids),
+            "current_progress": len(next_questions)
+        })
+        
+    except Exception as e:
+        print(f"Branching logic error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/survey/<survey_id>/track', methods=['POST'])
+def track_survey_view(survey_id):
+    """Track when a user views a survey"""
+    try:
+        data = request.json
+        username = data.get("username")
+        email = data.get("email")
+        
+        tracking_id = str(uuid.uuid4())
+        tracking_data = {
+            "_id": tracking_id,
+            "survey_id": survey_id,
+            "username": username,
+            "email": email,
+            "viewed_at": datetime.utcnow(),
+            "submitted": False
+        }
+        
+        db["survey_tracking"].insert_one(tracking_data)
+        
+        return jsonify({
+            "tracking_id": tracking_id,
+            "message": "Tracking started"
+        })
+        
+    except Exception as e:
+        print(f"Tracking error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/survey/<survey_id>/tracking', methods=['GET'])
@@ -768,6 +1000,93 @@ def get_all_responses():
         print(f"Error fetching all responses: {e}")
         return jsonify({"error": str(e)}), 500
 
+# edit survey
+@app.route('/survey/<survey_id>/edit', methods=['PUT'])
+def edit_survey(survey_id):
+    print(f"Edit survey request for ID: {survey_id}")
+    data = request.get_json()
+    print(f"Update data: {data}")
+
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+
+    try:
+        # Clean the data to remove fields that shouldn't be updated
+        update_data = {k: v for k, v in data.items() if k not in ['_id', 'created_at']}
+        
+        # Try to find survey using both _id and id fields
+        query = {"$or": [{"_id": survey_id}, {"id": survey_id}]}
+        
+        # Try ObjectId conversion for _id field
+        try:
+            from bson import ObjectId
+            if ObjectId.is_valid(survey_id):
+                query["$or"].append({"_id": ObjectId(survey_id)})
+        except:
+            pass
+        
+        print(f"Update query: {query}")
+        print(f"Update data: {update_data}")
+        
+        result = db["surveys"].update_one(
+            query,
+            { "$set": update_data }
+        )
+        
+        print(f"Update result: matched={result.matched_count}, modified={result.modified_count}")
+
+        if result.matched_count == 0:
+            return jsonify({ "error": "Survey not found" }), 404
+
+        return jsonify({ "message": "Survey updated successfully" })
+
+    except Exception as e:
+        print(f"Error updating survey: {e}")
+        return jsonify({ "error": str(e) }), 500
+
+
+# Postback URL Management Endpoints
+@app.route('/postback/outbound', methods=['POST', 'GET'])
+def manage_outbound_postback():
+    if request.method == 'POST':
+        try:
+            data = request.get_json()
+            postback_url = data.get('url', '').strip()
+            
+            if not postback_url:
+                return jsonify({"error": "URL is required"}), 400
+                
+            # Basic URL validation
+            if not postback_url.startswith(('http://', 'https://')):
+                return jsonify({"error": "URL must start with http:// or https://"}), 400
+            
+            # Save or update the postback URL
+            db["postback_config"].update_one(
+                {"_id": "outbound_url"},
+                {"$set": {"url": postback_url, "updated_at": datetime.utcnow()}},
+                upsert=True
+            )
+            
+            return jsonify({"message": "Postback URL saved successfully", "url": postback_url})
+            
+        except Exception as e:
+            print(f"Error saving postback URL: {e}")
+            return jsonify({"error": str(e)}), 500
+    
+    else:  # GET request
+        try:
+            postback_config = db["postback_config"].find_one({"_id": "outbound_url"})
+            if postback_config:
+                return jsonify({
+                    "url": postback_config.get("url", ""),
+                    "updated_at": postback_config.get("updated_at")
+                })
+            else:
+                return jsonify({"url": "", "updated_at": None})
+                
+        except Exception as e:
+            print(f"Error retrieving postback URL: {e}")
+            return jsonify({"error": str(e)}), 500
 
 
 if __name__ == '__main__':

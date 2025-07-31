@@ -1,21 +1,12 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Share2, Copy, ExternalLink, CheckCircle } from 'lucide-react';
-import CustomerFeedbackTemplate from '../templates/CustomerFeedbackTemplate';
-
-interface SurveyQuestion {
-  question: string;
-  type: 'multiple_choice' | 'rating' | 'yes_no' | 'short_answer';
-  options?: string[];
-}
 
 interface SurveyPreviewProps {
   survey: {
     survey_id: string;
-    questions: SurveyQuestion[];
     template_type: string;
-    theme: {
+    theme?: {
       font?: string;
-      animationSpeed?: number;
       colors?: {
         primary?: string;
         background?: string;
@@ -31,13 +22,13 @@ const SurveyPreview: React.FC<SurveyPreviewProps> = ({ survey }) => {
   const [copied, setCopied] = useState(false);
   const shareInputRef = useRef<HTMLInputElement>(null);
 
-  React.useEffect(() => {
-    const baseUrl = window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1'
-      ? 'http://localhost:5173'
-      : 'https://pepperadsresponses.web.app';
+  useEffect(() => {
+    const baseUrl =
+      window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'http://localhost:5173'
+        : 'https://pepperadsresponses.web.app';
 
-    const link = `${baseUrl}/survey/${survey.survey_id}`;
-    setShareLink(link);
+    setShareLink(`${baseUrl}/survey/${survey.survey_id}`);
   }, [survey.survey_id]);
 
   const copyToClipboard = async () => {
@@ -56,123 +47,69 @@ const SurveyPreview: React.FC<SurveyPreviewProps> = ({ survey }) => {
   };
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div
-        className="text-center p-8 rounded-2xl shadow-lg"
-        style={{
-          backgroundColor: survey.theme?.colors?.background || '#ffffff',
-          color: survey.theme?.colors?.text || '#1a1a1a',
-          fontFamily: survey.theme?.font || 'Poppins, sans-serif'
-        }}
-      >
-        <h1
-          className="text-3xl font-bold mb-4 flex items-center justify-center gap-3"
-          style={{ color: survey.theme?.colors?.primary || '#d90429' }}
-        >
-          <span className="text-4xl"></span>
-          {survey.prompt}
-        </h1>
-        <p className="text-lg opacity-80">
-          Share your thoughts with us - your feedback helps us improve!
-        </p>
-      </div>
-
-      {/* Share Link */}
-      <div className="bg-white rounded-2xl p-6 shadow-lg border border-red-100">
-        <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <Share2 size={20} className="text-red-600" />
-          <span className="text-xl"></span>
-          Share This Survey
-        </h3>
-        <div className="flex gap-2">
+    <div className="space-y-6">
+      {/* Share Link Section - Now on Top */}
+      <div className="bg-white rounded-xl p-5 shadow border border-gray-200">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <Share2 size={16} className="text-red-500" />
+            Share this survey
+          </h4>
+        </div>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <input
             ref={shareInputRef}
             type="text"
             value={shareLink}
             readOnly
-            className="flex-1 px-4 py-3 border border-gray-300 rounded-xl bg-gray-50"
+            className="flex-1 w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-gray-50 focus:outline-none"
           />
-          <button
-            onClick={copyToClipboard}
-            className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors flex items-center gap-2"
-          >
-            {copied ? (
-              <>
-                <CheckCircle size={18} />
-                Copied!
-              </>
-            ) : (
-              <>
-                <Copy size={18} />
-                Copy
-              </>
-            )}
-          </button>
-          <a
-            href={shareLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-6 py-3 bg-gray-900 hover:bg-black text-white rounded-xl font-medium transition-colors flex items-center gap-2"
-          >
-            <ExternalLink size={18} />
-            Open
-          </a>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <button
+              onClick={copyToClipboard}
+              className="w-full sm:w-auto px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg flex items-center justify-center gap-1"
+            >
+              {copied ? (
+                <>
+                  <CheckCircle size={14} />
+                  Copied
+                </>
+              ) : (
+                <>
+                  <Copy size={14} />
+                  Copy
+                </>
+              )}
+            </button>
+            <a
+              href={shareLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full sm:w-auto px-4 py-2 bg-gray-800 hover:bg-black text-white text-sm rounded-lg flex items-center justify-center gap-1"
+            >
+              <ExternalLink size={14} />
+              Open
+            </a>
+          </div>
         </div>
       </div>
 
-      {/* Embedded Real Template Preview */}
-      <div className="space-y-6">
-        <h3 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <span className="text-2xl"></span>
-          Survey Template Preview
-        </h3>
-        <div className="border rounded-xl overflow-hidden shadow-lg max-h-[500px] overflow-y-auto bg-white">
-          
-<div className="preview-wrapper">
-          <CustomerFeedbackTemplate
-  survey={{
-    ...survey,
-    id: survey.survey_id,
-    questions: survey.questions.map((q, idx) => ({
-      id: q.question + '-' + idx,
-      question: q.question,
-      type:
-        q.type === 'multiple_choice'
-          ? 'radio'
-          : q.type === 'rating'
-          ? 'range'
-          : q.type === 'yes_no'
-          ? 'radio'
-          : 'text',
-      options: q.options,
-    })),
-  }}
-  previewMode={true}
-/>
-</div>
-        </div>
-      </div>
-
-      {/* Submit Button Preview */}
-      <div className="text-center">
-        <button
-          className="px-8 py-4 text-white font-semibold rounded-xl shadow-lg transition-all duration-200 hover:shadow-xl cursor-not-allowed opacity-75"
+      {/* Survey Preview Section */}
+      <div className="rounded-xl border shadow bg-white overflow-hidden">
+        <iframe
+          src={shareLink}
+          title="Survey Preview"
+          className="w-full"
           style={{
-            backgroundColor: survey.theme?.colors?.primary || '#d90429',
-            fontFamily: survey.theme?.font || 'Poppins, sans-serif'
+            height: '500px',
+            transform: 'scale(0.9)',
+            transformOrigin: 'top left',
+            width: '111%',
+            border: 'none',
+            pointerEvents: 'auto',
+            overflow: 'auto',
           }}
-          disabled
-        >
-          <span className="mr-2">
-            <img
-              src="https://i.postimg.cc/9Mhc6NJ6/chilllllllli.png"
-              alt="Chilli Icon"
-              className="w-6 h-6 inline-block "
-            />
-          </span>
-          Submit Survey (Preview Mode)
-        </button>
+        />
       </div>
     </div>
   );

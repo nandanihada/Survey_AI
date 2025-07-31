@@ -1,14 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { fetchSurveys, generateInsights } from '../utils/api';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, Users, MessageSquare, Lightbulb, Loader2 } from 'lucide-react';
+import {
+  fetchSurveys,
+  generateInsights
+} from '../utils/api';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts';
+import {
+  TrendingUp,
+  Users,
+  MessageSquare,
+  Lightbulb,
+  Loader2
+} from 'lucide-react';
 
 interface Survey {
   id: string;
   prompt: string;
 }
 
-const ResponseAnalytics: React.FC = () => {
+interface ResponseAnalyticsProps {
+  isDarkMode?: boolean;
+}
+
+const ResponseAnalytics: React.FC<ResponseAnalyticsProps> = ({ isDarkMode = false }) => {
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [selectedSurvey, setSelectedSurvey] = useState('');
   const [insights, setInsights] = useState('');
@@ -64,7 +88,6 @@ const ResponseAnalytics: React.FC = () => {
       .replace(/(\r\n|\n)/g, '<br>');
   };
 
-  // Mock data for demonstration
   const sampleResponseData = [
     { name: 'Very Satisfied', value: 45, color: '#d90429' },
     { name: 'Satisfied', value: 30, color: '#ff6b6b' },
@@ -80,27 +103,46 @@ const ResponseAnalytics: React.FC = () => {
     { question: 'Q5', responses: 95 }
   ];
 
+  const base = isDarkMode
+    ? {
+        text: 'text-gray-100',
+        bg: 'bg-slate-800',
+        border: 'border-slate-600',
+        label: 'text-slate-300',
+        card: 'bg-slate-900',
+        sub: 'text-slate-400',
+        select: 'bg-slate-700 text-white'
+      }
+    : {
+        text: 'text-gray-900',
+        bg: 'bg-white',
+        border: 'border-red-100',
+        label: 'text-gray-700',
+        card: 'bg-white',
+        sub: 'text-gray-600',
+        select: 'bg-white text-gray-900'
+      };
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+        <h2 className={`text-2xl font-bold flex items-center gap-2 ${base.text}`}>
           <TrendingUp size={24} className="text-red-600" />
-          <span className="text-2xl"></span>
           Response Analytics
         </h2>
       </div>
 
       {/* Survey Selection */}
-      <div className="bg-white rounded-2xl p-6 shadow-lg border border-red-100">
+      <div className={`${base.card} rounded-2xl p-6 shadow-lg border ${base.border}`}>
         <div className="flex flex-col md:flex-row gap-4 items-end">
           <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className={`block text-sm font-medium mb-2 ${base.label}`}>
               Select Survey
             </label>
             <select
               value={selectedSurvey}
               onChange={(e) => setSelectedSurvey(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 ${base.select} ${base.border}`}
             >
               <option value="">Choose a survey...</option>
               {surveys.map((survey) => (
@@ -136,53 +178,48 @@ const ResponseAnalytics: React.FC = () => {
         )}
       </div>
 
-      {/* Analytics Dashboard */}
+      {/* Stats */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Stats Cards */}
-        <div className="bg-white rounded-2xl p-6 shadow-lg border border-red-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Responses</p>
-              <p className="text-3xl font-bold text-gray-900">1,247</p>
-            </div>
-            <div className="p-3 bg-red-100 rounded-xl">
-              <Users className="text-red-600" size={24} />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl p-6 shadow-lg border border-red-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Completion Rate</p>
-              <p className="text-3xl font-bold text-gray-900">78.5%</p>
-            </div>
-            <div className="p-3 bg-green-100 rounded-xl">
-              <TrendingUp className="text-green-600" size={24} />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl p-6 shadow-lg border border-red-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Avg. Time</p>
-              <p className="text-3xl font-bold text-gray-900">4.2m</p>
-            </div>
-            <div className="p-3 bg-blue-100 rounded-xl">
-              <MessageSquare className="text-blue-600" size={24} />
+        {[
+          {
+            title: 'Total Responses',
+            value: '1,247',
+            icon: <Users size={24} className="text-red-600" />,
+            iconBg: 'bg-red-100'
+          },
+          {
+            title: 'Completion Rate',
+            value: '78.5%',
+            icon: <TrendingUp size={24} className="text-green-600" />,
+            iconBg: 'bg-green-100'
+          },
+          {
+            title: 'Avg. Time',
+            value: '4.2m',
+            icon: <MessageSquare size={24} className="text-blue-600" />,
+            iconBg: 'bg-blue-100'
+          }
+        ].map((stat, i) => (
+          <div
+            key={i}
+            className={`${base.card} rounded-2xl p-6 shadow-lg border ${base.border}`}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-sm font-medium ${base.sub}`}>{stat.title}</p>
+                <p className={`text-3xl font-bold ${base.text}`}>{stat.value}</p>
+              </div>
+              <div className={`p-3 rounded-xl ${stat.iconBg}`}>{stat.icon}</div>
             </div>
           </div>
-        </div>
+        ))}
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl p-6 shadow-lg border border-red-100">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <span className="text-xl"></span>
-            Response Distribution
-          </h3>
+        {/* Pie Chart */}
+        <div className={`${base.card} rounded-2xl p-6 shadow-lg border ${base.border}`}>
+          <h3 className={`text-lg font-semibold mb-4 ${base.text}`}>Response Distribution</h3>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
@@ -203,16 +240,14 @@ const ResponseAnalytics: React.FC = () => {
           </ResponsiveContainer>
         </div>
 
-        <div className="bg-white rounded-2xl p-6 shadow-lg border border-red-100">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <span className="text-xl"></span>
-            Responses by Question
-          </h3>
+        {/* Bar Chart */}
+        <div className={`${base.card} rounded-2xl p-6 shadow-lg border ${base.border}`}>
+          <h3 className={`text-lg font-semibold mb-4 ${base.text}`}>Responses by Question</h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={sampleBarData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="question" />
-              <YAxis />
+              <XAxis dataKey="question" stroke={isDarkMode ? '#ccc' : '#000'} />
+              <YAxis stroke={isDarkMode ? '#ccc' : '#000'} />
               <Tooltip />
               <Bar dataKey="responses" fill="#d90429" radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -220,16 +255,15 @@ const ResponseAnalytics: React.FC = () => {
         </div>
       </div>
 
-      {/* AI Insights */}
+      {/* Insights */}
       {insights && (
-        <div className="bg-gradient-to-br from-red-50 to-pink-50 rounded-2xl p-6 shadow-lg border border-red-100">
+        <div className={`bg-gradient-to-br from-red-50 to-pink-50 rounded-2xl p-6 shadow-lg border ${base.border}`}>
           <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <Lightbulb className="text-red-600" size={24} />
-            <span className="text-2xl"></span>
             AI-Generated Business Insights
           </h3>
-          <div 
-            className="prose prose-red max-w-none text-gray-700 leading-relaxed"
+          <div
+            className={`prose max-w-none leading-relaxed ${isDarkMode ? 'text-slate-200' : 'text-gray-700'}`}
             dangerouslySetInnerHTML={{ __html: formatInsights(insights) }}
           />
         </div>

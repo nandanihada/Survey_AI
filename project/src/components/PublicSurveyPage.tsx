@@ -29,6 +29,8 @@ import CustomerFeedbackTemplate from '../templates/CustomerFeedbackTemplate';
 // Mapping template types to components
 const templateMap: Record<string, React.ComponentType<{ survey: Survey }>> = {
   customer_feedback: CustomerFeedbackTemplate,
+  custom: CustomerFeedbackTemplate, // Use same template for custom surveys
+  default: CustomerFeedbackTemplate, // Fallback
 
   // Add other templates here...
 };

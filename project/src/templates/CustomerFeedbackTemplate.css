@@ -167,6 +167,31 @@
       transition: all 0.3s ease;
       animation: fadeInUp 0.6s ease-out;
       animation-fill-mode: both;
+      position: relative;
+    }
+    
+    /* Answered question styling */
+    .question-block.answered {
+      background: rgba(102, 126, 234, 0.1);
+      border: 1px solid rgba(102, 126, 234, 0.3);
+      box-shadow: 0 0 20px rgba(102, 126, 234, 0.2);
+    }
+    
+    .question-block.answered::after {
+      content: '✓';
+      position: absolute;
+      top: 15px;
+      right: 20px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 16px;
     }
 
     .question-block:nth-child(1) { animation-delay: 0.1s; }
@@ -454,6 +479,26 @@
     .success-animation.show .success-content {
       transform: scale(1);
     }
+    
+    /* Loading indicator */
+    .loading-indicator {
+      text-align: center;
+      padding: 20px;
+      color: #4ade80;
+      font-size: 1.1rem;
+      font-weight: 500;
+    }
+    
+    .loading-indicator .spin {
+      animation: spin 1s linear infinite;
+      margin-right: 10px;
+    }
+    
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    
     .survey-tagline {
   font-size: 1.1rem;
   font-weight: 500;
