@@ -3,7 +3,7 @@ import TemplateSelector from './TemplateSelector';
 import ThemeSelector from './ThemeSelector';
 import SurveyPreview from './SurveyPreview';
 import { generateSurvey } from '../utils/api';
-import { Sparkles, Loader2, MessageSquare} from 'lucide-react';
+import { Sparkles, Loader2, MessageSquare, Hash } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 interface Question {
   id: string;
@@ -37,6 +37,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
   const navigate = useNavigate();
   const [surveyTopic, setSurveyTopic] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState('custom');
+  const [questionCount, setQuestionCount] = useState(10);
   const [theme, setTheme] = useState({
     font: 'Poppins, sans-serif',
     intent: 'professional',
@@ -65,6 +66,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
         prompt: surveyTopic,
         template_type: selectedTemplate,
         theme,
+        question_count: questionCount,
       };
 
       const result = await generateSurvey(requestData);
@@ -152,57 +154,42 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
               />
             </div>
 
-            {/* Settings */}
-            {/* <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label
-                  className={`block text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                    isDarkMode ? 'text-slate-300' : 'text-stone-700'
-                  }`}
-                >
-                  <Settings size={14} />
-                  Response Type
-                </label>
-                <select
-                  value={responseType}
-                  onChange={(e) => setResponseType(e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-colors ${
-                    isDarkMode
-                      ? 'bg-slate-700/50 border-slate-600 text-white'
-                      : 'bg-stone-50 border-stone-300'
-                  }`}
-                >
-                  <option value="multiple_choice">Multiple Choice</option>
-                  <option value="likert_scale">Likert Scale</option>
-                  <option value="yes_no">Yes/No</option>
-                </select>
-              </div>
-
-              <div>
-                <label
-                  className={`block text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                    isDarkMode ? 'text-slate-300' : 'text-stone-700'
-                  }`}
-                >
-                  <Hash size={14} />
-                  Questions
-                </label>
-                <input
-                  type="number"
-                  value={questionCount}
-                  onChange={(e) =>
-                    setQuestionCount(parseInt(e.target.value) || 10)
-                  }
-                  min="1"
-                  max="30"
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-colors ${
-                    isDarkMode
-                      ? 'bg-slate-700/50 border-slate-600 text-white'
-                      : 'bg-stone-50 border-stone-300'
-                  }`}
-                />
-              </div>
-            </div> */}
+            {/* Question Count */}
+            <div>
+              <label
+                className={`block text-sm font-medium mb-2 flex items-center gap-1.5 ${
+                  isDarkMode ? 'text-slate-300' : 'text-stone-700'
+                }`}
+              >
+                <Hash size={14} />
+                Number of Questions
+              </label>
+              <select
+                value={questionCount}
+                onChange={(e) => setQuestionCount(parseInt(e.target.value))}
+                className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-colors ${
+                  isDarkMode
+                    ? 'bg-slate-700/50 border-slate-600 text-white'
+                    : 'bg-stone-50 border-stone-300'
+                }`}
+              >
+                <option value={5}>5 Questions</option>
+                <option value={10}>10 Questions</option>
+                <option value={12}>12 Questions</option>
+                <option value={15}>15 Questions</option>
+                <option value={20}>20 Questions</option>
+                <option value={25}>25 Questions</option>
+                <option value={30}>30 Questions</option>
+                <option value={50}>50 Questions</option>
+                <option value={75}>75 Questions</option>
+                <option value={100}>100 Questions</option>
+              </select>
+              <p className={`text-xs mt-1 ${
+                isDarkMode ? 'text-slate-400' : 'text-stone-500'
+              }`}>
+                Choose how many questions you want in your survey (5-100)
+              </p>
+            </div>
 
             {/* Generate Button */}
             <button

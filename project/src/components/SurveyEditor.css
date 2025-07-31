@@ -29,6 +29,26 @@
   min-height: 80px;
   font-size: 14px;
   line-height: 1.5;
+  padding: 12px;
+}
+
+/* Fix ReactQuill <p> tag issues */
+.question-editor .ql-editor p {
+  margin: 0;
+  padding: 0;
+}
+
+.question-editor .ql-editor > p:first-child {
+  margin-top: 0;
+}
+
+.question-editor .ql-editor > p:last-child {
+  margin-bottom: 0;
+}
+
+.question-editor .ql-editor:empty::before {
+  font-style: italic;
+  color: #9ca3af;
 }
 
 .question-editor .ql-toolbar {
@@ -87,6 +107,8 @@
   transition: all 0.2s ease;
   border: 1px solid #e5e7eb;
   background: white;
+  contain: layout style;
+  will-change: transform;
 }
 
 .question-card:hover {
@@ -159,6 +181,37 @@
     grid-template-columns: 1fr;
     gap: 1rem;
   }
+}
+
+/* Performance optimizations */
+.question-editor {
+  contain: layout style;
+  will-change: contents;
+}
+
+.question-list {
+  contain: layout;
+}
+
+.question-item {
+  contain: layout style;
+  transform: translateZ(0); /* Force GPU acceleration */
+}
+
+.transition-smooth {
+  transition: all 0.15s cubic-bezier(0.1, 0.7, 0.1, 1);
+}
+
+.preview-iframe {
+  contain: strict;
+  isolation: isolate;
+}
+
+.survey-editor-loading {
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 @media (max-width: 768px) {

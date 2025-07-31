@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   DndContext, 
@@ -55,7 +55,7 @@ interface SortableQuestionProps {
   onDuplicate: (index: number) => void;
 }
 
-const SortableQuestion: React.FC<SortableQuestionProps> = ({ 
+const SortableQuestion: React.FC<SortableQuestionProps> = React.memo(({ 
   question, 
   index, 
   onUpdate, 
@@ -94,7 +94,7 @@ const SortableQuestion: React.FC<SortableQuestionProps> = ({
     toolbar: [
       ['bold', 'italic', 'underline'],
       [{ 'color': [] }, { 'background': [] }],
-      [{ 'size': ['small', false, 'large', 'huge'] }],
+      [{ 'size': ['small', false, 'large'] }],
       [{ 'align': [] }],
       ['clean']
     ],
@@ -103,6 +103,24 @@ const SortableQuestion: React.FC<SortableQuestionProps> = ({
   const quillFormats = [
     'bold', 'italic', 'underline', 'color', 'background', 'size', 'align'
   ];
+
+  // Function to strip HTML tags except allowed formatting
+  const stripUnnecessaryHTML = (htmlString: string): string => {
+    if (!htmlString) return '';
+    
+    // Remove <p> tags but keep content
+    let cleaned = htmlString.replace(/<p>/g, '').replace(/<\/p>/g, '');
+    
+    // Remove empty <br> tags at the end
+    cleaned = cleaned.replace(/<br\s*\/?\s*>$/g, '');
+    
+    // If the result is empty or just whitespace, return plain text
+    if (cleaned.trim() === '' || cleaned.trim() === '<br>') {
+      return htmlString.replace(/<[^>]*>/g, '').trim();
+    }
+    
+    return cleaned.trim();
+  };
 
   return (
     <div
@@ -150,7 +168,10 @@ const SortableQuestion: React.FC<SortableQuestionProps> = ({
               </label>
               <ReactQuill
                 value={question.question}
-                onChange={(value) => onUpdate(index, 'question', value)}
+                onChange={(value) => {
+                  const cleanedValue = stripUnnecessaryHTML(value);
+                  onUpdate(index, 'question', cleanedValue);
+                }}
                 modules={quillModules}
                 formats={quillFormats}
                 theme="snow"
@@ -265,7 +286,7 @@ const SortableQuestion: React.FC<SortableQuestionProps> = ({
       </div>
     </div>
   );
-};
+});
 
 const SurveyEditor: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -445,7 +466,7 @@ const SurveyEditor: React.FC = () => {
     }
   };
 
-  const handleQuestionUpdate = (index: number, field: keyof Question, value: any) => {
+  const handleQuestionUpdate = useCallback((index: number, field: keyof Question, value: any) => {
     if (!survey) return;
     
     const updatedQuestions = [...survey.questions];
@@ -454,18 +475,18 @@ const SurveyEditor: React.FC = () => {
     const updatedSurvey = { ...survey, questions: updatedQuestions };
     setSurvey(updatedSurvey);
     saveToHistory(updatedSurvey);
-  };
+  }, [survey, saveToHistory]);
 
-  const handleQuestionDelete = (index: number) => {
+  const handleQuestionDelete = useCallback((index: number) => {
     if (!survey) return;
     
     const updatedQuestions = survey.questions.filter((_, i) => i !== index);
     const updatedSurvey = { ...survey, questions: updatedQuestions };
     setSurvey(updatedSurvey);
     saveToHistory(updatedSurvey);
-  };
+  }, [survey, saveToHistory]);
 
-  const handleQuestionDuplicate = (index: number) => {
+  const handleQuestionDuplicate = useCallback((index: number) => {
     if (!survey) return;
     
     const questionToDuplicate = survey.questions[index];
@@ -480,7 +501,7 @@ const SurveyEditor: React.FC = () => {
     const updatedSurvey = { ...survey, questions: updatedQuestions };
     setSurvey(updatedSurvey);
     saveToHistory(updatedSurvey);
-  };
+  }, [survey, saveToHistory]);
 
   const addNewQuestion = (template?: string) => {
     if (!survey) return;
