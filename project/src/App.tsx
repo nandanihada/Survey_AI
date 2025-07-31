@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/Tabs';
 import SurveyForm from './components/SurveyForm';
@@ -25,6 +25,33 @@ function Dashboard() {
 // State for widget settings
   const [widgetSettings, setWidgetSettings] = useState<WidgetCustomizerSettings | null>(null);
 
+  // Memoized default settings
+  const defaultSettings = useMemo(() => ({
+    color: 'red',
+    transparency: 95,
+    glassEffect: true,
+    animationSpeed: 50,
+    questionDelay: 2000,
+    questionAnimation: 'simple',
+    answerAnimation: 'simple',
+    smartDelay: true,
+    minDelay: 2000,
+    maxDelay: 50000,
+    questions: [
+      {
+        id: 'q1',
+        text: 'How are you feeling about your experience so far?',
+        type: 'emoji',
+        options: [
+          { id: 'opt1', label: 'Amazing', emoji: '🤩' },
+          { id: 'opt2', label: 'Good', emoji: '😊' },
+          { id: 'opt3', label: 'Okay', emoji: '😐' },
+          { id: 'opt4', label: 'Frustrated', emoji: '😤' }
+        ]
+      }
+    ]
+  }), []);
+
   // Load settings from localStorage and listen for changes
   useEffect(() => {
     const loadSettings = () => {
@@ -34,42 +61,15 @@ function Dashboard() {
           setWidgetSettings(JSON.parse(savedSettings));
         } catch (error) {
           console.error('Error parsing saved widget settings:', error);
-          setDefaultSettings();
+          setWidgetSettings(defaultSettings);
+          localStorage.setItem('widgetCustomizerSettings', JSON.stringify(defaultSettings));
         }
       } else {
-        setDefaultSettings();
+        setWidgetSettings(defaultSettings);
+        localStorage.setItem('widgetCustomizerSettings', JSON.stringify(defaultSettings));
       }
     };
 
-    const setDefaultSettings = () => {
-      const defaultSettings = {
-        color: 'red',
-        transparency: 95,
-        glassEffect: true,
-        animationSpeed: 50,
-        questionDelay: 2000,
-        questionAnimation: 'simple',
-        answerAnimation: 'simple',
-        smartDelay: true,
-        minDelay: 2000,
-        maxDelay: 50000,
-        questions: [
-          {
-            id: 'q1',
-            text: 'How are you feeling about your experience so far?',
-            type: 'emoji',
-            options: [
-              { id: 'opt1', label: 'Amazing', emoji: '🤩' },
-              { id: 'opt2', label: 'Good', emoji: '😊' },
-              { id: 'opt3', label: 'Okay', emoji: '😐' },
-              { id: 'opt4', label: 'Frustrated', emoji: '😤' }
-            ]
-          }
-        ]
-      };
-      setWidgetSettings(defaultSettings);
-      localStorage.setItem('widgetCustomizerSettings', JSON.stringify(defaultSettings));
-    };
 
     loadSettings();
 
@@ -97,24 +97,24 @@ function Dashboard() {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('widgetSettingsUpdated', handleCustomEvent as EventListener);
     };
-  }, []);
+  }, [defaultSettings]);
 
-  const toggleTheme = () => setIsDarkMode(!isDarkMode);
+  const toggleTheme = useCallback(() => setIsDarkMode(!isDarkMode), []);
 
-  const handleWidgetComplete = (responses: Record<string, string>) => {
+  const handleWidgetComplete = useCallback((responses: Record<string, string>) => {
     console.log('Widget completed with responses:', responses);
     setShowPreviewWidget(false);
     // You can integrate this with your analytics or backend here
-  };
+  }, []);
 
-  const handleWidgetDismiss = () => {
+  const handleWidgetDismiss = useCallback(() => {
     console.log('Widget dismissed');
     setShowPreviewWidget(false);
-  };
+  }, []);
 
-  const showWidgetPreview = () => {
+  const showWidgetPreview = useCallback(() => {
     setShowPreviewWidget(true);
-  };
+  }, []);
 
   const toggleAutoPreview = () => {
     setAutoPreviewEnabled(!autoPreviewEnabled);

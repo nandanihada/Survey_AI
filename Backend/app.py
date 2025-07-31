@@ -283,26 +283,21 @@ def generate_survey():
         print(f"Response type: {response_type}")
         print(f"Prompt: {prompt[:100]}...")
 
-        # Get question count - allow more for custom template
+        # Get question count - flexible for all templates
         try:
             question_count = int(data.get("question_count", 10))
-            if template_type == "custom":
-                # For custom template, allow more questions
-                if question_count < 5 or question_count > 100:
-                    return jsonify({"error": "For custom surveys, question count must be between 5 and 100"}), 400
-            else:
-                # For regular templates, keep existing limit
-                if question_count < 1 or question_count > 50:
-                    return jsonify({"error": "Question count must be between 1 and 50"}), 400
+            # Allow flexible question count for all templates (5-100)
+            if question_count < 5 or question_count > 100:
+                return jsonify({"error": "Question count must be between 5 and 100"}), 400
         except ValueError:
             return jsonify({"error": "Invalid question count"}), 400
 
         # Define prompt templates with the current question_count and prompt
         prompt_templates = {
             "custom": f"""
-            Generate a comprehensive survey about "{prompt}" with as many questions as needed to thoroughly explore this topic.
+            Generate a comprehensive survey about "{prompt}" with exactly {question_count} questions that thoroughly explore this topic.
             
-            Create between 10 questions that cover all important aspects. Be creative and thorough.
+            Create exactly {question_count} questions that cover all important aspects. Be creative and thorough.
             
             Use this exact format:
             
@@ -335,7 +330,7 @@ def generate_survey():
             """,
             
             "customer_feedback": f"""
-            Generate exactly 10 survey questions for customer feedback about "{prompt}".
+            Generate exactly {question_count} survey questions for customer feedback about "{prompt}".
 
             Use this exact format:
 
@@ -362,19 +357,19 @@ def generate_survey():
             - Yes/No = Only two options: A) Yes, B) No
             - Rating, Short Answer, and Opinion Scale = No options needed
 
-            Distribution:
-            - 3 Multiple Choice questions  
-            - 2 Rating questions  
-            - 2 Yes/No questions  
-            - 2 Short Answer questions  
-            - 1 Opinion Scale question
+            Create a good distribution of question types across all {question_count} questions:
+            - Multiple Choice questions (about 30%)
+            - Rating questions (about 20%) 
+            - Yes/No questions (about 20%)
+            - Short Answer questions (about 20%)
+            - Opinion Scale questions (about 10%)
 
-            Do not include any explanation — only return the 10 formatted questions in order.
+            Do not include any explanation — only return the {question_count} formatted questions in order.
             """
             ,
 
             "default": f"""
-                                 Generate exactly 10 survey questions about "{prompt}".
+                                 Generate exactly {question_count} survey questions about "{prompt}".
 
                                  Use this exact format:
 
