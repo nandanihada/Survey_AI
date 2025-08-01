@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import OptimizedLoader from './OptimizedLoader';
+import TemplateSelector from './TemplateSelector';
 import type { Survey, Question } from '../types/Survey';
-import { Plus, Trash2, Save, ArrowLeft } from 'lucide-react';
+import { Plus, Trash2, Save, ArrowLeft, Grid3X3 } from 'lucide-react';
 import './SurveyEditor.css';
 
 interface SimpleQuestionProps {
@@ -348,6 +349,23 @@ const SurveyEditor: React.FC = () => {
                 placeholder="Enter survey description"
                 rows={3}
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                <Grid3X3 size={16} />
+                Survey Template
+              </label>
+              <div className="border border-gray-300 rounded-md p-4">
+                <TemplateSelector
+                  selectedTemplate={survey.template_type || 'custom'}
+                  onSelectTemplate={(newTemplate) => setSurvey({ ...survey, template_type: newTemplate })}
+                  isDarkMode={false}
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Changing the template will affect how your survey is displayed to respondents.
+              </p>
             </div>
           </div>
         </div>

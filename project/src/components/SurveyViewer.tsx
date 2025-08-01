@@ -1,5 +1,7 @@
 import React from 'react';
 import CustomerFeedbackTemplate from '../templates/CustomerFeedbackTemplate';
+import EmployeeCheckInTemplate from '../templates/EmployeeCheckInTemplate';
+import AICustomTemplate from '../templates/AICustomTemplate';
 import type { Survey } from '../types/Survey';
 
 interface SurveyViewerProps {
@@ -8,11 +10,12 @@ interface SurveyViewerProps {
 
 const templateMap: Record<string, React.ComponentType<{ survey: Survey }>> = {
   customer_feedback: CustomerFeedbackTemplate,
-  // add more mappings if needed
+  employee_checkin: EmployeeCheckInTemplate,
+  custom: AICustomTemplate,
 };
 
 const SurveyViewer: React.FC<SurveyViewerProps> = ({ survey }) => {
-  const TemplateComponent = templateMap[survey.template_type];
+  const TemplateComponent = templateMap[survey.template_type] || templateMap['customer_feedback'];
 
   if (!TemplateComponent) {
     return (

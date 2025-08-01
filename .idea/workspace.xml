@@ -7,11 +7,12 @@
     <list default="true" id="bbe779bd-d937-43a2-a891-54e9d6982d2b" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Backend/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/app.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/project/package-lock.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/project/package.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/App.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/components/SurveyEditor.css" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/SurveyEditor.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/project/src/components/PublicSurveyPage.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/PublicSurveyPage.tsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/project/src/components/SurveyEditor.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/SurveyEditor.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/project/src/components/SurveyViewer.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/SurveyViewer.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/project/src/components/TemplateSelector.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/TemplateSelector.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/project/src/templates/EmployeeSurveyTemplate.css" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/project/src/templates/EmployeeSurveyTemplate.tsx" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -39,6 +40,35 @@
     &quot;last_opened_file_path&quot;: &quot;D:/pepeleads/blank/Survey_AI&quot;
   }
 }</component>
+  <component name="RunManager">
+    <configuration name="app" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="Survey_AI" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/Backend" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/Backend/app.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.app" />
+      </list>
+    </recent_temporary>
+  </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>

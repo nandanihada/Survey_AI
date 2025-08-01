@@ -365,8 +365,45 @@ def generate_survey():
             - Opinion Scale questions (about 10%)
 
             Do not include any explanation — only return the {question_count} formatted questions in order.
-            """
-            ,
+            """,
+
+            "employee_checkin": f"""
+            Generate exactly {question_count} employee check-in survey questions about "{prompt}".
+
+            Use this exact format:
+
+            1. Question text here (Multiple Choice)  
+            A) Option 1  
+            B) Option 2  
+            C) Option 3  
+            D) Option 4  
+
+            2. Question text here (Rating 1-5)
+
+            3. Question text here (Yes/No)  
+            A) Yes  
+            B) No  
+
+            4. Question text here (Short Answer)
+
+            5. Question text here (Opinion Scale 1-10)
+
+            Important Rules:
+            - Start each question with a number and period (1. 2. 3. etc)
+            - Include the question type in parentheses exactly as shown
+            - Multiple Choice = 4 options (A-D)
+            - Yes/No = Only two options: A) Yes, B) No
+            - Rating, Short Answer, and Opinion Scale = No options needed
+
+            Create a good distribution of question types across all {question_count} questions:
+            - Multiple Choice questions (about 30%)
+            - Rating questions (about 20%) 
+            - Yes/No questions (about 20%)
+            - Short Answer questions (about 20%)
+            - Opinion Scale questions (about 10%)
+
+            Do not include any explanation — only return the {question_count} formatted questions in order.
+            """,
 
             "default": f"""
                                  Generate exactly {question_count} survey questions about "{prompt}".

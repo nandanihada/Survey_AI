@@ -38,7 +38,7 @@ const templatesData: Template[] = [
     description: 'Unlimited questions, AI-generated',
     gradient: 'from-gradient-start to-gradient-end',
     icon: <Sparkles size={14} />,
-    imageUrl: 'https://images.unsplash.com/photo-1677442136019-21780ecad995?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3'
+    imageUrl: 'https://images.unsplash.com/photo-1620121692029-d088224ddc74?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=500&q=80'
   },
   {
     id: 'customer_feedback',

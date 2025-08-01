@@ -4,10 +4,10 @@ import axios from 'axios';
 import type { Survey } from '../types/Survey';
 // import type { Survey } from '../types/Survey'; // Adjust the path if needed
 
-// ImSurvey, port all templates
+// Import all templates
 import CustomerFeedbackTemplate from '../templates/CustomerFeedbackTemplate';
-
-// import other templates as needed...
+import EmployeeCheckInTemplate from '../templates/EmployeeCheckInTemplate';
+import AICustomTemplate from '../templates/AICustomTemplate';
 
 // Define fallback Survey type if you don't have a separate shared file
 // interface Question {
@@ -24,12 +24,12 @@ import CustomerFeedbackTemplate from '../templates/CustomerFeedbackTemplate';
 //   template_type: string;
 //   questions: Question[];
 //   [key: string]: unknown;
-  
 // }
 // Mapping template types to components
 const templateMap: Record<string, React.ComponentType<{ survey: Survey }>> = {
   customer_feedback: CustomerFeedbackTemplate,
-  custom: CustomerFeedbackTemplate, // Use same template for custom surveys
+  employee_checkin: EmployeeCheckInTemplate,
+  custom: AICustomTemplate, // AI Custom template
   default: CustomerFeedbackTemplate, // Fallback
 
   // Add other templates here...
