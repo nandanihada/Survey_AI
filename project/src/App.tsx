@@ -15,6 +15,7 @@ import FloatingWidget from './components/FloatingWidget';
 import { WidgetResponsesView } from './components/WidgetResponsesView';
 import { WidgetCustomizer, WidgetCustomizerSettings, Question } from './components/WidgetCustomizer';
 import { PenSquare, FolderOpen, TrendingUp, Link, Sun, Moon } from 'lucide-react';
+import './styles/mobile-responsive.css';
 
 function Dashboard() {
   const [activeTab, setActiveTab] = useState('create');
@@ -145,17 +146,17 @@ function Dashboard() {
       onWidgetComplete={handleWidgetComplete}
       onWidgetDismiss={handleWidgetDismiss}
     >
-      <div className={`min-h-screen transition-all duration-300 ${isDarkMode ? 'bg-dark-theme text-white' : 'bg-light-theme text-stone-800'}`}>
+      <div className={`min-h-screen transition-all duration-300 mobile-scroll safe-area-inset ${isDarkMode ? 'bg-dark-theme text-white' : 'bg-light-theme text-stone-800'}`}>
       {/* Header */}
       <div className={`border-b ${isDarkMode ? 'bg-slate-800/90 border-slate-700' : 'bg-white/90 border-stone-200'} backdrop-blur-sm`}>
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between flex-wrap gap-3">
           {/* Logo */}
-          <div className="flex items-center gap-3">
-            <div className={`w-6 h-6 rounded flex items-center justify-center text-xs ${isDarkMode ? 'bg-red-500/20 text-red-400' : 'bg-red-50 text-red-600'}`}>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded flex items-center justify-center text-xs ${isDarkMode ? 'bg-red-500/20 text-red-400' : 'bg-red-50 text-red-600'}`}>
               <img
                 src="https://i.postimg.cc/9Mhc6NJ6/chilllllllli.png"
                 alt="Chilli Icon"
-                className="w-5 h-5"
+                className="w-4 h-4 sm:w-5 sm:h-5"
                 style={{ animation: 'wiggleGlow 1s infinite', filter: 'drop-shadow(0 0 4px red)' }}
               />
               <style>{`@keyframes wiggleGlow {
@@ -164,34 +165,64 @@ function Dashboard() {
                 75%{transform:rotate(-5deg);filter:drop-shadow(0 0 10px red)}
               }`}</style>
             </div>
-            <span className="text-base font-medium">AI Survey</span>
+            <span className="text-sm sm:text-base font-medium">AI Survey</span>
           </div>
 
-          {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className={`grid grid-cols-5 rounded-lg p-1 text-xs ${isDarkMode ? 'bg-slate-700/40' : 'bg-stone-100'}`}>
-              {[
-                { value: 'create', icon: PenSquare, label: 'Create' },
-                { value: 'surveys', icon: FolderOpen, label: 'Surveys' },
-                { value: 'responses', icon: TrendingUp, label: 'Analytics' },
-                { value: 'postback', icon: Link, label: 'Postback' },
-                { value: 'testlab', icon: () => <span className="text-xs">🧪</span>, label: 'Test Lab' }
-              ].map(({ value, icon: Icon, label }) => (
-                <TabsTrigger
-                  key={value}
-                  value={value}
-                  className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-md transition-all duration-150 ${
-                    isDarkMode
-                      ? 'data-[state=active]:bg-red-500 data-[state=active]:text-white text-slate-300 hover:text-white'
-                      : 'data-[state=active]:bg-white data-[state=active]:text-red-600 text-stone-600 hover:text-stone-800'
-                  }`}
-                >
-                  <Icon size={14} />
-                  {label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+          {/* Mobile Navigation - Hidden on mobile, shown on tablet+ */}
+          <div className="hidden md:flex">
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className={`grid grid-cols-5 rounded-lg p-1 text-xs ${isDarkMode ? 'bg-slate-700/40' : 'bg-stone-100'}`}>
+                {[
+                  { value: 'create', icon: PenSquare, label: 'Create' },
+                  { value: 'surveys', icon: FolderOpen, label: 'Surveys' },
+                  { value: 'responses', icon: TrendingUp, label: 'Analytics' },
+                  { value: 'postback', icon: Link, label: 'Postback' },
+                  { value: 'testlab', icon: () => <span className="text-xs">🧪</span>, label: 'Test Lab' }
+                ].map(({ value, icon: Icon, label }) => (
+                  <TabsTrigger
+                    key={value}
+                    value={value}
+                    className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-md transition-all duration-150 ${
+                      isDarkMode
+                        ? 'data-[state=active]:bg-red-500 data-[state=active]:text-white text-slate-300 hover:text-white'
+                        : 'data-[state=active]:bg-white data-[state=active]:text-red-600 text-stone-600 hover:text-stone-800'
+                    }`}
+                  >
+                    <Icon size={14} />
+                    <span className="hidden lg:inline">{label}</span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </div>
+
+          {/* Mobile Tabs - Visible only on mobile */}
+          <div className="md:hidden w-full order-3">
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className={`grid grid-cols-5 rounded-lg p-1 text-xs w-full ${isDarkMode ? 'bg-slate-700/40' : 'bg-stone-100'}`}>
+                {[
+                  { value: 'create', icon: PenSquare, label: 'Create' },
+                  { value: 'surveys', icon: FolderOpen, label: 'Surveys' },
+                  { value: 'responses', icon: TrendingUp, label: 'Analytics' },
+                  { value: 'postback', icon: Link, label: 'Postback' },
+                  { value: 'testlab', icon: () => <span className="text-xs">🧪</span>, label: 'Test Lab' }
+                ].map(({ value, icon: Icon, label }) => (
+                  <TabsTrigger
+                    key={value}
+                    value={value}
+                    className={`flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-md transition-all duration-150 ${
+                      isDarkMode
+                        ? 'data-[state=active]:bg-red-500 data-[state=active]:text-white text-slate-300 hover:text-white'
+                        : 'data-[state=active]:bg-white data-[state=active]:text-red-600 text-stone-600 hover:text-stone-800'
+                    }`}
+                  >
+                    <Icon size={12} />
+                    <span className="text-xs leading-none">{label}</span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </div>
 
           {/* Theme Toggle */}
           <button
@@ -206,20 +237,20 @@ function Dashboard() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex max-w-7xl mx-auto px-6 py-8 gap-6 min-h-screen">
+      <div className="flex flex-col lg:flex-row max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8 gap-4 sm:gap-6 min-h-screen">
         
         {/* Main Content */}
-        <div className="flex-1">
+        <div className="flex-1 w-full">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsContent value="create">
-              <div className="space-y-6">
+              <div className="space-y-4 sm:space-y-6">
                 <SurveyForm isDarkMode={isDarkMode} />
                 
                 {/* Widget Preview Section */}
-                <div className={`p-6 rounded-lg border ${
+                <div className={`p-4 sm:p-6 rounded-lg border ${
                   isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-stone-200'
                 }`}>
-                  <h3 className={`text-lg font-semibold mb-3 ${
+                  <h3 className={`text-base sm:text-lg font-semibold mb-3 ${
                     isDarkMode ? 'text-white' : 'text-stone-800'
                   }`}>Widget Preview</h3>
                   <p className={`text-sm mb-4 ${
@@ -227,10 +258,10 @@ function Dashboard() {
                   }`}>
                     See how your survey widget will appear to visitors.
                   </p>
-                  <div className="flex gap-3 items-center">
+                  <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
                     <button
                       onClick={showWidgetPreview}
-                      className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                      className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm sm:text-base"
                     >
                       Preview Widget
                     </button>
@@ -279,9 +310,6 @@ function Dashboard() {
         </div>
       </div>
       </div>
-      
-      {/* Debug component (only shows in development) */}
-      <FloatingWidgetDebug />
       
       {/* Preview Widget */}
       {showPreviewWidget && widgetSettings && (

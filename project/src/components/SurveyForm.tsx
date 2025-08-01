@@ -85,9 +85,9 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
   };
 
   return (
-    <div className="grid grid-cols-12 px-0 gap-4 py-6">
+    <div className="grid grid-cols-1 lg:grid-cols-12 px-0 gap-4 py-6">
       {/* Left Sidebar - Theme */}
-      <div className="col-span-3">
+      <div className="col-span-1 lg:col-span-3 order-2 lg:order-1">
         <div
           className={`rounded-xl border transition-all duration-300 ${
             isDarkMode
@@ -104,10 +104,10 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
       </div>
 
       {/* Center Content */}
-      <div className="col-span-6 space-y-6">
+      <div className="col-span-1 lg:col-span-6 space-y-6 order-1 lg:order-2">
         {/* Form Card */}
         <div
-          className={`rounded-xl border p-6 transition-all duration-300 ${
+          className={`rounded-xl border p-4 sm:p-6 transition-all duration-300 ${
             isDarkMode
               ? 'bg-slate-800/50 border-slate-700'
               : 'bg-white border-stone-200 shadow-sm'
@@ -235,7 +235,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
       </div>
 
        {/* Right Sidebar - Preview */}
-      <div className="col-span-3">
+      <div className="col-span-1 lg:col-span-3 order-3">
         {generatedSurvey ? (
           <>
             <SurveyPreview
@@ -250,13 +250,13 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
             <div className="mt-4 space-y-2">
               <button
                 onClick={() => navigate(`/preview/${generatedSurvey.survey_id}`)}
-                className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition-all"
+                className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition-all text-sm"
               >
                 Preview Survey
               </button>
               <button
                 onClick={() => navigate(`/edit/${generatedSurvey.survey_id}`)}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-all"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-all text-sm"
               >
                 Edit Survey
               </button>
@@ -264,24 +264,24 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
           </>
         ) : (
           <div
-            className={`rounded-xl border h-96 flex items-center justify-center transition-all duration-300 ${
+            className={`rounded-xl border h-64 lg:h-96 flex items-center justify-center transition-all duration-300 ${
               isDarkMode
                 ? 'bg-slate-800/50 border-slate-700'
                 : 'bg-white border-stone-200 shadow-sm'
             }`}
           >
-            <div className="text-center">
+            <div className="text-center px-4">
               <div
-                className={`w-12 h-12 rounded-lg mx-auto mb-3 flex items-center justify-center ${
+                className={`w-10 h-10 lg:w-12 lg:h-12 rounded-lg mx-auto mb-3 flex items-center justify-center ${
                   isDarkMode
                     ? 'bg-slate-700 text-slate-400'
                     : 'bg-stone-100 text-stone-400'
                 }`}
               >
-                <MessageSquare size={20} />
+                <MessageSquare size={18} className="lg:w-5 lg:h-5" />
               </div>
               <p
-                className={`text-sm font-medium ${
+                className={`text-xs lg:text-sm font-medium ${
                   isDarkMode ? 'text-slate-300' : 'text-stone-600'
                 }`}
               >

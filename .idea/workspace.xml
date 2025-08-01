@@ -6,13 +6,11 @@
   <component name="ChangeListManager">
     <list default="true" id="bbe779bd-d937-43a2-a891-54e9d6982d2b" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Backend/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/app.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/components/PublicSurveyPage.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/PublicSurveyPage.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/components/SurveyEditor.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/SurveyEditor.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/components/SurveyViewer.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/SurveyViewer.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/components/TemplateSelector.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/TemplateSelector.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/templates/EmployeeSurveyTemplate.css" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/templates/EmployeeSurveyTemplate.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/project/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/project/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/project/src/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/App.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/project/src/components/SurveyForm.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/SurveyForm.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/project/src/templates/AICustomTemplate.css" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/templates/AICustomTemplate.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/project/src/templates/CustomerFeedbackTemplate.css" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/templates/CustomerFeedbackTemplate.css" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

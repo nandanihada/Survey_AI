@@ -1,0 +1,216 @@
+/* Mobile Responsive Styles */
+
+/* Base responsive adjustments */
+@media (max-width: 768px) {
+  .min-h-screen {
+    min-height: 100vh;
+  }
+  
+  /* Improved touch targets */
+  button, .button {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+  
+  /* Better form inputs on mobile */
+  input[type="text"], 
+  input[type="email"],
+  input[type="password"],
+  textarea,
+  select {
+    font-size: 16px; /* Prevents zoom on iOS */
+    min-height: 44px;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  
+  /* Improved spacing */
+  .space-y-6 > * + * {
+    margin-top: 1rem;
+  }
+  
+  .space-y-4 > * + * {
+    margin-top: 0.75rem;
+  }
+  
+  /* Tab improvements */
+  .tabs-trigger {
+    min-height: 48px;
+    font-size: 0.875rem;
+  }
+  
+  /* Card improvements */
+  .survey-card {
+    margin-bottom: 1rem;
+    padding: 1rem !important;
+  }
+  
+  /* Header improvements */
+  .header-mobile {
+    padding: 0.75rem 1rem;
+  }
+  
+  /* Navigation improvements */
+  .nav-mobile {
+    bottom: 0;
+    left: 0;
+    right: 0;
+    position: fixed;
+    z-index: 50;
+  }
+}
+
+/* Small mobile devices */
+@media (max-width: 480px) {
+  /* Reduced padding for very small screens */
+  .container-mobile {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+  
+  /* Stack elements vertically */
+  .flex-mobile-stack {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  /* Text size adjustments */
+  .text-mobile-sm {
+    font-size: 0.875rem;
+  }
+  
+  .text-mobile-xs {
+    font-size: 0.75rem;
+  }
+  
+  /* Button improvements */
+  .button-mobile-full {
+    width: 100%;
+    padding: 0.75rem 1rem;
+  }
+  
+  /* Form improvements */
+  .form-mobile {
+    gap: 0.75rem;
+  }
+  
+  /* Grid improvements */
+  .grid-mobile-1 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Tablet improvements */
+@media (min-width: 768px) and (max-width: 1024px) {
+  /* Tablet-specific improvements */
+  .tablet-grid-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .tablet-spacing {
+    gap: 1.5rem;
+  }
+}
+
+/* Landscape phone improvements */
+@media (max-width: 896px) and (orientation: landscape) {
+  .landscape-mobile {
+    max-height: 100vh;
+    overflow-y: auto;
+  }
+  
+  .header-landscape {
+    padding: 0.5rem 1rem;
+  }
+}
+
+/* High DPI displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .high-dpi {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+}
+
+/* Dark mode mobile improvements */
+@media (prefers-color-scheme: dark) {
+  .mobile-dark-bg {
+    background-color: #0f172a;
+  }
+  
+  .mobile-dark-text {
+    color: #e2e8f0;
+  }
+  
+  .mobile-dark-border {
+    border-color: #334155;
+  }
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+  .motion-reduce {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* Focus improvements for better accessibility */
+.focus-visible:focus-visible {
+  outline: 2px solid #ef4444;
+  outline-offset: 2px;
+}
+
+/* Safe area adjustments for devices with notches */
+@supports (padding: max(0px)) {
+  .safe-area-inset {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+    padding-top: max(1rem, env(safe-area-inset-top));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* Improved scrolling on mobile */
+.mobile-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+/* Better loading states on mobile */
+.mobile-loading {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/* Mobile-first utility classes */
+.mobile-hidden {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .mobile-hidden {
+    display: block;
+  }
+  
+  .desktop-hidden {
+    display: none;
+  }
+}
+
+/* Performance improvements */
+.gpu-accelerated {
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* Hover state improvements for touch devices */
+@media (hover: none) and (pointer: coarse) {
+  .touch-device button:hover {
+    background-color: initial;
+  }
+  
+  .touch-device .hover\:bg-red-600:hover {
+    background-color: #dc2626;
+  }
+}
