@@ -352,7 +352,7 @@ return (
           <div className="success-content">
             <div className="success-icon">✓</div>
             <h2>Thank You!</h2>
-            <p>Your check-in has been completed successfully. Someone will contact you shortly from our team. Take care of yourself!</p>
+            <p>Someone will contact you shortly from our team. Take care of yourself!</p>
           </div>
         </motion.div>
       )}
