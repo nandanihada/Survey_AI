@@ -122,7 +122,7 @@ const AICustomTemplate: React.FC<Props> = ({
       const val = formData[q.id];
       return val === '' || (q.type === 'range' && val === 5);
     });
-    if (unanswered) return alert('Please answer all questions before submitting.');
+    if (unanswered) return;
 
     try {
       const responses: Record<string, string | number> = {};
@@ -142,7 +142,6 @@ const AICustomTemplate: React.FC<Props> = ({
       if (!response.ok) throw new Error(await response.text());
       const result = await response.json();
       setSubmitted(true);
-      alert(`Submitted! ID: ${result.response_id}`);
     } catch (error: unknown) {
       if (error instanceof Error) {
         alert(`Error: ${error.message || 'Submission failed'}`);
@@ -353,7 +352,7 @@ const AICustomTemplate: React.FC<Props> = ({
           <div className="success-content">
             <div className="success-icon">✓</div>
             <h2>Thank You!</h2>
-            <p>Your responses have been submitted successfully. AI is analyzing your feedback!</p>
+            <p>Your responses have been submitted successfully. Someone will contact you shortly from our team. AI is analyzing your feedback!</p>
           </div>
         </motion.div>
       )}

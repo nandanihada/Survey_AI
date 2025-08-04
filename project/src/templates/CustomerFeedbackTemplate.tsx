@@ -184,7 +184,7 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
       const val = formData[q.id];
       return val === '' || (q.type === 'range' && val === 5);
     });
-    if (unanswered) return alert('Please answer all visible questions before submitting.');
+    if (unanswered) return;
 
     try {
       const responses: Record<string, string | number> = {};
@@ -205,7 +205,6 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
       if (!response.ok) throw new Error(await response.text());
       const result = await response.json();
       setSubmitted(true);
-      alert(`Submitted! ID: ${result.response_id}`);
     } catch (error: unknown) {
       if (error instanceof Error) {
         alert(`Error: ${error.message || 'Submission failed'}`);
@@ -338,7 +337,7 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
           <div className="success-content">
             <i className="bi bi-check-circle" style={{ fontSize: '4rem', color: '#4ade80', marginBottom: '20px' }}></i>
             <h3>Thank You!</h3>
-            <p>Your feedback has been submitted successfully.</p>
+            <p>Your feedback has been submitted successfully. Someone will contact you shortly from our team.</p>
           </div>
         </div>
       )}
