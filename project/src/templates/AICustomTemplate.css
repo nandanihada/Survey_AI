@@ -142,6 +142,24 @@
   text-shadow: none;
 }
 
+.question-description {
+  font-size: 0.9rem;
+  color: #6b7280;
+  margin-top: 8px;
+  font-weight: 400;
+  font-style: italic;
+}
+
+.answer-description {
+  font-size: 0.85rem;
+  color: #4b5563;
+  margin-bottom: 15px;
+  padding: 10px 15px;
+  background: rgba(107, 114, 128, 0.1);
+  border-radius: 10px;
+  border-left: 3px solid #76c7c0;
+}
+
 .ai-textarea {
   width: 100%;
   min-height: 120px;

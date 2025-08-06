@@ -46,6 +46,32 @@ const SimpleQuestion: React.FC<SimpleQuestionProps> = React.memo(({
           />
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Question Description (Optional)
+          </label>
+          <textarea
+            value={question.questionDescription || ''}
+            onChange={(e) => onUpdate(index, 'questionDescription', e.target.value)}
+            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+            placeholder="Add additional context or instructions for this question..."
+            rows={2}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Answer Instructions (Optional)
+          </label>
+          <textarea
+            value={question.answerDescription || ''}
+            onChange={(e) => onUpdate(index, 'answerDescription', e.target.value)}
+            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+            placeholder="Provide guidance on how to answer this question..."
+            rows={2}
+          />
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">

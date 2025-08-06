@@ -7,6 +7,8 @@ import type { Survey } from '../types/Survey';
 interface Question {
   id: string;
   question: string;
+  questionDescription?: string;
+  answerDescription?: string;
   type: 'text' | 'radio' | 'range';
   options?: string[];
 }
@@ -14,6 +16,8 @@ interface Question {
 interface RawQuestion {
   id: string;
   question: string;
+  questionDescription?: string;
+  answerDescription?: string;
   type: string;
   options?: string[];
 }
@@ -57,6 +61,8 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
   const normalizedQuestions: Question[] = (survey.questions || []).map((q: RawQuestion, index) => ({
     id: q.id || `q${index}`,
     question: q.question,
+    questionDescription: q.questionDescription,
+    answerDescription: q.answerDescription,
     type: normalizeType(q.type),
     options: q.options || [],
   }));
@@ -251,7 +257,14 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
             ) : (
               <span style={{ fontWeight: 600, color: '#fff' }}>{q.question}</span>
             )}
+            {q.questionDescription && (
+              <p style={{ fontSize: '0.9rem', color: '#d1fae5', marginTop: '0.5rem' }}>{q.questionDescription}</p>
+            )}
           </motion.h5>
+
+          {q.answerDescription && (
+            <p style={{ fontSize: '0.8rem', color: '#93c5fd', marginBottom: '0.5rem' }}>{q.answerDescription}</p>
+          )}
 
           {q.type === 'range' && (
             <>

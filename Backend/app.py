@@ -7,6 +7,7 @@ import re
 from datetime import datetime
 import threading
 import os
+import requests
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
 from integrations import forward_survey_data_to_partners
@@ -217,6 +218,39 @@ def parse_survey_response(response_text):
         print(f"Error parsing survey response: {str(e)}")
         print(f"Original text: {response_text[:500]}...")  # Debug logging
         raise ValueError(f"Failed to parse survey questions: {str(e)}")
+
+def send_webhook_notification(data):
+    """Send webhook notification to Make.com with proper datetime serialization"""
+    url = "https://hook.eu2.make.com/582wnttqwkv7tgoizpvdv1grwux0gpir"
+    headers = {'Content-Type': 'application/json'}
+    
+    def serialize_datetime(obj):
+        """Convert datetime objects to ISO format strings for JSON serialization"""
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        elif isinstance(obj, dict):
+            return {key: serialize_datetime(value) for key, value in obj.items()}
+        elif isinstance(obj, list):
+            return [serialize_datetime(item) for item in obj]
+        else:
+            return obj
+    
+    try:
+        # Serialize datetime objects in the data
+        serialized_data = serialize_datetime(data)
+        
+        response = requests.post(url, json=serialized_data, headers=headers, timeout=10)
+        if response.status_code == 200:
+            print("Webhook notification sent successfully to Make.com")
+        else:
+            print(f"Failed to send webhook to Make.com. Status code: {response.status_code}")
+            print(f"Response: {response.text}")
+    except requests.exceptions.Timeout:
+        print("Error sending webhook to Make.com: Request timed out")
+    except requests.exceptions.ConnectionError:
+        print("Error sending webhook to Make.com: Connection error")
+    except Exception as e:
+        print(f"Error sending webhook to Make.com: {e}")
 def validate_color(color):
     """Validate and normalize hex color code"""
     if not color:
@@ -692,6 +726,9 @@ def submit_public_response(survey_id):
             except Exception as tracking_error:
                 print(f"WARNING: Tracking update error: {tracking_error}")
 
+        # Send webhook notification to Make.com
+        send_webhook_notification(response_data)
+        
         print(f"SUCCESS: Response {response_id} processed successfully")
         return jsonify({
             "message": "Response submitted successfully",

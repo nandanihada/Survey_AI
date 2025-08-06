@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import TemplateSelector from './TemplateSelector';
 import ThemeSelector from './ThemeSelector';
 import SurveyPreview from './SurveyPreview';
+import VoiceInputButton from './VoiceInputButton';
+import VoiceErrorToast from './VoiceErrorToast';
 import { generateSurvey } from '../utils/api';
+import { useVoiceInput } from '../hooks/useVoiceInput';
+import { useVoiceMessages } from './VoiceMessages';
 import { Sparkles, Loader2, MessageSquare, Hash } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 interface Question {
@@ -52,7 +56,19 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
   const [generatedSurvey, setGeneratedSurvey] = useState<SurveyData | null>(null);
   const [error, setError] = useState('');
 
-  const handleGenerateSurvey = async () => {
+  // Voice input functionality with soft female voice
+  const { 
+    playGenerationMessage, 
+    playCompletionMessage, 
+    playListeningPrompt,
+    playErrorMessage 
+  } = useVoiceMessages();
+
+  const handleVoiceTranscript = useCallback((text: string) => {
+    setSurveyTopic(text);
+  }, []);
+
+  const handleGenerateSurvey = useCallback(async () => {
     if (!surveyTopic.trim()) {
       setError('Please enter a survey topic');
       return;
@@ -60,6 +76,9 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
 
     setIsLoading(true);
     setError('');
+
+    // Play the generation message
+    playGenerationMessage();
 
     try {
       const requestData = {
@@ -73,6 +92,11 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
       console.log('Generated survey result:', result);
       console.log('Questions in result:', result.questions);
       setGeneratedSurvey(result);
+      
+      // Play completion message after successful generation
+      setTimeout(() => {
+        playCompletionMessage();
+      }, 500);
     } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message);
@@ -82,7 +106,42 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [surveyTopic, selectedTemplate, theme, questionCount, playGenerationMessage, playCompletionMessage]);
+
+  const handleVoiceComplete = useCallback(async () => {
+    // Automatically trigger survey generation after voice input
+    if (surveyTopic.trim()) {
+      await handleGenerateSurvey();
+    }
+  }, [surveyTopic, handleGenerateSurvey]);
+
+  // Initialize voice input hook first
+  const {
+    state: voiceState,
+    transcript: voiceTranscript,
+    isSupported: isVoiceSupported,
+    error: voiceError,
+    startListening,
+    stopListening,
+    clearTranscript,
+  } = useVoiceInput({
+    onTranscript: handleVoiceTranscript,
+    onComplete: handleVoiceComplete,
+    language: 'en-US',
+  });
+
+  // Enhanced voice input handlers (after hook initialization)
+  const handleStartListening = useCallback(() => {
+    startListening();
+    // Play prompt after a short delay to avoid overlap
+    setTimeout(() => {
+      playListeningPrompt();
+    }, 800);
+  }, [startListening, playListeningPrompt]);
+
+  const handleVoiceError = useCallback((error: string) => {
+    playErrorMessage(error);
+  }, [playErrorMessage]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 px-0 gap-4 py-6">
@@ -140,18 +199,59 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
               >
                 <MessageSquare size={14} />
                 Survey Topic
+                {isVoiceSupported && (
+                  <span 
+                    className={`text-xs px-2 py-1 rounded-full ${
+                      isDarkMode 
+                        ? 'bg-blue-500/20 text-blue-400' 
+                        : 'bg-blue-100 text-blue-600'
+                    }`}
+                  >
+                    🎤 Voice enabled
+                  </span>
+                )}
               </label>
-              <textarea
-                value={surveyTopic}
-                onChange={(e) => setSurveyTopic(e.target.value)}
-                placeholder="Describe your survey topic (e.g., Customer feedback on food delivery app)"
-                className={`w-full px-3 py-3 border rounded-lg text-sm focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-colors resize-none ${
-                  isDarkMode
-                    ? 'bg-slate-700/50 border-slate-600 text-white placeholder-slate-400'
-                    : 'bg-stone-50 border-stone-300 placeholder-stone-500'
-                }`}
-                rows={3}
-              />
+              <div className="relative">
+                <textarea
+                  value={surveyTopic}
+                  onChange={(e) => setSurveyTopic(e.target.value)}
+                  placeholder={isVoiceSupported 
+                    ? "Describe your survey topic or click the microphone to speak..." 
+                    : "Describe your survey topic (e.g., Customer feedback on food delivery app)"
+                  }
+                  className={`w-full px-3 py-3 pr-12 border rounded-lg text-sm focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-colors resize-none ${
+                    isDarkMode
+                      ? 'bg-slate-700/50 border-slate-600 text-white placeholder-slate-400'
+                      : 'bg-stone-50 border-stone-300 placeholder-stone-500'
+                  } ${
+                    voiceState === 'listening' ? 'ring-2 ring-red-500/20 border-red-500' : ''
+                  }`}
+                  rows={3}
+                />
+                <VoiceInputButton
+                  state={voiceState}
+                  isSupported={isVoiceSupported}
+                  onStartListening={handleStartListening}
+                  onStopListening={stopListening}
+                  isDarkMode={isDarkMode}
+                />
+              </div>
+              {voiceState === 'listening' && (
+                <p className={`text-xs mt-2 flex items-center gap-1 ${
+                  isDarkMode ? 'text-red-400' : 'text-red-600'
+                }`}>
+                  <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                  Listening... Speak now
+                </p>
+              )}
+              {voiceState === 'processing' && (
+                <p className={`text-xs mt-2 flex items-center gap-1 ${
+                  isDarkMode ? 'text-blue-400' : 'text-blue-600'
+                }`}>
+                  <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+                  Processing speech...
+                </p>
+              )}
             </div>
 
             {/* Question Count */}
@@ -298,6 +398,13 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
           </div>
         )}
       </div>
+      
+      {/* Voice Error Toast */}
+      <VoiceErrorToast 
+        error={voiceError} 
+        onClose={clearTranscript}
+        isDarkMode={isDarkMode}
+      />
     </div>
   );
 };

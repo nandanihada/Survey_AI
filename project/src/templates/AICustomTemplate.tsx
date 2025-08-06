@@ -7,6 +7,8 @@ import type { Survey } from '../types/Survey';
 interface Question {
   id: string;
   question: string;
+  questionDescription?: string;
+  answerDescription?: string;
   type: 'text' | 'radio' | 'range';
   options?: string[];
 }
@@ -14,6 +16,8 @@ interface Question {
 interface RawQuestion {
   id: string;
   question: string;
+  questionDescription?: string;
+  answerDescription?: string;
   type: string;
   options?: string[];
 }
@@ -55,6 +59,8 @@ const AICustomTemplate: React.FC<Props> = ({
   const normalizedQuestions: Question[] = (survey.questions || []).map((q: RawQuestion, index) => ({
     id: q.id || `q${index}`,
     question: q.question,
+    questionDescription: q.questionDescription,
+    answerDescription: q.answerDescription,
     type: normalizeType(q.type),
     options: q.options || [],
   }));
@@ -187,8 +193,22 @@ const AICustomTemplate: React.FC<Props> = ({
             ) : (
               question.question
             )}
+            {question.questionDescription && (
+              <p className="question-description">{question.questionDescription}</p>
+            )}
           </motion.h2>
 
+          {question.answerDescription && (
+            <motion.p
+              className="answer-description"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3, duration: 0.5 }}
+            >
+              {question.answerDescription}
+            </motion.p>
+          )}
+          
           <motion.div
             className="answer-section"
             initial={{ opacity: 0, y: 20 }}

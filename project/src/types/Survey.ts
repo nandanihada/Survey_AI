@@ -1,6 +1,8 @@
 export interface Question {
   id: string;
   question: string;
+  questionDescription?: string;
+  answerDescription?: string;
   type: 'text' | 'radio' | 'checkbox' | 'dropdown' | 'range' | 'multiple_choice' | 'yes_no' | 'short_answer' | 'rating';
   options?: string[];
   required?: boolean;
