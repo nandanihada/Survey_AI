@@ -10,8 +10,21 @@ from mongodb_config import db
 postback_bp = Blueprint('postback_bp', __name__)
 
 
-@postback_bp.route('/postback-handler', methods=['GET'])
+@postback_bp.route('/postback-handler', methods=['GET', 'POST'])
 def handle_postback():
+    # Enhanced logging - log ALL incoming parameters
+    print("\n" + "="*60)
+    print("📡 INBOUND POSTBACK RECEIVED FROM EXTERNAL PARTNER!")
+    print("="*60)
+    print(f"Method: {request.method}")
+    print(f"URL: {request.url}")
+    print(f"Source IP: {request.environ.get('REMOTE_ADDR', 'Unknown')}")
+    print(f"User Agent: {request.headers.get('User-Agent', 'Unknown')}")
+    print(f"GET Parameters: {dict(request.args)}")
+    if request.method == 'POST':
+        print(f"POST Data: {request.get_data(as_text=True)}")
+    
+    # Extract parameters
     transaction_id = request.args.get("transaction_id")
     status = request.args.get("status", "confirmed")
     reward = request.args.get("reward", 0)
@@ -19,6 +32,15 @@ def handle_postback():
     sid1 = request.args.get("sid1")
     clicked_at = request.args.get("clicked_at")
     username = request.args.get("username", "unknown")
+    
+    print(f"\n📋 EXTRACTED PARAMETERS:")
+    print(f"   🆔 Transaction ID: {transaction_id}")
+    print(f"   📊 Status: {status}")
+    print(f"   💰 Reward: {reward}")
+    print(f"   💱 Currency: {currency}")
+    print(f"   🔗 SID1 (Response ID): {sid1}")
+    print(f"   👤 Username: {username}")
+    print(f"   ⏰ Clicked At: {clicked_at}")
 
     if not sid1:
         return jsonify({"error": "Missing required parameter: sid1 (tracking_id)"}), 400

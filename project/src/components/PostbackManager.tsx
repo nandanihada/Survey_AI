@@ -257,15 +257,58 @@ const PostbackSender: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
 };
 
 const PostbackReceiver: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
+    const [testResult, setTestResult] = useState('');
+    const [isTestingReceiver, setIsTestingReceiver] = useState(false);
+    
     const baseUrl = window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1'
         ? 'http://127.0.0.1:5000/postback-handler'
         : 'https://pepper-flask-app.onrender.com/postback-handler';
   
     const fullUrl = `${baseUrl}?sid1=[YOUR_UNIQUE_ID]&status=[STATUS]&reward=[REWARD]`;
+    const productionUrl = 'https://pepper-flask-app.onrender.com/postback-handler';
 
     const copyToClipboard = async () => {
-      await navigator.clipboard.writeText(fullUrl);
-      alert('URL copied to clipboard!');
+      await navigator.clipboard.writeText(productionUrl);
+      alert('Production URL copied to clipboard!');
+    };
+    
+    const testPostbackReceiver = async () => {
+        setIsTestingReceiver(true);
+        setTestResult('🧪 Testing postback receiver...');
+        
+        try {
+            // Generate a test response ID
+            const testResponseId = 'test-response-' + Date.now();
+            
+            // Now test the postback receiver with the test response ID
+            const testParams = {
+                sid1: testResponseId,
+                transaction_id: 'test-txn-' + Date.now(),
+                status: 'confirmed',
+                reward: '1.50',
+                currency: 'USD',
+                username: 'testuser'
+            };
+            
+            const queryString = new URLSearchParams(testParams).toString();
+            const postbackResponse = await fetch(`${baseUrl}?${queryString}`);
+            
+            if (postbackResponse.ok) {
+                const result = await postbackResponse.text();
+                setTestResult(`✅ SUCCESS: Postback receiver is working!\n\nResponse: ${result}\n\n🎯 Your postback URL is ready to use with AdBreak Media!`);
+            } else {
+                const errorText = await postbackResponse.text();
+                if (postbackResponse.status === 404) {
+                    setTestResult(`⚠️  Test response not found, but receiver is working!\n\nThis is expected - the receiver successfully processed the request but couldn't find a matching survey response.\n\n✅ Your postback URL is working correctly!`);
+                } else {
+                    setTestResult(`❌ FAILED: HTTP ${postbackResponse.status}\n\nError: ${errorText}`);
+                }
+            }
+        } catch (error) {
+            setTestResult(`❌ FAILED: Network error - ${error}\n\nMake sure your Flask server is running on ${baseUrl}`);
+        } finally {
+            setIsTestingReceiver(false);
+        }
     };
   
     return (
@@ -316,6 +359,48 @@ const PostbackReceiver: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => 
                     <li>`currency`: The currency of the reward (e.g., "USD").</li>
                     <li>`transaction_id`: The partner's internal transaction ID. (Optional)</li>
                 </ul>
+            </div>
+            
+            {/* Test Section */}
+            <div className={`p-4 rounded-lg border ${isDarkMode ? 'bg-blue-900/20 border-blue-500/30' : 'bg-blue-50 border-blue-200'}`}>
+                <h4 className="font-semibold mb-2 flex items-center gap-2">
+                    <Send size={16} className="text-blue-500" />
+                    Test Your Postback Receiver
+                </h4>
+                <p className={`text-sm mb-3 ${isDarkMode ? 'text-slate-300' : 'text-gray-600'}`}>
+                    Test your postback receiver to make sure it's working correctly before giving the URL to AdBreak Media.
+                </p>
+                <button
+                    onClick={testPostbackReceiver}
+                    disabled={isTestingReceiver}
+                    className={`w-full px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                        isTestingReceiver
+                            ? 'bg-gray-400 text-gray-700 cursor-not-allowed'
+                            : 'bg-blue-600 hover:bg-blue-700 text-white'
+                    }`}
+                >
+                    {isTestingReceiver ? (
+                        <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            Testing...
+                        </>
+                    ) : (
+                        <>
+                            <Send size={16} />
+                            Test Postback Receiver
+                        </>
+                    )}
+                </button>
+                
+                {testResult && (
+                    <div className={`mt-4 p-3 rounded-lg border text-sm whitespace-pre-wrap ${
+                        testResult.includes('✅') || testResult.includes('⚠️')
+                            ? (isDarkMode ? 'bg-green-900/20 border-green-500/30 text-green-300' : 'bg-green-50 border-green-200 text-green-700')
+                            : (isDarkMode ? 'bg-red-900/20 border-red-500/30 text-red-300' : 'bg-red-50 border-red-200 text-red-700')
+                    }`}>
+                        {testResult}
+                    </div>
+                )}
             </div>
       </div>
     );

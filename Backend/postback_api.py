@@ -34,7 +34,7 @@ def add_partner():
         new_partner = {
             "name": data['name'],
             "url": data['url'],
-            "status": data.get('status', 'inactive'),
+            "status": data.get('status', 'active'),  # Changed default to 'active'
             "created_at": datetime.utcnow()
         }
         
