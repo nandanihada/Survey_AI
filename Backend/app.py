@@ -543,7 +543,12 @@ def generate_survey():
                 if attempt == max_retries - 1:
                     raise ValueError(f"Failed after {max_retries} attempts: {str(last_error)}")
          # your backend
-        FRONTEND_URL = "http://localhost:5173"  # your new React frontend
+        # def get_frontend_url():
+        #     if "localhost" in request.host or "127.0.0.1" in request.host:
+        #         return "http://localhost:5173"
+        #     return "https://pepperadsresponses.web.app" 
+     
+        FRONTEND_URL = "https://pepperadsresponses.web.app"  # your new React frontend
         # Create and save survey document
         try:
             survey_id = str(uuid.uuid4())
