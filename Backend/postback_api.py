@@ -97,3 +97,13 @@ def get_postback_logs():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@postback_api_bp.route('/api/inbound-postback-logs', methods=['GET'])
+def get_inbound_postback_logs():
+    try:
+        # Get inbound postback logs
+        logs_cursor = db.inbound_postback_logs.find().sort("timestamp", -1).limit(50)
+        logs = [convert_objectid(log) for log in logs_cursor]
+        return jsonify(logs)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+

@@ -74,6 +74,27 @@ def handle_postback():
         )
 
         print(f"📝 Updated document {response_doc['_id']} with postback data.")
+        
+        # Log the inbound postback for frontend display
+        inbound_log_entry = {
+            "type": "inbound",
+            "source_ip": request.environ.get('REMOTE_ADDR', 'Unknown'),
+            "user_agent": request.headers.get('User-Agent', 'Unknown'),
+            "sid1": sid1,
+            "transaction_id": transaction_id,
+            "status": status,
+            "reward": reward,
+            "currency": currency,
+            "username": username,
+            "url_called": request.url,
+            "timestamp": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+            "success": True,
+            "response_message": "Survey forwarded to SurveyTitans"
+        }
+        
+        # Save inbound log to database
+        db.inbound_postback_logs.insert_one(inbound_log_entry)
+        print(f"📊 Logged inbound postback to database")
 
         # Combine the original response with the new postback data for forwarding
         forwarding_data = {**response_doc, **postback_update_data}
@@ -96,4 +117,26 @@ def handle_postback():
     
     except Exception as e:
         print("❌ Error handling postback:", str(e))
+        
+        # Log the failed inbound postback attempt
+        try:
+            failed_log_entry = {
+                "type": "inbound",
+                "source_ip": request.environ.get('REMOTE_ADDR', 'Unknown'),
+                "user_agent": request.headers.get('User-Agent', 'Unknown'),
+                "sid1": sid1 or "Unknown",
+                "transaction_id": transaction_id,
+                "status": status,
+                "reward": reward,
+                "currency": currency,
+                "username": username,
+                "url_called": request.url,
+                "timestamp": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+                "success": False,
+                "error_message": str(e)
+            }
+            db.inbound_postback_logs.insert_one(failed_log_entry)
+        except Exception as log_error:
+            print(f"Failed to log error: {log_error}")
+        
         return jsonify({"error": "Internal server error"}), 500

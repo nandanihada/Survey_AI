@@ -51,6 +51,12 @@ const api = {
     const response = await fetch(`${API_BASE}/api/postback-logs`);
     if (!response.ok) throw new Error('Failed to fetch logs');
     return response.json();
+  },
+  
+  async getInboundLogs() {
+    const response = await fetch(`${API_BASE}/api/inbound-postback-logs`);
+    if (!response.ok) throw new Error('Failed to fetch inbound logs');
+    return response.json();
   }
 };
 
@@ -407,7 +413,9 @@ const PostbackReceiver: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => 
 };
 
 const PostbackLogs: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
-    const [logs, setLogs] = useState([]);
+    const [outboundLogs, setOutboundLogs] = useState([]);
+    const [inboundLogs, setInboundLogs] = useState([]);
+    const [activeLogTab, setActiveLogTab] = useState<'outbound' | 'inbound'>('inbound');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
@@ -419,8 +427,12 @@ const PostbackLogs: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
     const loadLogs = async () => {
         try {
             setLoading(true);
-            const data = await api.getLogs();
-            setLogs(data);
+            const [outboundData, inboundData] = await Promise.all([
+                api.getLogs(),
+                api.getInboundLogs()
+            ]);
+            setOutboundLogs(outboundData);
+            setInboundLogs(inboundData);
         } catch (err) {
             setError('Failed to load logs');
             console.error('Error loading logs:', err);
@@ -440,6 +452,8 @@ const PostbackLogs: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
         );
     }
 
+    const currentLogs = activeLogTab === 'inbound' ? inboundLogs : outboundLogs;
+    
     return (
         <div className="space-y-6">
              {error && (
@@ -449,47 +463,132 @@ const PostbackLogs: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
                 </div>
             )}
 
-            <div>
-                <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <Activity size={20} />
-                    Outbound Postback Logs
-                </h3>
-                <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-300' : 'text-gray-600'}`}>
-                    A real-time stream of postbacks sent to your partners.
-                </p>
+            <div className="flex justify-between items-center">
+                <div>
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                        <Activity size={20} />
+                        Postback Logs
+                    </h3>
+                    <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-300' : 'text-gray-600'}`}>
+                        View both inbound and outbound postback activity.
+                    </p>
+                </div>
+                
+                {/* Log Type Tabs */}
+                <div className={`flex rounded-lg p-1 text-xs ${isDarkMode ? 'bg-slate-700/40' : 'bg-stone-100'}`}>
+                    <button 
+                        onClick={() => setActiveLogTab('inbound')}
+                        className={`px-4 py-2 rounded-md transition-colors flex items-center gap-2 ${
+                            activeLogTab === 'inbound' 
+                                ? (isDarkMode ? 'bg-blue-500 text-white' : 'bg-white text-blue-600 shadow-sm') 
+                                : (isDarkMode ? 'text-slate-300 hover:text-white' : 'text-stone-600 hover:text-stone-800')
+                        }`}
+                    >
+                        <Eye size={14} /> Inbound ({inboundLogs.length})
+                    </button>
+                    <button 
+                        onClick={() => setActiveLogTab('outbound')}
+                        className={`px-4 py-2 rounded-md transition-colors flex items-center gap-2 ${
+                            activeLogTab === 'outbound' 
+                                ? (isDarkMode ? 'bg-blue-500 text-white' : 'bg-white text-blue-600 shadow-sm') 
+                                : (isDarkMode ? 'text-slate-300 hover:text-white' : 'text-stone-600 hover:text-stone-800')
+                        }`}
+                    >
+                        <Send size={14} /> Outbound ({outboundLogs.length})
+                    </button>
+                </div>
             </div>
+            
             <div className={`border rounded-lg ${isDarkMode ? 'border-slate-600' : 'border-gray-200'}`}>
-                <table className="w-full text-sm text-left">
-                    <thead className={`border-b ${isDarkMode ? 'border-slate-600 bg-slate-700/50' : 'border-gray-200 bg-gray-50'}`}>
-                        <tr>
-                            <th className="p-3">Partner</th>
-                            <th className="p-3">Timestamp</th>
-                            <th className="p-3">Status</th>
-                            <th className="p-3">URL Sent</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {logs.map(log => (
-                            <tr key={log.id} className={`border-b ${isDarkMode ? 'border-slate-700' : 'border-gray-100'}`}>
-                                <td className="p-3">{log.partnerName}</td>
-                                <td className="p-3"><Clock size={14} className="inline mr-1" /> {log.timestamp}</td>
-                                <td className="p-3">
-                                    <span className={`px-2 py-1 rounded-full text-xs flex items-center gap-1 ${
-                                        log.status === 'success' 
-                                            ? (isDarkMode ? 'bg-green-500/20 text-green-300' : 'bg-green-100 text-green-800')
-                                            : (isDarkMode ? 'bg-red-500/20 text-red-300' : 'bg-red-100 text-red-800')
-                                    }`}>
-                                        {log.status === 'success' ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
-                                        {log.status}
-                                    </span>
-                                </td>
-                                <td className={`p-3 font-mono text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-                                    {log.url}
-                                </td>
+                {activeLogTab === 'inbound' ? (
+                    <>
+                        <table className="w-full text-sm text-left">
+                            <thead className={`border-b ${isDarkMode ? 'border-slate-600 bg-slate-700/50' : 'border-gray-200 bg-gray-50'}`}>
+                                <tr>
+                                    <th className="p-3">Source</th>
+                                    <th className="p-3">Timestamp</th>
+                                    <th className="p-3">Reward</th>
+                                    <th className="p-3">SID1</th>
+                                    <th className="p-3">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {inboundLogs.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={5} className="p-8 text-center text-gray-500">
+                                            📡 No inbound postbacks received yet.
+                                            <br />
+                                            Test your receiver or wait for external partners to send postbacks.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    inboundLogs.map(log => (
+                                        <tr key={log.id} className={`border-b ${isDarkMode ? 'border-slate-700' : 'border-gray-100'}`}>
+                                            <td className="p-3">{log.source_ip || 'Unknown'}</td>
+                                            <td className="p-3"><Clock size={14} className="inline mr-1" /> {log.timestamp}</td>
+                                            <td className="p-3 font-semibold">${log.reward} {log.currency}</td>
+                                            <td className={`p-3 font-mono text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                                                {log.sid1?.substring(0, 8)}...
+                                            </td>
+                                            <td className="p-3">
+                                                <span className={`px-2 py-1 rounded-full text-xs flex items-center gap-1 ${
+                                                    log.success 
+                                                        ? (isDarkMode ? 'bg-green-500/20 text-green-300' : 'bg-green-100 text-green-800')
+                                                        : (isDarkMode ? 'bg-red-500/20 text-red-300' : 'bg-red-100 text-red-800')
+                                                }`}>
+                                                    {log.success ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                                                    {log.success ? 'success' : 'failed'}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </>
+                ) : (
+                    <table className="w-full text-sm text-left">
+                        <thead className={`border-b ${isDarkMode ? 'border-slate-600 bg-slate-700/50' : 'border-gray-200 bg-gray-50'}`}>
+                            <tr>
+                                <th className="p-3">Partner</th>
+                                <th className="p-3">Timestamp</th>
+                                <th className="p-3">Status</th>
+                                <th className="p-3">URL Sent</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {outboundLogs.length === 0 ? (
+                                <tr>
+                                    <td colSpan={4} className="p-8 text-center text-gray-500">
+                                        📤 No outbound postbacks sent yet.
+                                        <br />
+                                        Complete a survey to trigger outbound postbacks.
+                                    </td>
+                                </tr>
+                            ) : (
+                                outboundLogs.map(log => (
+                                    <tr key={log.id} className={`border-b ${isDarkMode ? 'border-slate-700' : 'border-gray-100'}`}>
+                                        <td className="p-3">{log.partnerName}</td>
+                                        <td className="p-3"><Clock size={14} className="inline mr-1" /> {log.timestamp}</td>
+                                        <td className="p-3">
+                                            <span className={`px-2 py-1 rounded-full text-xs flex items-center gap-1 ${
+                                                log.status === 'success' 
+                                                    ? (isDarkMode ? 'bg-green-500/20 text-green-300' : 'bg-green-100 text-green-800')
+                                                    : (isDarkMode ? 'bg-red-500/20 text-red-300' : 'bg-red-100 text-red-800')
+                                            }`}>
+                                                {log.status === 'success' ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                                                {log.status}
+                                            </span>
+                                        </td>
+                                        <td className={`p-3 font-mono text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                                            {log.url}
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                )}
             </div>
         </div>
     );
