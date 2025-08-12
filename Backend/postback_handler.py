@@ -54,6 +54,30 @@ def handle_postback():
 
         if not response_doc:
             print(f"❌ ERROR: No response found with _id: {sid1}")
+            
+            # Log this failed attempt for frontend display
+            failed_log_entry = {
+                "type": "inbound",
+                "source_ip": request.environ.get('REMOTE_ADDR', 'Unknown'),
+                "user_agent": request.headers.get('User-Agent', 'Unknown'),
+                "sid1": sid1,
+                "transaction_id": transaction_id,
+                "status": status,
+                "reward": reward,
+                "currency": currency,
+                "username": username,
+                "url_called": request.url,
+                "timestamp": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+                "success": False,
+                "error_message": f"Survey response not found for sid1: {sid1}"
+            }
+            
+            try:
+                db.inbound_postback_logs.insert_one(failed_log_entry)
+                print(f"📊 Logged failed inbound postback to database")
+            except Exception as log_error:
+                print(f"Failed to log failed attempt: {log_error}")
+            
             return jsonify({"error": "No matching survey response found for the provided sid1"}), 404
 
         print(f"✅ SUCCESS: Found response: {response_doc['_id']}")
