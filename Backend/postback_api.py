@@ -99,7 +99,11 @@ def get_postback_logs():
             # Ensure timestamp_str is available for display
             if 'timestamp' in log_data and 'timestamp_str' not in log_data:
                 if hasattr(log_data['timestamp'], 'strftime'):
-                    log_data['timestamp_str'] = log_data['timestamp'].strftime('%Y-%m-%d %H:%M:%S UTC')
+                    # Convert UTC to local time for display
+                    import time
+                    utc_timestamp = log_data['timestamp']
+                    local_timestamp = utc_timestamp.replace(tzinfo=None) + datetime.timedelta(seconds=time.timezone)
+                    log_data['timestamp_str'] = local_timestamp.strftime('%Y-%m-%d %H:%M:%S')
                 else:
                     log_data['timestamp_str'] = str(log_data['timestamp'])
             logs.append(log_data)
@@ -120,7 +124,11 @@ def get_inbound_postback_logs():
             # Ensure timestamp_str is available for display
             if 'timestamp' in log_data and 'timestamp_str' not in log_data:
                 if hasattr(log_data['timestamp'], 'strftime'):
-                    log_data['timestamp_str'] = log_data['timestamp'].strftime('%Y-%m-%d %H:%M:%S UTC')
+                    # Convert UTC to local time for display
+                    import time
+                    utc_timestamp = log_data['timestamp']
+                    local_timestamp = utc_timestamp.replace(tzinfo=None) + datetime.timedelta(seconds=time.timezone)
+                    log_data['timestamp_str'] = local_timestamp.strftime('%Y-%m-%d %H:%M:%S')
                 else:
                     log_data['timestamp_str'] = str(log_data['timestamp'])
             logs.append(log_data)

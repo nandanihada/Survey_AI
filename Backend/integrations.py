@@ -106,8 +106,8 @@ def log_postback_attempt(partner_name, url, status_code, response_text):
             "status_code": status_code,
             "payout": 0.0,  # Default payout for outbound (we're sending, not receiving)
             "response": response_text[:500] if response_text else "",  # Limit response text
-            "timestamp": datetime.utcnow(),  # Store as datetime object
-            "timestamp_str": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')  # String version for display
+            "timestamp": datetime.utcnow(),  # Store as datetime object for sorting
+            "timestamp_str": datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Local time for display
         }
         
         db.postback_logs.insert_one(log_entry)

@@ -88,8 +88,8 @@ def handle_postback():
                 "currency": currency,
                 "username": username,
                 "url_called": request.url,
-                "timestamp": datetime.utcnow(),  # Store as datetime object
-                "timestamp_str": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'),  # String version for display
+                "timestamp": datetime.utcnow(),  # Store as datetime object for sorting
+                "timestamp_str": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),  # Local time for display
                 "success": False,
                 "error_message": f"Survey response not found for sid1: {sid1}"
             }
@@ -154,8 +154,8 @@ def handle_postback():
             "currency": currency,
             "username": username,
             "url_called": request.url,
-            "timestamp": datetime.utcnow(),  # Store as datetime object
-            "timestamp_str": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'),  # String version for display
+            "timestamp": datetime.utcnow(),  # Store as datetime object for sorting
+            "timestamp_str": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),  # Local time for display
             "success": True,
             "response_message": "Survey forwarded to SurveyTitans"
         }
@@ -220,8 +220,8 @@ def handle_postback():
                 "currency": currency,
                 "username": username,
                 "url_called": request.url,
-                "timestamp": datetime.utcnow(),  # Store as datetime object
-                "timestamp_str": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'),  # String version for display
+                "timestamp": datetime.utcnow(),  # Store as datetime object for sorting
+                "timestamp_str": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),  # Local time for display
                 "success": False,
                 "error_message": str(e)
             }
