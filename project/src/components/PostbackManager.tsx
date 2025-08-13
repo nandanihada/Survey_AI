@@ -505,9 +505,9 @@ const PostbackLogs: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
                         <table className="w-full text-sm text-left">
                             <thead className={`border-b ${isDarkMode ? 'border-slate-600 bg-slate-700/50' : 'border-gray-200 bg-gray-50'}`}>
                                 <tr>
-                                    <th className="p-3">Source</th>
+                                    <th className="p-3">Name (Source)</th>
                                     <th className="p-3">Timestamp</th>
-                                    <th className="p-3">Reward</th>
+                                    <th className="p-3">Payout</th>
                                     <th className="p-3">SID1</th>
                                     <th className="p-3">Status</th>
                                 </tr>
@@ -522,13 +522,24 @@ const PostbackLogs: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
                                         </td>
                                     </tr>
                                 ) : (
-                                    inboundLogs.map(log => (
-                                        <tr key={log.id} className={`border-b ${isDarkMode ? 'border-slate-700' : 'border-gray-100'}`}>
-                                            <td className="p-3">{log.source_ip || 'Unknown'}</td>
-                                            <td className="p-3"><Clock size={14} className="inline mr-1" /> {log.timestamp}</td>
-                                            <td className="p-3 font-semibold">${log.reward} {log.currency}</td>
+                                    inboundLogs.map((log, index) => (
+                                        <tr key={log.id || index} className={`border-b ${isDarkMode ? 'border-slate-700' : 'border-gray-100'}`}>
+                                            <td className="p-3 font-medium">
+                                                {log.name || log.source_ip || 'Unknown Partner'}
+                                                <br />
+                                                <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                                                    {log.source_ip}
+                                                </span>
+                                            </td>
+                                            <td className="p-3">
+                                                <Clock size={14} className="inline mr-1" />
+                                                {log.timestamp_str || log.timestamp || 'Unknown'}
+                                            </td>
+                                            <td className="p-3 font-semibold">
+                                                ${log.payout || log.reward || 0} {log.currency || 'USD'}
+                                            </td>
                                             <td className={`p-3 font-mono text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-                                                {log.sid1?.substring(0, 8)}...
+                                                {log.sid1 ? `${log.sid1.substring(0, 8)}...` : 'N/A'}
                                             </td>
                                             <td className="p-3">
                                                 <span className={`px-2 py-1 rounded-full text-xs flex items-center gap-1 ${
@@ -566,10 +577,13 @@ const PostbackLogs: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
                                     </td>
                                 </tr>
                             ) : (
-                                outboundLogs.map(log => (
-                                    <tr key={log.id} className={`border-b ${isDarkMode ? 'border-slate-700' : 'border-gray-100'}`}>
-                                        <td className="p-3">{log.partnerName}</td>
-                                        <td className="p-3"><Clock size={14} className="inline mr-1" /> {log.timestamp}</td>
+                                outboundLogs.map((log, index) => (
+                                    <tr key={log.id || index} className={`border-b ${isDarkMode ? 'border-slate-700' : 'border-gray-100'}`}>
+                                        <td className="p-3 font-medium">{log.partnerName || log.name || 'Unknown Partner'}</td>
+                                        <td className="p-3">
+                                            <Clock size={14} className="inline mr-1" />
+                                            {log.timestamp_str || log.timestamp || 'Unknown'}
+                                        </td>
                                         <td className="p-3">
                                             <span className={`px-2 py-1 rounded-full text-xs flex items-center gap-1 ${
                                                 log.status === 'success' 

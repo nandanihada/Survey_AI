@@ -98,12 +98,16 @@ def log_postback_attempt(partner_name, url, status_code, response_text):
     """
     try:
         log_entry = {
-            "partnerName": partner_name,
+            "type": "outbound",
+            "partnerName": partner_name,  # Name of the partner (who received postback)
+            "name": partner_name,  # Alias for consistent field naming
             "url": url,
             "status": "success" if status_code == 200 else "failure",
             "status_code": status_code,
+            "payout": 0.0,  # Default payout for outbound (we're sending, not receiving)
             "response": response_text[:500] if response_text else "",  # Limit response text
-            "timestamp": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+            "timestamp": datetime.utcnow(),  # Store as datetime object
+            "timestamp_str": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')  # String version for display
         }
         
         db.postback_logs.insert_one(log_entry)

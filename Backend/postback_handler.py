@@ -55,19 +55,41 @@ def handle_postback():
         if not response_doc:
             print(f"❌ ERROR: No response found with _id: {sid1}")
             
+            # Determine sender name from User-Agent or source IP for failed attempts
+            user_agent = request.headers.get('User-Agent', 'Unknown')
+            sender_name = "Unknown Partner"
+            
+            # Try to identify sender from User-Agent patterns
+            if "curl" in user_agent.lower():
+                sender_name = "cURL Client"
+            elif "postman" in user_agent.lower():
+                sender_name = "Postman"
+            elif "python" in user_agent.lower():
+                sender_name = "Python Client"
+            elif "adbreak" in user_agent.lower():
+                sender_name = "AdBreak Media"
+            elif "surveytitans" in user_agent.lower():
+                sender_name = "SurveyTitans"
+            else:
+                # Use source IP as fallback
+                sender_name = f"Partner ({request.environ.get('REMOTE_ADDR', 'Unknown IP')})"
+            
             # Log this failed attempt for frontend display
             failed_log_entry = {
                 "type": "inbound",
+                "name": sender_name,  # Who sent the postback
                 "source_ip": request.environ.get('REMOTE_ADDR', 'Unknown'),
-                "user_agent": request.headers.get('User-Agent', 'Unknown'),
+                "user_agent": user_agent,
                 "sid1": sid1,
                 "transaction_id": transaction_id,
                 "status": status,
-                "reward": reward,
+                "payout": float(reward) if reward else 0.0,  # Ensure numeric payout
+                "reward": float(reward) if reward else 0.0,  # Keep both for compatibility
                 "currency": currency,
                 "username": username,
                 "url_called": request.url,
-                "timestamp": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+                "timestamp": datetime.utcnow(),  # Store as datetime object
+                "timestamp_str": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'),  # String version for display
                 "success": False,
                 "error_message": f"Survey response not found for sid1: {sid1}"
             }
@@ -99,19 +121,41 @@ def handle_postback():
 
         print(f"📝 Updated document {response_doc['_id']} with postback data.")
         
+        # Determine sender name from User-Agent or source IP
+        user_agent = request.headers.get('User-Agent', 'Unknown')
+        sender_name = "Unknown Partner"
+        
+        # Try to identify sender from User-Agent patterns
+        if "curl" in user_agent.lower():
+            sender_name = "cURL Client"
+        elif "postman" in user_agent.lower():
+            sender_name = "Postman"
+        elif "python" in user_agent.lower():
+            sender_name = "Python Client"
+        elif "adbreak" in user_agent.lower():
+            sender_name = "AdBreak Media"
+        elif "surveytitans" in user_agent.lower():
+            sender_name = "SurveyTitans"
+        else:
+            # Use source IP as fallback
+            sender_name = f"Partner ({request.environ.get('REMOTE_ADDR', 'Unknown IP')})"
+        
         # Log the inbound postback for frontend display
         inbound_log_entry = {
             "type": "inbound",
+            "name": sender_name,  # Who sent the postback
             "source_ip": request.environ.get('REMOTE_ADDR', 'Unknown'),
-            "user_agent": request.headers.get('User-Agent', 'Unknown'),
+            "user_agent": user_agent,
             "sid1": sid1,
             "transaction_id": transaction_id,
             "status": status,
-            "reward": reward,
+            "payout": float(reward) if reward else 0.0,  # Ensure numeric payout
+            "reward": float(reward) if reward else 0.0,  # Keep both for compatibility
             "currency": currency,
             "username": username,
             "url_called": request.url,
-            "timestamp": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+            "timestamp": datetime.utcnow(),  # Store as datetime object
+            "timestamp_str": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'),  # String version for display
             "success": True,
             "response_message": "Survey forwarded to SurveyTitans"
         }
@@ -142,20 +186,42 @@ def handle_postback():
     except Exception as e:
         print("❌ Error handling postback:", str(e))
         
+        # Determine sender name from User-Agent or source IP for exception case
+        user_agent = request.headers.get('User-Agent', 'Unknown')
+        sender_name = "Unknown Partner"
+        
+        # Try to identify sender from User-Agent patterns
+        if "curl" in user_agent.lower():
+            sender_name = "cURL Client"
+        elif "postman" in user_agent.lower():
+            sender_name = "Postman"
+        elif "python" in user_agent.lower():
+            sender_name = "Python Client"
+        elif "adbreak" in user_agent.lower():
+            sender_name = "AdBreak Media"
+        elif "surveytitans" in user_agent.lower():
+            sender_name = "SurveyTitans"
+        else:
+            # Use source IP as fallback
+            sender_name = f"Partner ({request.environ.get('REMOTE_ADDR', 'Unknown IP')})"
+        
         # Log the failed inbound postback attempt
         try:
             failed_log_entry = {
                 "type": "inbound",
+                "name": sender_name,  # Who sent the postback
                 "source_ip": request.environ.get('REMOTE_ADDR', 'Unknown'),
-                "user_agent": request.headers.get('User-Agent', 'Unknown'),
+                "user_agent": user_agent,
                 "sid1": sid1 or "Unknown",
                 "transaction_id": transaction_id,
                 "status": status,
-                "reward": reward,
+                "payout": float(reward) if reward else 0.0,  # Ensure numeric payout
+                "reward": float(reward) if reward else 0.0,  # Keep both for compatibility
                 "currency": currency,
                 "username": username,
                 "url_called": request.url,
-                "timestamp": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+                "timestamp": datetime.utcnow(),  # Store as datetime object
+                "timestamp_str": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'),  # String version for display
                 "success": False,
                 "error_message": str(e)
             }

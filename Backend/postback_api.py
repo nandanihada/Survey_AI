@@ -90,9 +90,20 @@ def delete_partner(partner_id):
 @postback_api_bp.route('/api/postback-logs', methods=['GET'])
 def get_postback_logs():
     try:
-        # In a real app, you would add pagination here
+        # Get outbound postback logs, sorted by timestamp (newest first)
         logs_cursor = db.postback_logs.find().sort("timestamp", -1).limit(50)
-        logs = [convert_objectid(log) for log in logs_cursor]
+        logs = []
+        
+        for log in logs_cursor:
+            log_data = convert_objectid(log)
+            # Ensure timestamp_str is available for display
+            if 'timestamp' in log_data and 'timestamp_str' not in log_data:
+                if hasattr(log_data['timestamp'], 'strftime'):
+                    log_data['timestamp_str'] = log_data['timestamp'].strftime('%Y-%m-%d %H:%M:%S UTC')
+                else:
+                    log_data['timestamp_str'] = str(log_data['timestamp'])
+            logs.append(log_data)
+            
         return jsonify(logs)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -100,9 +111,20 @@ def get_postback_logs():
 @postback_api_bp.route('/api/inbound-postback-logs', methods=['GET'])
 def get_inbound_postback_logs():
     try:
-        # Get inbound postback logs
+        # Get inbound postback logs, sorted by timestamp (newest first)
         logs_cursor = db.inbound_postback_logs.find().sort("timestamp", -1).limit(50)
-        logs = [convert_objectid(log) for log in logs_cursor]
+        logs = []
+        
+        for log in logs_cursor:
+            log_data = convert_objectid(log)
+            # Ensure timestamp_str is available for display
+            if 'timestamp' in log_data and 'timestamp_str' not in log_data:
+                if hasattr(log_data['timestamp'], 'strftime'):
+                    log_data['timestamp_str'] = log_data['timestamp'].strftime('%Y-%m-%d %H:%M:%S UTC')
+                else:
+                    log_data['timestamp_str'] = str(log_data['timestamp'])
+            logs.append(log_data)
+            
         return jsonify(logs)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
