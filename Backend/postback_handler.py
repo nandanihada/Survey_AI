@@ -125,20 +125,42 @@ def handle_postback():
         user_agent = request.headers.get('User-Agent', 'Unknown')
         sender_name = "Unknown Partner"
         
-        # Try to identify sender from User-Agent patterns
-        if "curl" in user_agent.lower():
-            sender_name = "cURL Client"
+        # Enhanced sender identification with multiple patterns
+        source_ip = request.environ.get('REMOTE_ADDR', 'Unknown')
+        
+        # Check User-Agent patterns first
+        if "adbreak" in user_agent.lower() or "ad-break" in user_agent.lower():
+            sender_name = "AdBreak Media"
+        elif "surveytitans" in user_agent.lower() or "survey-titans" in user_agent.lower():
+            sender_name = "SurveyTitans"
         elif "postman" in user_agent.lower():
             sender_name = "Postman"
-        elif "python" in user_agent.lower():
+        elif "curl" in user_agent.lower():
+            sender_name = "cURL Client"
+        elif "python" in user_agent.lower() and "requests" in user_agent.lower():
             sender_name = "Python Client"
-        elif "adbreak" in user_agent.lower():
+        elif "mozilla" in user_agent.lower() or "chrome" in user_agent.lower():
+            sender_name = "Browser Client"
+        # Check for specific partner domains in referrer or other headers
+        elif request.headers.get('Referer'):
+            referer = request.headers.get('Referer', '').lower()
+            if "adbreak" in referer:
+                sender_name = "AdBreak Media"
+            elif "surveytitans" in referer:
+                sender_name = "SurveyTitans"
+            else:
+                sender_name = f"Web Partner ({source_ip})"
+        # Check transaction_id or other parameters for partner identification
+        elif transaction_id and "adbreak" in str(transaction_id).lower():
             sender_name = "AdBreak Media"
-        elif "surveytitans" in user_agent.lower():
+        elif transaction_id and "titans" in str(transaction_id).lower():
             sender_name = "SurveyTitans"
         else:
-            # Use source IP as fallback
-            sender_name = f"Partner ({request.environ.get('REMOTE_ADDR', 'Unknown IP')})"
+            # Use source IP as fallback with more descriptive name
+            if source_ip == '127.0.0.1' or source_ip.startswith('192.168.'):
+                sender_name = f"Local Partner ({source_ip})"
+            else:
+                sender_name = f"External Partner ({source_ip})"
         
         # Log the inbound postback for frontend display
         inbound_log_entry = {
