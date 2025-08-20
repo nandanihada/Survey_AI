@@ -38,7 +38,7 @@ else:
         
         # Test postback with valid ID
         print(f"\n🧪 Test with this URL instead:")
-        print(f"   https://hostslice.onrender.com//postback-handler?sid1={sample['_id']}&status=confirmed&reward=2.50")
+        print(f"   https://hostslice.onrender.com/postback-handler?sid1={sample['_id']}&status=confirmed&reward=2.50")
     
 print("\n💡 Your inbound postbacks are visible in:")
 print("1. ✅ Backend console (what you just showed)")

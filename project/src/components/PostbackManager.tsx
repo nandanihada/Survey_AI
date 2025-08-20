@@ -268,10 +268,10 @@ const PostbackReceiver: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => 
     
     const baseUrl = window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1'
         ? 'http://127.0.0.1:5000/postback-handler'
-        : 'https://hostslice.onrender.com//postback-handler';
+        : 'https://hostslice.onrender.com/postback-handler';
   
     const fullUrl = `${baseUrl}?sid1=[YOUR_UNIQUE_ID]&status=[STATUS]&reward=[REWARD]`;
-    const productionUrl = 'https://hostslice.onrender.com//postback-handler';
+    const productionUrl = 'https://hostslice.onrender.com/postback-handler';
 
     const copyToClipboard = async () => {
       await navigator.clipboard.writeText(productionUrl);
