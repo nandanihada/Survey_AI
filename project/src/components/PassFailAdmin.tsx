@@ -412,7 +412,7 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                     {survey.survey_name}
                   </div>
                   <div className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-gray-600'}`}>
-                    {survey.config.pass_fail_enabled ? '✅ Pass/Fail Enabled' : '❌ Pass/Fail Disabled'}
+                    {survey.config?.pass_fail_enabled ? '✅ Pass/Fail Enabled' : '❌ Pass/Fail Disabled'}
                   </div>
                   {survey.criteria_set && (
                     <div className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
@@ -440,11 +440,16 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                 </label>
                 <input
                   type="checkbox"
-                  checked={selectedSurvey.config.pass_fail_enabled}
+                  checked={selectedSurvey.config?.pass_fail_enabled || false}
                   onChange={(e) => {
                     const updatedConfig = {
                       ...selectedSurvey.config,
-                      pass_fail_enabled: e.target.checked
+                      pass_fail_enabled: e.target.checked,
+                      fail_page_config: selectedSurvey.config?.fail_page_config || {
+                        fail_page_url: '/survey-thankyou',
+                        custom_message: 'Thank you for your time!',
+                        show_retry_option: false
+                      }
                     };
                     updateSurveyConfig(selectedSurvey.survey_id, updatedConfig);
                   }}
@@ -453,13 +458,13 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
               </div>
 
               {/* Criteria Set Selection */}
-              {selectedSurvey.config.pass_fail_enabled && (
+              {selectedSurvey.config?.pass_fail_enabled && (
                 <div>
                   <label className={`block mb-2 ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
                     Criteria Set
                   </label>
                   <select
-                    value={selectedSurvey.config.criteria_set_id || ''}
+                    value={selectedSurvey.config?.criteria_set_id || ''}
                     onChange={(e) => {
                       const updatedConfig = {
                         ...selectedSurvey.config,
@@ -492,7 +497,7 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                     </label>
                     <input
                       type="checkbox"
-                      checked={selectedSurvey.config.pepperads_redirect_enabled}
+                      checked={selectedSurvey.config?.pepperads_redirect_enabled || false}
                       onChange={(e) => {
                         const updatedConfig = {
                           ...selectedSurvey.config,
@@ -504,7 +509,7 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                     />
                   </div>
 
-                  {selectedSurvey.config.pepperads_redirect_enabled && (
+                  {selectedSurvey.config?.pepperads_redirect_enabled && (
                     <div>
                       <label className={`block mb-2 ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
                         Offer (Redirect URL)
@@ -512,7 +517,7 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                       <div className="flex flex-col sm:flex-row gap-2">
                         <div className="flex-1 flex gap-2">
                           <select
-                            value={selectedSurvey.config.pepperads_offer_id || ''}
+                            value={selectedSurvey.config?.pepperads_offer_id || ''}
                             onChange={(e) => {
                               const updatedConfig = {
                                 ...selectedSurvey.config,
@@ -533,12 +538,12 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                               </option>
                             ))}
                           </select>
-                          {selectedSurvey.config.pepperads_offer_id && (
+                          {selectedSurvey.config?.pepperads_offer_id && (
                             <>
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const selectedOffer = offers.find(o => o._id === selectedSurvey.config.pepperads_offer_id);
+                                  const selectedOffer = offers.find(o => o._id === selectedSurvey.config?.pepperads_offer_id);
                                   if (selectedOffer) {
                                     setOfferForm({
                                       _id: selectedOffer._id,
@@ -591,13 +596,15 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                 </label>
                 <input
                   type="text"
-                  value={selectedSurvey.config.fail_page_config.fail_page_url}
+                  value={selectedSurvey.config.fail_page_config?.fail_page_url || ''}
                   onChange={(e) => {
                     const updatedConfig = {
                       ...selectedSurvey.config,
                       fail_page_config: {
                         ...selectedSurvey.config.fail_page_config,
-                        fail_page_url: e.target.value
+                        fail_page_url: e.target.value,
+                        custom_message: selectedSurvey.config.fail_page_config?.custom_message || 'Thank you for your time!',
+                        show_retry_option: selectedSurvey.config.fail_page_config?.show_retry_option || false
                       }
                     };
                     updateSurveyConfig(selectedSurvey.survey_id, updatedConfig);
@@ -616,13 +623,15 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                   Fail Message
                 </label>
                 <textarea
-                  value={selectedSurvey.config.fail_page_config.custom_message}
+                  value={selectedSurvey.config.fail_page_config?.custom_message || ''}
                   onChange={(e) => {
                     const updatedConfig = {
                       ...selectedSurvey.config,
                       fail_page_config: {
                         ...selectedSurvey.config.fail_page_config,
-                        custom_message: e.target.value
+                        custom_message: e.target.value,
+                        fail_page_url: selectedSurvey.config.fail_page_config?.fail_page_url || '/survey-thankyou',
+                        show_retry_option: selectedSurvey.config.fail_page_config?.show_retry_option || false
                       }
                     };
                     updateSurveyConfig(selectedSurvey.survey_id, updatedConfig);

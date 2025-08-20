@@ -88,12 +88,19 @@ const AICustomTemplate: React.FC<Props> = ({
     const params = new URLSearchParams(location.search);
     setUsername(params.get('username'));
     setEmail(params.get('email'));
-    setClickId(params.get('click_id'));
+    
+    // Auto-generate click_id if not provided
+    let extractedClickId = params.get('click_id');
+    if (!extractedClickId) {
+      extractedClickId = `auto_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      console.log('🎯 Auto-generated click_id:', extractedClickId);
+    }
+    setClickId(extractedClickId);
     
     console.log('🔍 URL Parameters extracted:', {
       username: params.get('username'),
       email: params.get('email'),
-      click_id: params.get('click_id')
+      click_id: extractedClickId
     });
 
     if (params.get('username') && params.get('email') && survey.id) {
