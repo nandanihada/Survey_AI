@@ -39,6 +39,7 @@ const EmployeeCheckInTemplate: React.FC<Props> = ({
   const [username, setUsername] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [trackingId, setTrackingId] = useState<string | null>(null);
+  const [clickId, setClickId] = useState<string | null>(null);
 
   const normalizeType = (type: string): 'text' | 'radio' | 'range' => {
     switch (type) {
@@ -87,6 +88,13 @@ const EmployeeCheckInTemplate: React.FC<Props> = ({
     const params = new URLSearchParams(location.search);
     setUsername(params.get('username'));
     setEmail(params.get('email'));
+    setClickId(params.get('click_id'));
+    
+    console.log('🔍 URL Parameters extracted:', {
+      username: params.get('username'),
+      email: params.get('email'),
+      click_id: params.get('click_id')
+    });
 
     if (params.get('username') && params.get('email') && survey.id) {
       fetch(`${apiBaseUrl}/survey/${survey.id}/track`, {
@@ -139,14 +147,56 @@ const EmployeeCheckInTemplate: React.FC<Props> = ({
         }
       });
 
-      const response = await fetch(`${apiBaseUrl}/survey/${survey.id}/respond`, {
+      console.log('🚀 Submitting survey responses:', responses);
+      console.log('📋 Survey ID:', survey.id);
+      console.log('👤 User info:', { username, email, trackingId, clickId });
+      
+      const response = await fetch(`${apiBaseUrl}/survey/${survey.id}/submit-enhanced`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ responses, email, username, tracking_id: trackingId }),
+        body: JSON.stringify({ 
+          responses, 
+          email, 
+          username, 
+          tracking_id: trackingId,
+          click_id: clickId 
+        }),
       });
 
       if (!response.ok) throw new Error(await response.text());
       const result = await response.json();
+      
+      console.log('✅ Enhanced submission successful:', result);
+      
+      // Handle redirection logic
+      const redirect = result?.redirect || {};
+      const evaluation = result?.evaluation || {};
+      
+      console.log('📊 Evaluation result:', evaluation);
+      console.log('🔗 Redirect info:', redirect);
+      console.log('🔍 Should redirect?', redirect?.should_redirect);
+      console.log('🔍 Redirect URL?', redirect?.redirect_url);
+      
+      if (redirect?.should_redirect && redirect?.redirect_url) {
+        console.log('🚀 Redirecting to:', redirect.redirect_url);
+        
+        // Show success message briefly before redirect
+        setSubmitted(true);
+        
+        // Add delay if specified
+        const delay = redirect.delay_seconds || 3;
+        console.log(`⏱️ Redirecting in ${delay} seconds...`);
+        
+        setTimeout(() => {
+          console.log('🔄 Executing redirect now...');
+          window.location.href = redirect.redirect_url;
+        }, delay * 1000);
+        
+        return;
+      }
+      
+      // No redirect - show success message
+      console.log('ℹ️ No redirect - showing success message');
       setSubmitted(true);
     } catch (error: unknown) {
       if (error instanceof Error) {

@@ -8,13 +8,13 @@ import ResponseAnalytics from './components/ResponseAnalytics';
 import SurveyEditor from './components/SurveyEditor';
 import PublicSurveyPage from './components/PublicSurveyPage';
 import SurveyPreviewPage from './components/SurveyPreviewPage';
-import { FloatingWidgetProvider, FloatingWidgetDebug } from './components/FloatingWidgetProvider';
-import { FloatingWidgetDemo } from './components/FloatingWidgetDemo';
+import { FloatingWidgetProvider } from './components/FloatingWidgetProvider';
 import WidgetTestPage from './components/WidgetTestPage';
 import FloatingWidget from './components/FloatingWidget';
 import { WidgetResponsesView } from './components/WidgetResponsesView';
-import { WidgetCustomizer, WidgetCustomizerSettings, Question } from './components/WidgetCustomizer';
-import { PenSquare, FolderOpen, TrendingUp, Link, Sun, Moon } from 'lucide-react';
+import { WidgetCustomizer, WidgetCustomizerSettings } from './components/WidgetCustomizer';
+import PassFailAdmin from './components/PassFailAdmin';
+import { PenSquare, FolderOpen, TrendingUp, Link, Sun, Moon, Settings } from 'lucide-react';
 import './styles/mobile-responsive.css';
 
 function Dashboard() {
@@ -27,7 +27,7 @@ function Dashboard() {
   const [widgetSettings, setWidgetSettings] = useState<WidgetCustomizerSettings | null>(null);
 
   // Memoized default settings
-  const defaultSettings = useMemo(() => ({
+  const defaultSettings = useMemo<WidgetCustomizerSettings>(() => ({
     color: 'red',
     transparency: 95,
     glassEffect: true,
@@ -171,12 +171,13 @@ function Dashboard() {
           {/* Mobile Navigation - Hidden on mobile, shown on tablet+ */}
           <div className="hidden md:flex">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className={`grid grid-cols-5 rounded-lg p-1 text-xs ${isDarkMode ? 'bg-slate-700/40' : 'bg-stone-100'}`}>
+              <TabsList className={`grid grid-cols-6 rounded-lg p-1 text-xs ${isDarkMode ? 'bg-slate-700/40' : 'bg-stone-100'}`}>
                 {[
                   { value: 'create', icon: PenSquare, label: 'Create' },
                   { value: 'surveys', icon: FolderOpen, label: 'Surveys' },
                   { value: 'responses', icon: TrendingUp, label: 'Analytics' },
                   { value: 'postback', icon: Link, label: 'Postback' },
+                  { value: 'passfail', icon: Settings, label: 'Pass/Fail' },
                   { value: 'testlab', icon: () => <span className="text-xs">🧪</span>, label: 'Test Lab' }
                 ].map(({ value, icon: Icon, label }) => (
                   <TabsTrigger
@@ -199,12 +200,13 @@ function Dashboard() {
           {/* Mobile Tabs - Visible only on mobile */}
           <div className="md:hidden w-full order-3">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className={`grid grid-cols-5 rounded-lg p-1 text-xs w-full ${isDarkMode ? 'bg-slate-700/40' : 'bg-stone-100'}`}>
+              <TabsList className={`grid grid-cols-6 rounded-lg p-1 text-xs w-full ${isDarkMode ? 'bg-slate-700/40' : 'bg-stone-100'}`}>
                 {[
                   { value: 'create', icon: PenSquare, label: 'Create' },
                   { value: 'surveys', icon: FolderOpen, label: 'Surveys' },
                   { value: 'responses', icon: TrendingUp, label: 'Analytics' },
                   { value: 'postback', icon: Link, label: 'Postback' },
+                  { value: 'passfail', icon: Settings, label: 'Pass/Fail' },
                   { value: 'testlab', icon: () => <span className="text-xs">🧪</span>, label: 'Test Lab' }
                 ].map(({ value, icon: Icon, label }) => (
                   <TabsTrigger
@@ -280,14 +282,15 @@ function Dashboard() {
                 </div>
               </div>
             </TabsContent>
-          <TabsContent value="surveys"><SurveyList isDarkMode={isDarkMode} /></TabsContent>
-          <TabsContent value="responses">
-            <div className="space-y-6">
-              <ResponseAnalytics isDarkMode={isDarkMode} />
-              <WidgetResponsesView isDarkMode={isDarkMode} />
-            </div>
-          </TabsContent>
-          <TabsContent value="postback"><PostbackManager isDarkMode={isDarkMode} /></TabsContent>
+            <TabsContent value="surveys"><SurveyList isDarkMode={isDarkMode} /></TabsContent>
+            <TabsContent value="responses">
+              <div className="space-y-6">
+                <ResponseAnalytics isDarkMode={isDarkMode} />
+                <WidgetResponsesView isDarkMode={isDarkMode} />
+              </div>
+            </TabsContent>
+            <TabsContent value="postback"><PostbackManager isDarkMode={isDarkMode} /></TabsContent>
+            <TabsContent value="passfail"><PassFailAdmin isDarkMode={isDarkMode} /></TabsContent>
             <TabsContent value="testlab">
               <div className="space-y-6">
                 <div className={`p-6 rounded-lg border ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-stone-200'}`}>

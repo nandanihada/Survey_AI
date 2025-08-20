@@ -16,6 +16,15 @@ from postback_api import postback_api_bp
 from mongodb_config import db
 from bson import ObjectId
 
+# Import enhanced survey handler
+try:
+    from enhanced_survey_handler import EnhancedSurveyHandler
+    ENHANCED_HANDLER_AVAILABLE = True
+    print("✅ Enhanced survey handler imported successfully")
+except ImportError as e:
+    print(f"⚠️ Enhanced survey handler not available: {e}")
+    ENHANCED_HANDLER_AVAILABLE = False
+
 # Load environment variables
 try:
     from dotenv import load_dotenv
@@ -1162,6 +1171,683 @@ def manage_outbound_postback():
             print(f"Error retrieving postback URL: {e}")
             return jsonify({"error": str(e)}), 500
 
+
+# Add enhanced survey submission endpoint
+if ENHANCED_HANDLER_AVAILABLE:
+    @app.route('/survey/<survey_id>/submit-enhanced', methods=['POST'])
+    def submit_enhanced_survey_response(survey_id):
+        """Enhanced survey submission with pass/fail logic, tracking, and conditional redirects"""
+        
+        # Validate request
+        if not request.is_json:
+            return jsonify({"error": "Content-Type must be application/json"}), 400
+        
+        request_data = request.json
+        if not request_data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        # Process submission using enhanced handler
+        handler = EnhancedSurveyHandler()
+        result = handler.handle_survey_submission(survey_id, request_data)
+        
+        # Return appropriate status code
+        if "error" in result:
+            status_code = result.get("status_code", 500)
+            return jsonify(result), status_code
+        else:
+            return jsonify(result), 200
+    
+    print("✅ Enhanced survey submission endpoint added: /survey/<survey_id>/submit-enhanced")
+else:
+    print("⚠️ Enhanced survey submission endpoint not available")
+
+# Admin configuration endpoints for pass/fail system
+@app.route('/admin/survey/<survey_id>/config', methods=['GET', 'POST', 'PUT'])
+def manage_survey_config(survey_id):
+    """Manage survey pass/fail configuration"""
+    
+    if request.method == 'GET':
+        # Get current configuration
+        try:
+            config = db.survey_configurations.find_one({"survey_id": survey_id})
+            if config:
+                # Convert ObjectId to string
+                config["_id"] = str(config["_id"])
+                return jsonify(config)
+            else:
+                return jsonify({"message": "No configuration found", "survey_id": survey_id})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    elif request.method in ['POST', 'PUT']:
+        # Update configuration
+        try:
+            data = request.json
+            if not data:
+                return jsonify({"error": "No data provided"}), 400
+            
+            # Prepare configuration data
+            config_data = {
+                "survey_id": survey_id,
+                "pass_fail_enabled": data.get("pass_fail_enabled", False),
+                "pepperads_redirect_enabled": data.get("pepperads_redirect_enabled", False),
+                "criteria_set_id": data.get("criteria_set_id"),
+                "pepperads_offer_id": data.get("pepperads_offer_id"),
+                "fail_page_config": data.get("fail_page_config", {
+                    "fail_page_url": "/survey-thankyou",
+                    "custom_message": "Thank you for your time!",
+                    "show_retry_option": False
+                }),
+                "updated_at": datetime.utcnow()
+            }
+            
+            # Upsert configuration
+            result = db.survey_configurations.update_one(
+                {"survey_id": survey_id},
+                {"$set": config_data},
+                upsert=True
+            )
+            
+            if result.upserted_id:
+                return jsonify({"message": "Configuration created", "survey_id": survey_id})
+            else:
+                return jsonify({"message": "Configuration updated", "survey_id": survey_id})
+                
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+@app.route('/admin/criteria', methods=['GET', 'POST'])
+def manage_criteria():
+    """Manage pass/fail criteria sets"""
+    
+    if request.method == 'GET':
+        try:
+            # Get all criteria sets
+            criteria_sets = list(db.pass_fail_criteria.find({"is_active": True}))
+            
+            # Convert ObjectIds to strings
+            for criteria in criteria_sets:
+                criteria["_id"] = str(criteria["_id"])
+            
+            return jsonify({"criteria_sets": criteria_sets})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    elif request.method == 'POST':
+        try:
+            data = request.json
+            if not data:
+                return jsonify({"error": "No data provided"}), 400
+            
+            # Create new criteria set
+            criteria_data = {
+                "_id": str(uuid.uuid4()),
+                "name": data.get("name", "New Criteria Set"),
+                "description": data.get("description", ""),
+                "criteria": data.get("criteria", []),
+                "logic_type": data.get("logic_type", "all_required"),
+                "passing_threshold": data.get("passing_threshold", 50.0),
+                "is_active": True,
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
+            
+            db.pass_fail_criteria.insert_one(criteria_data)
+            return jsonify({"message": "Criteria set created", "criteria_id": criteria_data["_id"]})
+            
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+@app.route('/admin/criteria/<criteria_id>', methods=['GET', 'PUT', 'DELETE'])
+def manage_specific_criteria(criteria_id):
+    """Manage specific criteria set"""
+    
+    if request.method == 'GET':
+        try:
+            criteria = db.pass_fail_criteria.find_one({"_id": criteria_id})
+            if criteria:
+                criteria["_id"] = str(criteria["_id"])
+                return jsonify(criteria)
+            else:
+                return jsonify({"error": "Criteria not found"}), 404
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    elif request.method == 'PUT':
+        try:
+            data = request.json
+            if not data:
+                return jsonify({"error": "No data provided"}), 400
+            
+            update_data = {
+                "name": data.get("name"),
+                "description": data.get("description"),
+                "criteria": data.get("criteria"),
+                "logic_type": data.get("logic_type"),
+                "passing_threshold": data.get("passing_threshold"),
+                "updated_at": datetime.utcnow()
+            }
+            
+            # Remove None values
+            update_data = {k: v for k, v in update_data.items() if v is not None}
+            
+            result = db.pass_fail_criteria.update_one(
+                {"_id": criteria_id},
+                {"$set": update_data}
+            )
+            
+            if result.matched_count == 0:
+                return jsonify({"error": "Criteria not found"}), 404
+            
+            return jsonify({"message": "Criteria updated"})
+            
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    elif request.method == 'DELETE':
+        try:
+            # Soft delete by setting is_active to False
+            result = db.pass_fail_criteria.update_one(
+                {"_id": criteria_id},
+                {"$set": {"is_active": False, "updated_at": datetime.utcnow()}}
+            )
+            
+            if result.matched_count == 0:
+                return jsonify({"error": "Criteria not found"}), 404
+            
+            return jsonify({"message": "Criteria deleted"})
+            
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+@app.route('/admin/survey/<survey_id>/questions', methods=['GET'])
+def get_survey_questions_for_admin(survey_id):
+    """Get survey questions for admin criteria configuration"""
+    try:
+        # Find the survey
+        survey = db.surveys.find_one({
+            "$or": [{"_id": survey_id}, {"id": survey_id}]
+        })
+        
+        if not survey:
+            return jsonify({"error": "Survey not found"}), 404
+        
+        # Extract questions with proper formatting for admin interface
+        questions = survey.get("questions", [])
+        formatted_questions = []
+        
+        for i, question in enumerate(questions):
+            formatted_question = {
+                "id": question.get("id", f"q{i+1}"),
+                "question_text": question.get("question", ""),
+                "type": question.get("type", "multiple_choice"),
+                "options": question.get("options", []),
+                "question_number": i + 1
+            }
+            formatted_questions.append(formatted_question)
+        
+        return jsonify({
+            "survey_id": survey_id,
+            "survey_name": survey.get("prompt", "Untitled Survey"),
+            "questions": formatted_questions,
+            "total_questions": len(formatted_questions)
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/admin/surveys-with-config', methods=['GET'])
+def get_surveys_with_config():
+    """Get all surveys with their pass/fail configuration"""
+    try:
+        # Get all surveys
+        surveys = list(db.surveys.find().sort("created_at", -1))
+        
+        # Get all configurations
+        configs = list(db.survey_configurations.find())
+        config_map = {config["survey_id"]: config for config in configs}
+        
+        # Get all criteria sets
+        criteria_sets = list(db.pass_fail_criteria.find({"is_active": True}))
+        criteria_map = {criteria["_id"]: criteria for criteria in criteria_sets}
+        
+        # Combine data
+        result = []
+        for survey in surveys:
+            survey_id = survey.get("_id") or survey.get("id")
+            # Ensure survey_id is string for JSON serialization
+            try:
+                from bson import ObjectId as _OID
+                if isinstance(survey_id, _OID):
+                    survey_id = str(survey_id)
+            except Exception:
+                pass
+            
+            config = config_map.get(survey_id, {})
+            criteria_set = None
+            
+            if config.get("criteria_set_id"):
+                criteria_set = criteria_map.get(config["criteria_set_id"])
+            
+            # Convert any ObjectIds in nested docs to strings
+            if config:
+                config = convert_objectid_to_string(dict(config))
+            if criteria_set:
+                criteria_set = convert_objectid_to_string(dict(criteria_set))
+
+            survey_data = {
+                "survey_id": survey_id,
+                "survey_name": survey.get("prompt", "Untitled Survey"),
+                "created_at": survey.get("created_at"),
+                "config": config,
+                "criteria_set": criteria_set
+            }
+            result.append(survey_data)
+        
+        return jsonify({"surveys": result})
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/admin/global-config', methods=['GET', 'POST'])
+def manage_global_config():
+    """Manage global system configuration"""
+    
+    if request.method == 'GET':
+        try:
+            from pass_fail_schema import get_system_config
+            config = get_system_config()
+            return jsonify(config)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    elif request.method == 'POST':
+        try:
+            from pass_fail_schema import update_system_config
+            data = request.json
+            if not data:
+                return jsonify({"error": "No data provided"}), 400
+            
+            success = update_system_config(data)
+            if success:
+                return jsonify({"message": "Global configuration updated"})
+            else:
+                return jsonify({"error": "Failed to update configuration"}), 500
+                
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+@app.route('/admin/pepperads/offers', methods=['GET', 'POST'])
+def manage_pepperads_offers():
+    """List or create PepperAds offers (used for PASS redirects)"""
+    try:
+        if request.method == 'GET':
+            offers_cursor = db.pepperads_offers.find()
+            offers = []
+            for offer in offers_cursor:
+                offer = convert_objectid_to_string(dict(offer))
+                offers.append({
+                    "_id": offer.get("_id"),
+                    "offer_name": offer.get("offer_name"),
+                    "base_url": offer.get("base_url"),
+                    "is_active": offer.get("is_active", False)
+                })
+            return jsonify({"offers": offers})
+
+        # POST - create new offer
+        data = request.get_json() or {}
+        if not data.get("offer_name") or not data.get("base_url"):
+            return jsonify({"error": "offer_name and base_url are required"}), 400
+            
+        offer_id = str(uuid.uuid4())
+        offer_doc = {
+            "_id": offer_id,
+            "offer_name": data.get("offer_name"),
+            "description": data.get("description", ""),
+            "base_url": data.get("base_url"),
+            "parameters": data.get("parameters", {
+                "required_params": ["click_id", "user_id"],
+                "optional_params": ["email", "survey_id", "username"],
+                "parameter_mapping": {
+                    "click_id": "click_id",
+                    "user_id": "username",
+                    "email": "email",
+                    "survey_id": "survey_id"
+                }
+            }),
+            "tracking": data.get("tracking", {
+                "track_conversions": True,
+                "conversion_value": 1.0,
+                "currency": "USD"
+            }),
+            "is_active": data.get("is_active", True),
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+        result = db.pepperads_offers.insert_one(offer_doc)
+        return jsonify({"message": "Offer created", "_id": offer_id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/admin/pepperads/offers/<offer_id>', methods=['PUT', 'DELETE'])
+def update_delete_pepperads_offer(offer_id):
+    """Update or delete a specific PepperAds offer"""
+    try:
+        if request.method == 'PUT':
+            # Update existing offer
+            data = request.get_json() or {}
+            if not data.get("offer_name") or not data.get("base_url"):
+                return jsonify({"error": "offer_name and base_url are required"}), 400
+            
+            # Check if offer exists
+            existing_offer = db.pepperads_offers.find_one({"_id": offer_id})
+            if not existing_offer:
+                return jsonify({"error": "Offer not found"}), 404
+            
+            update_doc = {
+                "offer_name": data.get("offer_name"),
+                "description": data.get("description", ""),
+                "base_url": data.get("base_url"),
+                "is_active": data.get("is_active", True),
+                "updated_at": datetime.utcnow()
+            }
+            
+            # Preserve existing parameters and tracking if not provided
+            if "parameters" in data:
+                update_doc["parameters"] = data["parameters"]
+            if "tracking" in data:
+                update_doc["tracking"] = data["tracking"]
+            
+            db.pepperads_offers.update_one({"_id": offer_id}, {"$set": update_doc})
+            return jsonify({"message": "Offer updated", "_id": offer_id})
+            
+        elif request.method == 'DELETE':
+            # Delete offer
+            result = db.pepperads_offers.delete_one({"_id": offer_id})
+            if result.deleted_count == 0:
+                return jsonify({"error": "Offer not found"}), 404
+            
+            # Also remove this offer from any survey configurations
+            db.survey_configs.update_many(
+                {"config.pepperads_offer_id": offer_id},
+                {"$unset": {"config.pepperads_offer_id": ""}, "$set": {"config.pepperads_redirect_enabled": False}}
+            )
+            
+            return jsonify({"message": "Offer deleted"})
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/admin/survey/<survey_id>/generate-criteria', methods=['POST'])
+def generate_dynamic_criteria(survey_id):
+    """Generate dynamic criteria based on survey questions"""
+    try:
+        from evaluation_engine import SurveyEvaluationEngine
+        
+        # Find the survey
+        survey = db.surveys.find_one({
+            "$or": [{"_id": survey_id}, {"id": survey_id}]
+        })
+        
+        if not survey:
+            return jsonify({"error": "Survey not found"}), 404
+        
+        # Generate dynamic criteria
+        engine = SurveyEvaluationEngine()
+        dynamic_criteria = engine._create_dynamic_criteria_for_survey(survey)
+        
+        if not dynamic_criteria:
+            return jsonify({"error": "Could not generate criteria for this survey"}), 400
+        
+        return jsonify({
+            "message": "Dynamic criteria generated successfully",
+            "criteria": dynamic_criteria
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/admin/criteria/test', methods=['POST'])
+def test_criteria():
+    """Test criteria against sample responses"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        criteria_set = data.get("criteria_set")
+        test_responses = data.get("responses")
+        
+        if not criteria_set or not test_responses:
+            return jsonify({"error": "Both criteria_set and responses are required"}), 400
+        
+        from evaluation_engine import SurveyEvaluationEngine
+        
+        # Create a mock survey evaluation
+        engine = SurveyEvaluationEngine()
+        
+        # Simulate evaluation with the provided criteria
+        criteria_results = {}
+        criteria_met = []
+        criteria_failed = []
+        total_weight = 0
+        achieved_weight = 0
+        
+        for criterion in criteria_set["criteria"]:
+            result = engine._evaluate_single_criterion(criterion, test_responses)
+            criteria_results[criterion["id"]] = result
+            
+            weight = criterion.get("weight", 1.0)
+            total_weight += weight
+            
+            if result["passed"]:
+                criteria_met.append(criterion["id"])
+                achieved_weight += weight
+            else:
+                criteria_failed.append(criterion["id"])
+        
+        # Determine overall result
+        logic_type = criteria_set.get("logic_type", "all_required")
+        overall_result = engine._determine_overall_result(
+            logic_type, 
+            criteria_results, 
+            criteria_set, 
+            achieved_weight, 
+            total_weight
+        )
+        
+        # Calculate score
+        final_score = (achieved_weight / total_weight * 100) if total_weight > 0 else 0
+        
+        test_result = {
+            "status": "pass" if overall_result else "fail",
+            "score": round(final_score, 2),
+            "criteria_met": criteria_met,
+            "criteria_failed": criteria_failed,
+            "details": {
+                "criteria_results": criteria_results,
+                "logic_type": logic_type,
+                "total_criteria": len(criteria_set["criteria"]),
+                "criteria_passed": len(criteria_met),
+                "achieved_weight": achieved_weight,
+                "total_weight": total_weight
+            },
+            "message": f"Test {'passed' if overall_result else 'failed'} based on {logic_type} logic"
+        }
+        
+        return jsonify(test_result)
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/admin/surveys/bulk-assign-criteria', methods=['POST'])
+def bulk_assign_criteria():
+    """Bulk assign criteria to multiple surveys"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        survey_ids = data.get("survey_ids", [])
+        criteria_set_id = data.get("criteria_set_id")
+        config_updates = data.get("config_updates", {})
+        
+        if not survey_ids or not criteria_set_id:
+            return jsonify({"error": "survey_ids and criteria_set_id are required"}), 400
+        
+        # Verify criteria set exists
+        criteria_set = db.pass_fail_criteria.find_one({
+            "_id": criteria_set_id,
+            "is_active": True
+        })
+        
+        if not criteria_set:
+            return jsonify({"error": "Criteria set not found"}), 404
+        
+        updated_surveys = []
+        failed_surveys = []
+        
+        for survey_id in survey_ids:
+            try:
+                # Prepare configuration data
+                config_data = {
+                    "survey_id": survey_id,
+                    "criteria_set_id": criteria_set_id,
+                    "pass_fail_enabled": config_updates.get("pass_fail_enabled", True),
+                    "pepperads_redirect_enabled": config_updates.get("pepperads_redirect_enabled", True),
+                    "updated_at": datetime.utcnow()
+                }
+                
+                # Add other config updates if provided
+                if config_updates.get("pepperads_offer_id"):
+                    config_data["pepperads_offer_id"] = config_updates["pepperads_offer_id"]
+                
+                if config_updates.get("fail_page_config"):
+                    config_data["fail_page_config"] = config_updates["fail_page_config"]
+                
+                # Upsert configuration
+                result = db.survey_configurations.update_one(
+                    {"survey_id": survey_id},
+                    {"$set": config_data},
+                    upsert=True
+                )
+                
+                updated_surveys.append(survey_id)
+                
+            except Exception as e:
+                failed_surveys.append({"survey_id": survey_id, "error": str(e)})
+        
+        return jsonify({
+            "message": f"Bulk assignment completed",
+            "updated_surveys": len(updated_surveys),
+            "failed_surveys": len(failed_surveys),
+            "details": {
+                "updated": updated_surveys,
+                "failed": failed_surveys
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/admin/survey/<survey_id>/preview-evaluation', methods=['POST'])
+def preview_evaluation(survey_id):
+    """Preview how evaluation would work with sample responses"""
+    try:
+        data = request.json
+        sample_responses = data.get("responses", {})
+        criteria_set_id = data.get("criteria_set_id")  # Optional, will use survey's configured criteria if not provided
+        
+        if not sample_responses:
+            return jsonify({"error": "Sample responses are required"}), 400
+        
+        from evaluation_engine import evaluate_responses
+        
+        # Run evaluation preview
+        evaluation_result = evaluate_responses(survey_id, sample_responses, criteria_set_id)
+        
+        return jsonify({
+            "message": "Evaluation preview completed",
+            "evaluation": evaluation_result,
+            "sample_responses": sample_responses,
+            "survey_id": survey_id
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/admin/analytics/criteria-performance', methods=['GET'])
+def get_criteria_performance():
+    """Get analytics on criteria performance across surveys"""
+    try:
+        # Get all survey configurations with criteria
+        configs = list(db.survey_configurations.find({"pass_fail_enabled": True}))
+        
+        # Get all responses with evaluations
+        responses_with_eval = list(db.responses.find({"evaluation_result": {"$exists": True}}))
+        
+        # Aggregate stats
+        criteria_stats = {}
+        survey_stats = {}
+        overall_stats = {
+            "total_surveys_with_criteria": len(configs),
+            "total_evaluated_responses": len(responses_with_eval),
+            "pass_rate": 0,
+            "fail_rate": 0
+        }
+        
+        pass_count = 0
+        fail_count = 0
+        
+        for response in responses_with_eval:
+            survey_id = response.get("survey_id")
+            evaluation = response.get("evaluation_result", {})
+            status = evaluation.get("status", "unknown")
+            
+            if status == "pass":
+                pass_count += 1
+            elif status == "fail":
+                fail_count += 1
+            
+            # Track per-survey stats
+            if survey_id not in survey_stats:
+                survey_stats[survey_id] = {
+                    "total": 0,
+                    "pass": 0,
+                    "fail": 0,
+                    "avg_score": 0
+                }
+            
+            survey_stats[survey_id]["total"] += 1
+            survey_stats[survey_id][status] += 1
+            
+            # Add to average score calculation
+            score = evaluation.get("score", 0)
+            survey_stats[survey_id]["avg_score"] = (
+                (survey_stats[survey_id]["avg_score"] * (survey_stats[survey_id]["total"] - 1) + score) 
+                / survey_stats[survey_id]["total"]
+            )
+        
+        total_evaluated = pass_count + fail_count
+        if total_evaluated > 0:
+            overall_stats["pass_rate"] = round((pass_count / total_evaluated) * 100, 2)
+            overall_stats["fail_rate"] = round((fail_count / total_evaluated) * 100, 2)
+        
+        # Calculate pass rates for each survey
+        for survey_id, stats in survey_stats.items():
+            if stats["total"] > 0:
+                stats["pass_rate"] = round((stats["pass"] / stats["total"]) * 100, 2)
+                stats["fail_rate"] = round((stats["fail"] / stats["total"]) * 100, 2)
+                stats["avg_score"] = round(stats["avg_score"], 2)
+        
+        return jsonify({
+            "overall_stats": overall_stats,
+            "survey_stats": survey_stats,
+            "criteria_stats": criteria_stats
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run()
