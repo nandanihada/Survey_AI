@@ -20,7 +20,7 @@ const PostbackGenerator: React.FC<PostbackGeneratorProps> = ({ isDarkMode = fals
 
     const baseUrl = window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1'
       ? 'http://127.0.0.1:5000/postback-handler'
-      : 'https://pepper-flask-app.onrender.com/postback-handler';
+      : 'https://hostslice.onrender.com//postback-handler';
 
     const url = `${baseUrl}?transaction_id=${encodeURIComponent(subId)}&status=1&reward=0.1&currency=USD&sid1=${encodeURIComponent(subId)}`;
     setPostbackUrl(url);

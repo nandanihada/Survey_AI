@@ -35,7 +35,7 @@ except ImportError:
 if os.getenv("FLASK_ENV") == "development":
     BASE_URL = "http://127.0.0.1:5000"
 else:
-    BASE_URL = "https://pepper-flask-app.onrender.com"
+    BASE_URL = "https://hostslice.onrender.com/"
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)

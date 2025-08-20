@@ -188,7 +188,7 @@ const SurveyEditor: React.FC = () => {
   const [saveMessage, setSaveMessage] = useState('');
 
   const isLocalhost = window.location.hostname === 'localhost';
-  const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://pepper-flask-app.onrender.com';
+  const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com/';
 
   useEffect(() => {
     if (!id) return;

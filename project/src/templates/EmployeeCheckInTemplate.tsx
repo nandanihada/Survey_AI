@@ -82,7 +82,7 @@ const EmployeeCheckInTemplate: React.FC<Props> = ({
   const isLocalhost = window.location.hostname === 'localhost';
   const apiBaseUrl = isLocalhost
     ? 'http://localhost:5000'
-    : 'https://pepper-flask-app.onrender.com';
+    : 'https://hostslice.onrender.com/';
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);

@@ -21,7 +21,7 @@ def explain_postback_flow():
     print("5. Your receiver processes the postback and updates records")
     
     print("\n🌐 YOUR POSTBACK RECEIVER URLs:")
-    print("Production: https://pepper-flask-app.onrender.com/postback-handler")
+    print("Production: https://hostslice.onrender.com//postback-handler")
     print("Local Dev:  http://127.0.0.1:5000/postback-handler")
     
     print("\n📋 EXPECTED PARAMETERS FROM ADBREAK MEDIA:")
@@ -186,7 +186,7 @@ def generate_adbreak_postback_url():
     print("🔗 POSTBACK URL FOR ADBREAK MEDIA")
     print("="*60)
     
-    production_url = "https://pepper-flask-app.onrender.com/postback-handler"
+    production_url = "https://hostslice.onrender.com//postback-handler"
     postback_url_template = f"{production_url}?transaction_id={{transaction_id}}&status={{status}}&reward={{reward}}&currency={{currency}}&sid1={{sid1}}&username={{username}}"
     
     print("📋 Give this EXACT URL to AdBreak Media in their postback settings:")
