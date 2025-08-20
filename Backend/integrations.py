@@ -95,6 +95,7 @@ def replace_postback_parameters(url, response_data):
 def log_postback_attempt(partner_name, url, status_code, response_text):
     """
     Log postback attempts to the database for monitoring and debugging.
+    Only logs OUTBOUND postbacks (when we send to partners).
     """
     try:
         log_entry = {
@@ -110,7 +111,9 @@ def log_postback_attempt(partner_name, url, status_code, response_text):
             "timestamp_str": datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Local time for display
         }
         
-        db.postback_logs.insert_one(log_entry)
+        # Log to outbound_postback_logs collection to separate from inbound
+        db.outbound_postback_logs.insert_one(log_entry)
+        print(f"📤 Logged OUTBOUND postback to {partner_name}")
         
     except Exception as e:
         print(f"Error logging postback attempt: {str(e)}")

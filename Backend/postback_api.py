@@ -91,7 +91,7 @@ def delete_partner(partner_id):
 def get_postback_logs():
     try:
         # Get outbound postback logs, sorted by timestamp (newest first)
-        logs_cursor = db.postback_logs.find().sort("timestamp", -1).limit(50)
+        logs_cursor = db.outbound_postback_logs.find().sort("timestamp", -1).limit(50)
         logs = []
         
         for log in logs_cursor:
