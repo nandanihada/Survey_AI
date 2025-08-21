@@ -64,7 +64,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false }) => {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
+    return new Date(dateString).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
   };
 
   const getResponseCount = () => {

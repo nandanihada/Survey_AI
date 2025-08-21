@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Link, Copy, CheckCircle, Send, Settings, Eye, Plus, Trash2, Edit3, Activity, Clock, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Link, Copy, Send, Settings, Eye, Plus, Trash2, Edit3, Activity, Clock, AlertCircle, CheckCircle2, Users, ExternalLink } from 'lucide-react';
 
 interface PostbackManagerProps {
   isDarkMode?: boolean;
@@ -56,6 +56,48 @@ const api = {
   async getInboundLogs() {
     const response = await fetch(`${API_BASE}/api/inbound-postback-logs`);
     if (!response.ok) throw new Error('Failed to fetch inbound logs');
+    return response.json();
+  },
+  
+  async getPostbackShares() {
+    const response = await fetch(`${API_BASE}/api/postback-shares`);
+    if (!response.ok) throw new Error('Failed to fetch postback shares');
+    return response.json();
+  },
+  
+  async addPostbackShare(share: any) {
+    const response = await fetch(`${API_BASE}/api/postback-shares`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(share)
+    });
+    if (!response.ok) throw new Error('Failed to add postback share');
+    return response.json();
+  },
+  
+  async updatePostbackShare(id: string, share: any) {
+    const response = await fetch(`${API_BASE}/api/postback-shares/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(share)
+    });
+    if (!response.ok) throw new Error('Failed to update postback share');
+    return response.json();
+  },
+  
+  async deletePostbackShare(id: string) {
+    const response = await fetch(`${API_BASE}/api/postback-shares/${id}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) throw new Error('Failed to delete postback share');
+    return response.json();
+  },
+  
+  async generatePostbackUrl(id: string) {
+    const response = await fetch(`${API_BASE}/api/postback-shares/${id}/generate-url`, {
+      method: 'POST'
+    });
+    if (!response.ok) throw new Error('Failed to generate postback URL');
     return response.json();
   }
 };
@@ -120,7 +162,7 @@ const PostbackManager: React.FC<PostbackManagerProps> = ({ isDarkMode = false })
 };
 
 const PostbackSender: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
-    const [partners, setPartners] = useState([]);
+    const [partners, setPartners] = useState<any[]>([]);
     const [isEditing, setIsEditing] = useState<string | null>(null);
     const [editedPartner, setEditedPartner] = useState({ name: '', url: '', status: 'inactive' });
     const [loading, setLoading] = useState(true);
@@ -144,12 +186,12 @@ const PostbackSender: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
         }
     };
 
-    const handleEdit = (partner) => {
+    const handleEdit = (partner: any) => {
         setIsEditing(partner.id);
         setEditedPartner({ name: partner.name, url: partner.url, status: partner.status });
     };
 
-    const handleSave = async (partnerId) => {
+    const handleSave = async (partnerId: string) => {
         try {
             await api.updatePartner(partnerId, editedPartner);
             setPartners(partners.map(p => p.id === partnerId ? { ...p, ...editedPartner } : p));
@@ -175,7 +217,7 @@ const PostbackSender: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
         }
     };
     
-    const handleDelete = async (partnerId) => {
+    const handleDelete = async (partnerId: string) => {
         if (!confirm('Are you sure you want to delete this partner?')) return;
         
         try {
@@ -265,6 +307,30 @@ const PostbackSender: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
 const PostbackReceiver: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
     const [testResult, setTestResult] = useState('');
     const [isTestingReceiver, setIsTestingReceiver] = useState(false);
+    const [activeReceiverTab, setActiveReceiverTab] = useState<'basic' | 'sharing'>('basic');
+    const [postbackShares, setPostbackShares] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    
+    // Load postback shares on component mount
+    useEffect(() => {
+        if (activeReceiverTab === 'sharing') {
+            loadPostbackShares();
+        }
+    }, [activeReceiverTab]);
+    
+    const loadPostbackShares = async () => {
+        try {
+            setLoading(true);
+            const data = await api.getPostbackShares();
+            setPostbackShares(data);
+        } catch (err) {
+            setError('Failed to load postback shares');
+            console.error('Error loading postback shares:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
     
     const baseUrl = window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1'
         ? 'http://127.0.0.1:5000/postback-handler'
@@ -319,16 +385,44 @@ const PostbackReceiver: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => 
   
     return (
       <div className="space-y-6">
-        <div>
-            <h3 className="text-lg font-semibold flex items-center gap-2">
-                <Eye size={20} />
-                Receiving Inbound Postbacks
-            </h3>
-            <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-300' : 'text-gray-600'}`}>
-                Provide this URL to your partners. We will track completions when they send a GET request to this endpoint.
-            </p>
+        <div className="flex justify-between items-center">
+            <div>
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Eye size={20} />
+                    Receiving Inbound Postbacks
+                </h3>
+                <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-300' : 'text-gray-600'}`}>
+                    Provide this URL to your partners. We will track completions when they send a GET request to this endpoint.
+                </p>
+            </div>
+            
+            {/* Receiver Tabs */}
+            <div className={`flex rounded-lg p-1 text-xs ${isDarkMode ? 'bg-slate-700/40' : 'bg-stone-100'}`}>
+                <button 
+                    onClick={() => setActiveReceiverTab('basic')}
+                    className={`px-4 py-2 rounded-md transition-colors flex items-center gap-2 ${
+                        activeReceiverTab === 'basic' 
+                            ? (isDarkMode ? 'bg-blue-500 text-white' : 'bg-white text-blue-600 shadow-sm') 
+                            : (isDarkMode ? 'text-slate-300 hover:text-white' : 'text-stone-600 hover:text-stone-800')
+                    }`}
+                >
+                    <Link size={14} /> Basic URL
+                </button>
+                <button 
+                    onClick={() => setActiveReceiverTab('sharing')}
+                    className={`px-4 py-2 rounded-md transition-colors flex items-center gap-2 ${
+                        activeReceiverTab === 'sharing' 
+                            ? (isDarkMode ? 'bg-blue-500 text-white' : 'bg-white text-blue-600 shadow-sm') 
+                            : (isDarkMode ? 'text-slate-300 hover:text-white' : 'text-stone-600 hover:text-stone-800')
+                    }`}
+                >
+                    <Users size={14} /> Third Party Sharing
+                </button>
+            </div>
         </div>
         
+        {activeReceiverTab === 'basic' && (
+        <>
         <div className={`p-4 rounded-lg border ${isDarkMode ? 'bg-slate-700/50 border-slate-600' : 'bg-gray-50 border-gray-200'}`}>
              <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
                   Your Postback URL
@@ -408,13 +502,498 @@ const PostbackReceiver: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => 
                     </div>
                 )}
             </div>
+        </>
+        )}
+        
+        {activeReceiverTab === 'sharing' && <PostbackSharingManager isDarkMode={isDarkMode} />}
       </div>
     );
 };
 
+const PostbackSharingManager: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
+    const [postbackShares, setPostbackShares] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [isEditing, setIsEditing] = useState<string | null>(null);
+    const [showAddForm, setShowAddForm] = useState(false);
+    const [editedShare, setEditedShare] = useState({
+        third_party_name: '',
+        third_party_contact: '',
+        postback_type: 'global',
+        notes: '',
+        status: 'active',
+        parameters: {} as any
+    });
+    
+    useEffect(() => {
+        loadPostbackShares();
+    }, []);
+    
+    const loadPostbackShares = async () => {
+        try {
+            setLoading(true);
+            const data = await api.getPostbackShares();
+            setPostbackShares(data);
+        } catch (err) {
+            setError('Failed to load postback shares');
+            console.error('Error loading postback shares:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+    
+    const handleAdd = () => {
+        setEditedShare({
+            third_party_name: '',
+            third_party_contact: '',
+            postback_type: 'global',
+            notes: '',
+            status: 'active',
+            parameters: {}
+        });
+        setShowAddForm(true);
+    };
+    
+    const handleSave = async () => {
+        try {
+            if (isEditing) {
+                await api.updatePostbackShare(isEditing, editedShare);
+                setPostbackShares(postbackShares.map(s => s.id === isEditing ? { ...s, ...editedShare } : s));
+                setIsEditing(null);
+            } else {
+                const newShare = await api.addPostbackShare(editedShare);
+                setPostbackShares([newShare, ...postbackShares]);
+                setShowAddForm(false);
+            }
+        } catch (err) {
+            setError('Failed to save postback share');
+            console.error('Error saving postback share:', err);
+        }
+    };
+    
+    const handleEdit = (share: any) => {
+        setEditedShare({
+            third_party_name: share.third_party_name,
+            third_party_contact: share.third_party_contact || '',
+            postback_type: share.postback_type,
+            notes: share.notes || '',
+            status: share.status,
+            parameters: share.parameters || {}
+        });
+        setIsEditing(share.id);
+    };
+    
+    const handleDelete = async (shareId: string) => {
+        if (!confirm('Are you sure you want to delete this postback sharing record?')) return;
+        
+        try {
+            await api.deletePostbackShare(shareId);
+            setPostbackShares(postbackShares.filter(s => s.id !== shareId));
+        } catch (err) {
+            setError('Failed to delete postback share');
+            console.error('Error deleting postback share:', err);
+        }
+    };
+    
+    const handleGenerateUrl = async (shareId: string) => {
+        try {
+            const result = await api.generatePostbackUrl(shareId);
+            await navigator.clipboard.writeText(result.postback_url);
+            alert(`Postback URL for ${result.third_party_name} copied to clipboard!\n\nURL: ${result.postback_url}`);
+        } catch (err) {
+            setError('Failed to generate postback URL');
+            console.error('Error generating postback URL:', err);
+        }
+    };
+    
+    const defaultParameters = {
+        global: {
+            campaign_id: { enabled: true, description: 'Offer ID' },
+            campaign_name: { enabled: true, description: 'Offer Name' },
+            status: { enabled: true, description: 'Conversion Status', possible_values: 'credited, reversed' },
+            reversal_reason: { enabled: false, description: 'If status is reversed, a reversal reason will be included' },
+            sid1: { enabled: true, description: 'SubID1 value passed using s1 parameter in tracking link' },
+            sid2: { enabled: false, description: 'SubID2 value passed using s2 parameter in tracking link' },
+            sid3: { enabled: false, description: 'SubID3 value passed using s3 parameter in tracking link' },
+            commission: { enabled: true, description: 'Commission earned for the conversion (in USD)' },
+            ip: { enabled: true, description: 'Click IP address' }
+        },
+        content_monetizer: {
+            widget_id: { enabled: true, description: 'Content Monetizer Widget ID' },
+            virtual_currency: { enabled: true, description: 'The amount of virtual currency earned' }
+        },
+        wallad: {
+            wallad_id: { enabled: true, description: 'WallAd ID' },
+            wallad_currency_amount: { enabled: true, description: 'The amount of virtual currency earned' },
+            user_id: { enabled: true, description: 'The user ID passed to WallAds via the "uid" parameter' }
+        }
+    };
+    
+    const updateParameterConfig = (paramName: string, config: any) => {
+        setEditedShare({
+            ...editedShare,
+            parameters: {
+                ...editedShare.parameters,
+                [paramName]: config
+            }
+        });
+    };
+    
+    const getCurrentParameters = () => {
+        const baseParams = (defaultParameters as any)[editedShare.postback_type] || defaultParameters.global;
+        return { ...baseParams, ...editedShare.parameters };
+    };
+    
+    const getPlaceholderValue = (paramName: string) => {
+        const placeholders: { [key: string]: string } = {
+            'campaign_id': 'OFFER123',
+            'campaign_name': 'Survey Offer',
+            'status': 'credited',
+            'reversal_reason': 'fraud_detected',
+            'sid1': 'user_12345',
+            'sid2': 'source_abc',
+            'sid3': 'campaign_xyz',
+            'commission': '1.50',
+            'ip': '192.168.1.1',
+            'widget_id': 'widget_456',
+            'virtual_currency': '100',
+            'wallad_id': 'wall_789',
+            'wallad_currency_amount': '50',
+            'user_id': 'user_98765'
+        };
+        return placeholders[paramName] || 'custom_value';
+    };
+    
+    const generatePreviewUrl = () => {
+        const baseUrl = 'https://hostslice.onrender.com/postback-handler';
+        const params: string[] = [];
+        
+        Object.entries(getCurrentParameters()).forEach(([paramName, paramConfig]: [string, any]) => {
+            if (paramConfig.enabled) {
+                const value = paramConfig.customValue || `[${paramName.toUpperCase()}]`;
+                params.push(`${paramName}=${encodeURIComponent(value)}`);
+            }
+        });
+        
+        return params.length > 0 ? `${baseUrl}?${params.join('&')}` : baseUrl;
+    };
+    
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center py-8">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                    <p className={isDarkMode ? 'text-slate-300' : 'text-gray-600'}>Loading sharing records...</p>
+                </div>
+            </div>
+        );
+    }
+    
+    return (
+        <div className="space-y-6">
+            {error && (
+                <div className={`p-3 rounded-lg border ${isDarkMode ? 'bg-red-800/20 border-red-500 text-red-200' : 'bg-red-50 border-red-200 text-red-700'}`}>
+                    <AlertCircle size={16} className="inline mr-2" />
+                    {error}
+                </div>
+            )}
+            
+            <div className="flex justify-between items-center">
+                <div>
+                    <h4 className="text-lg font-semibold flex items-center gap-2">
+                        <Users size={20} />
+                        Third Party Postback Sharing
+                    </h4>
+                    <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-300' : 'text-gray-600'}`}>
+                        Track which postback URLs you've shared with third parties and customize parameters.
+                    </p>
+                </div>
+                <button 
+                    onClick={handleAdd} 
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                    <Plus size={16} /> Add Third Party
+                </button>
+            </div>
+            
+            {/* Add/Edit Form */}
+            {(showAddForm || isEditing) && (
+                <div className={`p-6 rounded-lg border ${isDarkMode ? 'bg-slate-700/50 border-slate-600' : 'bg-gray-50 border-gray-200'}`}>
+                    <h5 className="font-semibold mb-4">{isEditing ? 'Edit' : 'Add'} Third Party Sharing</h5>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
+                                Third Party Name *
+                            </label>
+                            <input 
+                                value={editedShare.third_party_name}
+                                onChange={(e) => setEditedShare({...editedShare, third_party_name: e.target.value})}
+                                className={`w-full p-2 border rounded ${isDarkMode ? 'bg-slate-800 border-slate-500 text-white' : 'bg-white border-gray-300'}`}
+                                placeholder="e.g., AdBreak Media"
+                            />
+                        </div>
+                        <div>
+                            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
+                                Contact Info
+                            </label>
+                            <input 
+                                value={editedShare.third_party_contact}
+                                onChange={(e) => setEditedShare({...editedShare, third_party_contact: e.target.value})}
+                                className={`w-full p-2 border rounded ${isDarkMode ? 'bg-slate-800 border-slate-500 text-white' : 'bg-white border-gray-300'}`}
+                                placeholder="email@company.com"
+                            />
+                        </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
+                                Postback Type
+                            </label>
+                            <select 
+                                value={editedShare.postback_type}
+                                onChange={(e) => setEditedShare({...editedShare, postback_type: e.target.value, parameters: {}})}
+                                className={`w-full p-2 border rounded ${isDarkMode ? 'bg-slate-800 border-slate-500 text-white' : 'bg-white border-gray-300'}`}
+                            >
+                                <option value="global">Global Postbacks</option>
+                                <option value="content_monetizer">Content Monetizer</option>
+                                <option value="wallad">WallAd</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
+                                Status
+                            </label>
+                            <select 
+                                value={editedShare.status}
+                                onChange={(e) => setEditedShare({...editedShare, status: e.target.value})}
+                                className={`w-full p-2 border rounded ${isDarkMode ? 'bg-slate-800 border-slate-500 text-white' : 'bg-white border-gray-300'}`}
+                            >
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div className="mb-4">
+                        <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
+                            Notes
+                        </label>
+                        <textarea 
+                            value={editedShare.notes}
+                            onChange={(e) => setEditedShare({...editedShare, notes: e.target.value})}
+                            rows={2}
+                            className={`w-full p-2 border rounded ${isDarkMode ? 'bg-slate-800 border-slate-500 text-white' : 'bg-white border-gray-300'}`}
+                            placeholder="Additional notes about this integration..."
+                        />
+                    </div>
+                    
+                    {/* Parameter Configuration */}
+                    <div className="mb-4">
+                        <h6 className="font-medium mb-3">Parameter Configuration</h6>
+                        <div className={`p-4 rounded border ${isDarkMode ? 'bg-slate-800/50 border-slate-600' : 'bg-white border-gray-200'}`}>
+                            <div className="grid grid-cols-1 gap-3">
+                                {Object.entries(getCurrentParameters()).map(([paramName, paramConfig]: [string, any]) => (
+                                    <div key={paramName} className="space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={paramConfig.enabled || false}
+                                                        onChange={(e) => updateParameterConfig(paramName, {...paramConfig, enabled: e.target.checked})}
+                                                        className="rounded"
+                                                    />
+                                                    <code className={`text-sm font-mono ${isDarkMode ? 'text-blue-300' : 'text-blue-600'}`}>
+                                                        {paramName}
+                                                    </code>
+                                                </div>
+                                                <p className={`text-xs mt-1 ml-6 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                                                    {paramConfig.description}
+                                                    {paramConfig.possible_values && (
+                                                        <span className="ml-2 font-medium">Values: {paramConfig.possible_values}</span>
+                                                    )}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        {paramConfig.enabled && (
+                                            <div className="ml-6">
+                                                <label className={`block text-xs font-medium mb-1 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
+                                                    Custom Value for {paramName}:
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={paramConfig.customValue || ''}
+                                                    onChange={(e) => updateParameterConfig(paramName, {...paramConfig, customValue: e.target.value})}
+                                                    placeholder={`e.g., ${getPlaceholderValue(paramName)}`}
+                                                    className={`w-full p-2 text-sm border rounded ${isDarkMode ? 'bg-slate-700 border-slate-500 text-white' : 'bg-white border-gray-300'}`}
+                                                />
+                                                <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                                                    Leave empty to use placeholder [{paramName.toUpperCase()}] in URL
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* Live Preview */}
+                    <div className="mb-4">
+                        <h6 className="font-medium mb-3">Live URL Preview</h6>
+                        <div className={`p-4 rounded border ${isDarkMode ? 'bg-slate-800/50 border-slate-600' : 'bg-white border-gray-200'}`}>
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
+                                    Generated URL:
+                                </span>
+                                <button
+                                    onClick={() => navigator.clipboard.writeText(generatePreviewUrl())}
+                                    className={`p-1 hover:bg-gray-500/20 rounded transition-colors ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}
+                                    title="Copy preview URL"
+                                >
+                                    <Copy size={14} />
+                                </button>
+                            </div>
+                            <div className={`p-3 rounded font-mono text-sm break-all ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-gray-100 text-gray-800'}`}>
+                                {generatePreviewUrl()}
+                            </div>
+                            <p className={`text-xs mt-2 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                                This preview updates as you configure parameters. Parameters without custom values will show as placeholders like [SID1].
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={handleSave} 
+                            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                        >
+                            {isEditing ? 'Update' : 'Create'}
+                        </button>
+                        <button 
+                            onClick={() => {
+                                setShowAddForm(false);
+                                setIsEditing(null);
+                                setError('');
+                            }} 
+                            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            )}
+            
+            {/* Sharing Records List */}
+            <div className="space-y-4">
+                {postbackShares.length === 0 ? (
+                    <div className={`p-8 text-center rounded-lg border ${isDarkMode ? 'bg-slate-700/50 border-slate-600' : 'bg-gray-50 border-gray-200'}`}>
+                        <Users size={48} className={`mx-auto mb-4 ${isDarkMode ? 'text-slate-400' : 'text-gray-400'}`} />
+                        <p className={`text-lg font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-gray-600'}`}>
+                            No third party sharing records yet
+                        </p>
+                        <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                            Add a third party to start tracking postback URL sharing.
+                        </p>
+                    </div>
+                ) : (
+                    postbackShares.map(share => (
+                        <div key={share.id} className={`p-4 rounded-lg border ${isDarkMode ? 'bg-slate-700/50 border-slate-600' : 'bg-gray-50 border-gray-200'}`}>
+                            <div className="flex justify-between items-start">
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <h5 className="font-semibold text-lg">{share.third_party_name}</h5>
+                                        <span className={`px-2 py-1 rounded-full text-xs ${
+                                            share.status === 'active' 
+                                                ? (isDarkMode ? 'bg-green-500/20 text-green-300' : 'bg-green-100 text-green-800')
+                                                : (isDarkMode ? 'bg-gray-500/20 text-gray-300' : 'bg-gray-100 text-gray-800')
+                                        }`}>
+                                            {share.status}
+                                        </span>
+                                        <span className={`px-2 py-1 rounded-full text-xs ${isDarkMode ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-100 text-blue-800'}`}>
+                                            {share.postback_type}
+                                        </span>
+                                    </div>
+                                    
+                                    {share.third_party_contact && (
+                                        <p className={`text-sm mb-2 ${isDarkMode ? 'text-slate-400' : 'text-gray-600'}`}>
+                                            📧 {share.third_party_contact}
+                                        </p>
+                                    )}
+                                    
+                                    <div className="flex items-center gap-4 text-sm">
+                                        <span className={`flex items-center gap-1 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                                            <Clock size={14} />
+                                            Created: {share.created_at_str || 'Unknown'}
+                                        </span>
+                                        {share.last_used_str && (
+                                            <span className={`flex items-center gap-1 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                                                <Activity size={14} />
+                                                Last used: {share.last_used_str}
+                                            </span>
+                                        )}
+                                        <span className={`flex items-center gap-1 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                                            📊 Used {share.usage_count || 0} times
+                                        </span>
+                                    </div>
+                                    
+                                    {share.notes && (
+                                        <p className={`text-sm mt-2 italic ${isDarkMode ? 'text-slate-400' : 'text-gray-600'}`}>
+                                            📝 {share.notes}
+                                        </p>
+                                    )}
+                                    
+                                    <div className="mt-3">
+                                        <p className={`text-xs font-medium mb-1 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
+                                            Enabled Parameters:
+                                        </p>
+                                        <div className="flex flex-wrap gap-1">
+                                            {Object.entries(share.parameters || {}).filter(([_, config]: [string, any]) => config.enabled).map(([paramName]) => (
+                                                <code key={paramName} className={`px-2 py-1 rounded text-xs ${isDarkMode ? 'bg-slate-600 text-slate-300' : 'bg-gray-200 text-gray-700'}`}>
+                                                    {paramName}
+                                                </code>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div className="flex items-center gap-2 ml-4">
+                                    <button 
+                                        onClick={() => handleGenerateUrl(share.id)} 
+                                        className="p-2 hover:bg-blue-500/20 rounded-full transition-colors" 
+                                        title="Generate & Copy URL"
+                                    >
+                                        <ExternalLink size={16} className="text-blue-500" />
+                                    </button>
+                                    <button 
+                                        onClick={() => handleEdit(share)} 
+                                        className="p-2 hover:bg-yellow-500/20 rounded-full transition-colors" 
+                                        title="Edit"
+                                    >
+                                        <Edit3 size={16} className="text-yellow-500" />
+                                    </button>
+                                    <button 
+                                        onClick={() => handleDelete(share.id)} 
+                                        className="p-2 hover:bg-red-500/20 rounded-full transition-colors" 
+                                        title="Delete"
+                                    >
+                                        <Trash2 size={16} className="text-red-500" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+        </div>
+    );
+};
+
 const PostbackLogs: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
-    const [outboundLogs, setOutboundLogs] = useState([]);
-    const [inboundLogs, setInboundLogs] = useState([]);
+    const [outboundLogs, setOutboundLogs] = useState<any[]>([]);
+    const [inboundLogs, setInboundLogs] = useState<any[]>([]);
     const [activeLogTab, setActiveLogTab] = useState<'outbound' | 'inbound'>('inbound');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');

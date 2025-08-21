@@ -6,11 +6,15 @@
   <component name="ChangeListManager">
     <list default="true" id="bbe779bd-d937-43a2-a891-54e9d6982d2b" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Backend/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/app.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/App.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/templates/AICustomTemplate.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/templates/AICustomTemplate.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/templates/CustomerFeedbackTemplate.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/templates/CustomerFeedbackTemplate.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/templates/EmployeeCheckInTemplate.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/templates/EmployeeCheckInTemplate.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Backend/integrations.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/integrations.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Backend/mongodb_config.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/mongodb_config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Backend/postback_api.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/postback_api.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Backend/postback_handler.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/postback_handler.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/pages/AdminDashboard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/pages/AdminDashboard.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/project/src/components/PostbackManager.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/PostbackManager.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/project/src/components/SurveyList.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/SurveyList.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/project/src/components/TestLabCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/TestLabCard.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/project/src/components/WidgetResponsesView.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/WidgetResponsesView.tsx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

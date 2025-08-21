@@ -32,7 +32,7 @@ export const WidgetResponsesView: React.FC<WidgetResponsesViewProps> = ({ isDark
   };
 
   const formatTimestamp = (timestamp: number) => {
-    return new Date(timestamp).toLocaleString();
+    return new Date(timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
   };
 
   return (

@@ -207,7 +207,7 @@ const AdminDashboard: React.FC = () => {
                       </div>
                     </td>
                     <td>
-                      {new Date(survey.created_at).toLocaleDateString()}
+                      {new Date(survey.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
                     </td>
                     <td>
                       <div className={`status-badge ${status.status}`}>

@@ -89,7 +89,7 @@ def handle_postback():
                 "username": username,
                 "url_called": request.url,
                 "timestamp": datetime.utcnow(),  # Store as datetime object for sorting
-                "timestamp_str": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),  # Local time for display
+                "timestamp_str": (datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).strftime('%Y-%m-%d %H:%M:%S IST'),  # IST time for display
                 "success": False,
                 "error_message": f"Survey response not found for sid1: {sid1}"
             }
@@ -243,7 +243,7 @@ def handle_postback():
                 "username": username,
                 "url_called": request.url,
                 "timestamp": datetime.utcnow(),  # Store as datetime object for sorting
-                "timestamp_str": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),  # Local time for display
+                "timestamp_str": (datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).strftime('%Y-%m-%d %H:%M:%S IST'),  # IST time for display
                 "success": False,
                 "error_message": str(e)
             }
