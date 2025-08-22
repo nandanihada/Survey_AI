@@ -6,6 +6,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import ProjectEdit from './pages/ProjectEdit';
+import PostbackManager from './pages/PostbackManager';
 import './App.css';
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -72,6 +73,14 @@ function AppContent() {
           element={
             <PrivateRoute>
               <ProjectEdit />
+            </PrivateRoute>
+          } 
+        />
+        <Route 
+          path="/postback-manager" 
+          element={
+            <PrivateRoute>
+              <PostbackManager />
             </PrivateRoute>
           } 
         />

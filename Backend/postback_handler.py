@@ -10,50 +10,57 @@ from mongodb_config import db
 postback_bp = Blueprint('postback_bp', __name__)
 
 
-@postback_bp.route('/postback-handler', methods=['GET', 'POST'])
-def handle_postback():
+@postback_bp.route('/postback-handler/<unique_id>', methods=['GET', 'POST'])
+def handle_postback(unique_id):
     # Enhanced logging - log ALL incoming parameters
     print("\n" + "="*60)
     print("📡 INBOUND POSTBACK RECEIVED FROM EXTERNAL PARTNER!")
     print("="*60)
     print(f"Method: {request.method}")
     print(f"URL: {request.url}")
+    print(f"Unique ID: {unique_id}")
     print(f"Source IP: {request.environ.get('REMOTE_ADDR', 'Unknown')}")
     print(f"User Agent: {request.headers.get('User-Agent', 'Unknown')}")
     print(f"GET Parameters: {dict(request.args)}")
     if request.method == 'POST':
         print(f"POST Data: {request.get_data(as_text=True)}")
     
-    # Extract parameters
-    transaction_id = request.args.get("transaction_id")
-    status = request.args.get("status", "confirmed")
-    reward = request.args.get("reward", 0)
+    # Extract ONLY 10 fixed parameters for postback system
+    click_id = request.args.get("click_id")
+    payout = request.args.get("payout", 0)
     currency = request.args.get("currency", "USD")
-    sid1 = request.args.get("sid1")
-    clicked_at = request.args.get("clicked_at")
-    username = request.args.get("username", "unknown")
+    offer_id = request.args.get("offer_id")
+    conversion_status = request.args.get("conversion_status", "confirmed")
+    transaction_id = request.args.get("transaction_id")
+    sub1 = request.args.get("sub1")
+    sub2 = request.args.get("sub2")
+    event_name = request.args.get("event_name", "conversion")
+    timestamp = request.args.get("timestamp")
     
-    print(f"\n📋 EXTRACTED PARAMETERS:")
-    print(f"   🆔 Transaction ID: {transaction_id}")
-    print(f"   📊 Status: {status}")
-    print(f"   💰 Reward: {reward}")
+    print(f"\n📋 EXTRACTED 10 FIXED PARAMETERS:")
+    print(f"   🔗 Click ID: {click_id}")
+    print(f"   💰 Payout: {payout}")
     print(f"   💱 Currency: {currency}")
-    print(f"   🔗 SID1 (Response ID): {sid1}")
-    print(f"   👤 Username: {username}")
-    print(f"   ⏰ Clicked At: {clicked_at}")
+    print(f"   🎯 Offer ID: {offer_id}")
+    print(f"   📊 Conversion Status: {conversion_status}")
+    print(f"   🆔 Transaction ID: {transaction_id}")
+    print(f"   📝 Sub1: {sub1}")
+    print(f"   📝 Sub2: {sub2}")
+    print(f"   🎪 Event Name: {event_name}")
+    print(f"   ⏰ Timestamp: {timestamp}")
 
-    if not sid1:
-        return jsonify({"error": "Missing required parameter: sid1 (tracking_id)"}), 400
+    if not unique_id:
+        return jsonify({"error": "Missing required unique ID in URL path"}), 400
 
     try:
-        # Find the original survey response in the 'responses' collection using the unique ID (_id)
-        print(f"🔎 Searching for response with _id: {sid1}")
+        # Find the original survey response using the unique ID from URL path
+        print(f"🔎 Searching for response with unique_id: {unique_id}")
         response_doc = db["responses"].find_one({
-            "_id": sid1
+            "_id": unique_id
         })
 
         if not response_doc:
-            print(f"❌ ERROR: No response found with _id: {sid1}")
+            print(f"❌ ERROR: No response found with unique_id: {unique_id}")
             
             # Determine sender name from User-Agent or source IP for failed attempts
             user_agent = request.headers.get('User-Agent', 'Unknown')
@@ -80,18 +87,23 @@ def handle_postback():
                 "name": sender_name,  # Who sent the postback
                 "source_ip": request.environ.get('REMOTE_ADDR', 'Unknown'),
                 "user_agent": user_agent,
-                "sid1": sid1,
-                "transaction_id": transaction_id,
-                "status": status,
-                "payout": float(reward) if reward else 0.0,  # Ensure numeric payout
-                "reward": float(reward) if reward else 0.0,  # Keep both for compatibility
+                # All 10 fixed parameters
+                "click_id": click_id,
+                "payout": float(payout) if payout else 0.0,
                 "currency": currency,
-                "username": username,
+                "offer_id": offer_id,
+                "conversion_status": conversion_status,
+                "transaction_id": transaction_id,
+                "sub1": sub1,
+                "sub2": sub2,
+                "event_name": event_name,
+                "timestamp": timestamp,
+                "unique_id": unique_id,
                 "url_called": request.url,
                 "timestamp": datetime.utcnow(),  # Store as datetime object for sorting
                 "timestamp_str": (datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).strftime('%Y-%m-%d %H:%M:%S IST'),  # IST time for display
                 "success": False,
-                "error_message": f"Survey response not found for sid1: {sid1}"
+                "error_message": f"Survey response not found for unique_id: {unique_id}"
             }
             
             try:
@@ -100,17 +112,24 @@ def handle_postback():
             except Exception as log_error:
                 print(f"Failed to log failed attempt: {log_error}")
             
-            return jsonify({"error": "No matching survey response found for the provided sid1"}), 404
+            return jsonify({"error": "No matching survey response found for the provided unique_id"}), 404
 
         print(f"✅ SUCCESS: Found response: {response_doc['_id']}")
 
-        # Prepare the update with the new data from the postback
+        # Prepare the update with the new data from the postback (ONLY 10 parameters)
         postback_update_data = {
-            "postback_status": status,
-            "postback_reward": reward,
+            "postback_click_id": click_id,
+            "postback_payout": payout,
             "postback_currency": currency,
+            "postback_offer_id": offer_id,
+            "postback_conversion_status": conversion_status,
             "postback_transaction_id": transaction_id,
-            "postback_received_at": datetime.utcnow()
+            "postback_sub1": sub1,
+            "postback_sub2": sub2,
+            "postback_event_name": event_name,
+            "postback_timestamp": timestamp,
+            "postback_received_at": datetime.utcnow(),
+            "postback_unique_id": unique_id
         }
 
         # Update the original response document in MongoDB
@@ -168,13 +187,18 @@ def handle_postback():
             "name": sender_name,  # Who sent the postback
             "source_ip": request.environ.get('REMOTE_ADDR', 'Unknown'),
             "user_agent": user_agent,
-            "sid1": sid1,
-            "transaction_id": transaction_id,
-            "status": status,
-            "payout": float(reward) if reward else 0.0,  # Ensure numeric payout
-            "reward": float(reward) if reward else 0.0,  # Keep both for compatibility
+            # All 10 fixed parameters
+            "click_id": click_id,
+            "payout": float(payout) if payout else 0.0,
             "currency": currency,
-            "username": username,
+            "offer_id": offer_id,
+            "conversion_status": conversion_status,
+            "transaction_id": transaction_id,
+            "sub1": sub1,
+            "sub2": sub2,
+            "event_name": event_name,
+            "timestamp": timestamp,
+            "unique_id": unique_id,
             "url_called": request.url,
             "timestamp": datetime.utcnow(),  # Store as datetime object for sorting
             "timestamp_str": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),  # Local time for display
@@ -234,13 +258,18 @@ def handle_postback():
                 "name": sender_name,  # Who sent the postback
                 "source_ip": request.environ.get('REMOTE_ADDR', 'Unknown'),
                 "user_agent": user_agent,
-                "sid1": sid1 or "Unknown",
-                "transaction_id": transaction_id,
-                "status": status,
-                "payout": float(reward) if reward else 0.0,  # Ensure numeric payout
-                "reward": float(reward) if reward else 0.0,  # Keep both for compatibility
+                # All 10 fixed parameters
+                "click_id": click_id,
+                "payout": float(payout) if payout else 0.0,
                 "currency": currency,
-                "username": username,
+                "offer_id": offer_id,
+                "conversion_status": conversion_status,
+                "transaction_id": transaction_id,
+                "sub1": sub1,
+                "sub2": sub2,
+                "event_name": event_name,
+                "timestamp": timestamp,
+                "unique_id": unique_id,
                 "url_called": request.url,
                 "timestamp": datetime.utcnow(),  # Store as datetime object for sorting
                 "timestamp_str": (datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).strftime('%Y-%m-%d %H:%M:%S IST'),  # IST time for display

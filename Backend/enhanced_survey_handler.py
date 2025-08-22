@@ -352,18 +352,19 @@ class EnhancedSurveyHandler:
     ) -> str:
         """Replace placeholders in postback URL"""
         
-        # Standard replacements
+        # Standard replacements for ONLY 10 fixed parameters
         replacements = {
-            '[TRANSACTION_ID]': response_data.get("_id", ""),
-            '[RESPONSE_ID]': response_data.get("_id", ""),
-            '[SESSION_ID]': response_data.get("session_id", ""),
-            '[SURVEY_ID]': response_data.get("survey_id", ""),
-            '[USERNAME]': response_data.get("user_info", {}).get("username", ""),
-            '[EMAIL]': response_data.get("user_info", {}).get("email", ""),
+            # 10 Fixed Parameters ONLY
             '[CLICK_ID]': response_data.get("user_info", {}).get("click_id", ""),
-            '[STATUS]': evaluation_result.get("status", "unknown"),
-            '[SCORE]': str(evaluation_result.get("score", 0)),
-            '[RESULT]': "qualified" if evaluation_result.get("status") == "pass" else "not_qualified",
+            '[PAYOUT]': str(evaluation_result.get("payout", 0)),
+            '[CURRENCY]': "USD",  # Default currency
+            '[OFFER_ID]': response_data.get("survey_id", ""),
+            '[CONVERSION_STATUS]': "confirmed" if evaluation_result.get("status") == "pass" else "rejected",
+            '[TRANSACTION_ID]': response_data.get("_id", ""),
+            '[SUB1]': response_data.get("user_info", {}).get("click_id", ""),  # Use click_id as sub1
+            '[SUB2]': response_data.get("session_id", ""),  # Use session_id as sub2
+            '[EVENT_NAME]': "survey_conversion",
+            '[TIMESTAMP]': str(int(datetime.now(timezone.utc).timestamp()))
         }
         
         # Add extra parameters

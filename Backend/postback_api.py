@@ -3,6 +3,7 @@ from flask import Blueprint, request, jsonify
 from mongodb_config import db
 from datetime import datetime, timedelta
 from bson import ObjectId
+import uuid
 
 postback_api_bp = Blueprint('postback_api_bp', __name__)
 
@@ -217,27 +218,20 @@ def create_postback_share():
         if not data or 'third_party_name' not in data:
             return jsonify({"error": "Third party name is required"}), 400
         
-        # Default parameter configuration based on type
+        # Default parameter configuration with ONLY 10 fixed parameters
         default_params = {
             'global': {
-                'campaign_id': {'enabled': True, 'description': 'Offer ID'},
-                'campaign_name': {'enabled': True, 'description': 'Offer Name'},
-                'status': {'enabled': True, 'description': 'Conversion Status', 'possible_values': 'credited, reversed'},
-                'reversal_reason': {'enabled': False, 'description': 'If status is reversed, a reversal reason will be included'},
-                'sid1': {'enabled': True, 'description': 'SubID1 value passed using s1 parameter in tracking link'},
-                'sid2': {'enabled': False, 'description': 'SubID2 value passed using s2 parameter in tracking link'},
-                'sid3': {'enabled': False, 'description': 'SubID3 value passed using s3 parameter in tracking link'},
-                'commission': {'enabled': True, 'description': 'Commission earned for the conversion (in USD)'},
-                'ip': {'enabled': True, 'description': 'Click IP address'}
-            },
-            'content_monetizer': {
-                'widget_id': {'enabled': True, 'description': 'Content Monetizer Widget ID'},
-                'virtual_currency': {'enabled': True, 'description': 'The amount of virtual currency earned'}
-            },
-            'wallad': {
-                'wallad_id': {'enabled': True, 'description': 'WallAd ID'},
-                'wallad_currency_amount': {'enabled': True, 'description': 'The amount of virtual currency earned'},
-                'user_id': {'enabled': True, 'description': 'The user ID passed to WallAds via the "uid" parameter'}
+                # 10 Fixed Parameters ONLY - default disabled; enable explicitly from UI
+                'click_id': {'enabled': False, 'description': 'Unique identifier for the click/conversion event'},
+                'payout': {'enabled': False, 'description': 'Commission/payout amount earned for the conversion'},
+                'currency': {'enabled': False, 'description': 'Currency code (USD, EUR, etc.)'},
+                'offer_id': {'enabled': False, 'description': 'Unique identifier for the offer/campaign'},
+                'conversion_status': {'enabled': False, 'description': 'Status of the conversion (confirmed, pending, reversed)'},
+                'transaction_id': {'enabled': False, 'description': 'Unique transaction identifier'},
+                'sub1': {'enabled': False, 'description': 'SubID1 - First level tracking parameter'},
+                'sub2': {'enabled': False, 'description': 'SubID2 - Second level tracking parameter'},
+                'event_name': {'enabled': False, 'description': 'Name of the conversion event (conversion, lead, sale, etc.)'},
+                'timestamp': {'enabled': False, 'description': 'Timestamp of when the conversion occurred'}
             }
         }
         
@@ -249,6 +243,9 @@ def create_postback_share():
         for param_name, param_config in custom_params.items():
             final_params[param_name] = param_config
         
+        # Generate unique ID automatically
+        unique_postback_id = str(uuid.uuid4())
+        
         new_share = {
             "third_party_name": data['third_party_name'],
             "third_party_contact": data.get('third_party_contact', ''),
@@ -256,6 +253,7 @@ def create_postback_share():
             "parameters": final_params,
             "notes": data.get('notes', ''),
             "status": data.get('status', 'active'),
+            "unique_postback_id": unique_postback_id,  # Auto-generated UUID
             "created_at": datetime.utcnow(),
             "last_used": None,
             "usage_count": 0
@@ -332,19 +330,29 @@ def generate_postback_url(share_id):
         if not share:
             return jsonify({"error": "Postback share not found"}), 404
         
-        # Base URL
-        base_url = "https://hostslice.onrender.com/postback-handler"
+        # Base URL with unique ID
+        unique_id = share.get('unique_postback_id')
+        if not unique_id:
+            # Persist a new UUID if missing
+            unique_id = str(uuid.uuid4())
+            db.postback_shares.update_one(
+                {"_id": ObjectId(share_id)},
+                {"$set": {"unique_postback_id": unique_id}}
+            )
+        base_url = f"https://hostslice.onrender.com/postback-handler/{unique_id}"
         
-        # Build query parameters based on enabled parameters
+        # Build query parameters based on enabled parameters (ONLY 10 fixed parameters)
         params = []
         for param_name, param_config in share['parameters'].items():
             if param_config.get('enabled', False):
+                # Use custom parameter name if provided, otherwise use standard name
+                custom_name = param_config.get('customName', param_name)
                 # Use custom value if provided, otherwise use placeholder
                 if param_config.get('customValue'):
                     value = param_config['customValue']
                 else:
                     value = f"[{param_name.upper()}]"
-                params.append(f"{param_name}={value}")
+                params.append(f"{custom_name}={value}")
         
         # Construct final URL
         if params:

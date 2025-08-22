@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { projectService } from '../services/projectService';
 import { Project } from '../../../shared/types';
 import toast from 'react-hot-toast';
-import { LogOutIcon, PlusIcon, EditIcon, Trash2Icon } from 'lucide-react';
+import { LogOutIcon, PlusIcon, EditIcon, Trash2Icon, SettingsIcon } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
@@ -19,7 +19,7 @@ const Dashboard: React.FC = () => {
     try {
       const response = await projectService.getUserProjects();
       if (response.data.success) {
-        setProjects(response.data.data);
+        setProjects(response.data.data || []);
       } else {
         toast.error('Failed to load projects');
       }
@@ -34,7 +34,7 @@ const Dashboard: React.FC = () => {
       const projectName = 'Untitled Project';
       const newProject = await projectService.createProject({ name: projectName });
 
-      if (newProject.data.success) {
+      if (newProject.data.success && newProject.data.data) {
         toast.success('Project created successfully');
         navigate(`/project/${newProject.data.data.projectId}`);
       }
@@ -68,6 +68,16 @@ const Dashboard: React.FC = () => {
       <header className="dashboard-header">
         <div className="dashboard-nav">
           <h1 className="dashboard-title">Projects</h1>
+          <div className="nav-actions">
+            <button 
+              className="btn btn-secondary" 
+              onClick={() => navigate('/postback-manager')}
+              title="Manage Postback Integrations"
+            >
+              <SettingsIcon />
+              Postback Manager
+            </button>
+          </div>
           <div className="user-menu">
             <span className="user-info">{user?.email}</span>
             <button className="btn btn-outline" onClick={logout}>

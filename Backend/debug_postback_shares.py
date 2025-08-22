@@ -80,8 +80,16 @@ def test_create_postback_share():
         "notes": "Test creation",
         "status": "active",
         "parameters": {
-            "campaign_id": {"enabled": True, "description": "Test campaign"},
-            "sid1": {"enabled": True, "description": "Test SID1"}
+            "click_id": {"enabled": True, "customName": "click_id"},
+            "payout": {"enabled": True, "customName": "payout"},
+            "currency": {"enabled": True, "customName": "currency"},
+            "offer_id": {"enabled": True, "customName": "offer_id"},
+            "conversion_status": {"enabled": True, "customName": "status"},
+            "transaction_id": {"enabled": True, "customName": "txn_id"},
+            "sub1": {"enabled": True, "customName": "sub1"},
+            "sub2": {"enabled": True, "customName": "sub2"},
+            "event_name": {"enabled": True, "customName": "event"},
+            "timestamp": {"enabled": True, "customName": "ts"}
         }
     }
     
@@ -116,12 +124,26 @@ def direct_database_test():
     try:
         from datetime import datetime
         
+        import uuid
+        
         test_doc = {
-            "third_party_name": "Direct Test Partner",
+            "third_party_name": "Direct Test Partner UUID",
             "third_party_contact": "direct@test.com",
             "postback_type": "global",
-            "parameters": {"test": {"enabled": True}},
-            "notes": "Direct database test",
+            "unique_postback_id": str(uuid.uuid4()),
+            "parameters": {
+                "click_id": {"enabled": True, "customName": "click_id"},
+                "payout": {"enabled": True, "customName": "payout"},
+                "currency": {"enabled": True, "customName": "currency"},
+                "offer_id": {"enabled": True, "customName": "offer_id"},
+                "conversion_status": {"enabled": True, "customName": "status"},
+                "transaction_id": {"enabled": True, "customName": "txn_id"},
+                "sub1": {"enabled": True, "customName": "sub1"},
+                "sub2": {"enabled": True, "customName": "sub2"},
+                "event_name": {"enabled": True, "customName": "event"},
+                "timestamp": {"enabled": True, "customName": "ts"}
+            },
+            "notes": "Direct database test with UUID",
             "status": "active",
             "created_at": datetime.utcnow(),
             "last_used": None,

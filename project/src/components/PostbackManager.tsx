@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link, Copy, Send, Settings, Eye, Plus, Trash2, Edit3, Activity, Clock, AlertCircle, CheckCircle2, Users, ExternalLink } from 'lucide-react';
 
@@ -448,17 +447,73 @@ const PostbackReceiver: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => 
         </div>
 
         <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-slate-700/50' : 'bg-gray-50'}`}>
-                <h4 className="font-semibold mb-2">Accepted Parameters</h4>
-                <p className={`text-sm mb-2 ${isDarkMode ? 'text-slate-300' : 'text-gray-600'}`}>
-                    We accept the following query parameters. `sid1` is required.
+                <h4 className="font-semibold mb-3">Accepted Parameters</h4>
+                <p className={`text-sm mb-4 ${isDarkMode ? 'text-slate-300' : 'text-gray-600'}`}>
+                    We accept the following query parameters. All parameters are optional unless marked as required.
                 </p>
-                <ul className="list-disc list-inside space-y-1 text-sm">
-                    <li>`sid1`: Your unique tracking ID for the user session. (Required)</li>
-                    <li>`status`: The status of the conversion (e.g., "confirmed", "declined"). Defaults to "confirmed".</li>
-                    <li>`reward`: The payout amount.</li>
-                    <li>`currency`: The currency of the reward (e.g., "USD").</li>
-                    <li>`transaction_id`: The partner's internal transaction ID. (Optional)</li>
-                </ul>
+                <div className="overflow-x-auto">
+                    <table className={`w-full text-sm border-collapse ${isDarkMode ? 'border-slate-600' : 'border-gray-300'}`}>
+                        <thead>
+                            <tr className={`${isDarkMode ? 'bg-slate-600' : 'bg-gray-100'}`}>
+                                <th className={`border px-3 py-2 text-left font-semibold ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>Parameter</th>
+                                <th className={`border px-3 py-2 text-left font-semibold ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>Description</th>
+                                <th className={`border px-3 py-2 text-left font-semibold ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>Required</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td className={`border px-3 py-2 font-mono ${isDarkMode ? 'border-slate-500 bg-slate-700/30' : 'border-gray-300 bg-gray-50'}`}>click_id</td>
+                                <td className={`border px-3 py-2 ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>Unique identifier for the click/conversion event</td>
+                                <td className={`border px-3 py-2 ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>Optional</td>
+                            </tr>
+                            <tr>
+                                <td className={`border px-3 py-2 font-mono ${isDarkMode ? 'border-slate-500 bg-slate-700/30' : 'border-gray-300 bg-gray-50'}`}>payout</td>
+                                <td className={`border px-3 py-2 ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>Commission/payout amount earned for the conversion</td>
+                                <td className={`border px-3 py-2 ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>Optional</td>
+                            </tr>
+                            <tr>
+                                <td className={`border px-3 py-2 font-mono ${isDarkMode ? 'border-slate-500 bg-slate-700/30' : 'border-gray-300 bg-gray-50'}`}>currency</td>
+                                <td className={`border px-3 py-2 ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>Currency code (USD, EUR, etc.)</td>
+                                <td className={`border px-3 py-2 ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>Optional</td>
+                            </tr>
+                            <tr>
+                                <td className={`border px-3 py-2 font-mono ${isDarkMode ? 'border-slate-500 bg-slate-700/30' : 'border-gray-300 bg-gray-50'}`}>offer_id</td>
+                                <td className={`border px-3 py-2 ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>Unique identifier for the offer/campaign</td>
+                                <td className={`border px-3 py-2 ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>Optional</td>
+                            </tr>
+                            <tr>
+                                <td className={`border px-3 py-2 font-mono ${isDarkMode ? 'border-slate-500 bg-slate-700/30' : 'border-gray-300 bg-gray-50'}`}>conversion_status</td>
+                                <td className={`border px-3 py-2 ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>Status of the conversion (confirmed, pending, reversed)</td>
+                                <td className={`border px-3 py-2 ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>Optional</td>
+                            </tr>
+                            <tr>
+                                <td className={`border px-3 py-2 font-mono ${isDarkMode ? 'border-slate-500 bg-slate-700/30' : 'border-gray-300 bg-gray-50'}`}>transaction_id</td>
+                                <td className={`border px-3 py-2 ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>Unique transaction identifier</td>
+                                <td className={`border px-3 py-2 ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>Optional</td>
+                            </tr>
+                            <tr>
+                                <td className={`border px-3 py-2 font-mono ${isDarkMode ? 'border-slate-500 bg-slate-700/30' : 'border-gray-300 bg-gray-50'}`}>sub1</td>
+                                <td className={`border px-3 py-2 ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>SubID1 - First level tracking parameter</td>
+                                <td className={`border px-3 py-2 ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>Optional</td>
+                            </tr>
+                            <tr>
+                                <td className={`border px-3 py-2 font-mono ${isDarkMode ? 'border-slate-500 bg-slate-700/30' : 'border-gray-300 bg-gray-50'}`}>sub2</td>
+                                <td className={`border px-3 py-2 ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>SubID2 - Second level tracking parameter</td>
+                                <td className={`border px-3 py-2 ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>Optional</td>
+                            </tr>
+                            <tr>
+                                <td className={`border px-3 py-2 font-mono ${isDarkMode ? 'border-slate-500 bg-slate-700/30' : 'border-gray-300 bg-gray-50'}`}>event_name</td>
+                                <td className={`border px-3 py-2 ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>Name of the conversion event (conversion, lead, sale, etc.)</td>
+                                <td className={`border px-3 py-2 ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>Optional</td>
+                            </tr>
+                            <tr>
+                                <td className={`border px-3 py-2 font-mono ${isDarkMode ? 'border-slate-500 bg-slate-700/30' : 'border-gray-300 bg-gray-50'}`}>timestamp</td>
+                                <td className={`border px-3 py-2 ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>Timestamp of when the conversion occurred</td>
+                                <td className={`border px-3 py-2 ${isDarkMode ? 'border-slate-500' : 'border-gray-300'}`}>Optional</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
             
             {/* Test Section */}
@@ -608,24 +663,16 @@ const PostbackSharingManager: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode 
     
     const defaultParameters = {
         global: {
-            campaign_id: { enabled: true, description: 'Offer ID' },
-            campaign_name: { enabled: true, description: 'Offer Name' },
-            status: { enabled: true, description: 'Conversion Status', possible_values: 'credited, reversed' },
-            reversal_reason: { enabled: false, description: 'If status is reversed, a reversal reason will be included' },
-            sid1: { enabled: true, description: 'SubID1 value passed using s1 parameter in tracking link' },
-            sid2: { enabled: false, description: 'SubID2 value passed using s2 parameter in tracking link' },
-            sid3: { enabled: false, description: 'SubID3 value passed using s3 parameter in tracking link' },
-            commission: { enabled: true, description: 'Commission earned for the conversion (in USD)' },
-            ip: { enabled: true, description: 'Click IP address' }
-        },
-        content_monetizer: {
-            widget_id: { enabled: true, description: 'Content Monetizer Widget ID' },
-            virtual_currency: { enabled: true, description: 'The amount of virtual currency earned' }
-        },
-        wallad: {
-            wallad_id: { enabled: true, description: 'WallAd ID' },
-            wallad_currency_amount: { enabled: true, description: 'The amount of virtual currency earned' },
-            user_id: { enabled: true, description: 'The user ID passed to WallAds via the "uid" parameter' }
+            click_id: { enabled: false, description: 'Unique identifier for the click/conversion event' },
+            payout: { enabled: false, description: 'Commission/payout amount earned for the conversion' },
+            currency: { enabled: false, description: 'Currency code (USD, EUR, etc.)' },
+            offer_id: { enabled: false, description: 'Unique identifier for the offer/campaign' },
+            conversion_status: { enabled: false, description: 'Status of the conversion (confirmed, pending, reversed)' },
+            transaction_id: { enabled: false, description: 'Unique transaction identifier' },
+            sub1: { enabled: false, description: 'SubID1 - First level tracking parameter' },
+            sub2: { enabled: false, description: 'SubID2 - Second level tracking parameter' },
+            event_name: { enabled: false, description: 'Name of the conversion event (conversion, lead, sale, etc.)' },
+            timestamp: { enabled: false, description: 'Timestamp of when the conversion occurred' }
         }
     };
     
@@ -640,38 +687,38 @@ const PostbackSharingManager: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode 
     };
     
     const getCurrentParameters = () => {
-        const baseParams = (defaultParameters as any)[editedShare.postback_type] || defaultParameters.global;
-        return { ...baseParams, ...editedShare.parameters };
+        // Only return the 10 fixed parameters from defaultParameters.global
+        return defaultParameters.global;
     };
     
     const getPlaceholderValue = (paramName: string) => {
         const placeholders: { [key: string]: string } = {
-            'campaign_id': 'OFFER123',
-            'campaign_name': 'Survey Offer',
-            'status': 'credited',
-            'reversal_reason': 'fraud_detected',
-            'sid1': 'user_12345',
-            'sid2': 'source_abc',
-            'sid3': 'campaign_xyz',
-            'commission': '1.50',
-            'ip': '192.168.1.1',
-            'widget_id': 'widget_456',
-            'virtual_currency': '100',
-            'wallad_id': 'wall_789',
-            'wallad_currency_amount': '50',
-            'user_id': 'user_98765'
+            'click_id': 'click_12345',
+            'payout': '5.50',
+            'currency': 'USD',
+            'offer_id': 'offer_789',
+            'conversion_status': 'confirmed',
+            'transaction_id': 'txn_abc123',
+            'sub1': 'sub1_value',
+            'sub2': 'sub2_value',
+            'event_name': 'conversion',
+            'timestamp': '1640995200'
         };
         return placeholders[paramName] || 'custom_value';
     };
     
     const generatePreviewUrl = () => {
-        const baseUrl = 'https://hostslice.onrender.com/postback-handler';
+        const uniqueId = (editedShare as any).unique_postback_id || 'auto-generated-uuid';
+        const baseUrl = `https://hostslice.onrender.com/postback-handler/${uniqueId}`;
         const params: string[] = [];
         
-        Object.entries(getCurrentParameters()).forEach(([paramName, paramConfig]: [string, any]) => {
-            if (paramConfig.enabled) {
-                const value = paramConfig.customValue || `[${paramName.toUpperCase()}]`;
-                params.push(`${paramName}=${encodeURIComponent(value)}`);
+        // Only use parameters that are enabled in editedShare.parameters
+        Object.entries(defaultParameters.global).forEach(([paramName, defaultConfig]: [string, any]) => {
+            const userConfig = editedShare.parameters?.[paramName];
+            if (userConfig?.enabled) {
+                const customName = userConfig.customName || paramName;
+                const value = userConfig.customValue || `[${paramName.toUpperCase()}]`;
+                params.push(`${customName}=${value}`);
             }
         });
         
@@ -794,48 +841,55 @@ const PostbackSharingManager: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode 
                         <h6 className="font-medium mb-3">Parameter Configuration</h6>
                         <div className={`p-4 rounded border ${isDarkMode ? 'bg-slate-800/50 border-slate-600' : 'bg-white border-gray-200'}`}>
                             <div className="grid grid-cols-1 gap-3">
-                                {Object.entries(getCurrentParameters()).map(([paramName, paramConfig]: [string, any]) => (
-                                    <div key={paramName} className="space-y-2">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex-1">
-                                                <div className="flex items-center gap-2">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        checked={paramConfig.enabled || false}
-                                                        onChange={(e) => updateParameterConfig(paramName, {...paramConfig, enabled: e.target.checked})}
-                                                        className="rounded"
-                                                    />
-                                                    <code className={`text-sm font-mono ${isDarkMode ? 'text-blue-300' : 'text-blue-600'}`}>
-                                                        {paramName}
-                                                    </code>
-                                                </div>
-                                                <p className={`text-xs mt-1 ml-6 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-                                                    {paramConfig.description}
-                                                    {paramConfig.possible_values && (
-                                                        <span className="ml-2 font-medium">Values: {paramConfig.possible_values}</span>
-                                                    )}
-                                                </p>
-                                            </div>
+                              {Object.entries(getCurrentParameters()).map(([paramName, paramConfig]: [string, any]) => {
+                                // Only use user config for enabled, default to false if not set
+                                const userConfig = editedShare.parameters?.[paramName] || {};
+                                const enabled = userConfig.enabled === true; // Only true if user set it
+                                const mergedConfig = { ...paramConfig, ...userConfig, enabled };
+
+                                return (
+                                  <div key={paramName} className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                          <input 
+                                            type="checkbox" 
+                                            checked={enabled}
+                                            onChange={(e) => updateParameterConfig(paramName, { ...mergedConfig, enabled: e.target.checked })}
+                                            className="rounded"
+                                          />
+                                          <code className={`text-sm font-mono ${isDarkMode ? 'text-blue-300' : 'text-blue-600'}`}>
+                                            {paramName}
+                                          </code>
                                         </div>
-                                        {paramConfig.enabled && (
-                                            <div className="ml-6">
-                                                <label className={`block text-xs font-medium mb-1 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
-                                                    Custom Value for {paramName}:
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={paramConfig.customValue || ''}
-                                                    onChange={(e) => updateParameterConfig(paramName, {...paramConfig, customValue: e.target.value})}
-                                                    placeholder={`e.g., ${getPlaceholderValue(paramName)}`}
-                                                    className={`w-full p-2 text-sm border rounded ${isDarkMode ? 'bg-slate-700 border-slate-500 text-white' : 'bg-white border-gray-300'}`}
-                                                />
-                                                <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-                                                    Leave empty to use placeholder [{paramName.toUpperCase()}] in URL
-                                                </p>
-                                            </div>
-                                        )}
+                                        <p className={`text-xs mt-1 ml-6 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                                          {mergedConfig.description}
+                                          {mergedConfig.possible_values && (
+                                            <span className="ml-2 font-medium">Values: {mergedConfig.possible_values}</span>
+                                          )}
+                                        </p>
+                                      </div>
                                     </div>
-                                ))}
+                                    {enabled && (
+                                      <div className="ml-6">
+                                        <label className={`block text-xs font-medium mb-1 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
+                                          Custom Value for {paramName}:
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={mergedConfig.customValue || ''}
+                                          onChange={(e) => updateParameterConfig(paramName, { ...mergedConfig, customValue: e.target.value })}
+                                          placeholder={`e.g., ${getPlaceholderValue(paramName)}`}
+                                          className={`w-full p-2 text-sm border rounded ${isDarkMode ? 'bg-slate-700 border-slate-500 text-white' : 'bg-white border-gray-300'}`}
+                                        />
+                                        <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                                          Leave empty to use placeholder [{paramName.toUpperCase()}] in URL
+                                        </p>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                         </div>
                     </div>
