@@ -2,12 +2,20 @@ import os
 import json
 from flask import Blueprint, request, jsonify
 import requests
-from datetime import datetime
-from integrations import forward_survey_data_to_partners
+from datetime import datetime, timedelta
+# from integrations import forward_survey_data_to_partners
 from mongodb_config import db
 
 # Create blueprint
 postback_bp = Blueprint('postback_bp', __name__)
+
+
+def _safe_float(val, default=0.0):
+    try:
+        # Accept int/float strings; otherwise fallback
+        return float(val)
+    except Exception:
+        return default
 
 
 @postback_bp.route('/postback-handler/<unique_id>', methods=['GET', 'POST'])
@@ -53,14 +61,14 @@ def handle_postback(unique_id):
         return jsonify({"error": "Missing required unique ID in URL path"}), 400
 
     try:
-        # Find the original survey response using the unique ID from URL path
-        print(f"🔎 Searching for response with unique_id: {unique_id}")
-        response_doc = db["responses"].find_one({
-            "_id": unique_id
+        # Find the postback share using the unique ID from URL path
+        print(f"🔎 Searching for postback share with unique_id: {unique_id}")
+        share_doc = db["postback_shares"].find_one({
+            "unique_postback_id": unique_id
         })
 
-        if not response_doc:
-            print(f"❌ ERROR: No response found with unique_id: {unique_id}")
+        if not share_doc:
+            print(f"❌ ERROR: No postback share found with unique_id: {unique_id}")
             
             # Determine sender name from User-Agent or source IP for failed attempts
             user_agent = request.headers.get('User-Agent', 'Unknown')
@@ -89,7 +97,7 @@ def handle_postback(unique_id):
                 "user_agent": user_agent,
                 # All 10 fixed parameters
                 "click_id": click_id,
-                "payout": float(payout) if payout else 0.0,
+                "payout": _safe_float(payout, 0.0),
                 "currency": currency,
                 "offer_id": offer_id,
                 "conversion_status": conversion_status,
@@ -103,7 +111,7 @@ def handle_postback(unique_id):
                 "timestamp": datetime.utcnow(),  # Store as datetime object for sorting
                 "timestamp_str": (datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).strftime('%Y-%m-%d %H:%M:%S IST'),  # IST time for display
                 "success": False,
-                "error_message": f"Survey response not found for unique_id: {unique_id}"
+                "error_message": f"Postback share not found for unique_id: {unique_id}"
             }
             
             try:
@@ -112,33 +120,34 @@ def handle_postback(unique_id):
             except Exception as log_error:
                 print(f"Failed to log failed attempt: {log_error}")
             
-            return jsonify({"error": "No matching survey response found for the provided unique_id"}), 404
+            return jsonify({"error": "No matching postback share found for the provided unique_id"}), 404
 
-        print(f"✅ SUCCESS: Found response: {response_doc['_id']}")
+        print(f"✅ SUCCESS: Found postback share: {share_doc.get('_id')}")
 
         # Prepare the update with the new data from the postback (ONLY 10 parameters)
         postback_update_data = {
-            "postback_click_id": click_id,
-            "postback_payout": payout,
-            "postback_currency": currency,
-            "postback_offer_id": offer_id,
-            "postback_conversion_status": conversion_status,
-            "postback_transaction_id": transaction_id,
-            "postback_sub1": sub1,
-            "postback_sub2": sub2,
-            "postback_event_name": event_name,
-            "postback_timestamp": timestamp,
-            "postback_received_at": datetime.utcnow(),
-            "postback_unique_id": unique_id
+            "inbound_postback": {
+                "click_id": click_id,
+                "payout": payout,
+                "currency": currency,
+                "offer_id": offer_id,
+                "conversion_status": conversion_status,
+                "transaction_id": transaction_id,
+                "sub1": sub1,
+                "sub2": sub2,
+                "event_name": event_name,
+                "timestamp": timestamp,
+            },
+            "last_used": datetime.utcnow(),
         }
 
-        # Update the original response document in MongoDB
-        db["responses"].update_one(
-            {"_id": response_doc["_id"]},
-            {"$set": postback_update_data}
+        # Update the postback share document in MongoDB
+        db["postback_shares"].update_one(
+            {"_id": share_doc["_id"]},
+            {"$set": postback_update_data, "$inc": {"usage_count": 1}}
         )
 
-        print(f"📝 Updated document {response_doc['_id']} with postback data.")
+        print(f"📝 Updated postback share {share_doc['_id']} with inbound postback data.")
         
         # Determine sender name from User-Agent or source IP
         user_agent = request.headers.get('User-Agent', 'Unknown')
@@ -189,7 +198,7 @@ def handle_postback(unique_id):
             "user_agent": user_agent,
             # All 10 fixed parameters
             "click_id": click_id,
-            "payout": float(payout) if payout else 0.0,
+            "payout": _safe_float(payout, 0.0),
             "currency": currency,
             "offer_id": offer_id,
             "conversion_status": conversion_status,
@@ -203,31 +212,15 @@ def handle_postback(unique_id):
             "timestamp": datetime.utcnow(),  # Store as datetime object for sorting
             "timestamp_str": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),  # Local time for display
             "success": True,
-            "response_message": "Survey forwarded to SurveyTitans"
+            "response_message": "Inbound postback recorded"
         }
         
         # Save inbound log to database
         db.inbound_postback_logs.insert_one(inbound_log_entry)
         print(f"📊 Logged inbound postback to database")
 
-        # Combine the original response with the new postback data for forwarding
-        forwarding_data = {**response_doc, **postback_update_data}
-
-        # Forward the updated data to other partners if needed
-        forward_survey_data_to_partners(forwarding_data)
-
-        # Forward to SurveyTitans
-        surveytitans_url = "https://surveytitans.com/track"
-        payload = {
-            "sid": sid1,
-            "responses": forwarding_data.get("responses", {}),
-            "email": forwarding_data.get("email", "")
-        }
-
-        titan_response = requests.post(surveytitans_url, json=payload)
-        print(f"SurveyTitans response: {titan_response.status_code} - {titan_response.text}")
-
-        return jsonify({"message": "Survey forwarded to SurveyTitans"}), 200
+        # Respond success after recording
+        return jsonify({"message": "Inbound postback recorded"}), 200
     
     except Exception as e:
         print("❌ Error handling postback:", str(e))
@@ -260,7 +253,7 @@ def handle_postback(unique_id):
                 "user_agent": user_agent,
                 # All 10 fixed parameters
                 "click_id": click_id,
-                "payout": float(payout) if payout else 0.0,
+                "payout": _safe_float(payout, 0.0),
                 "currency": currency,
                 "offer_id": offer_id,
                 "conversion_status": conversion_status,
