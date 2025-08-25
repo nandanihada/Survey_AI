@@ -72,6 +72,11 @@ const PostbackManager: React.FC = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingShare, setEditingShare] = useState<PostbackShare | null>(null);
   const [generatedUrl, setGeneratedUrl] = useState<string>('');
+  // Tabs: shares | inboundLogs
+  const [activeTab, setActiveTab] = useState<'shares' | 'inboundLogs'>('shares');
+  // Inbound logs state
+  const [inboundLogs, setInboundLogs] = useState<any[]>([]);
+  const [logsLoading, setLogsLoading] = useState<boolean>(false);
 
   const [formData, setFormData] = useState({
     third_party_name: '',
@@ -86,6 +91,12 @@ const PostbackManager: React.FC = () => {
     fetchPostbackShares();
   }, []);
 
+  useEffect(() => {
+    if (activeTab === 'inboundLogs') {
+      fetchInboundLogs();
+    }
+  }, [activeTab]);
+
   const fetchPostbackShares = async () => {
     try {
       const data = await postbackService.getPostbackShares();
@@ -95,6 +106,19 @@ const PostbackManager: React.FC = () => {
       console.error('Fetch error:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchInboundLogs = async () => {
+    try {
+      setLogsLoading(true);
+      const data = await postbackService.getInboundPostbackLogs();
+      setInboundLogs(data || []);
+    } catch (error) {
+      toast.error('Error fetching inbound postback logs');
+      console.error('Inbound logs fetch error:', error);
+    } finally {
+      setLogsLoading(false);
     }
   };
 
@@ -238,9 +262,20 @@ const PostbackManager: React.FC = () => {
       <div className="header">
         <h1>Postback Manager</h1>
         <p>Configure 10-parameter postback system for third-party integrations</p>
-        <button className="btn-primary" onClick={handleCreateNew}>
-          Create New Postback Share
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button className={`btn-secondary ${activeTab === 'shares' ? 'active' : ''}`} onClick={() => setActiveTab('shares')}>Shares</button>
+          <button className={`btn-secondary ${activeTab === 'inboundLogs' ? 'active' : ''}`} onClick={() => setActiveTab('inboundLogs')}>Inbound Postback Logs</button>
+          {activeTab === 'shares' && (
+            <button className="btn-primary" onClick={handleCreateNew}>
+              Create New Postback Share
+            </button>
+          )}
+          {activeTab === 'inboundLogs' && (
+            <button className="btn-primary" onClick={fetchInboundLogs} disabled={logsLoading}>
+              {logsLoading ? 'Refreshing…' : 'Refresh Logs'}
+            </button>
+          )}
+        </div>
       </div>
 
       {showCreateForm && (
@@ -367,76 +402,149 @@ const PostbackManager: React.FC = () => {
         </div>
       )}
 
-      <div className="postback-shares-list">
-        <h2>Existing Postback Shares</h2>
-        
-        {postbackShares.length === 0 ? (
-          <div className="empty-state">
-            <p>No postback shares configured yet.</p>
-            <button className="btn-primary" onClick={handleCreateNew}>
-              Create Your First Postback Share
-            </button>
-          </div>
-        ) : (
-          <div className="shares-grid">
-            {postbackShares.map(share => (
-              <div key={share.id} className="share-card">
-                <div className="share-header">
-                  <h3>{share.third_party_name}</h3>
-                  <span className={`status ${share.status}`}>
-                    {share.status}
-                  </span>
-                </div>
+      {activeTab === 'shares' && (
+        <div className="postback-shares-list">
+          <h2>Existing Postback Shares</h2>
+          {postbackShares.length === 0 ? (
+            <div className="empty-state">
+              <p>No postback shares configured yet.</p>
+              <button className="btn-primary" onClick={handleCreateNew}>
+                Create Your First Postback Share
+              </button>
+            </div>
+          ) : (
+            <div className="shares-grid">
+              {postbackShares.map(share => (
+                <div key={share.id} className="share-card">
+                  <div className="share-header">
+                    <h3>{share.third_party_name}</h3>
+                    <span className={`status ${share.status}`}>
+                      {share.status}
+                    </span>
+                  </div>
 
-                <div className="share-details">
-                  <p><strong>Contact:</strong> {share.third_party_contact || 'Not provided'}</p>
-                  <p><strong>Type:</strong> {share.postback_type}</p>
-                  <p><strong>Unique ID:</strong> <code>{(share as any).unique_postback_id || 'Auto-generated'}</code></p>
-                  <p><strong>Created:</strong> {share.created_at_str}</p>
-                  {share.last_used_str && (
-                    <p><strong>Last Used:</strong> {share.last_used_str}</p>
-                  )}
-                  <p><strong>Usage Count:</strong> {share.usage_count || 0}</p>
-                </div>
+                  <div className="share-details">
+                    <p><strong>Contact:</strong> {share.third_party_contact || 'Not provided'}</p>
+                    <p><strong>Type:</strong> {share.postback_type}</p>
+                    <p><strong>Unique ID:</strong> <code>{(share as any).unique_postback_id || 'Auto-generated'}</code></p>
+                    <p><strong>Created:</strong> {share.created_at_str}</p>
+                    {share.last_used_str && (
+                      <p><strong>Last Used:</strong> {share.last_used_str}</p>
+                    )}
+                    <p><strong>Usage Count:</strong> {share.usage_count || 0}</p>
+                  </div>
 
-                <div className="enabled-parameters">
-                  <h4>Enabled Parameters ({Object.values(share.parameters).filter(p => p.enabled).length}/10):</h4>
-                  <div className="parameter-tags">
-                    {Object.entries(share.parameters)
-                      .filter(([_, config]) => config.enabled)
-                      .map(([key, config]) => (
-                        <span key={key} className="parameter-tag">
-                          {config.customName || key}
-                        </span>
-                      ))}
+                  <div className="enabled-parameters">
+                    <h4>Enabled Parameters ({Object.values(share.parameters).filter(p => p.enabled).length}/10):</h4>
+                    <div className="parameter-tags">
+                      {Object.entries(share.parameters)
+                        .filter(([_, config]) => config.enabled)
+                        .map(([key, config]) => (
+                          <span key={key} className="parameter-tag">
+                            {config.customName || key}
+                          </span>
+                        ))}
+                    </div>
+                  </div>
+
+                  <div className="share-actions">
+                    <button 
+                      className="btn-secondary"
+                      onClick={() => generateUrl(share.id)}
+                    >
+                      Generate URL
+                    </button>
+                    <button 
+                      className="btn-secondary"
+                      onClick={() => handleEdit(share)}
+                    >
+                      Edit
+                    </button>
+                    <button 
+                      className="btn-danger"
+                      onClick={() => handleDelete(share.id)}
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
-                <div className="share-actions">
-                  <button 
-                    className="btn-secondary"
-                    onClick={() => generateUrl(share.id)}
-                  >
-                    Generate URL
-                  </button>
-                  <button 
-                    className="btn-secondary"
-                    onClick={() => handleEdit(share)}
-                  >
-                    Edit
-                  </button>
-                  <button 
-                    className="btn-danger"
-                    onClick={() => handleDelete(share.id)}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {activeTab === 'inboundLogs' && (
+        <div className="inbound-logs">
+          <h2>Inbound Postback Logs</h2>
+          {logsLoading ? (
+            <div className="loading">Loading inbound logs…</div>
+          ) : inboundLogs.length === 0 ? (
+            <div className="empty-state">
+              <p>No inbound logs found.</p>
+            </div>
+          ) : (
+            <div className="table-wrapper" style={{ overflowX: 'auto' }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Type</th>
+                    <th>IP</th>
+                    <th>User Agent</th>
+                    <th>SID1</th>
+                    <th>Transaction ID</th>
+                    <th>Status (Conversion)</th>
+                    <th>Reward</th>
+                    <th>Currency</th>
+                    <th>Username</th>
+                    <th>URL</th>
+                    <th>Timestamp</th>
+                    <th>Success</th>
+                    <th>Error Message</th>
+                    <th>Name (Source)</th>
+                    <th>Payout</th>
+                    <th>Click ID</th>
+                    <th>Offer ID</th>
+                    <th>Sub2</th>
+                    <th>Event Name</th>
+                    <th>Unique ID</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inboundLogs.map((log, idx) => (
+                    <tr key={log.id || idx}>
+                      <td>{log.type}</td>
+                      <td>{log.source_ip}</td>
+                      <td style={{ maxWidth: 280, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={log.user_agent}>{log.user_agent}</td>
+                      <td>{log.sub1}</td>
+                      <td>{log.transaction_id}</td>
+                      <td>{log.conversion_status}</td>
+                      <td>{log.payout}</td>
+                      <td>{log.currency}</td>
+                      <td>{log.username || '-'}</td>
+                      <td style={{ maxWidth: 360, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={log.url_called}>{log.url_called}</td>
+                      <td>{log.timestamp_str || log.timestamp}</td>
+                      <td>
+                        <span className={`status ${log.success ? 'active' : 'inactive'}`}>{log.success ? 'Success' : 'Failed'}</span>
+                      </td>
+                      <td style={{ maxWidth: 280, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={log.error_message || log.response_message}>
+                        {log.error_message || log.response_message || '-'}
+                      </td>
+                      <td>{log.name}</td>
+                      <td>{log.payout}</td>
+                      <td>{log.click_id}</td>
+                      <td>{log.offer_id}</td>
+                      <td>{log.sub2}</td>
+                      <td>{log.event_name}</td>
+                      <td><code>{log.unique_id}</code></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {generatedUrl && (
         <div className="url-display">
