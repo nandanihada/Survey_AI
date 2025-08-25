@@ -1135,60 +1135,84 @@ const PostbackLogs: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
             <div className={`border rounded-lg ${isDarkMode ? 'border-slate-600' : 'border-gray-200'}`}>
                 {activeLogTab === 'inbound' ? (
                     <>
-                        <table className="w-full text-sm text-left">
-                            <thead className={`border-b ${isDarkMode ? 'border-slate-600 bg-slate-700/50' : 'border-gray-200 bg-gray-50'}`}>
-                                <tr>
-                                    <th className="p-3">Name (Source)</th>
-                                    <th className="p-3">Timestamp</th>
-                                    <th className="p-3">Payout</th>
-                                    <th className="p-3">SID1</th>
-                                    <th className="p-3">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {inboundLogs.length === 0 ? (
+                        <div className="overflow-x-auto">
+                            <table className="min-w-[1200px] w-full text-sm text-left">
+                                <thead className={`border-b ${isDarkMode ? 'border-slate-600 bg-slate-700/50' : 'border-gray-200 bg-gray-50'}`}>
                                     <tr>
-                                        <td colSpan={5} className="p-8 text-center text-gray-500">
-                                            📡 No inbound postbacks received yet.
-                                            <br />
-                                            Test your receiver or wait for external partners to send postbacks.
-                                        </td>
+                                        <th className="p-3">timestamp</th>
+                                        <th className="p-3">type</th>
+                                        <th className="p-3">name</th>
+                                        <th className="p-3">ip</th>
+                                        <th className="p-3">user_agent</th>
+                                        <th className="p-3">unique_id</th>
+                                        <th className="p-3">url</th>
+                                        <th className="p-3">click_id</th>
+                                        <th className="p-3">payout</th>
+                                        <th className="p-3">reward</th>
+                                        <th className="p-3">currency</th>
+                                        <th className="p-3">offer_id</th>
+                                        <th className="p-3">status</th>
+                                        <th className="p-3">transaction_id</th>
+                                        <th className="p-3">sid1</th>
+                                        <th className="p-3">sub1</th>
+                                        <th className="p-3">sub2</th>
+                                        <th className="p-3">event_name</th>
+                                        <th className="p-3">username</th>
+                                        <th className="p-3">success</th>
+                                        <th className="p-3">error_message</th>
                                     </tr>
-                                ) : (
-                                    inboundLogs.map((log, index) => (
-                                        <tr key={log.id || index} className={`border-b ${isDarkMode ? 'border-slate-700' : 'border-gray-100'}`}>
-                                            <td className="p-3 font-medium">
-                                                {log.name || log.source_ip || 'Unknown Partner'}
+                                </thead>
+                                <tbody>
+                                    {inboundLogs.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={21} className="p-8 text-center text-gray-500">
+                                                📡 No inbound postbacks received yet.
                                                 <br />
-                                                <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-                                                    {log.source_ip}
-                                                </span>
-                                            </td>
-                                            <td className="p-3">
-                                                <Clock size={14} className="inline mr-1" />
-                                                {log.timestamp_str || log.timestamp || 'Unknown'}
-                                            </td>
-                                            <td className="p-3 font-semibold">
-                                                ${log.payout || log.reward || 0} {log.currency || 'USD'}
-                                            </td>
-                                            <td className={`p-3 font-mono text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-                                                {log.sid1 ? `${log.sid1.substring(0, 8)}...` : 'N/A'}
-                                            </td>
-                                            <td className="p-3">
-                                                <span className={`px-2 py-1 rounded-full text-xs flex items-center gap-1 ${
-                                                    log.success 
-                                                        ? (isDarkMode ? 'bg-green-500/20 text-green-300' : 'bg-green-100 text-green-800')
-                                                        : (isDarkMode ? 'bg-red-500/20 text-red-300' : 'bg-red-100 text-red-800')
-                                                }`}>
-                                                    {log.success ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
-                                                    {log.success ? 'success' : 'failed'}
-                                                </span>
+                                                Test your receiver or wait for external partners to send postbacks.
                                             </td>
                                         </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
+                                    ) : (
+                                        inboundLogs.map((log, index) => (
+                                            <tr key={log.id || index} className={`border-b ${isDarkMode ? 'border-slate-700' : 'border-gray-100'}`}>
+                                                <td className="p-3 whitespace-nowrap">
+                                                    <Clock size={14} className="inline mr-1" />
+                                                    {log.timestamp_str || log.timestamp || 'Unknown'}
+                                                </td>
+                                                <td className="p-3">{log.type || 'inbound'}</td>
+                                                <td className="p-3 font-medium">{log.name || '-'}</td>
+                                                <td className="p-3">{log.source_ip || log.ip || '-'}</td>
+                                                <td className="p-3">{log.user_agent || '-'}</td>
+                                                <td className="p-3 font-mono text-xs">{log.unique_id || '-'}</td>
+                                                <td className="p-3 font-mono text-xs">{log.url_called || log.url || '-'}</td>
+                                                <td className="p-3">{log.click_id || '-'}</td>
+                                                <td className="p-3">{typeof log.payout !== 'undefined' ? log.payout : '-'}</td>
+                                                <td className="p-3">{typeof log.reward !== 'undefined' ? log.reward : (typeof log.payout !== 'undefined' ? log.payout : '-')}</td>
+                                                <td className="p-3">{log.currency || '-'}</td>
+                                                <td className="p-3">{log.offer_id || '-'}</td>
+                                                <td className="p-3">{log.conversion_status || log.status || '-'}</td>
+                                                <td className="p-3">{log.transaction_id || '-'}</td>
+                                                <td className="p-3 font-mono text-xs">{log.sid1 || log.sub1 || '-'}</td>
+                                                <td className="p-3 font-mono text-xs">{log.sub1 || '-'}</td>
+                                                <td className="p-3 font-mono text-xs">{log.sub2 || '-'}</td>
+                                                <td className="p-3">{log.event_name || '-'}</td>
+                                                <td className="p-3">{log.username || '-'}</td>
+                                                <td className="p-3">
+                                                    <span className={`px-2 py-1 rounded-full text-xs flex items-center gap-1 ${
+                                                        log.success 
+                                                            ? (isDarkMode ? 'bg-green-500/20 text-green-300' : 'bg-green-100 text-green-800')
+                                                            : (isDarkMode ? 'bg-red-500/20 text-red-300' : 'bg-red-100 text-red-800')
+                                                    }`}>
+                                                        {log.success ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                                                        {String(!!log.success)}
+                                                    </span>
+                                                </td>
+                                                <td className="p-3">{log.error_message || log.response_message || '-'}</td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </>
                 ) : (
                     <table className="w-full text-sm text-left">
