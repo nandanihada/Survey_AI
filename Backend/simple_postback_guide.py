@@ -13,7 +13,7 @@ def show_your_postback_urls():
     print("Give these URLs to ANY platform (AdBreak Media, etc.):")
     print()
     print("🔗 PRODUCTION URL:")
-    print("https://hostslice.onrender.com/postback-handler")
+    print("https://api.theinterwebsite.space/postback-handler")
     print()
     print("🔗 LOCAL TESTING URL:")
     print("http://127.0.0.1:5000/postback-handler")
@@ -120,7 +120,7 @@ def explain_the_difference():
     print("   → Example: SurveyTitans, etc.")
     print()
     print("🎯 FOR ADBREAK MEDIA:")
-    print("   → Just give them: https://hostslice.onrender.com/postback-handler")
+    print("   → Just give them: https://api.theinterwebsite.space/postback-handler")
     print("   → They'll add their parameters automatically")
 
 def main():
@@ -137,7 +137,7 @@ def main():
         test_your_receiver()
     
     print("\n✅ SUMMARY:")
-    print("1. Give AdBreak this URL: https://hostslice.onrender.com/postback-handler")
+    print("1. Give AdBreak this URL: https://api.theinterwebsite.space/postback-handler")
     print("2. They'll call it when users complete offers")
     print("3. Your receiver will update the database")
     print("4. Done! 🎉")

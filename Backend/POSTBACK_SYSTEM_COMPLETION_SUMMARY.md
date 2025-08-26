@@ -57,12 +57,12 @@ The system now exclusively supports these parameters:
 
 **Old Format:**
 ```
-https://hostslice.onrender.com/postback-handler?click_id=[CLICK_ID]&payout=[PAYOUT]...
+https://api.theinterwebsite.space/postback-handler?click_id=[CLICK_ID]&payout=[PAYOUT]...
 ```
 
 **New Format:**
 ```
-https://hostslice.onrender.com/postback-handler/{unique-uuid}?click_id=[CLICK_ID]&payout=[PAYOUT]...
+https://api.theinterwebsite.space/postback-handler/{unique-uuid}?click_id=[CLICK_ID]&payout=[PAYOUT]...
 ```
 
 ### ✅ **Key Features Implemented**

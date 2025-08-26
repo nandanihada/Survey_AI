@@ -339,7 +339,7 @@ def generate_postback_url(share_id):
                 {"_id": ObjectId(share_id)},
                 {"$set": {"unique_postback_id": unique_id}}
             )
-        base_url = f"https://hostslice.onrender.com/postback-handler/{unique_id}"
+        base_url = f"https://api.theinterwebsite.space/postback-handler/{unique_id}"
         
         # Build query parameters based on enabled parameters (ONLY 10 fixed parameters)
         params = []

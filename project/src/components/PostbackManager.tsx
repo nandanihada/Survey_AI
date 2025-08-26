@@ -8,7 +8,7 @@ interface PostbackManagerProps {
 // API base URL
 const API_BASE = window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1'
   ? 'http://127.0.0.1:5000'
-  : 'https://hostslice.onrender.com/';
+  : 'https://api.theinterwebsite.space/';
 
 // API helper functions
 const api = {
@@ -347,10 +347,10 @@ const PostbackReceiver: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => 
     // For local testing we use a placeholder test ID so the route is hit and we get a friendly 404 from DB lookup.
     const baseUrl = window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1'
         ? 'http://127.0.0.1:5000/postback-handler/test-uuid'
-        : 'https://hostslice.onrender.com/postback-handler/{YOUR_UNIQUE_ID}';
+        : 'https://api.theinterwebsite.space/postback-handler/{YOUR_UNIQUE_ID}';
   
     const fullUrl = `${baseUrl}`;
-    const productionUrl = 'https://hostslice.onrender.com/postback-handler/{YOUR_UNIQUE_ID}';
+    const productionUrl = 'https://api.theinterwebsite.space/postback-handler/{YOUR_UNIQUE_ID}';
 
     const copyToClipboard = async () => {
       await navigator.clipboard.writeText(productionUrl);
@@ -728,7 +728,7 @@ const PostbackSharingManager: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode 
     
     const generatePreviewUrl = () => {
         const uniqueId = (editedShare as any).unique_postback_id || 'auto-generated-uuid';
-        const baseUrl = `https://hostslice.onrender.com/postback-handler/${uniqueId}`;
+        const baseUrl = `https://api.theinterwebsite.space/postback-handler/${uniqueId}`;
         const params: string[] = [];
         
         // Only use parameters that are enabled in editedShare.parameters

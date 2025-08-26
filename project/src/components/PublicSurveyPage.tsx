@@ -50,7 +50,7 @@ const PublicSurveyPage: React.FC = () => {
       const isLocalhost = window.location.hostname === 'localhost';
       const apiBaseUrl = isLocalhost
         ? 'http://localhost:5000'
-        : 'https://hostslice.onrender.com/';
+        : 'https://api.theinterwebsite.space/';
   try {
     const response =await axios.get(`${apiBaseUrl}/survey/${id}/view`);
    const data = response.data;

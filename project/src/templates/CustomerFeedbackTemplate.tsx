@@ -94,7 +94,7 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
   const isLocalhost = window.location.hostname === 'localhost';
   const apiBaseUrl = isLocalhost
     ? 'http://localhost:5000'
-    : 'https://hostslice.onrender.com/';
+    : 'https://api.theinterwebsite.space/';
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);

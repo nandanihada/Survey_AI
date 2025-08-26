@@ -42,7 +42,7 @@ def test_parameter_structure():
     
     # Test URL structure
     test_uuid = str(uuid.uuid4())
-    base_url = f"https://hostslice.onrender.com/postback-handler/{test_uuid}"
+    base_url = f"https://api.theinterwebsite.space/postback-handler/{test_uuid}"
     
     # Build sample URL with all parameters
     sample_params = []
