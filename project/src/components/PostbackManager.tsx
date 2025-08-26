@@ -228,7 +228,19 @@ const PostbackSender: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
         }
     };
 
-    const availableParams = ['[TRANSACTION_ID]', '[REWARD]', '[CURRENCY]', '[USERNAME]', '[SESSION_ID]', '[COMPLETE_ID]'];
+    // Standardized 10 fixed parameters (placeholders to use in partner URLs)
+    const availableParams = [
+        '[CLICK_ID]',
+        '[PAYOUT]',
+        '[CURRENCY]',
+        '[OFFER_ID]',
+        '[CONVERSION_STATUS]',
+        '[TRANSACTION_ID]',
+        '[SUB1]',
+        '[SUB2]',
+        '[EVENT_NAME]',
+        '[TIMESTAMP]'
+    ];
 
     return (
         <div className="space-y-6">
@@ -331,12 +343,14 @@ const PostbackReceiver: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => 
         }
     };
     
+    // Display URL should include the required unique ID segment as per backend route: /postback-handler/<unique_id>
+    // For local testing we use a placeholder test ID so the route is hit and we get a friendly 404 from DB lookup.
     const baseUrl = window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1'
-        ? 'http://127.0.0.1:5000/postback-handler'
-        : 'https://hostslice.onrender.com/postback-handler';
+        ? 'http://127.0.0.1:5000/postback-handler/test-uuid'
+        : 'https://hostslice.onrender.com/postback-handler/{YOUR_UNIQUE_ID}';
   
-    const fullUrl = `${baseUrl}?sid1=[YOUR_UNIQUE_ID]&status=[STATUS]&reward=[REWARD]`;
-    const productionUrl = 'https://hostslice.onrender.com/postback-handler';
+    const fullUrl = `${baseUrl}`;
+    const productionUrl = 'https://hostslice.onrender.com/postback-handler/{YOUR_UNIQUE_ID}';
 
     const copyToClipboard = async () => {
       await navigator.clipboard.writeText(productionUrl);
@@ -352,13 +366,18 @@ const PostbackReceiver: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => 
             const testResponseId = 'test-response-' + Date.now();
             
             // Now test the postback receiver with the test response ID
+            // Use standardized 10 fixed parameters
             const testParams = {
-                sid1: testResponseId,
-                transaction_id: 'test-txn-' + Date.now(),
-                status: 'confirmed',
-                reward: '1.50',
+                click_id: 'click-' + Date.now(),
+                payout: '1.50',
                 currency: 'USD',
-                username: 'testuser'
+                offer_id: 'offer-demo',
+                conversion_status: 'confirmed',
+                transaction_id: 'test-txn-' + Date.now(),
+                sub1: testResponseId,
+                sub2: 'sub2-demo',
+                event_name: 'conversion',
+                timestamp: Math.floor(Date.now() / 1000).toString()
             };
             
             const queryString = new URLSearchParams(testParams).toString();
