@@ -53,7 +53,7 @@ def log_request_info():
 
 
 # Gemini API Configuration
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyB5qCIodAB4-2W9O_gllY4rbNW2P16U0lc")
+GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY", "AIzaSyDKsjeKLBjrbEtVhed015yRimBpIk5CU6s")
 print(f"Using Gemini API Key: {GEMINI_API_KEY[:20]}...")
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-1.5-flash-latest")
@@ -549,6 +549,15 @@ def generate_survey():
             except Exception as retry_error:
                 last_error = retry_error
                 print(f"Retry {attempt + 1} failed: {retry_error}")
+                
+                # Check for quota exceeded error
+                if "RATE_LIMIT_EXCEEDED" in str(retry_error) or "Quota exceeded" in str(retry_error):
+                    return jsonify({
+                        "error": "API quota exceeded. Please try again later or upgrade your API plan.",
+                        "error_type": "quota_exceeded",
+                        "message": "The Google Gemini API has reached its rate limit. Please wait a few minutes before trying again."
+                    }), 429
+                
                 if attempt == max_retries - 1:
                     raise ValueError(f"Failed after {max_retries} attempts: {str(last_error)}")
          # your backend
@@ -1850,4 +1859,4 @@ def get_criteria_performance():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run()
+    app.run(host='127.0.0.1', port=5000, debug=True)

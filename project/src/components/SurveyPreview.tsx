@@ -26,7 +26,7 @@ const SurveyPreview: React.FC<SurveyPreviewProps> = ({ survey }) => {
     const baseUrl =
       window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
         ? 'http://localhost:5173'
-        : 'https://pepperadsresponses.web.app';
+        : 'https://theinterwebsite.space';
 
     setShareLink(`${baseUrl}/survey/${survey.survey_id}`);
   }, [survey.survey_id]);

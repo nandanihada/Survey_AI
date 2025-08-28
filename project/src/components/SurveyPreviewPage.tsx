@@ -25,7 +25,7 @@ const SurveyPreviewPage: React.FC = () => {
         // Set share link
         const baseUrl = window.location.hostname === 'localhost' 
           ? 'http://localhost:5173'
-          : 'https://pepperadsresponses.web.app';
+          : 'https://theinterwebsite.space';
         setShareLink(`${baseUrl}/survey/${id}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load survey');
