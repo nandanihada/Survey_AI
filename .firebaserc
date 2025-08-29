@@ -1,7 +1,9 @@
 {
   "projects": {
     "default": "pepperadsresponses",
-    "newprod": "hostsliceresponse"
+    "newprod": "hostsliceresponse",
+    "website": "hostsliceresponse",
+    "survey": "pepperadsresponses"
   },
   "targets": {},
   "etags": {}

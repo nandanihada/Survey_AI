@@ -35,15 +35,20 @@ except ImportError:
 if os.getenv("FLASK_ENV") == "development":
     BASE_URL = "http://127.0.0.1:5000"
 else:
-    BASE_URL = "https://api.theinterwebsite.space/"
+    BASE_URL = "https://api.theinterwebsite.space"
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True)
-# CORS(
-#     app,
-#     supports_credentials=True,
-#     origins=["https://pepperadsresponses.web.app"]
-# )
+CORS(app, 
+     supports_credentials=True,
+     origins=[
+         "http://localhost:5173",         # For local testing
+         "https://pepperadsresponses.web.app",
+         "https://hostsliceresponse.web.app",
+         "https://theinterwebsite.space"
+     ],
+     allow_headers=["Content-Type", "Authorization"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+)
 
 
 @app.before_request
@@ -286,9 +291,12 @@ def validate_color(color):
     supports_credentials=True,
     origins=[
         "http://localhost:5173",         # For local testing
-        "https://pepperadsresponses.web.app"  # For production
+        "https://pepperadsresponses.web.app",
+        "https://hostsliceresponse.web.app",
+        "https://theinterwebsite.space"
     ],
-    allow_headers=["Content-Type"]
+    allow_headers=["Content-Type", "Authorization"],
+    methods=["GET", "POST", "OPTIONS"]
 )
 def generate_survey():
     if request.method == 'OPTIONS':
@@ -622,8 +630,22 @@ def generate_survey():
         }), 500
 
 
-@app.route('/survey/<survey_id>/respond', methods=['POST'])
+@app.route('/survey/<survey_id>/respond', methods=['POST', 'OPTIONS'])
+@cross_origin(
+    supports_credentials=True,
+    origins=[
+        "http://localhost:5173",
+        "https://pepperadsresponses.web.app",
+        "https://hostsliceresponse.web.app",
+        "https://theinterwebsite.space"
+    ],
+    allow_headers=["Content-Type", "Authorization"],
+    methods=["POST", "OPTIONS"]
+)
 def submit_public_response(survey_id):
+    if request.method == 'OPTIONS':
+        return '', 200
+        
     print(f"\n=== SURVEY RESPONSE SUBMISSION DEBUG ===")
     print(f"Survey ID received: {survey_id}")
     print(f"Request method: {request.method}")
