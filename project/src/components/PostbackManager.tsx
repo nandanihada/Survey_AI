@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Link, Copy, Send, Settings, Eye, Plus, Trash2, Edit3, Activity, Clock, AlertCircle, CheckCircle2, Users, ExternalLink } from 'lucide-react';
+import { Link, Copy, Send, Settings, Eye, Plus, Trash2, Edit3, Activity, Clock, AlertCircle, CheckCircle2, Users, ExternalLink, TestTube } from 'lucide-react';
+import PostbackTesting from './PostbackTesting';
 
 interface PostbackManagerProps {
   isDarkMode?: boolean;
@@ -103,7 +104,7 @@ const api = {
 
 
 const PostbackManager: React.FC<PostbackManagerProps> = ({ isDarkMode = false }) => {
-  const [activeTab, setActiveTab] = useState<'sender' | 'receiver' | 'logs'>('sender');
+  const [activeTab, setActiveTab] = useState<'sender' | 'receiver' | 'logs' | 'testing'>('sender');
 
   return (
     <div className={`p-6 rounded-2xl shadow-lg border ${
@@ -150,12 +151,23 @@ const PostbackManager: React.FC<PostbackManagerProps> = ({ isDarkMode = false })
           >
            <Activity size={14} /> Logs
           </button>
+          <button 
+            onClick={() => setActiveTab('testing')}
+            className={`px-4 py-2 rounded-md transition-colors flex items-center gap-2 ${
+              activeTab === 'testing' 
+                ? (isDarkMode ? 'bg-red-500 text-white' : 'bg-white text-red-600 shadow-sm') 
+                : (isDarkMode ? 'text-slate-300 hover:text-white' : 'text-stone-600 hover:text-stone-800')
+            }`}
+          >
+           <TestTube size={14} /> Testing
+          </button>
         </div>
       </div>
 
       {activeTab === 'sender' && <PostbackSender isDarkMode={isDarkMode} />}
       {activeTab === 'receiver' && <PostbackReceiver isDarkMode={isDarkMode} />}
       {activeTab === 'logs' && <PostbackLogs isDarkMode={isDarkMode} />}
+      {activeTab === 'testing' && <PostbackTesting isDarkMode={isDarkMode} />}
     </div>
   );
 };

@@ -13,6 +13,7 @@ from pymongo.errors import ServerSelectionTimeoutError
 from integrations import forward_survey_data_to_partners
 from postback_handler import postback_bp
 from postback_api import postback_api_bp
+from postback_testing import postback_testing_bp
 from mongodb_config import db
 from bson import ObjectId
 
@@ -42,11 +43,14 @@ CORS(app,
      supports_credentials=True,
      origins=[
          "http://localhost:5173",         # For local testing
+         "http://localhost:5174",         # Alternative port
+         "http://127.0.0.1:5173",
+         "http://127.0.0.1:5174",
          "https://pepperadsresponses.web.app",
          "https://hostsliceresponse.web.app",
          "https://theinterwebsite.space"
      ],
-     allow_headers=["Content-Type", "Authorization"],
+     allow_headers=["Content-Type", "Authorization", "Access-Control-Allow-Origin"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
 )
 
@@ -69,6 +73,7 @@ print("Gemini API configured successfully")
 # Register blueprints after MongoDB initialization
 app.register_blueprint(postback_bp)
 app.register_blueprint(postback_api_bp)
+app.register_blueprint(postback_testing_bp)
 
 
 # Helper function to convert ObjectId to string
@@ -291,11 +296,14 @@ def validate_color(color):
     supports_credentials=True,
     origins=[
         "http://localhost:5173",         # For local testing
+        "http://localhost:5174",         # Alternative port
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
         "https://pepperadsresponses.web.app",
         "https://hostsliceresponse.web.app",
         "https://theinterwebsite.space"
     ],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=["Content-Type", "Authorization", "Access-Control-Allow-Origin"],
     methods=["GET", "POST", "OPTIONS"]
 )
 def generate_survey():
@@ -635,6 +643,9 @@ def generate_survey():
     supports_credentials=True,
     origins=[
         "http://localhost:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
         "https://pepperadsresponses.web.app",
         "https://hostsliceresponse.web.app",
         "https://theinterwebsite.space"

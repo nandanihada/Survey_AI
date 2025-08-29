@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import postbackService, { PostbackShare, PostbackParameter } from '../services/postbackService';
+import PostbackTesting from '../components/PostbackTesting';
 import './PostbackManager.css';
 
 const FIXED_PARAMETERS = [
@@ -72,8 +73,8 @@ const PostbackManager: React.FC = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingShare, setEditingShare] = useState<PostbackShare | null>(null);
   const [generatedUrl, setGeneratedUrl] = useState<string>('');
-  // Tabs: shares | inboundLogs
-  const [activeTab, setActiveTab] = useState<'shares' | 'inboundLogs'>('shares');
+  // Tabs: shares | inboundLogs | testing
+  const [activeTab, setActiveTab] = useState<'shares' | 'inboundLogs' | 'testing'>('shares');
   // Inbound logs state
   const [inboundLogs, setInboundLogs] = useState<any[]>([]);
   const [logsLoading, setLogsLoading] = useState<boolean>(false);
@@ -263,8 +264,9 @@ const PostbackManager: React.FC = () => {
         <h1>Postback Manager</h1>
         <p>Configure 10-parameter postback system for third-party integrations</p>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button className={`btn-secondary ${activeTab === 'shares' ? 'active' : ''}`} onClick={() => setActiveTab('shares')}>Shares</button>
-          <button className={`btn-secondary ${activeTab === 'inboundLogs' ? 'active' : ''}`} onClick={() => setActiveTab('inboundLogs')}>Inbound Postback Logs</button>
+          <button className={`btn-secondary ${activeTab === 'shares' ? 'active' : ''}`} onClick={() => setActiveTab('shares')}>Outbound (Sender)</button>
+          <button className={`btn-secondary ${activeTab === 'inboundLogs' ? 'active' : ''}`} onClick={() => setActiveTab('inboundLogs')}>Inbound (Receiver)</button>
+          <button className={`btn-secondary ${activeTab === 'testing' ? 'active' : ''}`} onClick={() => setActiveTab('testing')}>Testing</button>
           {activeTab === 'shares' && (
             <button className="btn-primary" onClick={handleCreateNew}>
               Create New Postback Share
@@ -544,6 +546,10 @@ const PostbackManager: React.FC = () => {
             </div>
           )}
         </div>
+      )}
+
+      {activeTab === 'testing' && (
+        <PostbackTesting />
       )}
 
       {generatedUrl && (
