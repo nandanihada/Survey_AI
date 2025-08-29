@@ -90,7 +90,7 @@ const SurveyConfig: React.FC = () => {
       setLoading(true);
       
       // Fetch survey questions
-      const questionsResponse = await fetch(`/api/admin/survey/${survey_id}/questions`);
+      const questionsResponse = await fetch(`https://api.theinterwebsite.space/admin/survey/${survey_id}/questions`);
       if (questionsResponse.ok) {
         const questionsData = await questionsResponse.json();
         setQuestions(questionsData.questions || []);
@@ -98,7 +98,7 @@ const SurveyConfig: React.FC = () => {
       }
       
       // Fetch current configuration
-      const configResponse = await fetch(`/api/admin/survey/${survey_id}/config`);
+      const configResponse = await fetch(`https://api.theinterwebsite.space/admin/survey/${survey_id}/config`);
       if (configResponse.ok) {
         const configData = await configResponse.json();
         if (configData.survey_id) {
@@ -107,7 +107,7 @@ const SurveyConfig: React.FC = () => {
       }
       
       // Fetch available criteria sets
-      const criteriaResponse = await fetch('/api/admin/criteria');
+      const criteriaResponse = await fetch('https://api.theinterwebsite.space/admin/criteria');
       if (criteriaResponse.ok) {
         const criteriaData = await criteriaResponse.json();
         setCriteriaSets(criteriaData.criteria_sets || []);
@@ -125,7 +125,7 @@ const SurveyConfig: React.FC = () => {
     try {
       setSaving(true);
       
-      const response = await fetch(`/api/admin/survey/${survey_id}/config`, {
+      const response = await fetch(`https://api.theinterwebsite.space/admin/survey/${survey_id}/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config)
@@ -149,7 +149,7 @@ const SurveyConfig: React.FC = () => {
     try {
       setGeneratingCriteria(true);
       
-      const response = await fetch(`/api/admin/survey/${survey_id}/generate-criteria`, {
+      const response = await fetch(`https://api.theinterwebsite.space/admin/survey/${survey_id}/generate-criteria`, {
         method: 'POST'
       });
 
@@ -191,7 +191,7 @@ const SurveyConfig: React.FC = () => {
         }
       });
 
-      const response = await fetch(`/api/admin/survey/${survey_id}/preview-evaluation`, {
+      const response = await fetch(`https://api.theinterwebsite.space/admin/survey/${survey_id}/preview-evaluation`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -221,7 +221,7 @@ const SurveyConfig: React.FC = () => {
 
     try {
       // First create the criteria set
-      const createResponse = await fetch('/api/admin/criteria', {
+      const createResponse = await fetch('https://api.theinterwebsite.space/admin/criteria', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dynamicCriteria)
@@ -238,7 +238,7 @@ const SurveyConfig: React.FC = () => {
         }));
 
         // Refresh criteria sets
-        const criteriaResponse = await fetch('/api/admin/criteria');
+        const criteriaResponse = await fetch('https://api.theinterwebsite.space/admin/criteria');
         if (criteriaResponse.ok) {
           const criteriaData = await criteriaResponse.json();
           setCriteriaSets(criteriaData.criteria_sets || []);

@@ -1,7 +1,7 @@
 import axios, { AxiosResponse } from 'axios';
 import { LoginRequest, RegisterRequest, ApiResponse, User } from '../../../shared/types';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://api.theinterwebsite.space';
 
 // Create axios instance with base configuration
 const api = axios.create({

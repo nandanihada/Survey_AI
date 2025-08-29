@@ -1,6 +1,6 @@
 const SERVER_URL = window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1'
   ? 'http://127.0.0.1:5000'
-  : 'https://pepper-flask-app.onrender.com';
+  : 'https://api.theinterwebsite.space';
 
 export interface SurveyRequest {
   prompt: string;
