@@ -3,7 +3,8 @@
     "default": "pepperadsresponses",
     "newprod": "hostsliceresponse",
     "website": "hostsliceresponse",
-    "survey": "pepperadsresponses"
+    "survey": "pepperadsresponses",
+    "websie": "hostsliceresponse"
   },
   "targets": {},
   "etags": {}

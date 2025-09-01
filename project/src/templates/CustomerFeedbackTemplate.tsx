@@ -42,6 +42,7 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
   const [email, setEmail] = useState<string | null>(null);
   const [trackingId, setTrackingId] = useState<string | null>(null);
   const [clickId, setClickId] = useState<string | null>(null);
+  const [urlParameters, setUrlParameters] = useState<Record<string, string>>({});
 
   const normalizeType = (type: string): 'text' | 'radio' | 'range' => {
     switch (type) {
@@ -98,6 +99,15 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
+    
+    // Capture all URL parameters
+    const allParams: Record<string, string> = {};
+    params.forEach((value, key) => {
+      allParams[key] = value;
+    });
+    setUrlParameters(allParams);
+    
+    // Extract specific parameters
     setUsername(params.get('username'));
     setEmail(params.get('email'));
     
@@ -236,7 +246,8 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
           email, 
           username, 
           tracking_id: trackingId,
-          click_id: clickId 
+          click_id: clickId,
+          url_parameters: urlParameters
         }),
       });
       
