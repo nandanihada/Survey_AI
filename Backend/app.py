@@ -674,10 +674,12 @@ def submit_public_response(survey_id):
     tracking_id = data.get("tracking_id")
     email = data.get("email")
     username = data.get("username")
+    url_parameters = data.get("url_parameters", {})  # New: capture URL parameters
 
     print(f"Parsed responses: {responses}")
     print(f"Parsed email: {email}")
     print(f"Parsed username: {username}")
+    print(f"Parsed URL parameters: {url_parameters}")
 
     if not responses:
         print("ERROR: No responses provided")
@@ -714,6 +716,8 @@ def submit_public_response(survey_id):
             response_data["email"] = email
         if username:
             response_data["username"] = username
+        if url_parameters:
+            response_data["url_parameters"] = url_parameters
 
         print(f"Attempting to save response data: {response_data}")
 

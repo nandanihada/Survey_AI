@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Share2, Copy, ExternalLink, CheckCircle } from 'lucide-react';
+import { Share2, Copy, ExternalLink, CheckCircle, Settings } from 'lucide-react';
+import { generateSurveyLink, parseParamString, stringifyParams, type SurveyLinkParams } from '../utils/surveyLinkUtils';
 
 interface SurveyPreviewProps {
   survey: {
@@ -20,16 +21,40 @@ interface SurveyPreviewProps {
 const SurveyPreview: React.FC<SurveyPreviewProps> = ({ survey }) => {
   const [shareLink, setShareLink] = useState('');
   const [copied, setCopied] = useState(false);
+  const [showParamEditor, setShowParamEditor] = useState(false);
+  const [paramString, setParamString] = useState('');
+  const [urlParams, setUrlParams] = useState<SurveyLinkParams>({});
   const shareInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const baseUrl =
-      window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        ? 'http://localhost:5173'
-        : 'https://theinterwebsite.space';
+    const link = generateSurveyLink(survey.survey_id, undefined, urlParams);
+    setShareLink(link);
+  }, [survey.survey_id, urlParams]);
 
-    setShareLink(`${baseUrl}/survey/${survey.survey_id}`);
-  }, [survey.survey_id]);
+  const handleParamStringChange = (value: string) => {
+    setParamString(value);
+    const parsed = parseParamString(value);
+    setUrlParams(parsed);
+  };
+
+  const handleAddParam = () => {
+    const newParams = { ...urlParams, uid: '123' };
+    setUrlParams(newParams);
+    setParamString(stringifyParams(newParams));
+  };
+
+  const handleAddUsername = () => {
+    const newParams = { ...urlParams, username: 'user123' };
+    setUrlParams(newParams);
+    setParamString(stringifyParams(newParams));
+  };
+
+  const handleRemoveParam = (key: string) => {
+    const newParams = { ...urlParams };
+    delete newParams[key];
+    setUrlParams(newParams);
+    setParamString(stringifyParams(newParams));
+  };
 
   const copyToClipboard = async () => {
     if (shareInputRef.current) {
@@ -55,7 +80,60 @@ const SurveyPreview: React.FC<SurveyPreviewProps> = ({ survey }) => {
             <Share2 size={16} className="text-red-500" />
             Share this survey
           </h4>
+          <button
+            onClick={() => setShowParamEditor(!showParamEditor)}
+            className="flex items-center gap-1 px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+          >
+            <Settings size={12} />
+            {showParamEditor ? 'Hide' : 'Add'} Parameters
+          </button>
         </div>
+        {showParamEditor && (
+          <div className="mb-4 p-3 bg-gray-50 rounded-lg border">
+            <label className="block text-xs font-medium text-gray-700 mb-2">
+              URL Parameters (e.g., uid=123&source=email)
+            </label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={paramString}
+                onChange={(e) => handleParamStringChange(e.target.value)}
+                placeholder="uid=123&source=email&campaign=winter"
+                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+              />
+              <button
+                onClick={handleAddParam}
+                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg"
+              >
+                Add UID
+              </button>
+              <button
+                onClick={handleAddUsername}
+                className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-xs rounded-lg"
+              >
+                Add Username
+              </button>
+            </div>
+            {Object.keys(urlParams).length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(urlParams).map(([key, value]) => (
+                  <span
+                    key={key}
+                    className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                  >
+                    {key}={value}
+                    <button
+                      onClick={() => handleRemoveParam(key)}
+                      className="ml-1 text-blue-600 hover:text-blue-800"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <input
             ref={shareInputRef}
