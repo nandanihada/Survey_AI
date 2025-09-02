@@ -1,21 +1,54 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS ,cross_origin
 import google.generativeai as genai
-import uuid
-import json
-import re
-from datetime import datetime
-import threading
+import random
+import string
+from typing import Optional, Dict, List, Any, Union
+from datetime import datetime, timedelta
 import os
+import json
+import uuid
+import re
+import logging
+from bson import ObjectId, json_util
+from pymongo import MongoClient, ReturnDocument
+from dotenv import load_dotenv
 import requests
-from pymongo import MongoClient
-from pymongo.errors import ServerSelectionTimeoutError
-from integrations import forward_survey_data_to_partners
-from postback_handler import postback_bp
-from postback_api import postback_api_bp
-from postback_testing import postback_testing_bp
-from mongodb_config import db
+import urllib.parse
+import traceback
+from urllib.parse import urlparse, parse_qs, urlencode
+from flask_cors import CORS, cross_origin
 from bson import ObjectId
+import time
+import random
+from flask import Flask, request, jsonify
+from flask_cors import CORS ,cross_origin
+import google.generativeai as genai
+import json
+from datetime import datetime
+import os
+from dotenv import load_dotenv
+import pymongo
+from bson import ObjectId
+from bson import json_util
+import json
+import logging
+import traceback
+import random
+import string
+import requests
+import time
+from typing import Dict, Any, Optional, List, Union
+from pymongo import MongoClient
+from urllib.parse import urlparse, parse_qs, urlencode
+import urllib.parse
+import sys
+import os
+
+# Add the Backend directory to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.short_id import generate_short_id, is_valid_short_id
 
 # Import enhanced survey handler
 try:
@@ -61,19 +94,39 @@ def log_request_info():
     print("Headers:", dict(request.headers))
 
 
+# Initialize MongoDB first
+print("Initializing MongoDB...")
+from mongodb_config import db
+print("✅ MongoDB initialized successfully")
+
 # Gemini API Configuration
 GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY", "AIzaSyDKsjeKLBjrbEtVhed015yRimBpIk5CU6s")
 print(f"Using Gemini API Key: {GEMINI_API_KEY[:20]}...")
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-1.5-flash-latest")
+print("✅ Gemini API configured successfully")
 
-# Test API connection on startup (removed to avoid quota issues)
-print("Gemini API configured successfully")
-
-# Register blueprints after MongoDB initialization
-app.register_blueprint(postback_bp)
-app.register_blueprint(postback_api_bp)
-app.register_blueprint(postback_testing_bp)
+# Import blueprints after MongoDB is initialized
+try:
+    print("Importing blueprints...")
+    from postback_handler import postback_bp
+    from postback_api import postback_api_bp
+    from postback_testing import postback_testing_bp
+    
+    # Register blueprints
+    print("Registering blueprints...")
+    app.register_blueprint(postback_bp, url_prefix='/postback')
+    app.register_blueprint(postback_api_bp, url_prefix='/api')
+    app.register_blueprint(postback_testing_bp, url_prefix='/test')
+    print("✅ Postback blueprints registered successfully")
+except ImportError as e:
+    print(f"⚠️ Failed to import postback blueprints: {e}")
+    print("Make sure all blueprint files exist and don't have syntax errors.")
+    print("Files should be in the same directory as app.py:")
+    print("- postback_handler.py")
+    print("- postback_api.py")
+    print("- postback_testing.py")
+    raise  # Re-raise the exception to see the full traceback
 
 
 # Helper function to convert ObjectId to string
@@ -585,7 +638,14 @@ def generate_survey():
         FRONTEND_URL = "https://pepperadsresponses.web.app"  # your new React frontend
         # Create and save survey document
         try:
-            survey_id = str(uuid.uuid4())
+            # Generate a short ID (5 characters) for the survey
+            while True:
+                short_id = generate_short_id(5)
+                # Check if this ID already exists
+                if not db.surveys.find_one({"$or": [{"_id": short_id}, {"id": short_id}]}):
+                    break
+                    
+            survey_id = short_id
             survey_data = {
                 "_id": survey_id,
                 "id": survey_id,
@@ -595,8 +655,9 @@ def generate_survey():
                 "questions": questions,
                 "theme": complete_theme,
                 "created_at": datetime.utcnow(),
-                 "shareable_link": f"{BASE_URL}/survey/{survey_id}/respond",
-                 "public_link": f"{FRONTEND_URL}/survey/{survey_id}"
+                "shareable_link": f"{BASE_URL}/survey/{survey_id}/respond",
+                "public_link": f"{FRONTEND_URL}/survey/{survey_id}",
+                "is_short_id": True  # Mark that this survey uses a short ID
             }
 
             # Save to database without timeout parameter
@@ -632,8 +693,7 @@ def generate_survey():
             "error": str(e),
             "suggestion": "Try changing the template or using simpler prompt text.",
             "debug_info": {
-                "template_type": template_type,
-                "raw_ai_output": raw_response[:300] if raw_response else None
+                "template_type": template_type
             }
         }), 500
 
@@ -657,40 +717,41 @@ def submit_public_response(survey_id):
     if request.method == 'OPTIONS':
         return '', 200
         
-    print(f"\n=== SURVEY RESPONSE SUBMISSION DEBUG ===")
-    print(f"Survey ID received: {survey_id}")
-    print(f"Request method: {request.method}")
-    print(f"Request headers: {dict(request.headers)}")
-
-    # Check if request has JSON data
-    if not request.is_json:
-        print("ERROR: Request is not JSON")
-        return jsonify({"error": "Content-Type must be application/json"}), 400
-
-    data = request.json
-    print(f"Raw request data: {data}")
-
-    responses = data.get("responses")
-    tracking_id = data.get("tracking_id")
-    email = data.get("email")
-    username = data.get("username")
-    url_parameters = data.get("url_parameters", {})  # New: capture URL parameters
-
-    print(f"Parsed responses: {responses}")
-    print(f"Parsed email: {email}")
-    print(f"Parsed username: {username}")
-    print(f"Parsed URL parameters: {url_parameters}")
-
-    if not responses:
-        print("ERROR: No responses provided")
-        return jsonify({"error": "Responses required"}), 400
-
     try:
-        # Check if survey exists - IMPORTANT: Check both _id and id fields
-        print(f"Looking for survey with ID: {survey_id}")
+        data = request.json
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+            
+        responses = data.get("responses", {})
+        email = data.get("email")
+        username = data.get("username")
+        tracking_id = data.get("tracking_id")
+        url_parameters = data.get("url_parameters", {})
 
-        # Try both _id and id fields
-        survey = db["surveys"].find_one({"$or": [{"_id": survey_id}, {"id": survey_id}]})
+        print(f"Parsed responses: {responses}")
+        print(f"Parsed email: {email}")
+        print(f"Parsed username: {username}")
+        print(f"Parsed URL parameters: {url_parameters}")
+
+        if not responses:
+            print("ERROR: No responses provided")
+            return jsonify({"error": "Responses required"}), 400
+
+        # Check if the survey_id is a valid short ID (5 alphanumeric characters)
+        is_short_id = is_valid_short_id(survey_id, 5)
+        
+        # Build query to find survey by ID
+        query = {"$or": [{"_id": survey_id}, {"id": survey_id}]}
+        
+        # If it's not a short ID, try to convert from UUID string to ObjectId if needed
+        if not is_short_id and len(survey_id) == 24:
+            try:
+                query["$or"].append({"_id": ObjectId(survey_id)})
+            except:
+                pass  # Not a valid ObjectId, continue with original query
+        
+        print(f"Looking for survey with query: {query}")
+        survey = db["surveys"].find_one(query)
 
         if not survey:
             print(f"ERROR: Survey {survey_id} not found in database")
@@ -1027,6 +1088,19 @@ def get_survey_tracking(survey_id):
 @app.route('/survey/<survey_id>/view', methods=['GET'])
 def view_survey(survey_id):
     try:
+        # Check if the survey_id is a valid short ID (5 alphanumeric characters)
+        is_short_id = is_valid_short_id(survey_id, 5)
+        
+        # Build query to find survey by ID
+        query = {"$or": [{"_id": survey_id}, {"id": survey_id}]}
+        
+        # If it's not a short ID, try to convert from UUID string to ObjectId if needed
+        if not is_short_id and len(survey_id) == 24:
+            try:
+                query["$or"].append({"_id": ObjectId(survey_id)})
+            except:
+                pass  # Not a valid ObjectId, continue with original query
+        
         # Optional: track click
         email = request.args.get("email")
         username = request.args.get("username")
@@ -1041,6 +1115,8 @@ def view_survey(survey_id):
             db["survey_clicks"].insert_one(click_data)
             print(f"Click tracked: {username} ({email}) on survey {survey_id}")
 
+        # Find the survey using the query
+        survey = db["surveys"].find_one(query)
         # ✅ Fix here: use "id" instead of "_id"
         survey = db["surveys"].find_one({"id": survey_id})
         if not survey:
@@ -1141,18 +1217,20 @@ def edit_survey(survey_id):
 
     try:
         # Clean the data to remove fields that shouldn't be updated
-        update_data = {k: v for k, v in data.items() if k not in ['_id', 'created_at']}
+        update_data = {k: v for k, v in data.items() if k not in ['_id', 'created_at', 'is_short_id']}
         
-        # Try to find survey using both _id and id fields
+        # Check if the survey_id is a valid short ID (5 alphanumeric characters)
+        is_short_id = is_valid_short_id(survey_id, 5)
+        
+        # Build query to find survey by ID
         query = {"$or": [{"_id": survey_id}, {"id": survey_id}]}
         
-        # Try ObjectId conversion for _id field
-        try:
-            from bson import ObjectId
-            if ObjectId.is_valid(survey_id):
+        # If it's not a short ID, try to convert from UUID string to ObjectId if needed
+        if not is_short_id and len(survey_id) == 24:
+            try:
                 query["$or"].append({"_id": ObjectId(survey_id)})
-        except:
-            pass
+            except:
+                pass  # Not a valid ObjectId, continue with original query
         
         print(f"Update query: {query}")
         print(f"Update data: {update_data}")
@@ -1165,9 +1243,21 @@ def edit_survey(survey_id):
         print(f"Update result: matched={result.matched_count}, modified={result.modified_count}")
 
         if result.matched_count == 0:
-            return jsonify({ "error": "Survey not found" }), 404
+            # Try one more time with just the ID fields in case of any query issues
+            alt_query = {"$or": [{"_id": survey_id}, {"id": survey_id}]}
+            result = db["surveys"].update_one(
+                alt_query,
+                { "$set": update_data }
+            )
+            
+            if result.matched_count == 0:
+                return jsonify({ "error": "Survey not found" }), 404
 
-        return jsonify({ "message": "Survey updated successfully" })
+        return jsonify({ 
+            "message": "Survey updated successfully",
+            "survey_id": survey_id,
+            "is_short_id": is_short_id
+        })
 
     except Exception as e:
         print(f"Error updating survey: {e}")
