@@ -43,7 +43,13 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false }) => {
 
   const fetchSurveys = async () => {
     try {
-      const response = await fetch(`${apiBaseUrl}/surveys`);
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${apiBaseUrl}/api/surveys`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
       if (!response.ok) throw new Error('Failed to fetch surveys');
       const data = await response.json();
       setSurveys(data.surveys || []);

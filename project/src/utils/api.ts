@@ -28,12 +28,21 @@ export const generateSurvey = async (data: SurveyRequest) => {
   
   console.log('Sending request to backend:', requestData);
   
+  // Get auth token from localStorage
+  const token = localStorage.getItem('auth_token');
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  };
+  
+  // Add Authorization header if token exists
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
   const response = await fetch(`${SERVER_URL}/generate`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    },
+    headers,
     body: JSON.stringify(requestData),
     credentials: 'include'
   });
@@ -60,7 +69,22 @@ export const generateSurvey = async (data: SurveyRequest) => {
 };
 
 export const fetchSurveys = async () => {
-  const response = await fetch(`${SERVER_URL}/surveys`);
+  // Get auth token from localStorage
+  const token = localStorage.getItem('auth_token');
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  };
+  
+  // Add Authorization header if token exists
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  const response = await fetch(`${SERVER_URL}/api/surveys/`, {
+    method: 'GET',
+    headers,
+    credentials: 'include'
+  });
   
   if (!response.ok) {
     throw new Error(`Failed to fetch surveys: ${response.status}`);

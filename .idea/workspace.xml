@@ -6,7 +6,16 @@
   <component name="ChangeListManager">
     <list default="true" id="bbe779bd-d937-43a2-a891-54e9d6982d2b" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Backend/.env" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/.env" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Backend/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/.env.example" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Backend/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/app.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Backend/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/requirements.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Backend/utils/short_id.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/utils/short_id.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/project/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/project/package-lock.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/project/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/project/package.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/project/src/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/App.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/project/src/components/SurveyList.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/SurveyList.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/project/src/utils/api.ts" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/utils/api.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -80,5 +89,16 @@
       <updated>1753855321683</updated>
     </task>
     <servers />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
   </component>
 </project>

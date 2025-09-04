@@ -14,10 +14,17 @@ import FloatingWidget from './components/FloatingWidget';
 import { WidgetResponsesView } from './components/WidgetResponsesView';
 import { WidgetCustomizer, WidgetCustomizerSettings } from './components/WidgetCustomizer';
 import PassFailAdmin from './components/PassFailAdmin';
-import { PenSquare, FolderOpen, TrendingUp, Link, Sun, Moon, Settings } from 'lucide-react';
+import { AuthProvider } from './contexts/AuthContext';
+import UserDashboard from './pages/Dashboard';
+import AdminDashboard from './pages/AdminDashboard';
+import LoginPage from './pages/LoginPage';
+import ProtectedRoute from './components/ProtectedRoute';
+import { PenSquare, FolderOpen, TrendingUp, Link, Sun, Moon, Settings, Lock } from 'lucide-react';
+import { useAuth } from './contexts/AuthContext';
 import './styles/mobile-responsive.css';
 
-function Dashboard() {
+function LegacyDashboard() {
+  const { isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState('create');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showPreviewWidget, setShowPreviewWidget] = useState(false);
@@ -173,24 +180,36 @@ function Dashboard() {
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className={`grid grid-cols-6 rounded-lg p-1 text-xs ${isDarkMode ? 'bg-slate-700/40' : 'bg-stone-100'}`}>
                 {[
-                  { value: 'create', icon: PenSquare, label: 'Create' },
-                  { value: 'surveys', icon: FolderOpen, label: 'Surveys' },
-                  { value: 'responses', icon: TrendingUp, label: 'Analytics' },
-                  { value: 'postback', icon: Link, label: 'Postback' },
-                  { value: 'passfail', icon: Settings, label: 'Pass/Fail' },
-                  { value: 'testlab', icon: () => <span className="text-xs">🧪</span>, label: 'Test Lab' }
-                ].map(({ value, icon: Icon, label }) => (
+                  { value: 'create', icon: PenSquare, label: 'Create', adminOnly: false },
+                  { value: 'surveys', icon: FolderOpen, label: 'Surveys', adminOnly: false },
+                  { value: 'responses', icon: TrendingUp, label: 'Analytics', adminOnly: false },
+                  { value: 'postback', icon: Link, label: 'Postback', adminOnly: true },
+                  { value: 'passfail', icon: Settings, label: 'Pass/Fail', adminOnly: true },
+                  { value: 'testlab', icon: () => <span className="text-xs">🧪</span>, label: 'Test Lab', adminOnly: true }
+                ].map(({ value, icon: Icon, label, adminOnly }) => (
                   <TabsTrigger
                     key={value}
                     value={value}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-md transition-all duration-150 ${
-                      isDarkMode
+                    disabled={adminOnly && !isAdmin}
+                    className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-md transition-all duration-150 relative ${
+                      adminOnly && !isAdmin
+                        ? 'opacity-50 cursor-not-allowed'
+                        : isDarkMode
                         ? 'data-[state=active]:bg-red-500 data-[state=active]:text-white text-slate-300 hover:text-white'
                         : 'data-[state=active]:bg-white data-[state=active]:text-red-600 text-stone-600 hover:text-stone-800'
                     }`}
                   >
-                    <Icon size={14} />
-                    <span className="hidden lg:inline">{label}</span>
+                    {adminOnly && !isAdmin ? (
+                      <>
+                        <Lock size={14} className="text-red-500" />
+                        <span className="hidden lg:inline">{label}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Icon size={14} />
+                        <span className="hidden lg:inline">{label}</span>
+                      </>
+                    )}
                   </TabsTrigger>
                 ))}
               </TabsList>
@@ -202,24 +221,36 @@ function Dashboard() {
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className={`grid grid-cols-6 rounded-lg p-1 text-xs w-full ${isDarkMode ? 'bg-slate-700/40' : 'bg-stone-100'}`}>
                 {[
-                  { value: 'create', icon: PenSquare, label: 'Create' },
-                  { value: 'surveys', icon: FolderOpen, label: 'Surveys' },
-                  { value: 'responses', icon: TrendingUp, label: 'Analytics' },
-                  { value: 'postback', icon: Link, label: 'Postback' },
-                  { value: 'passfail', icon: Settings, label: 'Pass/Fail' },
-                  { value: 'testlab', icon: () => <span className="text-xs">🧪</span>, label: 'Test Lab' }
-                ].map(({ value, icon: Icon, label }) => (
+                  { value: 'create', icon: PenSquare, label: 'Create', adminOnly: false },
+                  { value: 'surveys', icon: FolderOpen, label: 'Surveys', adminOnly: false },
+                  { value: 'responses', icon: TrendingUp, label: 'Analytics', adminOnly: false },
+                  { value: 'postback', icon: Link, label: 'Postback', adminOnly: true },
+                  { value: 'passfail', icon: Settings, label: 'Pass/Fail', adminOnly: true },
+                  { value: 'testlab', icon: () => <span className="text-xs">🧪</span>, label: 'Test Lab', adminOnly: true }
+                ].map(({ value, icon: Icon, label, adminOnly }) => (
                   <TabsTrigger
                     key={value}
                     value={value}
-                    className={`flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-md transition-all duration-150 ${
-                      isDarkMode
+                    disabled={adminOnly && !isAdmin}
+                    className={`flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-md transition-all duration-150 relative ${
+                      adminOnly && !isAdmin
+                        ? 'opacity-50 cursor-not-allowed'
+                        : isDarkMode
                         ? 'data-[state=active]:bg-red-500 data-[state=active]:text-white text-slate-300 hover:text-white'
                         : 'data-[state=active]:bg-white data-[state=active]:text-red-600 text-stone-600 hover:text-stone-800'
                     }`}
                   >
-                    <Icon size={12} />
-                    <span className="text-xs leading-none">{label}</span>
+                    {adminOnly && !isAdmin ? (
+                      <>
+                        <Lock size={12} className="text-red-500" />
+                        <span className="text-xs leading-none">{label}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Icon size={12} />
+                        <span className="text-xs leading-none">{label}</span>
+                      </>
+                    )}
                   </TabsTrigger>
                 ))}
               </TabsList>
@@ -289,25 +320,53 @@ function Dashboard() {
                 <WidgetResponsesView isDarkMode={isDarkMode} />
               </div>
             </TabsContent>
-            <TabsContent value="postback"><PostbackManager isDarkMode={isDarkMode} /></TabsContent>
-            <TabsContent value="passfail"><PassFailAdmin isDarkMode={isDarkMode} /></TabsContent>
-            <TabsContent value="testlab">
-              <div className="space-y-6">
-                <div className={`p-6 rounded-lg border ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-stone-200'}`}>
-                  <h2 className={`text-xl font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
-                    🧪 Widget Test Lab
-                  </h2>
-                  <p className={`text-sm mb-4 ${isDarkMode ? 'text-slate-300' : 'text-stone-600'}`}>
-                    Test the enhanced floating widget with centered positioning, glass effects, and typewriter animations.
-                  </p>
-                  <button
-                    onClick={() => window.open('/widget-test', '_blank')}
-                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                  >
-                    Open Test Lab in New Tab
-                  </button>
+            <TabsContent value="postback">
+              {isAdmin ? (
+                <PostbackManager isDarkMode={isDarkMode} />
+              ) : (
+                <div className={`p-6 rounded-lg border text-center ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-stone-200'}`}>
+                  <Lock size={48} className="mx-auto mb-4 text-red-500" />
+                  <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>Admin Access Required</h3>
+                  <p className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-stone-600'}`}>This feature is only available to administrators.</p>
                 </div>
-              </div>
+              )}
+            </TabsContent>
+            <TabsContent value="passfail">
+              {isAdmin ? (
+                <PassFailAdmin isDarkMode={isDarkMode} />
+              ) : (
+                <div className={`p-6 rounded-lg border text-center ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-stone-200'}`}>
+                  <Lock size={48} className="mx-auto mb-4 text-red-500" />
+                  <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>Admin Access Required</h3>
+                  <p className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-stone-600'}`}>This feature is only available to administrators.</p>
+                </div>
+              )}
+            </TabsContent>
+            <TabsContent value="testlab">
+              {isAdmin ? (
+                <div className="space-y-6">
+                  <div className={`p-6 rounded-lg border ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-stone-200'}`}>
+                    <h2 className={`text-xl font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
+                      🧪 Widget Test Lab
+                    </h2>
+                    <p className={`text-sm mb-4 ${isDarkMode ? 'text-slate-300' : 'text-stone-600'}`}>
+                      Test the enhanced floating widget with centered positioning, glass effects, and typewriter animations.
+                    </p>
+                    <button
+                      onClick={() => window.open('/widget-test', '_blank')}
+                      className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                    >
+                      Open Test Lab in New Tab
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className={`p-6 rounded-lg border text-center ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-stone-200'}`}>
+                  <Lock size={48} className="mx-auto mb-4 text-red-500" />
+                  <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>Admin Access Required</h3>
+                  <p className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-stone-600'}`}>This feature is only available to administrators.</p>
+                </div>
+              )}
             </TabsContent>
           </Tabs>
         </div>
@@ -401,13 +460,48 @@ function WidgetCustomizerPage() {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/survey/:id" element={<PublicSurveyPage />} />
-      <Route path="/preview/:id" element={<SurveyPreviewPage />} />
-      <Route path="/edit/:id" element={<SurveyEditor />} />
-      <Route path="/widget-test" element={<WidgetTestPage />} />
-      <Route path="/widget-customizer" element={<WidgetCustomizerPage />} />
-      <Route path="*" element={<Dashboard />} />
-    </Routes>
+    <AuthProvider>
+      <Routes>
+        {/* Public routes */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/survey/:id" element={<PublicSurveyPage />} />
+        <Route path="/preview/:id" element={<SurveyPreviewPage />} />
+        
+        {/* Protected routes */}
+        <Route path="/dashboard" element={
+          <ProtectedRoute>
+            <UserDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/create" element={
+          <ProtectedRoute>
+            <LegacyDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/edit/:id" element={
+          <ProtectedRoute>
+            <SurveyEditor />
+          </ProtectedRoute>
+        } />
+        
+        {/* Admin routes */}
+        <Route path="/admin" element={
+          <ProtectedRoute requireAdmin>
+            <AdminDashboard />
+          </ProtectedRoute>
+        } />
+        
+        {/* Test routes */}
+        <Route path="/widget-test" element={<WidgetTestPage />} />
+        <Route path="/widget-customizer" element={<WidgetCustomizerPage />} />
+        
+        {/* Default route */}
+        <Route path="*" element={
+          <ProtectedRoute>
+            <UserDashboard />
+          </ProtectedRoute>
+        } />
+      </Routes>
+    </AuthProvider>
   );
 }

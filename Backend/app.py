@@ -49,6 +49,8 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.short_id import generate_short_id, is_valid_short_id
+from auth_middleware import requireAuth
+from flask import g
 
 # Import enhanced survey handler
 try:
@@ -72,6 +74,8 @@ else:
     BASE_URL = "https://api.theinterwebsite.space"
 
 app = Flask(__name__)
+app.secret_key = os.getenv('JWT_SECRET', 'your-super-secret-jwt-key-for-local-development')
+
 CORS(app, 
      supports_credentials=True,
      origins=[
@@ -81,11 +85,17 @@ CORS(app,
          "http://127.0.0.1:5174",
          "https://pepperadsresponses.web.app",
          "https://hostsliceresponse.web.app",
-         "https://theinterwebsite.space"
+         "https://theinterwebsite.space",
+         "http://localhost:3000",         # Dashboard frontend
+         "https://pepperads.in"           # Main site
      ],
-     allow_headers=["Content-Type", "Authorization", "Access-Control-Allow-Origin"],
-     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+     allow_headers=["Content-Type", "Authorization", "Access-Control-Allow-Origin", "Access-Control-Allow-Credentials"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     expose_headers=["Set-Cookie"]
 )
+
+# Disable Flask's automatic trailing slash redirects to prevent 308 redirects
+app.url_map.strict_slashes = False
 
 
 @app.before_request
@@ -112,20 +122,27 @@ try:
     from postback_handler import postback_bp
     from postback_api import postback_api_bp
     from postback_testing import postback_testing_bp
+    from auth_routes import auth_bp
+    from survey_routes import survey_bp
+    from admin_routes import admin_bp
     
     # Register blueprints
     print("Registering blueprints...")
     app.register_blueprint(postback_bp, url_prefix='/postback')
     app.register_blueprint(postback_api_bp, url_prefix='/api')
     app.register_blueprint(postback_testing_bp, url_prefix='/test')
-    print("✅ Postback blueprints registered successfully")
+    app.register_blueprint(auth_bp)  # Auth routes at /api/auth
+    app.register_blueprint(survey_bp)  # Survey routes at /api/surveys
+    app.register_blueprint(admin_bp)  # Admin routes at /api/admin
+    print("✅ All blueprints registered successfully")
 except ImportError as e:
-    print(f"⚠️ Failed to import postback blueprints: {e}")
+    print(f"⚠️ Failed to import blueprints: {e}")
     print("Make sure all blueprint files exist and don't have syntax errors.")
     print("Files should be in the same directory as app.py:")
     print("- postback_handler.py")
-    print("- postback_api.py")
+    print("- postback_api.py") 
     print("- postback_testing.py")
+    print("- auth_routes.py")
     raise  # Re-raise the exception to see the full traceback
 
 
@@ -359,6 +376,7 @@ def validate_color(color):
     allow_headers=["Content-Type", "Authorization", "Access-Control-Allow-Origin"],
     methods=["GET", "POST", "OPTIONS"]
 )
+@requireAuth
 def generate_survey():
     if request.method == 'OPTIONS':
         return '', 200
@@ -659,6 +677,26 @@ def generate_survey():
                 "public_link": f"{FRONTEND_URL}/survey/{survey_id}",
                 "is_short_id": True  # Mark that this survey uses a short ID
             }
+            
+            # Link survey to authenticated user (now mandatory with @requireAuth)
+            current_user = g.current_user  # Will always exist due to @requireAuth
+            user_id_str = str(current_user['_id'])
+            
+            # Add all user identification fields
+            survey_data["ownerUserId"] = user_id_str
+            survey_data["user_id"] = user_id_str
+            survey_data["creator_email"] = current_user.get('email', '')
+            survey_data["creator_name"] = current_user.get('name', '')
+            survey_data["simple_user_id"] = current_user.get('simpleUserId', 0)
+            survey_data["created_by"] = {
+                "user_id": user_id_str,
+                "email": current_user.get('email', ''),
+                "name": current_user.get('name', ''),
+                "simple_id": current_user.get('simpleUserId', 0)
+            }
+            
+            print(f"✅ Survey linked to user: {current_user.get('email', 'Unknown')} (ID: {user_id_str}, SimpleID: {current_user.get('simpleUserId', 'None')})")
+            print(f"📋 Survey data includes: ownerUserId, user_id, creator_email, creator_name, simple_user_id, created_by")
 
             # Save to database without timeout parameter
             db["surveys"].insert_one(survey_data)
@@ -1986,4 +2024,11 @@ def get_criteria_performance():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=5000, debug=True)
+    try:
+        app.run(host='127.0.0.1', port=5000, debug=True, threaded=True)
+    except KeyboardInterrupt:
+        print("\nServer stopped by user")
+    except Exception as e:
+        print(f"Server error: {e}")
+    finally:
+        print("Cleaning up...")
