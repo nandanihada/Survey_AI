@@ -653,9 +653,14 @@ def generate_survey():
         #         return "http://localhost:5173"
         #     return "https://pepperadsresponses.web.app" 
      
-        FRONTEND_URL = "https://pepperadsresponses.web.app"  # your new React frontend
+        # Dynamic frontend URL based on environment
+        if "localhost" in request.host or "127.0.0.1" in request.host:
+            FRONTEND_URL = "http://localhost:5173"
+        else:
+            FRONTEND_URL = "https://pepperadsresponses.web.app"
         # Create and save survey document
         try:
+            print(f"DEBUG: About to create survey with db object: {db}")
             # Generate a short ID (5 characters) for the survey
             while True:
                 short_id = generate_short_id(5)
@@ -663,7 +668,25 @@ def generate_survey():
                 if not db.surveys.find_one({"$or": [{"_id": short_id}, {"id": short_id}]}):
                     break
                     
+            # Get authenticated user first (now mandatory with @requireAuth)
+            current_user = g.current_user  # Will always exist due to @requireAuth
+            
+            # Debug: Print current_user data
+            print(f"DEBUG: Current user data: {current_user}")
+            print(f"DEBUG: simpleUserId: {current_user.get('simpleUserId', 'MISSING')}")
+            
             survey_id = short_id
+            simple_user_id = current_user.get('simpleUserId', 0)
+            
+            # Ensure we have a valid simpleUserId
+            if simple_user_id == 0 or simple_user_id is None:
+                print("WARNING: simpleUserId is 0 or None, fetching from database")
+                # Fallback: get from database directly
+                user_from_db = db.users.find_one({'_id': current_user['_id']})
+                if user_from_db:
+                    simple_user_id = user_from_db.get('simpleUserId', 0)
+                    print(f"DEBUG: Retrieved simpleUserId from DB: {simple_user_id}")
+            
             survey_data = {
                 "_id": survey_id,
                 "id": survey_id,
@@ -673,13 +696,15 @@ def generate_survey():
                 "questions": questions,
                 "theme": complete_theme,
                 "created_at": datetime.utcnow(),
-                "shareable_link": f"{BASE_URL}/survey/{survey_id}/respond",
-                "public_link": f"{FRONTEND_URL}/survey/{survey_id}",
+                "shareable_link": f"{FRONTEND_URL}/survey?offer_id={survey_id}&user_id={simple_user_id}",
+                "public_link": f"{FRONTEND_URL}/survey?offer_id={survey_id}&user_id={simple_user_id}",
                 "is_short_id": True  # Mark that this survey uses a short ID
             }
             
-            # Link survey to authenticated user (now mandatory with @requireAuth)
-            current_user = g.current_user  # Will always exist due to @requireAuth
+            print(f"DEBUG: Generated links with user_id={simple_user_id}")
+            print(f"DEBUG: Shareable link: {survey_data['shareable_link']}")
+            
+            # Link survey to authenticated user
             user_id_str = str(current_user['_id'])
             
             # Add all user identification fields
@@ -687,7 +712,7 @@ def generate_survey():
             survey_data["user_id"] = user_id_str
             survey_data["creator_email"] = current_user.get('email', '')
             survey_data["creator_name"] = current_user.get('name', '')
-            survey_data["simple_user_id"] = current_user.get('simpleUserId', 0)
+            survey_data["simple_user_id"] = simple_user_id
             survey_data["created_by"] = {
                 "user_id": user_id_str,
                 "email": current_user.get('email', ''),
@@ -697,6 +722,10 @@ def generate_survey():
             
             print(f"✅ Survey linked to user: {current_user.get('email', 'Unknown')} (ID: {user_id_str}, SimpleID: {current_user.get('simpleUserId', 'None')})")
             print(f"📋 Survey data includes: ownerUserId, user_id, creator_email, creator_name, simple_user_id, created_by")
+            print(f"🔗 Generated links:")
+            print(f"   - Shareable: {survey_data['shareable_link']}")
+            print(f"   - Public: {survey_data['public_link']}")
+            print(f"👤 User simpleUserId: {current_user.get('simpleUserId', 'NOT SET')}")
 
             # Save to database without timeout parameter
             db["surveys"].insert_one(survey_data)
@@ -1327,8 +1356,10 @@ def manage_outbound_postback():
             return jsonify({"message": "Postback URL saved successfully", "url": postback_url})
             
         except Exception as e:
-            print(f"Error saving postback URL: {e}")
-            return jsonify({"error": str(e)}), 500
+            print(f"Error saving survey: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({"error": f"Failed to save survey: {str(e)}"}), 500
     
     else:  # GET request
         try:

@@ -6,15 +6,18 @@ interface SurveyPreviewProps {
   survey: {
     survey_id: string;
     template_type: string;
+    public_link?: string;
+    shareable_link?: string;
     theme?: {
       font?: string;
+      intent?: string;
       colors?: {
         primary?: string;
         background?: string;
         text?: string;
       };
     };
-    prompt: string;
+    prompt?: string;
   };
 }
 
@@ -27,9 +30,15 @@ const SurveyPreview: React.FC<SurveyPreviewProps> = ({ survey }) => {
   const shareInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const link = generateSurveyLink(survey.survey_id, undefined, urlParams);
-    setShareLink(link);
-  }, [survey.survey_id, urlParams]);
+    // Use backend-generated link if available, otherwise generate one
+    if (survey.public_link && Object.keys(urlParams).length === 0) {
+      setShareLink(survey.public_link);
+    } else {
+      // If custom parameters are added, regenerate the link
+      const link = generateSurveyLink(survey.survey_id, undefined, urlParams);
+      setShareLink(link);
+    }
+  }, [survey.survey_id, survey.public_link, urlParams]);
 
   const handleParamStringChange = (value: string) => {
     setParamString(value);

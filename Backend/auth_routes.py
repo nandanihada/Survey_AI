@@ -1,10 +1,12 @@
 """
-Authentication routes for Flask app using JWT
+Authentication routes for Flask app 
 """
 from flask import Blueprint, request, jsonify, make_response
 from flask_cors import cross_origin
 from auth_service import AuthService
-import os
+from auth_middleware import requireAuth, optionalAuth
+from feature_middleware import get_user_permissions
+from datetime import datetime, timedelta
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 auth_service = AuthService()
@@ -282,3 +284,30 @@ def check_auth():
         
     except Exception as e:
         return jsonify({'error': f'Auth check failed: {str(e)}'}), 500
+
+@auth_bp.route('/permissions', methods=['GET', 'OPTIONS'])
+@cross_origin(
+    supports_credentials=True,
+    origins=[
+        "http://localhost:5173",
+        "http://localhost:5174", 
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "https://pepperadsresponses.web.app",
+        "https://hostsliceresponse.web.app",
+        "https://theinterwebsite.space"
+    ],
+    allow_headers=["Content-Type", "Authorization"],
+    methods=["GET", "OPTIONS"]
+)
+def get_permissions():
+    """Get current user's permissions and feature access"""
+    if request.method == 'OPTIONS':
+        return '', 200
+        
+    try:
+        permissions = get_user_permissions()
+        return jsonify(permissions)
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to get permissions: {str(e)}'}), 500

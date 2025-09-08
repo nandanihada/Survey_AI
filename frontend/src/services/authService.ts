@@ -58,7 +58,12 @@ export const authService = {
   },
 
   getProfile: async (): Promise<AxiosResponse<ApiResponse<{ user: User }>>> => {
-    const response = await api.get('/auth/profile');
+    const response = await api.get('/auth/me');
+    return response;
+  },
+
+  getPermissions: async (): Promise<AxiosResponse<any>> => {
+    const response = await api.get('/auth/permissions');
     return response;
   },
 

@@ -8,9 +8,9 @@ export interface SurveyLinkParams {
 
 /**
  * Generates a survey link with optional URL parameters
- * @param surveyId - The survey ID
+ * @param surveyId - The survey ID (will be used as offer_id)
  * @param baseUrl - The base URL (localhost or production)
- * @param params - Optional URL parameters to append
+ * @param params - Optional URL parameters to append (should include user_id)
  * @returns Complete survey link with parameters
  */
 export function generateSurveyLink(
@@ -24,17 +24,17 @@ export function generateSurveyLink(
       : 'https://theinterwebsite.space'
   );
 
-  let link = `${finalBaseUrl}/survey/${surveyId}`;
-
+  // New format: /survey?offer_id=RXDA1&user_id=123
+  const searchParams = new URLSearchParams();
+  searchParams.append('offer_id', surveyId);
+  
   if (params && Object.keys(params).length > 0) {
-    const searchParams = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
       searchParams.append(key, String(value));
     });
-    link += `?${searchParams.toString()}`;
   }
 
-  return link;
+  return `${finalBaseUrl}/survey?${searchParams.toString()}`;
 }
 
 /**

@@ -1,16 +1,18 @@
 /**
  * Admin dashboard with user management
  */
-import React, { useState, useEffect } from 'react';
-import Header from '../components/Header';
+import React, { useEffect, useState } from 'react';
 import ProtectedRoute from '../components/ProtectedRoute';
+import Header from '../components/Header';
 
 interface User {
+  _id?: string;
   uid: string;
   email: string;
   name: string;
   photo_url?: string;
-  role: 'user' | 'admin';
+  role: 'basic' | 'premium' | 'enterprise' | 'admin';
+  status?: 'approved' | 'disapproved' | 'locked';
   created_at: string;
   last_login: string;
 }
@@ -38,18 +40,29 @@ const AdminDashboard: React.FC = () => {
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem('auth_token');
+      console.log('Fetching users with token:', token ? 'Token present' : 'No token');
+      
       const response = await fetch(`${baseUrl}/api/admin/users`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
+      
+      console.log('Fetch users response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('Users data:', data);
         setUsers(data.users || []);
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to fetch users:', response.status, errorData);
+        alert(`Failed to fetch users: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Failed to fetch users:', error);
+      alert(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -74,6 +87,28 @@ const AdminDashboard: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
+      
+      // Check current user's token and role
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        try {
+          // Decode JWT token to check role (basic decode, not verification)
+          const tokenParts = token.split('.');
+          if (tokenParts.length === 3) {
+            const payload = JSON.parse(atob(tokenParts[1]));
+            console.log('Current user token payload:', payload);
+            console.log('User role:', payload.role);
+            console.log('User features:', payload.features);
+            
+            if (payload.role !== 'admin') {
+              alert(`Warning: You are logged in as '${payload.role}', but admin access is required. Please contact an administrator to upgrade your role.`);
+            }
+          }
+        } catch (e) {
+          console.error('Failed to decode token:', e);
+        }
+      }
+      
       if (activeTab === 'users') {
         await fetchUsers();
       } else {
@@ -84,10 +119,12 @@ const AdminDashboard: React.FC = () => {
     loadData();
   }, [activeTab]);
 
-  const updateUserRole = async (uid: string, newRole: 'user' | 'admin') => {
+  const updateUserRole = async (userId: string, newRole: 'basic' | 'premium' | 'enterprise' | 'admin') => {
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${baseUrl}/api/admin/users/${uid}/role`, {
+      console.log('Updating role for user:', userId, 'to:', newRole);
+      
+      const response = await fetch(`${baseUrl}/api/admin/users/${userId}/role`, {
         method: 'PUT',
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -96,13 +133,69 @@ const AdminDashboard: React.FC = () => {
         body: JSON.stringify({ role: newRole }),
       });
 
+      console.log('Response status:', response.status);
+      const result = await response.json();
+      console.log('Response data:', result);
+
       if (response.ok) {
+        console.log('Role updated successfully:', result.message);
         setUsers(users.map(user => 
-          user.uid === uid ? { ...user, role: newRole } : user
+          (user._id || user.uid) === userId ? { ...user, role: newRole } : user
         ));
+        
+        // Trigger permission refresh for affected user
+        const updatedUser = users.find(u => (u._id || u.uid) === userId);
+        if (updatedUser) {
+          // If global refresh function is available, call it
+          if ((window as any).refreshUserPermissions) {
+            setTimeout(() => {
+              (window as any).refreshUserPermissions();
+            }, 1000);
+          }
+          
+          alert(`Success: ${result.message}\n\nPermissions will be refreshed automatically. User should see new features within 30 seconds.`);
+        }
+      } else {
+        console.error('Failed to update role:', result.error);
+        alert(`Error: ${result.error}`);
       }
     } catch (error) {
       console.error('Failed to update user role:', error);
+      alert(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const updateUserStatus = async (userId: string, newStatus: 'approved' | 'disapproved' | 'locked') => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      console.log('Updating status for user:', userId, 'to:', newStatus);
+      
+      const response = await fetch(`${baseUrl}/api/admin/users/${userId}/status`, {
+        method: 'PUT',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      console.log('Status response status:', response.status);
+      const result = await response.json();
+      console.log('Status response data:', result);
+
+      if (response.ok) {
+        console.log('Status updated successfully:', result.message);
+        setUsers(users.map(user => 
+          (user._id || user.uid) === userId ? { ...user, status: newStatus } : user
+        ));
+        alert(`Success: ${result.message}`);
+      } else {
+        console.error('Failed to update status:', result.error);
+        alert(`Error: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to update user status:', error);
+      alert(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -155,7 +248,7 @@ const AdminDashboard: React.FC = () => {
                   <div className="bg-white shadow overflow-hidden sm:rounded-md">
                     <ul className="divide-y divide-gray-200">
                       {users.map((user) => (
-                        <li key={user.uid} className="px-6 py-4">
+                        <li key={user._id || user.uid} className="px-6 py-4">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center">
                               {user.photo_url ? (
@@ -182,25 +275,61 @@ const AdminDashboard: React.FC = () => {
                               </div>
                             </div>
                             <div className="flex items-center space-x-4">
-                              <span
-                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                  user.role === 'admin'
-                                    ? 'bg-purple-100 text-purple-800'
-                                    : 'bg-gray-100 text-gray-800'
-                                }`}
-                              >
-                                {user.role}
-                              </span>
-                              <select
-                                value={user.role}
-                                onChange={(e) =>
-                                  updateUserRole(user.uid, e.target.value as 'user' | 'admin')
-                                }
-                                className="text-sm border-gray-300 rounded-md"
-                              >
-                                <option value="user">User</option>
-                                <option value="admin">Admin</option>
-                              </select>
+                              <div className="flex flex-col space-y-2">
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-sm font-medium text-gray-700">Role:</span>
+                                  <span
+                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                      user.role === 'admin'
+                                        ? 'bg-purple-100 text-purple-800'
+                                        : user.role === 'enterprise'
+                                        ? 'bg-blue-100 text-blue-800'
+                                        : user.role === 'premium'
+                                        ? 'bg-green-100 text-green-800'
+                                        : 'bg-gray-100 text-gray-800'
+                                    }`}
+                                  >
+                                    {user.role}
+                                  </span>
+                                  <select
+                                    value={user.role}
+                                    onChange={(e) =>
+                                      updateUserRole(user._id || user.uid, e.target.value as 'basic' | 'premium' | 'enterprise' | 'admin')
+                                    }
+                                    className="text-sm border-gray-300 rounded-md"
+                                  >
+                                    <option value="basic">Basic</option>
+                                    <option value="premium">Premium</option>
+                                    <option value="enterprise">Enterprise</option>
+                                    <option value="admin">Admin</option>
+                                  </select>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-sm font-medium text-gray-700">Status:</span>
+                                  <span
+                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                      (user.status || 'approved') === 'approved'
+                                        ? 'bg-green-100 text-green-800'
+                                        : (user.status || 'approved') === 'disapproved'
+                                        ? 'bg-red-100 text-red-800'
+                                        : 'bg-yellow-100 text-yellow-800'
+                                    }`}
+                                  >
+                                    {user.status || 'approved'}
+                                  </span>
+                                  <select
+                                    value={user.status || 'approved'}
+                                    onChange={(e) =>
+                                      updateUserStatus(user._id || user.uid, e.target.value as 'approved' | 'disapproved' | 'locked')
+                                    }
+                                    className="text-sm border-gray-300 rounded-md"
+                                  >
+                                    <option value="approved">Approved</option>
+                                    <option value="disapproved">Disapproved</option>
+                                    <option value="locked">Locked</option>
+                                  </select>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </li>

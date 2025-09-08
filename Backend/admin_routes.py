@@ -6,6 +6,7 @@ from auth_middleware import requireAdmin
 from mongodb_config import db
 from bson import ObjectId
 from datetime import datetime
+from role_manager import RoleManager, UserRole, UserStatus
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
 
@@ -50,15 +51,16 @@ def update_user_role(user_id):
         data = request.json
         new_role = data.get('role')
         
-        if new_role not in ['user', 'admin']:
-            return jsonify({'error': 'Invalid role. Must be "user" or "admin"'}), 400
+        if not RoleManager.is_valid_role(new_role):
+            valid_roles = RoleManager.get_valid_roles()
+            return jsonify({'error': f'Invalid role. Must be one of: {", ".join(valid_roles)}'}), 400
         
         # Update user role
         try:
             object_id = ObjectId(user_id)
             result = db.users.update_one(
                 {'_id': object_id},
-                {'$set': {'role': new_role}}
+                {'$set': {'role': new_role, 'updatedAt': datetime.utcnow()}}
             )
         except:
             return jsonify({'error': 'Invalid user ID'}), 400
@@ -66,10 +68,40 @@ def update_user_role(user_id):
         if result.matched_count == 0:
             return jsonify({'error': 'User not found'}), 404
         
-        return jsonify({'message': f'User role updated to {new_role}'})
+        return jsonify({'message': f'User role updated to {RoleManager.get_role_display_name(new_role)}'})
         
     except Exception as e:
         return jsonify({'error': f'Failed to update user role: {str(e)}'}), 500
+
+@admin_bp.route('/users/<user_id>/status', methods=['PUT'])
+@requireAdmin
+def update_user_status(user_id):
+    """Update user account status"""
+    try:
+        data = request.json
+        new_status = data.get('status')
+        
+        if not RoleManager.is_valid_status(new_status):
+            valid_statuses = RoleManager.get_valid_statuses()
+            return jsonify({'error': f'Invalid status. Must be one of: {", ".join(valid_statuses)}'}), 400
+        
+        # Update user status
+        try:
+            object_id = ObjectId(user_id)
+            result = db.users.update_one(
+                {'_id': object_id},
+                {'$set': {'status': new_status, 'updatedAt': datetime.utcnow()}}
+            )
+        except:
+            return jsonify({'error': 'Invalid user ID'}), 400
+        
+        if result.matched_count == 0:
+            return jsonify({'error': 'User not found'}), 404
+        
+        return jsonify({'message': f'User status updated to {new_status}'})
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to update user status: {str(e)}'}), 500
 
 @admin_bp.route('/users/<user_id>', methods=['DELETE'])
 @requireAdmin
@@ -153,3 +185,67 @@ def get_admin_stats():
         
     except Exception as e:
         return jsonify({'error': f'Failed to get stats: {str(e)}'}), 500
+
+@admin_bp.route('/roles', methods=['GET'])
+@requireAdmin
+def get_role_hierarchy():
+    """Get role hierarchy and feature mapping"""
+    try:
+        return jsonify({
+            'roles': RoleManager.get_role_hierarchy(),
+            'valid_roles': RoleManager.get_valid_roles(),
+            'valid_statuses': RoleManager.get_valid_statuses(),
+            'role_display_names': {
+                role: RoleManager.get_role_display_name(role) 
+                for role in RoleManager.get_valid_roles()
+            },
+            'feature_display_names': {
+                feature: RoleManager.get_feature_display_name(feature)
+                for role_features in RoleManager.get_role_hierarchy().values()
+                for feature in role_features
+            }
+        })
+    except Exception as e:
+        return jsonify({'error': f'Failed to get role hierarchy: {str(e)}'}), 500
+
+@admin_bp.route('/users/bulk-update', methods=['PUT'])
+@requireAdmin
+def bulk_update_users():
+    """Bulk update user roles or statuses"""
+    try:
+        data = request.json
+        user_ids = data.get('user_ids', [])
+        update_type = data.get('type')  # 'role' or 'status'
+        new_value = data.get('value')
+        
+        if not user_ids:
+            return jsonify({'error': 'No user IDs provided'}), 400
+        
+        if update_type not in ['role', 'status']:
+            return jsonify({'error': 'Invalid update type. Must be "role" or "status"'}), 400
+        
+        # Validate the new value
+        if update_type == 'role' and not RoleManager.is_valid_role(new_value):
+            return jsonify({'error': f'Invalid role: {new_value}'}), 400
+        elif update_type == 'status' and not RoleManager.is_valid_status(new_value):
+            return jsonify({'error': f'Invalid status: {new_value}'}), 400
+        
+        # Convert user IDs to ObjectIds
+        try:
+            object_ids = [ObjectId(uid) for uid in user_ids]
+        except:
+            return jsonify({'error': 'Invalid user ID format'}), 400
+        
+        # Perform bulk update
+        result = db.users.update_many(
+            {'_id': {'$in': object_ids}},
+            {'$set': {update_type: new_value, 'updatedAt': datetime.utcnow()}}
+        )
+        
+        return jsonify({
+            'message': f'Updated {result.modified_count} users',
+            'modified_count': result.modified_count
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to bulk update users: {str(e)}'}), 500

@@ -94,9 +94,14 @@ const Header: React.FC = () => {
                   <div className="px-4 py-2 text-sm text-gray-700 border-b">
                     <div className="font-medium">{user.name}</div>
                     <div className="text-gray-500">{user.email}</div>
-                    {isAdmin && (
-                      <div className="text-blue-600 text-xs mt-1">Administrator</div>
-                    )}
+                    <div className={`text-xs mt-1 capitalize ${
+                      user.role === 'admin' ? 'text-purple-600' :
+                      user.role === 'enterprise' ? 'text-blue-600' :
+                      user.role === 'premium' ? 'text-green-600' :
+                      'text-gray-600'
+                    }`}>
+                      {user.role || 'basic'} user
+                    </div>
                   </div>
                   <a
                     href="/profile"

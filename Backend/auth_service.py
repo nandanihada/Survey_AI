@@ -8,6 +8,7 @@ from pymongo import MongoClient
 from dotenv import load_dotenv
 import re
 from utils.short_id import generate_simple_user_id
+from role_manager import RoleManager, UserRole, UserStatus
 
 load_dotenv()
 
@@ -48,6 +49,9 @@ class AuthService:
             'user_id': str(user_data['_id']),
             'email': user_data['email'],
             'role': user_data['role'],
+            'status': user_data.get('status', UserStatus.APPROVED.value),
+            'features': RoleManager.get_user_features(user_data['role']),
+            'simpleUserId': user_data.get('simpleUserId', 0),
             'exp': datetime.utcnow() + timedelta(hours=self.jwt_expiration_hours),
             'iat': datetime.utcnow()
         }
@@ -97,7 +101,8 @@ class AuthService:
             'passwordHash': password_hash,
             'name': name or email.split('@')[0],
             'simpleUserId': simple_user_id,  # Add simple numeric user ID
-            'role': 'user',  # Default role
+            'role': UserRole.BASIC.value,  # Default role is basic
+            'status': UserStatus.APPROVED.value,  # Default status is approved
             'createdAt': datetime.utcnow(),
             'lastLogin': None
         }
@@ -120,6 +125,13 @@ class AuthService:
         # Verify password
         if not self.verify_password(password, user['passwordHash']):
             raise ValueError("Invalid email or password")
+        
+        # Check account status before allowing login
+        user_status = user.get('status', UserStatus.APPROVED.value)
+        can_login, status_message = RoleManager.can_login(user_status)
+        
+        if not can_login:
+            raise ValueError(status_message.message)
         
         # Update last login
         users_collection.update_one(
@@ -154,7 +166,13 @@ class AuthService:
             payload = self.verify_jwt_token(token)
             user_id = payload.get('user_id')
             if user_id:
-                return self.get_user_by_id(user_id)
+                user = self.get_user_by_id(user_id)
+                if user:
+                    # Add JWT payload data to user object (including simpleUserId)
+                    user['simpleUserId'] = payload.get('simpleUserId', user.get('simpleUserId', 0))
+                    user['role'] = payload.get('role', user.get('role', 'basic'))
+                    user['features'] = payload.get('features', [])
+                return user
             return None
         except:
             return None

@@ -12,6 +12,9 @@ interface AuthContextType {
   register: (userData: RegisterRequest) => Promise<void>;
   logout: () => Promise<void>;
   isAdmin: boolean;
+  hasFeature: (feature: string) => boolean;
+  hasPremiumAccess: boolean;
+  hasEnterpriseAccess: boolean;
   refreshAuth: () => Promise<void>;
 }
 
@@ -108,6 +111,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const isAdmin = authService.isAdmin(user);
+  const hasFeature = (feature: string) => authService.hasFeature(user, feature);
+  const hasPremiumAccess = authService.hasPremiumAccess(user);
+  const hasEnterpriseAccess = authService.hasEnterpriseAccess(user);
+
+  // Global refresh function for permission updates
+  React.useEffect(() => {
+    (window as any).refreshUserPermissions = refreshAuth;
+    return () => {
+      delete (window as any).refreshUserPermissions;
+    };
+  }, [refreshAuth]);
 
   const value: AuthContextType = {
     user,
@@ -117,6 +131,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     register,
     logout,
     isAdmin,
+    hasFeature,
+    hasPremiumAccess,
+    hasEnterpriseAccess,
     refreshAuth,
   };
 

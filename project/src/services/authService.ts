@@ -5,8 +5,11 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'user' | 'admin';
+  role: 'basic' | 'premium' | 'enterprise' | 'admin';
+  features?: string[];
+  status?: 'approved' | 'disapproved' | 'locked';
   createdAt?: string;
+  simpleUserId?: number;
 }
 
 export interface AuthResponse {
@@ -221,6 +224,46 @@ class AuthService {
    */
   isAdmin(user: User | null): boolean {
     return user?.role === 'admin';
+  }
+
+  /**
+   * Check if user has specific feature access
+   */
+  hasFeature(user: User | null, feature: string): boolean {
+    if (!user) return false;
+    
+    // Check if features are available in user object
+    if (user.features && Array.isArray(user.features)) {
+      return user.features.includes(feature);
+    }
+    
+    // Fallback: check role-based access
+    const roleFeatures = {
+      'basic': ['create', 'survey', 'analytics'],
+      'premium': ['create', 'survey', 'analytics', 'postback', 'pass_fail'],
+      'enterprise': ['create', 'survey', 'analytics', 'postback', 'pass_fail', 'test_lab'],
+      'admin': ['create', 'survey', 'analytics', 'postback', 'pass_fail', 'test_lab', 'admin_panel', 'user_management']
+    };
+    
+    const userRole = user.role || 'basic';
+    const allowedFeatures = roleFeatures[userRole as keyof typeof roleFeatures] || [];
+    return allowedFeatures.includes(feature);
+  }
+
+  /**
+   * Check if user has premium or higher access
+   */
+  hasPremiumAccess(user: User | null): boolean {
+    if (!user) return false;
+    return ['premium', 'enterprise', 'admin'].includes(user.role);
+  }
+
+  /**
+   * Check if user has enterprise or higher access
+   */
+  hasEnterpriseAccess(user: User | null): boolean {
+    if (!user) return false;
+    return ['enterprise', 'admin'].includes(user.role);
   }
 }
 

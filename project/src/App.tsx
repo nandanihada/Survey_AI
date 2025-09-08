@@ -24,7 +24,7 @@ import { useAuth } from './contexts/AuthContext';
 import './styles/mobile-responsive.css';
 
 function LegacyDashboard() {
-  const { isAdmin } = useAuth();
+  const { hasFeature } = useAuth();
   const [activeTab, setActiveTab] = useState('create');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showPreviewWidget, setShowPreviewWidget] = useState(false);
@@ -180,38 +180,40 @@ function LegacyDashboard() {
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className={`grid grid-cols-6 rounded-lg p-1 text-xs ${isDarkMode ? 'bg-slate-700/40' : 'bg-stone-100'}`}>
                 {[
-                  { value: 'create', icon: PenSquare, label: 'Create', adminOnly: false },
-                  { value: 'surveys', icon: FolderOpen, label: 'Surveys', adminOnly: false },
-                  { value: 'responses', icon: TrendingUp, label: 'Analytics', adminOnly: false },
-                  { value: 'postback', icon: Link, label: 'Postback', adminOnly: true },
-                  { value: 'passfail', icon: Settings, label: 'Pass/Fail', adminOnly: true },
-                  { value: 'testlab', icon: () => <span className="text-xs">🧪</span>, label: 'Test Lab', adminOnly: true }
-                ].map(({ value, icon: Icon, label, adminOnly }) => (
-                  <TabsTrigger
-                    key={value}
-                    value={value}
-                    disabled={adminOnly && !isAdmin}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-md transition-all duration-150 relative ${
-                      adminOnly && !isAdmin
-                        ? 'opacity-50 cursor-not-allowed'
-                        : isDarkMode
-                        ? 'data-[state=active]:bg-red-500 data-[state=active]:text-white text-slate-300 hover:text-white'
-                        : 'data-[state=active]:bg-white data-[state=active]:text-red-600 text-stone-600 hover:text-stone-800'
-                    }`}
-                  >
-                    {adminOnly && !isAdmin ? (
-                      <>
-                        <Lock size={14} className="text-red-500" />
-                        <span className="hidden lg:inline">{label}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Icon size={14} />
-                        <span className="hidden lg:inline">{label}</span>
-                      </>
-                    )}
-                  </TabsTrigger>
-                ))}
+                  { value: 'create', icon: PenSquare, label: 'Create', requiresFeature: 'create' },
+                  { value: 'surveys', icon: FolderOpen, label: 'Surveys', requiresFeature: 'survey' },
+                  { value: 'responses', icon: TrendingUp, label: 'Analytics', requiresFeature: 'analytics' },
+                  { value: 'postback', icon: Link, label: 'Postback', requiresFeature: 'postback' },
+                  { value: 'passfail', icon: Settings, label: 'Pass/Fail', requiresFeature: 'pass_fail' },
+                  { value: 'testlab', icon: () => <span className="text-xs">🧪</span>, label: 'Test Lab', requiresFeature: 'test_lab' }
+                ].map(({ value, icon: Icon, label, requiresFeature }) => {
+                  const hasAccess = hasFeature(requiresFeature);
+                  return (
+                    <TabsTrigger
+                      key={value}
+                      value={value}
+                      className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-md transition-all duration-150 relative ${
+                        !hasAccess
+                          ? 'opacity-50 cursor-not-allowed'
+                          : isDarkMode
+                          ? 'data-[state=active]:bg-red-500 data-[state=active]:text-white text-slate-300 hover:text-white'
+                          : 'data-[state=active]:bg-white data-[state=active]:text-red-600 text-stone-600 hover:text-stone-800'
+                      }`}
+                    >
+                      {!hasAccess ? (
+                        <>
+                          <Lock size={14} className="text-red-500" />
+                          <span className="hidden lg:inline">{label}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Icon size={14} />
+                          <span className="hidden lg:inline">{label}</span>
+                        </>
+                      )}
+                    </TabsTrigger>
+                  );
+                })}
               </TabsList>
             </Tabs>
           </div>
@@ -221,38 +223,40 @@ function LegacyDashboard() {
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className={`grid grid-cols-6 rounded-lg p-1 text-xs w-full ${isDarkMode ? 'bg-slate-700/40' : 'bg-stone-100'}`}>
                 {[
-                  { value: 'create', icon: PenSquare, label: 'Create', adminOnly: false },
-                  { value: 'surveys', icon: FolderOpen, label: 'Surveys', adminOnly: false },
-                  { value: 'responses', icon: TrendingUp, label: 'Analytics', adminOnly: false },
-                  { value: 'postback', icon: Link, label: 'Postback', adminOnly: true },
-                  { value: 'passfail', icon: Settings, label: 'Pass/Fail', adminOnly: true },
-                  { value: 'testlab', icon: () => <span className="text-xs">🧪</span>, label: 'Test Lab', adminOnly: true }
-                ].map(({ value, icon: Icon, label, adminOnly }) => (
-                  <TabsTrigger
-                    key={value}
-                    value={value}
-                    disabled={adminOnly && !isAdmin}
-                    className={`flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-md transition-all duration-150 relative ${
-                      adminOnly && !isAdmin
-                        ? 'opacity-50 cursor-not-allowed'
-                        : isDarkMode
-                        ? 'data-[state=active]:bg-red-500 data-[state=active]:text-white text-slate-300 hover:text-white'
-                        : 'data-[state=active]:bg-white data-[state=active]:text-red-600 text-stone-600 hover:text-stone-800'
-                    }`}
-                  >
-                    {adminOnly && !isAdmin ? (
-                      <>
-                        <Lock size={12} className="text-red-500" />
-                        <span className="text-xs leading-none">{label}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Icon size={12} />
-                        <span className="text-xs leading-none">{label}</span>
-                      </>
-                    )}
-                  </TabsTrigger>
-                ))}
+                  { value: 'create', icon: PenSquare, label: 'Create', requiresFeature: 'create' },
+                  { value: 'surveys', icon: FolderOpen, label: 'Surveys', requiresFeature: 'survey' },
+                  { value: 'responses', icon: TrendingUp, label: 'Analytics', requiresFeature: 'analytics' },
+                  { value: 'postback', icon: Link, label: 'Postback', requiresFeature: 'postback' },
+                  { value: 'passfail', icon: Settings, label: 'Pass/Fail', requiresFeature: 'pass_fail' },
+                  { value: 'testlab', icon: () => <span className="text-xs">🧪</span>, label: 'Test Lab', requiresFeature: 'test_lab' }
+                ].map(({ value, icon: Icon, label, requiresFeature }) => {
+                  const hasAccess = hasFeature(requiresFeature);
+                  return (
+                    <TabsTrigger
+                      key={value}
+                      value={value}
+                      className={`flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-md transition-all duration-150 relative ${
+                        !hasAccess
+                          ? 'opacity-50 cursor-not-allowed'
+                          : isDarkMode
+                          ? 'data-[state=active]:bg-red-500 data-[state=active]:text-white text-slate-300 hover:text-white'
+                          : 'data-[state=active]:bg-white data-[state=active]:text-red-600 text-stone-600 hover:text-stone-800'
+                      }`}
+                    >
+                      {!hasAccess ? (
+                        <>
+                          <Lock size={12} className="text-red-500" />
+                          <span className="text-xs leading-none">{label}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Icon size={12} />
+                          <span className="text-xs leading-none">{label}</span>
+                        </>
+                      )}
+                    </TabsTrigger>
+                  );
+                })}
               </TabsList>
             </Tabs>
           </div>
@@ -321,29 +325,29 @@ function LegacyDashboard() {
               </div>
             </TabsContent>
             <TabsContent value="postback">
-              {isAdmin ? (
+              {hasFeature('postback') ? (
                 <PostbackManager isDarkMode={isDarkMode} />
               ) : (
                 <div className={`p-6 rounded-lg border text-center ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-stone-200'}`}>
                   <Lock size={48} className="mx-auto mb-4 text-red-500" />
-                  <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>Admin Access Required</h3>
-                  <p className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-stone-600'}`}>This feature is only available to administrators.</p>
+                  <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>Premium Access Required</h3>
+                  <p className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-stone-600'}`}>This feature requires Premium or higher subscription. Please upgrade your account.</p>
                 </div>
               )}
             </TabsContent>
             <TabsContent value="passfail">
-              {isAdmin ? (
+              {hasFeature('pass_fail') ? (
                 <PassFailAdmin isDarkMode={isDarkMode} />
               ) : (
                 <div className={`p-6 rounded-lg border text-center ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-stone-200'}`}>
                   <Lock size={48} className="mx-auto mb-4 text-red-500" />
-                  <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>Admin Access Required</h3>
-                  <p className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-stone-600'}`}>This feature is only available to administrators.</p>
+                  <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>Premium Access Required</h3>
+                  <p className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-stone-600'}`}>This feature requires Premium or higher subscription. Please upgrade your account.</p>
                 </div>
               )}
             </TabsContent>
             <TabsContent value="testlab">
-              {isAdmin ? (
+              {hasFeature('test_lab') ? (
                 <div className="space-y-6">
                   <div className={`p-6 rounded-lg border ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-stone-200'}`}>
                     <h2 className={`text-xl font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
@@ -363,8 +367,8 @@ function LegacyDashboard() {
               ) : (
                 <div className={`p-6 rounded-lg border text-center ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-stone-200'}`}>
                   <Lock size={48} className="mx-auto mb-4 text-red-500" />
-                  <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>Admin Access Required</h3>
-                  <p className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-stone-600'}`}>This feature is only available to administrators.</p>
+                  <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>Enterprise Access Required</h3>
+                  <p className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-stone-600'}`}>This feature requires Enterprise subscription. Please upgrade your account.</p>
                 </div>
               )}
             </TabsContent>
@@ -465,6 +469,7 @@ export default function App() {
         {/* Public routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/survey/:id" element={<PublicSurveyPage />} />
+        <Route path="/survey" element={<PublicSurveyPage />} />
         <Route path="/preview/:id" element={<SurveyPreviewPage />} />
         
         {/* Protected routes */}
