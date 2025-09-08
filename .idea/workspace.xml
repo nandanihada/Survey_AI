@@ -4,24 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="bbe779bd-d937-43a2-a891-54e9d6982d2b" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Backend/admin_routes.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/admin_routes.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Backend/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/app.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Backend/auth_middleware.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/auth_middleware.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Backend/auth_routes.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/auth_routes.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Backend/auth_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/auth_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/contexts/AuthContext.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/contexts/AuthContext.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/services/authService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/services/authService.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/App.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/components/Header.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/Header.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/components/PublicSurveyPage.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/PublicSurveyPage.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/components/SurveyPreview.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/SurveyPreview.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/contexts/AuthContext.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/contexts/AuthContext.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/pages/AdminDashboard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/pages/AdminDashboard.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/services/authService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/services/authService.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/utils/surveyLinkUtils.ts" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/utils/surveyLinkUtils.ts" afterDir="false" />
-    </list>
+    <list default="true" id="bbe779bd-d937-43a2-a891-54e9d6982d2b" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />

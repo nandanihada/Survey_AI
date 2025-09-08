@@ -657,7 +657,7 @@ def generate_survey():
         if "localhost" in request.host or "127.0.0.1" in request.host:
             FRONTEND_URL = "http://localhost:5173"
         else:
-            FRONTEND_URL = "https://pepperadsresponses.web.app"
+            FRONTEND_URL = "https://theinterwebsite.space"
         # Create and save survey document
         try:
             print(f"DEBUG: About to create survey with db object: {db}")
