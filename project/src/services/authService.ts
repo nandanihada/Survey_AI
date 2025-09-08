@@ -33,7 +33,10 @@ class AuthService {
   private token: string | null = null;
 
   constructor() {
-    this.baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    // Dynamic API URL based on environment
+    this.baseUrl = window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1'
+      ? 'http://localhost:5000'
+      : 'https://api.theinterwebsite.space';
     // Load token from localStorage on initialization
     this.token = localStorage.getItem('auth_token');
   }

@@ -3,11 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Edit3, Eye, Share2, Copy, CheckCircle, ArrowLeft, Settings } from 'lucide-react';
 import { fetchSurveyData } from '../utils/api';
 import { generateSurveyLink, parseParamString, stringifyParams, type SurveyLinkParams } from '../utils/surveyLinkUtils';
+import { useAuth } from '../contexts/AuthContext';
 import type { Survey } from '../types/Survey';
 
 const SurveyPreviewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [survey, setSurvey] = useState<Survey | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -26,8 +28,8 @@ const SurveyPreviewPage: React.FC = () => {
         const data = await fetchSurveyData(id);
         setSurvey(data.survey || data);
         
-        // Set share link
-        const link = generateSurveyLink(id!, undefined, urlParams);
+        // Set share link with user_id
+        const link = generateSurveyLink(id!, user?.simpleUserId?.toString(), urlParams);
         setShareLink(link);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load survey');
@@ -37,7 +39,7 @@ const SurveyPreviewPage: React.FC = () => {
     };
 
     loadSurvey();
-  }, [id, urlParams]);
+  }, [id, urlParams, user]);
 
   const handleParamStringChange = (value: string) => {
     setParamString(value);

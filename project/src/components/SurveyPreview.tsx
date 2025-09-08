@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { Share2, Copy, ExternalLink, CheckCircle, Settings } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Copy, CheckCircle, Settings, Eye, Share2, ExternalLink } from 'lucide-react';
 import { generateSurveyLink, parseParamString, stringifyParams, type SurveyLinkParams } from '../utils/surveyLinkUtils';
+import { useAuth } from '../contexts/AuthContext';
 
 interface SurveyPreviewProps {
   survey: {
@@ -22,6 +23,7 @@ interface SurveyPreviewProps {
 }
 
 const SurveyPreview: React.FC<SurveyPreviewProps> = ({ survey }) => {
+  const { user } = useAuth();
   const [shareLink, setShareLink] = useState('');
   const [copied, setCopied] = useState(false);
   const [showParamEditor, setShowParamEditor] = useState(false);
@@ -30,15 +32,15 @@ const SurveyPreview: React.FC<SurveyPreviewProps> = ({ survey }) => {
   const shareInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Use backend-generated link if available, otherwise generate one
+    // Use backend-generated link if available, otherwise generate one with user_id
     if (survey.public_link && Object.keys(urlParams).length === 0) {
       setShareLink(survey.public_link);
     } else {
-      // If custom parameters are added, regenerate the link
-      const link = generateSurveyLink(survey.survey_id, undefined, urlParams);
+      // If custom parameters are added, regenerate the link with user_id
+      const link = generateSurveyLink(survey.survey_id, user?.simpleUserId?.toString(), urlParams);
       setShareLink(link);
     }
-  }, [survey.survey_id, survey.public_link, urlParams]);
+  }, [survey.survey_id, survey.public_link, urlParams, user]);
 
   const handleParamStringChange = (value: string) => {
     setParamString(value);
@@ -188,13 +190,9 @@ const SurveyPreview: React.FC<SurveyPreviewProps> = ({ survey }) => {
           title="Survey Preview"
           className="w-full"
           style={{
-            height: '500px',
-            transform: 'scale(0.9)',
-            transformOrigin: 'top left',
-            width: '111%',
+            height: '600px',
             border: 'none',
-            pointerEvents: 'auto',
-            overflow: 'auto',
+            borderRadius: '12px',
           }}
         />
       </div>

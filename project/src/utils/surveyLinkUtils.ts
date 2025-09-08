@@ -9,32 +9,38 @@ export interface SurveyLinkParams {
 /**
  * Generates a survey link with optional URL parameters
  * @param surveyId - The survey ID (will be used as offer_id)
- * @param baseUrl - The base URL (localhost or production)
- * @param params - Optional URL parameters to append (should include user_id)
+ * @param userId - Optional user ID to append
+ * @param additionalParams - Optional URL parameters to append
  * @returns Complete survey link with parameters
  */
 export function generateSurveyLink(
   surveyId: string, 
-  baseUrl?: string, 
-  params?: SurveyLinkParams
+  userId?: string, 
+  additionalParams: SurveyLinkParams = {}
 ): string {
-  const finalBaseUrl = baseUrl || (
-    window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-      ? 'http://localhost:5173'
-      : 'https://theinterwebsite.space'
-  );
-
-  // New format: /survey?offer_id=RXDA1&user_id=123
-  const searchParams = new URLSearchParams();
-  searchParams.append('offer_id', surveyId);
+  const baseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:5173'
+    : 'https://theinterwebsite.space';
   
-  if (params && Object.keys(params).length > 0) {
-    Object.entries(params).forEach(([key, value]) => {
-      searchParams.append(key, String(value));
-    });
+  // Create URL with query parameters - ALWAYS go to /survey page
+  const url = new URL(`${baseUrl}/survey`);
+  
+  // Add offer_id parameter
+  url.searchParams.set('offer_id', surveyId);
+  
+  // Add user_id parameter if provided
+  if (userId) {
+    url.searchParams.set('user_id', userId);
   }
-
-  return `${finalBaseUrl}/survey?${searchParams.toString()}`;
+  
+  // Add any additional parameters
+  Object.entries(additionalParams).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      url.searchParams.set(key, String(value));
+    }
+  });
+  
+  return url.toString();
 }
 
 /**
