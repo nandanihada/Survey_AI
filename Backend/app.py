@@ -122,6 +122,7 @@ try:
     from postback_handler import postback_bp
     from postback_api import postback_api_bp
     from postback_testing import postback_testing_bp
+    from outbound_postback_api import outbound_postback_bp
     from auth_routes import auth_bp
     from survey_routes import survey_bp
     from admin_routes import admin_bp
@@ -130,7 +131,8 @@ try:
     print("Registering blueprints...")
     app.register_blueprint(postback_bp)
     app.register_blueprint(postback_api_bp, url_prefix='/api')
-    app.register_blueprint(postback_testing_bp, url_prefix='/test')
+    app.register_blueprint(postback_testing_bp)
+    app.register_blueprint(outbound_postback_bp)
     app.register_blueprint(auth_bp)  # Auth routes at /api/auth
     app.register_blueprint(survey_bp)  # Survey routes at /api/surveys
     app.register_blueprint(admin_bp)  # Admin routes at /api/admin

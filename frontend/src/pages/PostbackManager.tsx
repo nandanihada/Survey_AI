@@ -73,11 +73,18 @@ const PostbackManager: React.FC = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingShare, setEditingShare] = useState<PostbackShare | null>(null);
   const [generatedUrl, setGeneratedUrl] = useState<string>('');
-  // Tabs: shares | inboundLogs | testing
-  const [activeTab, setActiveTab] = useState<'shares' | 'inboundLogs' | 'testing'>('shares');
+  // Tabs: shares | inboundLogs | outboundLogs | testing
+  const [activeTab, setActiveTab] = useState<'shares' | 'inboundLogs' | 'outboundLogs' | 'testing'>('shares');
   // Inbound logs state
   const [inboundLogs, setInboundLogs] = useState<any[]>([]);
   const [logsLoading, setLogsLoading] = useState<boolean>(false);
+  // Outbound logs state
+  const [outboundLogs, setOutboundLogs] = useState<any[]>([]);
+  const [outboundLogsLoading, setOutboundLogsLoading] = useState<boolean>(false);
+  // Outbound testing state
+  const [testPartnerUrl, setTestPartnerUrl] = useState('https://example.com/postback?transaction_id=[TRANSACTION_ID]&reward=[REWARD]');
+  const [testPartnerName, setTestPartnerName] = useState('Test Partner');
+  const [testResult, setTestResult] = useState<any>(null);
 
   const [formData, setFormData] = useState({
     third_party_name: '',
@@ -95,6 +102,8 @@ const PostbackManager: React.FC = () => {
   useEffect(() => {
     if (activeTab === 'inboundLogs') {
       fetchInboundLogs();
+    } else if (activeTab === 'outboundLogs') {
+      fetchOutboundLogs();
     }
   }, [activeTab]);
 
@@ -120,6 +129,54 @@ const PostbackManager: React.FC = () => {
       console.error('Inbound logs fetch error:', error);
     } finally {
       setLogsLoading(false);
+    }
+  };
+
+  const fetchOutboundLogs = async () => {
+    try {
+      setOutboundLogsLoading(true);
+      const data = await postbackService.getPostbackLogs();
+      setOutboundLogs(data || []);
+    } catch (error) {
+      toast.error('Error fetching outbound postback logs');
+      console.error('Outbound logs fetch error:', error);
+    } finally {
+      setOutboundLogsLoading(false);
+    }
+  };
+
+  const testOutboundPostback = async () => {
+    try {
+      const response = await fetch('https://api.theinterwebsite.space/api/outbound-postback/send-to-partner', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          partner_url: testPartnerUrl,
+          partner_name: testPartnerName,
+          transaction_id: `TEST_${Date.now()}`,
+          reward: '5.00',
+          currency: 'USD',
+          username: 'test_user',
+          survey_id: 'TEST_SURVEY'
+        }),
+      });
+      
+      const result = await response.json();
+      setTestResult(result);
+      
+      if (result.success) {
+        toast.success('Outbound postback sent successfully!');
+      } else {
+        toast.error('Outbound postback failed');
+      }
+      
+      // Refresh outbound logs
+      fetchOutboundLogs();
+    } catch (error) {
+      toast.error('Error testing outbound postback');
+      console.error('Outbound test error:', error);
     }
   };
 
@@ -266,6 +323,7 @@ const PostbackManager: React.FC = () => {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button className={`btn-secondary ${activeTab === 'shares' ? 'active' : ''}`} onClick={() => setActiveTab('shares')}>Outbound (Sender)</button>
           <button className={`btn-secondary ${activeTab === 'inboundLogs' ? 'active' : ''}`} onClick={() => setActiveTab('inboundLogs')}>Inbound (Receiver)</button>
+          <button className={`btn-secondary ${activeTab === 'outboundLogs' ? 'active' : ''}`} onClick={() => setActiveTab('outboundLogs')}>Outbound Logs</button>
           <button className={`btn-secondary ${activeTab === 'testing' ? 'active' : ''}`} onClick={() => setActiveTab('testing')}>Testing</button>
           {activeTab === 'shares' && (
             <button className="btn-primary" onClick={handleCreateNew}>
@@ -275,6 +333,11 @@ const PostbackManager: React.FC = () => {
           {activeTab === 'inboundLogs' && (
             <button className="btn-primary" onClick={fetchInboundLogs} disabled={logsLoading}>
               {logsLoading ? 'Refreshing…' : 'Refresh Logs'}
+            </button>
+          )}
+          {activeTab === 'outboundLogs' && (
+            <button className="btn-primary" onClick={fetchOutboundLogs} disabled={outboundLogsLoading}>
+              {outboundLogsLoading ? 'Refreshing…' : 'Refresh Logs'}
             </button>
           )}
         </div>
@@ -539,6 +602,123 @@ const PostbackManager: React.FC = () => {
                       <td>{log.sub2}</td>
                       <td>{log.event_name}</td>
                       <td><code>{log.unique_id}</code></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'outboundLogs' && (
+        <div className="outbound-logs">
+          <h2>Outbound Postback Logs</h2>
+          <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f0f9ff', borderRadius: '8px', border: '1px solid #0ea5e9' }}>
+            <h3 style={{ margin: '0 0 10px 0', color: '#0369a1' }}>Test Outbound Postback</h3>
+            <p style={{ margin: '0 0 15px 0', fontSize: '14px', color: '#64748b' }}>
+              Send a test postback to a third-party URL to verify outbound functionality
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: '10px', alignItems: 'end' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '500' }}>Partner URL</label>
+                <input
+                  type="url"
+                  value={testPartnerUrl}
+                  onChange={(e) => setTestPartnerUrl(e.target.value)}
+                  placeholder="https://partner.com/postback?transaction_id=[TRANSACTION_ID]&reward=[REWARD]"
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '500' }}>Partner Name</label>
+                <input
+                  type="text"
+                  value={testPartnerName}
+                  onChange={(e) => setTestPartnerName(e.target.value)}
+                  placeholder="Partner Name"
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+              <button
+                onClick={testOutboundPostback}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#10b981',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                Send Test
+              </button>
+            </div>
+            {testResult && (
+              <div style={{ marginTop: '15px', padding: '10px', backgroundColor: testResult.success ? '#f0fdf4' : '#fef2f2', borderRadius: '6px', border: `1px solid ${testResult.success ? '#22c55e' : '#ef4444'}` }}>
+                <div style={{ fontWeight: '500', color: testResult.success ? '#15803d' : '#dc2626', marginBottom: '5px' }}>
+                  {testResult.success ? '✅ Success' : '❌ Failed'}
+                </div>
+                <div style={{ fontSize: '12px', color: '#64748b' }}>
+                  Status: {testResult.status_code || 'N/A'} | URL: {testResult.url_sent || testResult.url_attempted}
+                </div>
+                {testResult.response_text && (
+                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '5px' }}>
+                    Response: {testResult.response_text}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          
+          {outboundLogsLoading ? (
+            <div className="loading">Loading outbound logs…</div>
+          ) : outboundLogs.length === 0 ? (
+            <div className="empty-state">
+              <p>No outbound logs found. Send some test postbacks to see logs here.</p>
+            </div>
+          ) : (
+            <div className="table-wrapper" style={{ overflowX: 'auto' }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Partner Name</th>
+                    <th>URL</th>
+                    <th>Status</th>
+                    <th>Status Code</th>
+                    <th>Response</th>
+                    <th>Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {outboundLogs.map((log, idx) => (
+                    <tr key={log.id || idx}>
+                      <td>{log.partnerName || log.name || 'Unknown'}</td>
+                      <td style={{ maxWidth: 300, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={log.url}>{log.url}</td>
+                      <td>
+                        <span className={`status ${log.status === 'success' ? 'active' : 'inactive'}`}>
+                          {log.status === 'success' ? 'Success' : 'Failed'}
+                        </span>
+                      </td>
+                      <td>{log.status_code || 'N/A'}</td>
+                      <td style={{ maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={log.response}>
+                        {log.response || '-'}
+                      </td>
+                      <td>{log.timestamp_str || log.timestamp}</td>
                     </tr>
                   ))}
                 </tbody>
