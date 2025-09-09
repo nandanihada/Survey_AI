@@ -6,9 +6,8 @@
   <component name="ChangeListManager">
     <list default="true" id="bbe779bd-d937-43a2-a891-54e9d6982d2b" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/components/SurveyPreview.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/SurveyPreview.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/components/SurveyPreviewPage.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/components/SurveyPreviewPage.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/project/src/utils/surveyLinkUtils.ts" beforeDir="false" afterPath="$PROJECT_DIR$/project/src/utils/surveyLinkUtils.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Backend/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/app.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Backend/postback_api.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/postback_api.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

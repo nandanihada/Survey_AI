@@ -16,7 +16,7 @@ def convert_objectid(doc):
 
 # --- Partner Management (CRUD) ---
 
-@postback_api_bp.route('/api/partners', methods=['GET'])
+@postback_api_bp.route('/partners', methods=['GET'])
 def get_partners():
     try:
         partners_cursor = db.partners.find()
@@ -25,7 +25,7 @@ def get_partners():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@postback_api_bp.route('/api/partners', methods=['POST'])
+@postback_api_bp.route('/partners', methods=['POST'])
 def add_partner():
     try:
         data = request.json
@@ -48,7 +48,7 @@ def add_partner():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@postback_api_bp.route('/api/partners/<partner_id>', methods=['PUT'])
+@postback_api_bp.route('/partners/<partner_id>', methods=['PUT'])
 def update_partner(partner_id):
     try:
         data = request.json
@@ -73,7 +73,7 @@ def update_partner(partner_id):
         return jsonify({"error": str(e)}), 500
 
 
-@postback_api_bp.route('/api/partners/<partner_id>', methods=['DELETE'])
+@postback_api_bp.route('/partners/<partner_id>', methods=['DELETE'])
 def delete_partner(partner_id):
     try:
         result = db.partners.delete_one({"_id": ObjectId(partner_id)})
@@ -88,10 +88,17 @@ def delete_partner(partner_id):
 
 # --- Postback Logs ---
 
-@postback_api_bp.route('/api/postback-logs', methods=['GET'])
+@postback_api_bp.route('/postback-logs', methods=['GET'])
 def get_postback_logs():
+    print("🔍 get_postback_logs endpoint called")
     try:
+        # Check database connection
+        if db is None:
+            print("❌ Database connection not available")
+            return jsonify({"error": "Database connection not available"}), 500
+        
         # Get outbound postback logs, sorted by timestamp (newest first)
+        print("📊 Querying outbound_postback_logs collection...")
         logs_cursor = db.outbound_postback_logs.find().sort("timestamp", -1).limit(50)
         logs = []
         
@@ -102,20 +109,31 @@ def get_postback_logs():
                 if hasattr(log_data['timestamp'], 'strftime'):
                     # Convert UTC to IST (UTC+5:30)
                     utc_timestamp = log_data['timestamp']
-                    ist_timestamp = utc_timestamp + datetime.timedelta(hours=5, minutes=30)
+                    ist_timestamp = utc_timestamp + timedelta(hours=5, minutes=30)
                     log_data['timestamp_str'] = ist_timestamp.strftime('%Y-%m-%d %H:%M:%S IST')
                 else:
                     log_data['timestamp_str'] = str(log_data['timestamp'])
             logs.append(log_data)
-            
+        
+        print(f"✅ Retrieved {len(logs)} outbound postback logs")
         return jsonify(logs)
     except Exception as e:
+        print(f"❌ Error in get_postback_logs: {str(e)}")
+        import traceback
+        print(f"Full traceback: {traceback.format_exc()}")
         return jsonify({"error": str(e)}), 500
 
-@postback_api_bp.route('/api/inbound-postback-logs', methods=['GET'])
+@postback_api_bp.route('/inbound-postback-logs', methods=['GET'])
 def get_inbound_postback_logs():
+    print("🔍 get_inbound_postback_logs endpoint called")
     try:
+        # Check database connection
+        if db is None:
+            print("❌ Database connection not available")
+            return jsonify({"error": "Database connection not available"}), 500
+        
         # Get inbound postback logs, sorted by timestamp (newest first)
+        print("📊 Querying inbound_postback_logs collection...")
         logs_cursor = db.inbound_postback_logs.find().sort("timestamp", -1).limit(50)
         logs = []
         
@@ -126,20 +144,24 @@ def get_inbound_postback_logs():
                 if hasattr(log_data['timestamp'], 'strftime'):
                     # Convert UTC to IST (UTC+5:30)
                     utc_timestamp = log_data['timestamp']
-                    ist_timestamp = utc_timestamp + datetime.timedelta(hours=5, minutes=30)
+                    ist_timestamp = utc_timestamp + timedelta(hours=5, minutes=30)
                     log_data['timestamp_str'] = ist_timestamp.strftime('%Y-%m-%d %H:%M:%S IST')
                 else:
                     log_data['timestamp_str'] = str(log_data['timestamp'])
             logs.append(log_data)
-            
+        
+        print(f"✅ Retrieved {len(logs)} inbound postback logs")
         return jsonify(logs)
     except Exception as e:
+        print(f"❌ Error in get_inbound_postback_logs: {str(e)}")
+        import traceback
+        print(f"Full traceback: {traceback.format_exc()}")
         return jsonify({"error": str(e)}), 500
 
 
 # --- Postback Sharing Management ---
 
-@postback_api_bp.route('/api/test-db', methods=['GET'])
+@postback_api_bp.route('/test-db', methods=['GET'])
 def test_database():
     """Simple test endpoint to check database connection"""
     try:
@@ -161,7 +183,7 @@ def test_database():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-@postback_api_bp.route('/api/postback-shares', methods=['GET'])
+@postback_api_bp.route('/postback-shares', methods=['GET'])
 def get_postback_shares():
     """Get all postback sharing records"""
     print("🔍 get_postback_shares called")
@@ -202,7 +224,7 @@ def get_postback_shares():
         print(f"Full traceback: {traceback.format_exc()}")
         return jsonify({"error": str(e)}), 500
 
-@postback_api_bp.route('/api/postback-shares', methods=['POST'])
+@postback_api_bp.route('/postback-shares', methods=['POST'])
 def create_postback_share():
     """Create a new postback sharing record"""
     print("🔍 create_postback_share called")
@@ -280,7 +302,7 @@ def create_postback_share():
         print(f"Full traceback: {traceback.format_exc()}")
         return jsonify({"error": str(e)}), 500
 
-@postback_api_bp.route('/api/postback-shares/<share_id>', methods=['PUT'])
+@postback_api_bp.route('/postback-shares/<share_id>', methods=['PUT'])
 def update_postback_share(share_id):
     """Update a postback sharing record"""
     try:
@@ -308,7 +330,7 @@ def update_postback_share(share_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@postback_api_bp.route('/api/postback-shares/<share_id>', methods=['DELETE'])
+@postback_api_bp.route('/postback-shares/<share_id>', methods=['DELETE'])
 def delete_postback_share(share_id):
     """Delete a postback sharing record"""
     try:
@@ -321,7 +343,7 @@ def delete_postback_share(share_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@postback_api_bp.route('/api/postback-shares/<share_id>/generate-url', methods=['POST'])
+@postback_api_bp.route('/postback-shares/<share_id>/generate-url', methods=['POST'])
 def generate_postback_url(share_id):
     """Generate a customized postback URL for a specific third party"""
     try:

@@ -128,7 +128,7 @@ try:
     
     # Register blueprints
     print("Registering blueprints...")
-    app.register_blueprint(postback_bp, url_prefix='/postback')
+    app.register_blueprint(postback_bp)
     app.register_blueprint(postback_api_bp, url_prefix='/api')
     app.register_blueprint(postback_testing_bp, url_prefix='/test')
     app.register_blueprint(auth_bp)  # Auth routes at /api/auth
