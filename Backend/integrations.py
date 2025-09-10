@@ -1,6 +1,6 @@
 import requests
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from mongodb_config import db
 
 def forward_survey_data_to_partners(response_data):
@@ -108,7 +108,7 @@ def log_postback_attempt(partner_name, url, status_code, response_text):
             "payout": 0.0,  # Default payout for outbound (we're sending, not receiving)
             "response": response_text[:500] if response_text else "",  # Limit response text
             "timestamp": datetime.utcnow(),  # Store as datetime object for sorting
-            "timestamp_str": (datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).strftime('%Y-%m-%d %H:%M:%S IST')  # IST time for display
+            "timestamp_str": (datetime.utcnow() + timedelta(hours=5, minutes=30)).strftime('%Y-%m-%d %H:%M:%S IST')  # IST time for display
         }
         
         # Log to outbound_postback_logs collection to separate from inbound

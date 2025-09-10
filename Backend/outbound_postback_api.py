@@ -10,7 +10,7 @@ from integrations import forward_survey_data_to_partners, log_postback_attempt
 
 outbound_postback_bp = Blueprint('outbound_postback_bp', __name__)
 
-@outbound_postback_bp.route('/api/outbound-postback/test', methods=['POST', 'OPTIONS'])
+@outbound_postback_bp.route('/outbound-postback/test', methods=['POST', 'OPTIONS'])
 @cross_origin(
     supports_credentials=True,
     origins=[
@@ -68,7 +68,7 @@ def test_outbound_postback():
         print(f"❌ Error in test_outbound_postback: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@outbound_postback_bp.route('/api/outbound-postback/send-to-partner', methods=['POST', 'OPTIONS'])
+@outbound_postback_bp.route('/outbound-postback/send-to-partner', methods=['POST', 'OPTIONS'])
 @cross_origin(
     supports_credentials=True,
     origins=[
@@ -82,11 +82,17 @@ def test_outbound_postback():
 )
 def send_to_specific_partner():
     """Send postback to a specific partner URL"""
+    print("🔥 OUTBOUND POSTBACK ENDPOINT HIT!")
+    print(f"Request method: {request.method}")
+    print(f"Request headers: {dict(request.headers)}")
+    
     if request.method == 'OPTIONS':
+        print("🔄 OPTIONS request - returning CORS headers")
         return '', 200
     
     try:
         data = request.get_json()
+        print(f"📥 Received data: {data}")
         
         if not data or 'partner_url' not in data:
             return jsonify({"error": "partner_url is required"}), 400
@@ -117,12 +123,15 @@ def send_to_specific_partner():
         
         # Send the postback
         try:
+            print(f"🚀 Sending GET request to: {processed_url}")
             response = requests.get(processed_url, timeout=15)
+            print(f"✅ Response received - Status: {response.status_code}")
             
             # Log the attempt
             log_postback_attempt(partner_name, processed_url, response.status_code, response.text)
+            print(f"📝 Logged postback attempt to database")
             
-            return jsonify({
+            result = {
                 "message": f"Postback sent to {partner_name}",
                 "partner_name": partner_name,
                 "url_sent": processed_url,
@@ -130,7 +139,9 @@ def send_to_specific_partner():
                 "response_text": response.text[:200],  # First 200 chars
                 "success": response.status_code == 200,
                 "data_sent": postback_data
-            }), 200
+            }
+            print(f"🎯 Returning success response: {result}")
+            return jsonify(result), 200
             
         except requests.exceptions.RequestException as e:
             # Log the failed attempt
@@ -184,7 +195,7 @@ def replace_postback_parameters(url, response_data):
     
     return processed_url
 
-@outbound_postback_bp.route('/api/outbound-postback/partners', methods=['GET'])
+@outbound_postback_bp.route('/outbound-postback/partners', methods=['GET'])
 def get_active_partners():
     """Get list of active partners for postback sending"""
     try:

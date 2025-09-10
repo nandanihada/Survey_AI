@@ -81,6 +81,8 @@ const PostbackManager: React.FC = () => {
   // Outbound logs state
   const [outboundLogs, setOutboundLogs] = useState<any[]>([]);
   const [outboundLogsLoading, setOutboundLogsLoading] = useState<boolean>(false);
+  // Partners state
+  const [partners, setPartners] = useState<any[]>([]);
   // Outbound testing state
   const [testPartnerUrl, setTestPartnerUrl] = useState('https://example.com/postback?transaction_id=[TRANSACTION_ID]&reward=[REWARD]');
   const [testPartnerName, setTestPartnerName] = useState('Test Partner');
@@ -97,6 +99,7 @@ const PostbackManager: React.FC = () => {
 
   useEffect(() => {
     fetchPostbackShares();
+    fetchPartners();
   }, []);
 
   useEffect(() => {
@@ -145,9 +148,18 @@ const PostbackManager: React.FC = () => {
     }
   };
 
+  const fetchPartners = async () => {
+    try {
+      const data = await postbackService.getActivePartners();
+      setPartners(data || []);
+    } catch (error) {
+      console.error('Error fetching partners:', error);
+    }
+  };
+
   const testOutboundPostback = async () => {
     try {
-      const response = await fetch('https://api.theinterwebsite.space/api/outbound-postback/send-to-partner', {
+      const response = await fetch('http://localhost:5000/api/outbound-postback/send-to-partner', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -177,6 +189,46 @@ const PostbackManager: React.FC = () => {
     } catch (error) {
       toast.error('Error testing outbound postback');
       console.error('Outbound test error:', error);
+    }
+  };
+
+  const sendPostbackToPartner = async (partnerName: string, partnerUrl: string) => {
+    try {
+      toast.loading('Sending postback...', { id: 'sending-postback' });
+      
+      const response = await fetch('http://localhost:5000/api/outbound-postback/send-to-partner', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          partner_url: partnerUrl,
+          partner_name: partnerName,
+          transaction_id: `MANUAL_${Date.now()}`,
+          reward: '5.00',
+          currency: 'USD',
+          username: 'test_user',
+          survey_id: 'MANUAL_TEST',
+          click_id: `click_${Date.now()}`,
+          offer_id: 'TEST_OFFER',
+          conversion_status: 'confirmed'
+        }),
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        toast.success(`Postback sent to ${partnerName} successfully!`, { id: 'sending-postback' });
+      } else {
+        toast.error(`Failed to send postback to ${partnerName}: ${result.message || 'Unknown error'}`, { id: 'sending-postback' });
+      }
+      
+      // Refresh outbound logs to show the new entry
+      fetchOutboundLogs();
+      
+    } catch (error) {
+      toast.error(`Error sending postback to ${partnerName}`, { id: 'sending-postback' });
+      console.error('Send postback error:', error);
     }
   };
 
@@ -513,6 +565,26 @@ const PostbackManager: React.FC = () => {
                   </div>
 
                   <div className="share-actions">
+                    <button 
+                      className="btn-primary"
+                      onClick={() => {
+                        console.log('Button clicked for:', share.third_party_name);
+                        console.log('Partners available:', partners);
+                        const testUrl = `https://httpbin.org/get?partner=${share.third_party_name.replace(' ', '_')}&transaction_id=[TRANSACTION_ID]&reward=[REWARD]`;
+                        sendPostbackToPartner(share.third_party_name, testUrl);
+                      }}
+                      style={{ 
+                        backgroundColor: '#3b82f6', 
+                        padding: '6px 12px',
+                        fontSize: '14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                      title={`Send test postback to ${share.third_party_name}`}
+                    >
+                      🔵 Send Postback
+                    </button>
                     <button 
                       className="btn-secondary"
                       onClick={() => generateUrl(share.id)}

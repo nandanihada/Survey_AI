@@ -240,6 +240,31 @@ const PostbackSender: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
         }
     };
 
+    const sendPostbackToPartner = async (partnerId: string, partnerName: string) => {
+        try {
+            console.log(`Sending postback to partner ${partnerName} (ID: ${partnerId})`);
+            
+            const response = await fetch(`${API_BASE}/api/partners/${partnerId}/send-postback`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                alert(`✅ Postback sent to ${partnerName} successfully!\nStatus: ${result.status_code}\nURL: ${result.url_sent}`);
+            } else {
+                alert(`❌ Failed to send postback to ${partnerName}\nError: ${result.error || result.message}`);
+            }
+            
+        } catch (error) {
+            console.error('Send postback error:', error);
+            alert(`❌ Error sending postback to ${partnerName}: ${error}`);
+        }
+    };
+
     // Standardized 10 fixed parameters (placeholders to use in partner URLs)
     const availableParams = [
         '[CLICK_ID]',
@@ -302,7 +327,13 @@ const PostbackSender: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
                                     <p className={`text-xs font-mono mt-1 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>{partner.url}</p>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <button onClick={() => alert('Sending test postback...')} className="p-2 hover:bg-blue-500/20 rounded-full transition-colors"><Send size={16} className="text-blue-500" /></button>
+                                    <button 
+                                        onClick={() => sendPostbackToPartner(partner.id, partner.name)} 
+                                        className="p-2 hover:bg-blue-500/20 rounded-full transition-colors"
+                                        title={`Send test postback to ${partner.name}`}
+                                    >
+                                        <Send size={16} className="text-blue-500" />
+                                    </button>
                                     <button onClick={() => handleEdit(partner)} className="p-2 hover:bg-yellow-500/20 rounded-full transition-colors"><Edit3 size={16} className="text-yellow-500" /></button>
                                     <button onClick={() => handleDelete(partner.id)} className="p-2 hover:bg-red-500/20 rounded-full transition-colors"><Trash2 size={16} className="text-red-500" /></button>
                                 </div>

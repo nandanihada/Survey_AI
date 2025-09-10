@@ -109,7 +109,7 @@ def handle_postback(unique_id):
                 "unique_id": unique_id,
                 "url_called": request.url,
                 "timestamp": datetime.utcnow(),  # Store as datetime object for sorting
-                "timestamp_str": (datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).strftime('%Y-%m-%d %H:%M:%S IST'),  # IST time for display
+                "timestamp_str": (datetime.utcnow() + timedelta(hours=5, minutes=30)).strftime('%Y-%m-%d %H:%M:%S IST'),  # IST time for display
                 "success": False,
                 "error_message": f"Postback share not found for unique_id: {unique_id}"
             }
@@ -265,7 +265,7 @@ def handle_postback(unique_id):
                 "unique_id": unique_id,
                 "url_called": request.url,
                 "timestamp": datetime.utcnow(),  # Store as datetime object for sorting
-                "timestamp_str": (datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).strftime('%Y-%m-%d %H:%M:%S IST'),  # IST time for display
+                "timestamp_str": (datetime.utcnow() + timedelta(hours=5, minutes=30)).strftime('%Y-%m-%d %H:%M:%S IST'),  # IST time for display
                 "success": False,
                 "error_message": str(e)
             }

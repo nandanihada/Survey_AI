@@ -123,6 +123,7 @@ try:
     from postback_api import postback_api_bp
     from postback_testing import postback_testing_bp
     from outbound_postback_api import outbound_postback_bp
+    from partners_api import partners_api_bp
     from auth_routes import auth_bp
     from survey_routes import survey_bp
     from admin_routes import admin_bp
@@ -132,7 +133,8 @@ try:
     app.register_blueprint(postback_bp)
     app.register_blueprint(postback_api_bp, url_prefix='/api')
     app.register_blueprint(postback_testing_bp)
-    app.register_blueprint(outbound_postback_bp)
+    app.register_blueprint(outbound_postback_bp, url_prefix='/api')
+    app.register_blueprint(partners_api_bp, url_prefix='/api')
     app.register_blueprint(auth_bp)  # Auth routes at /api/auth
     app.register_blueprint(survey_bp)  # Survey routes at /api/surveys
     app.register_blueprint(admin_bp)  # Admin routes at /api/admin
@@ -2058,7 +2060,7 @@ def get_criteria_performance():
 
 if __name__ == '__main__':
     try:
-        app.run(host='127.0.0.1', port=5000, debug=True, threaded=True)
+        app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
     except KeyboardInterrupt:
         print("\nServer stopped by user")
     except Exception as e:

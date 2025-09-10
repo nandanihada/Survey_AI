@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://api.theinterwebsite.space';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 export interface PostbackParameter {
   enabled: boolean;
@@ -96,6 +96,11 @@ class PostbackService {
 
   async getInboundPostbackLogs(): Promise<any[]> {
     return this.request<any[]>('/api/inbound-postback-logs');
+  }
+
+  async getActivePartners(): Promise<any[]> {
+    const response = await this.request<{ partners: any[]; count: number }>('/api/outbound-postback/partners');
+    return response.partners || [];
   }
 }
 
