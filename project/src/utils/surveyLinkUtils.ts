@@ -11,12 +11,14 @@ export interface SurveyLinkParams {
  * @param surveyId - The survey ID (will be used as offer_id)
  * @param userId - Optional user ID to append
  * @param additionalParams - Optional URL parameters to append
+ * @param username - Optional username for aff_sub parameter
  * @returns Complete survey link with parameters
  */
 export function generateSurveyLink(
   surveyId: string, 
   userId?: string, 
-  additionalParams: SurveyLinkParams = {}
+  additionalParams: SurveyLinkParams = {},
+  username?: string
 ): string {
   const baseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? 'http://localhost:5173'
@@ -31,6 +33,11 @@ export function generateSurveyLink(
   // Add user_id parameter if provided
   if (userId) {
     url.searchParams.set('user_id', userId);
+  }
+  
+  // Add aff_sub parameter if username is provided
+  if (username) {
+    url.searchParams.set('aff_sub', username);
   }
   
   // Add any additional parameters

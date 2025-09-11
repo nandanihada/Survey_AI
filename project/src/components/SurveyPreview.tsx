@@ -32,12 +32,13 @@ const SurveyPreview: React.FC<SurveyPreviewProps> = ({ survey }) => {
   const shareInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Use backend-generated link if available, otherwise generate one with user_id
+    // Use backend-generated link if available, otherwise generate one with user_id and aff_sub
     if (survey.public_link && Object.keys(urlParams).length === 0) {
       setShareLink(survey.public_link);
     } else {
-      // If custom parameters are added, regenerate the link with user_id
-      const link = generateSurveyLink(survey.survey_id, user?.simpleUserId?.toString(), urlParams);
+      // If custom parameters are added, regenerate the link with user_id and aff_sub
+      const username = user?.name || user?.email?.split('@')[0] || `user_${user?.simpleUserId}`;
+      const link = generateSurveyLink(survey.survey_id, user?.simpleUserId?.toString(), urlParams, username);
       setShareLink(link);
     }
   }, [survey.survey_id, survey.public_link, urlParams, user]);

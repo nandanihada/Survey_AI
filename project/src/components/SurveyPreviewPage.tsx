@@ -28,8 +28,9 @@ const SurveyPreviewPage: React.FC = () => {
         const data = await fetchSurveyData(id);
         setSurvey(data.survey || data);
         
-        // Set share link with user_id
-        const link = generateSurveyLink(id!, user?.simpleUserId?.toString(), urlParams);
+        // Set share link with user_id and aff_sub
+        const username = user?.name || user?.email?.split('@')[0] || `user_${user?.simpleUserId}`;
+        const link = generateSurveyLink(id!, user?.simpleUserId?.toString(), urlParams, username);
         setShareLink(link);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load survey');
