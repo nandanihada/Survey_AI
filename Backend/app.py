@@ -706,12 +706,12 @@ def generate_survey():
                 "questions": questions,
                 "theme": complete_theme,
                 "created_at": datetime.utcnow(),
-                "shareable_link": f"{FRONTEND_URL}/survey?offer_id={survey_id}&user_id={simple_user_id}&aff_sub={username}",
-                "public_link": f"{FRONTEND_URL}/survey?offer_id={survey_id}&user_id={simple_user_id}&aff_sub={username}",
+                "shareable_link": f"{FRONTEND_URL}/survey?offer_id={survey_id}&user_id={simple_user_id}&sub1={username}",
+                "public_link": f"{FRONTEND_URL}/survey?offer_id={survey_id}&user_id={simple_user_id}&sub1={username}",
                 "is_short_id": True  # Mark that this survey uses a short ID
             }
             
-            print(f"DEBUG: Generated links with user_id={simple_user_id} and aff_sub={username}")
+            print(f"DEBUG: Generated links with user_id={simple_user_id} and sub1={username}")
             print(f"DEBUG: Shareable link: {survey_data['shareable_link']}")
             
             # Link survey to authenticated user
