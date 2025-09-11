@@ -37,7 +37,7 @@ export function generateSurveyLink(
   
   // Add aff_sub parameter if username is provided
   if (username) {
-    url.searchParams.set('aff_sub', username);
+    url.searchParams.set('sub1', username);
   }
   
   // Add any additional parameters
