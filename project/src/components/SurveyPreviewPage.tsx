@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Edit3, Eye, Share2, Copy, CheckCircle, ArrowLeft, Settings } from 'lucide-react';
+import { Edit3, Eye, Share2, Copy, CheckCircle, ArrowLeft, Settings, BarChart3 } from 'lucide-react';
 import { fetchSurveyData } from '../utils/api';
 import { generateSurveyLink, parseParamString, stringifyParams, type SurveyLinkParams } from '../utils/surveyLinkUtils';
 import { useAuth } from '../contexts/AuthContext';
 import type { Survey } from '../types/Survey';
+import SurveyResponses from './SurveyResponses';
 
 const SurveyPreviewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -18,6 +19,7 @@ const SurveyPreviewPage: React.FC = () => {
   const [showParamEditor, setShowParamEditor] = useState(false);
   const [paramString, setParamString] = useState('');
   const [urlParams, setUrlParams] = useState<SurveyLinkParams>({});
+  const [activeTab, setActiveTab] = useState('preview');
 
   useEffect(() => {
     if (!id) return;
@@ -282,24 +284,42 @@ const SurveyPreviewPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Preview */}
+          {/* Tab Navigation */}
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Live Preview</h2>
-              <div className="border rounded-lg overflow-hidden bg-gray-50">
-                <iframe
-                  src={shareLink}
-                  title="Survey Preview"
-                  className="w-full h-[600px] border-0"
-                  style={{
-                    transform: 'scale(0.95)',
-                    transformOrigin: 'top left',
-                    width: '105.26%',
-                    height: '631px',
-                  }}
-                />
-              </div>
+            <div className="flex items-center gap-4 mb-4">
+              <button
+                onClick={() => setActiveTab('preview')}
+                className={`px-4 py-2 rounded-lg ${activeTab === 'preview' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              >
+                Preview
+              </button>
+              <button
+                onClick={() => setActiveTab('responses')}
+                className={`px-4 py-2 rounded-lg ${activeTab === 'responses' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              >
+                Responses
+              </button>
             </div>
+            {activeTab === 'preview' ? (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Live Preview</h2>
+                <div className="border rounded-lg overflow-hidden bg-gray-50">
+                  <iframe
+                    src={shareLink}
+                    title="Survey Preview"
+                    className="w-full h-[600px] border-0"
+                    style={{
+                      transform: 'scale(0.95)',
+                      transformOrigin: 'top left',
+                      width: '105.26%',
+                      height: '631px',
+                    }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <SurveyResponses surveyId={id} />
+            )}
           </div>
         </div>
       </div>

@@ -11,7 +11,7 @@ export interface SurveyLinkParams {
  * @param surveyId - The survey ID (will be used as offer_id)
  * @param userId - Optional user ID to append
  * @param additionalParams - Optional URL parameters to append
- * @param username - Optional username for aff_sub parameter
+ * @param username - Optional username for sub1 parameter
  * @returns Complete survey link with parameters
  */
 export function generateSurveyLink(
@@ -35,7 +35,7 @@ export function generateSurveyLink(
     url.searchParams.set('user_id', userId);
   }
   
-  // Add aff_sub parameter if username is provided
+  // Add sub1 parameter if username is provided
   if (username) {
     url.searchParams.set('sub1', username);
   }
