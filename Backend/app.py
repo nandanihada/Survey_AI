@@ -127,6 +127,7 @@ try:
     from auth_routes import auth_bp
     from survey_routes import survey_bp
     from admin_routes import admin_bp
+    from response_logs_api import response_logs_bp
     
     # Register blueprints
     print("Registering blueprints...")
@@ -138,6 +139,7 @@ try:
     app.register_blueprint(auth_bp)  # Auth routes at /api/auth
     app.register_blueprint(survey_bp)  # Survey routes at /api/surveys
     app.register_blueprint(admin_bp)  # Admin routes at /api/admin
+    app.register_blueprint(response_logs_bp)
     print("✅ All blueprints registered successfully")
 except ImportError as e:
     print(f"⚠️ Failed to import blueprints: {e}")
@@ -861,7 +863,7 @@ def submit_public_response(survey_id):
 
         # Insert into database
         try:
-            result = db["responses"].insert_one(response_data)  # ✅ Save to "responses"
+            result = db["responses"].insert_one(response_data)  # Save to "responses"
 
             print(f"SUCCESS: Database insert result: {result.inserted_id}")
 
@@ -1178,40 +1180,27 @@ def view_survey(survey_id):
             except:
                 pass  # Not a valid ObjectId, continue with original query
         
-        # Optional: track click
-        email = request.args.get("email")
-        username = request.args.get("username")
-
-        if email and username:
-            click_data = {
-                "email": email,
-                "username": username,
-                "survey_id": survey_id,
-                "clicked_at": datetime.utcnow()
-            }
-            db["survey_clicks"].insert_one(click_data)
-            print(f"Click tracked: {username} ({email}) on survey {survey_id}")
-
-        # Find the survey using the query
+        print(f"Looking for survey with query: {query}")
         survey = db["surveys"].find_one(query)
-        # ✅ Fix here: use "id" instead of "_id"
-        survey = db["surveys"].find_one({"id": survey_id})
+
         if not survey:
+            print(f"ERROR: Survey {survey_id} not found in database")
+            # Let's see what surveys exist
+            all_surveys = list(db["surveys"].find({}, {"_id": 1, "id": 1, "prompt": 1}))
+            print(f"Available surveys: {all_surveys}")
             return jsonify({"error": "Survey not found"}), 404
 
+        print(f"Found survey: {survey.get('_id')} / {survey.get('id')}")
+
+        # Convert ObjectId to string for JSON serialization
         survey_data = convert_objectid_to_string(survey)
-
-        # Optional: if you want to return responses too
-        # responses_cursor = db["survey_responses"].find({"survey_id": survey_id})
-        # response_list = [convert_objectid_to_string(resp) for resp in responses_cursor]
-
-        # ✅ Fix here: return flat survey only
+        
+        # Return survey data only (this is a view endpoint, not a submission endpoint)
         return jsonify(survey_data)
 
     except Exception as e:
         print(f"Survey view error: {e}")
         return jsonify({"error": "Something went wrong", "details": str(e)}), 500
-
 
 
 @app.route('/surveys', methods=['GET'])

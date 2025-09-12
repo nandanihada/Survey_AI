@@ -6,6 +6,7 @@ import { generateSurveyLink, parseParamString, stringifyParams, type SurveyLinkP
 import { useAuth } from '../contexts/AuthContext';
 import type { Survey } from '../types/Survey';
 import SurveyResponses from './SurveyResponses';
+import ResponseLogs from './ResponseLogs';
 
 const SurveyPreviewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -299,6 +300,12 @@ const SurveyPreviewPage: React.FC = () => {
               >
                 Responses
               </button>
+              <button
+                onClick={() => setActiveTab('response-logs')}
+                className={`px-4 py-2 rounded-lg ${activeTab === 'response-logs' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              >
+                Response Logs
+              </button>
             </div>
             {activeTab === 'preview' ? (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -317,8 +324,10 @@ const SurveyPreviewPage: React.FC = () => {
                   />
                 </div>
               </div>
-            ) : (
+            ) : activeTab === 'responses' ? (
               <SurveyResponses surveyId={id} />
+            ) : (
+              <ResponseLogs surveyId={id} />
             )}
           </div>
         </div>
