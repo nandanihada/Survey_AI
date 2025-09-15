@@ -4,6 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import ProtectedRoute from '../components/ProtectedRoute';
 import Header from '../components/Header';
+import FancyTable from '../components/FancyTable';
 
 interface User {
   _id?: string;
@@ -23,16 +24,38 @@ interface Survey {
   title: string;
   status: string;
   created_at: string;
-  owner?: {
-    name: string;
+  ownerUserId: string;
+  creator_email?: string;
+  creator_name?: string;
+  total_sessions: number;
+  total_responses: number;
+  unique_ips: number;
+  creator_info?: {
+    _id: string;
+    uid: string;
     email: string;
+    name: string;
+    role: 'basic' | 'premium' | 'enterprise' | 'admin';
+    status: 'approved' | 'disapproved' | 'locked';
+    createdAt: string;
+    last_login?: string;
+    simpleUserId?: string;
+  };
+  latest_session_info?: {
+    session_id: string;
+    ip_address: string;
+    user_agent: string;
+    click_id: string;
+    session_started: string;
+    survey_completed?: string;
+    evaluation_status: string;
   };
 }
 
 const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
-  const [surveys, setSurveys] = useState<Survey[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [surveys, setSurveys] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'users' | 'surveys'>('users');
 
   const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -69,18 +92,31 @@ const AdminDashboard: React.FC = () => {
   const fetchAllSurveys = async () => {
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${baseUrl}/api/surveys/admin/all`, {
+      console.log('Fetching surveys with token:', token ? 'Token present' : 'No token');
+      
+      const response = await fetch(`${baseUrl}/api/admin/surveys/comprehensive`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
+      
+      console.log('Surveys response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('Surveys data received:', data);
+        console.log('Number of surveys:', data.surveys?.length || 0);
+        console.log('First survey sample:', data.surveys?.[0]);
         setSurveys(data.surveys || []);
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to fetch surveys:', response.status, errorData);
+        alert(`Failed to fetch surveys: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Failed to fetch surveys:', error);
+      alert(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -340,58 +376,162 @@ const AdminDashboard: React.FC = () => {
 
                 {/* Surveys Tab */}
                 {activeTab === 'surveys' && (
-                  <div className="bg-white shadow overflow-hidden sm:rounded-md">
-                    <ul className="divide-y divide-gray-200">
-                      {surveys.map((survey) => (
-                        <li key={survey._id} className="px-6 py-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center justify-between">
-                                <h3 className="text-sm font-medium text-gray-900">
-                                  {survey.title}
-                                </h3>
-                                <span
-                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                    survey.status === 'published'
-                                      ? 'bg-green-100 text-green-800'
-                                      : survey.status === 'draft'
-                                      ? 'bg-gray-100 text-gray-800'
-                                      : 'bg-red-100 text-red-800'
-                                  }`}
+                  <div>
+                    {/* Debug info */}
+                    <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded">
+                      <h3 className="font-medium text-yellow-800">Debug Info:</h3>
+                      <p className="text-sm text-yellow-700">
+                        Surveys loaded: {surveys.length} | 
+                        Loading: {loading ? 'Yes' : 'No'} | 
+                        Data type: {Array.isArray(surveys) ? 'Array' : typeof surveys}
+                      </p>
+                      {surveys.length > 0 && (
+                        <details className="mt-2">
+                          <summary className="text-sm text-yellow-700 cursor-pointer">Show first survey</summary>
+                          <pre className="text-xs mt-2 p-2 bg-white rounded border overflow-auto max-h-32">
+                            {JSON.stringify(surveys[0], null, 2)}
+                          </pre>
+                        </details>
+                      )}
+                    </div>
+                    
+                    {surveys.length === 0 ? (
+                      <div className="bg-white shadow overflow-hidden sm:rounded-md p-6">
+                        <div className="text-center">
+                          <p className="text-gray-500">Loading surveys...</p>
+                          <p className="text-sm text-gray-400 mt-2">
+                            If this persists, check the browser console for errors.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <FancyTable
+                        data={surveys}
+                        title="Survey Management Dashboard"
+                        columns={[
+                          {
+                            key: 'title',
+                            label: 'Survey Title',
+                            sortable: true,
+                            filterable: true,
+                            width: '200px',
+                            render: (value, row) => (
+                              <div className="flex flex-col">
+                                <div className="font-medium text-gray-900">{value}</div>
+                                <div className="text-sm text-gray-500">ID: {row.short_id}</div>
+                              </div>
+                            )
+                          },
+                          {
+                            key: 'status',
+                            label: 'Status',
+                            sortable: true,
+                            filterable: true,
+                            width: '120px',
+                            render: (value) => (
+                              <span
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                  value === 'published'
+                                    ? 'bg-green-100 text-green-800'
+                                    : value === 'draft'
+                                    ? 'bg-gray-100 text-gray-800'
+                                    : 'bg-red-100 text-red-800'
+                                }`}
+                              >
+                                {value}
+                              </span>
+                            )
+                          },
+                          {
+                            key: 'creator_info',
+                            label: 'Creator',
+                            sortable: true,
+                            filterable: true,
+                            width: '200px',
+                            render: (value, row) => (
+                              value ? (
+                                <div className="flex flex-col">
+                                  <div className="font-medium text-gray-900">{value.name}</div>
+                                  <div className="text-sm text-gray-500">{value.email}</div>
+                                  <div className="text-xs text-gray-400">UID: {value.simpleUserId || value.uid}</div>
+                                </div>
+                              ) : (
+                                <div className="text-sm text-gray-500">
+                                  <div>Unknown Creator</div>
+                                  <div className="text-xs text-gray-400">Owner ID: {row.ownerUserId}</div>
+                                </div>
+                              )
+                            )
+                          },
+                          {
+                            key: 'total_sessions',
+                            label: 'Sessions',
+                            sortable: true,
+                            filterable: true,
+                            width: '100px',
+                            render: (value) => (
+                              <div className="text-center">
+                                <div className="font-medium text-gray-900">{value || 0}</div>
+                                <div className="text-xs text-gray-500">sessions</div>
+                              </div>
+                            )
+                          },
+                          {
+                            key: 'total_responses',
+                            label: 'Responses',
+                            sortable: true,
+                            filterable: true,
+                            width: '100px',
+                            render: (value) => (
+                              <div className="text-center">
+                                <div className="font-medium text-gray-900">{value || 0}</div>
+                                <div className="text-xs text-gray-500">responses</div>
+                              </div>
+                            )
+                          },
+                          {
+                            key: 'created_at',
+                            label: 'Created',
+                            sortable: true,
+                            filterable: true,
+                            width: '120px',
+                            render: (value) => (
+                              <div className="text-sm text-gray-900">
+                                {new Date(value).toLocaleDateString()}
+                              </div>
+                            )
+                          },
+                          {
+                            key: 'actions',
+                            label: 'Actions',
+                            sortable: false,
+                            filterable: false,
+                            width: '120px',
+                            render: (value, row) => (
+                              <div className="flex flex-col space-y-1">
+                                <a
+                                  href={`/survey/${row.short_id}`}
+                                  className="text-blue-600 hover:text-blue-700 text-sm"
                                 >
-                                  {survey.status}
-                                </span>
+                                  View
+                                </a>
+                                <a
+                                  href={`/edit/${row.short_id}`}
+                                  className="text-gray-600 hover:text-gray-700 text-sm"
+                                >
+                                  Edit
+                                </a>
                               </div>
-                              <div className="mt-2 flex items-center text-sm text-gray-500">
-                                <span>ID: {survey.short_id}</span>
-                                {survey.owner && (
-                                  <>
-                                    <span className="mx-2">•</span>
-                                    <span>Owner: {survey.owner.name}</span>
-                                  </>
-                                )}
-                                <span className="mx-2">•</span>
-                                <span>Created {new Date(survey.created_at).toLocaleDateString()}</span>
-                              </div>
-                            </div>
-                            <div className="flex space-x-2 ml-4">
-                              <a
-                                href={`/survey/${survey.short_id}`}
-                                className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-                              >
-                                View
-                              </a>
-                              <a
-                                href={`/edit/${survey.short_id}`}
-                                className="text-gray-600 hover:text-gray-700 text-sm font-medium"
-                              >
-                                Edit
-                              </a>
-                            </div>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
+                            )
+                          }
+                        ]}
+                        searchable={true}
+                        pagination={true}
+                        pageSize={15}
+                        loading={loading}
+                        emptyMessage="No surveys found"
+                      />
+                    )}
                   </div>
                 )}
               </>

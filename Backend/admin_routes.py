@@ -249,3 +249,136 @@ def bulk_update_users():
         
     except Exception as e:
         return jsonify({'error': f'Failed to bulk update users: {str(e)}'}), 500
+
+@admin_bp.route('/surveys/comprehensive', methods=['GET'])
+@requireAdmin
+def get_comprehensive_survey_data():
+    """Get comprehensive survey data with detailed user information for admin dashboard"""
+    try:
+        # Build aggregation pipeline to get surveys with user details and session info
+        pipeline = [
+            # Join with users collection to get creator details
+            {
+                '$lookup': {
+                    'from': 'users',
+                    'let': {'owner_id': {'$toObjectId': '$ownerUserId'}},
+                    'pipeline': [
+                        {'$match': {'$expr': {'$eq': ['$_id', '$$owner_id']}}}
+                    ],
+                    'as': 'creator'
+                }
+            },
+            # Join with survey_sessions to get session data
+            {
+                '$lookup': {
+                    'from': 'survey_sessions',
+                    'localField': 'short_id',
+                    'foreignField': 'survey_id',
+                    'as': 'sessions'
+                }
+            },
+            # Join with responses to get response count
+            {
+                '$lookup': {
+                    'from': 'responses',
+                    'localField': 'short_id',
+                    'foreignField': 'survey_id',
+                    'as': 'responses'
+                }
+            },
+            # Add computed fields
+            {
+                '$addFields': {
+                    'creator_info': {'$arrayElemAt': ['$creator', 0]},
+                    'total_sessions': {'$size': '$sessions'},
+                    'total_responses': {'$size': '$responses'},
+                    'unique_ips': {
+                        '$size': {
+                            '$setUnion': [
+                                {'$map': {
+                                    'input': '$sessions',
+                                    'as': 'session',
+                                    'in': '$$session.user_info.ip_address'
+                                }}, 
+                                []
+                            ]
+                        }
+                    },
+                    'latest_session': {
+                        '$arrayElemAt': [
+                            {'$sortArray': {
+                                'input': '$sessions',
+                                'sortBy': {'timestamps.session_started': -1}
+                            }}, 
+                            0
+                        ]
+                    }
+                }
+            },
+            # Project final fields
+            {
+                '$project': {
+                    '_id': 1,
+                    'short_id': 1,
+                    'title': 1,
+                    'status': 1,
+                    'created_at': 1,
+                    'ownerUserId': 1,
+                    'creator_email': 1,
+                    'creator_name': 1,
+                    'total_sessions': 1,
+                    'total_responses': 1,
+                    'unique_ips': 1,
+                    'creator_info': {
+                        '_id': 1,
+                        'uid': 1,
+                        'email': 1,
+                        'name': 1,
+                        'role': 1,
+                        'status': 1,
+                        'createdAt': 1,
+                        'last_login': 1,
+                        'simpleUserId': 1
+                    },
+                    'latest_session_info': {
+                        'session_id': '$latest_session.session_id',
+                        'ip_address': '$latest_session.user_info.ip_address',
+                        'user_agent': '$latest_session.user_info.user_agent',
+                        'click_id': '$latest_session.user_info.click_id',
+                        'session_started': '$latest_session.timestamps.session_started',
+                        'survey_completed': '$latest_session.timestamps.survey_completed',
+                        'evaluation_status': '$latest_session.evaluation_result.status'
+                    }
+                }
+            },
+            # Sort by creation date (newest first)
+            {'$sort': {'created_at': -1}}
+        ]
+        
+        # Execute aggregation
+        surveys_data = list(db.surveys.aggregate(pipeline))
+        
+        # Convert ObjectIds to strings for JSON serialization
+        for survey in surveys_data:
+            convert_objectid_to_string(survey)
+            if survey.get('creator_info') and survey['creator_info'].get('_id'):
+                survey['creator_info']['_id'] = str(survey['creator_info']['_id'])
+        
+        # Get additional statistics
+        stats = {
+            'total_surveys': len(surveys_data),
+            'surveys_with_sessions': len([s for s in surveys_data if s['total_sessions'] > 0]),
+            'surveys_with_responses': len([s for s in surveys_data if s['total_responses'] > 0]),
+            'total_sessions_all': sum(s['total_sessions'] for s in surveys_data),
+            'total_responses_all': sum(s['total_responses'] for s in surveys_data)
+        }
+        
+        return jsonify({
+            'surveys': surveys_data,
+            'stats': stats,
+            'total': len(surveys_data)
+        })
+        
+    except Exception as e:
+        print(f"Error in comprehensive survey data: {e}")
+        return jsonify({'error': f'Failed to get comprehensive survey data: {str(e)}'}), 500
