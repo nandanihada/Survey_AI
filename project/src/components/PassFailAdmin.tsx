@@ -43,6 +43,12 @@ interface SurveyConfig {
       custom_message: string;
       show_retry_option: boolean;
     };
+    dynamic_redirect_enabled?: boolean;
+    dynamic_redirect_config?: {
+      pass_redirect_url: string;
+      fail_redirect_url: string;
+      parameter_mappings?: Record<string, string>;
+    };
   };
   criteria_set?: CriteriaSet;
 }
@@ -73,6 +79,18 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  
+  // Individual loading states for optimistic updates
+  const [updatingStates, setUpdatingStates] = useState<{
+    [surveyId: string]: {
+      pass_fail_enabled?: boolean;
+      pepperads_redirect_enabled?: boolean;
+      criteria_set_id?: boolean;
+      pepperads_offer_id?: boolean;
+      dynamic_redirect_enabled?: boolean;
+      dynamic_redirect_config?: boolean;
+    } | undefined;
+  }>({});
   
   // Form states
   const [showCriteriaForm, setShowCriteriaForm] = useState(false);
@@ -193,9 +211,26 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
     await loadSurveyQuestions(survey.survey_id);
   };
 
-  const updateSurveyConfig = async (surveyId: string, config: any) => {
+  const updateSurveyConfig = async (surveyId: string, config: any, fieldName?: string) => {
     try {
-      setLoading(true);
+      // Optimistic update - immediately update UI
+      setSurveys(prev => prev.map(survey => 
+        survey.survey_id === surveyId 
+          ? { ...survey, config: { ...survey.config, ...config } }
+          : survey
+      ));
+      
+      // Set loading state for specific field
+      if (fieldName) {
+        setUpdatingStates(prev => ({ 
+          ...prev, 
+          [surveyId]: { 
+            ...(prev[surveyId] || {}), 
+            [fieldName]: true 
+          } 
+        }));
+      }
+      
       const response = await fetch(`${API_BASE}/admin/survey/${surveyId}/config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -205,14 +240,28 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
       const data = await response.json();
       if (response.ok) {
         setMessage({ type: 'success', text: 'Configuration updated successfully' });
-        loadSurveysWithConfig(); // Refresh data
+        // Refresh to get latest data from server
+        loadSurveysWithConfig();
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to update configuration' });
+        // Revert optimistic update on error
+        loadSurveysWithConfig();
       }
     } catch (error) {
       setMessage({ type: 'error', text: 'Failed to update configuration' });
+      // Revert optimistic update on error
+      loadSurveysWithConfig();
     } finally {
-      setLoading(false);
+      // Clear loading state for specific field
+      if (fieldName) {
+        setUpdatingStates(prev => ({ 
+          ...prev, 
+          [surveyId]: { 
+            ...(prev[surveyId] || {}), 
+            [fieldName]: false 
+          } 
+        }));
+      }
     }
   };
 
@@ -438,23 +487,29 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                 <label className={`${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
                   Enable Pass/Fail Evaluation
                 </label>
-                <input
-                  type="checkbox"
-                  checked={selectedSurvey.config?.pass_fail_enabled || false}
-                  onChange={(e) => {
-                    const updatedConfig = {
-                      ...selectedSurvey.config,
-                      pass_fail_enabled: e.target.checked,
-                      fail_page_config: selectedSurvey.config?.fail_page_config || {
-                        fail_page_url: '/survey-thankyou',
-                        custom_message: 'Thank you for your time!',
-                        show_retry_option: false
-                      }
-                    };
-                    updateSurveyConfig(selectedSurvey.survey_id, updatedConfig);
-                  }}
-                  className="rounded"
-                />
+                <div className="flex items-center gap-2">
+                  {updatingStates[selectedSurvey.survey_id]?.pass_fail_enabled && (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                  )}
+                  <input
+                    type="checkbox"
+                    checked={selectedSurvey.config?.pass_fail_enabled || false}
+                    disabled={updatingStates[selectedSurvey.survey_id]?.pass_fail_enabled}
+                    onChange={(e) => {
+                      const updatedConfig = {
+                        ...selectedSurvey.config,
+                        pass_fail_enabled: e.target.checked,
+                        fail_page_config: selectedSurvey.config?.fail_page_config || {
+                          fail_page_url: '/survey-thankyou',
+                          custom_message: 'Thank you for your time!',
+                          show_retry_option: false
+                        }
+                      };
+                      updateSurveyConfig(selectedSurvey.survey_id, updatedConfig, 'pass_fail_enabled');
+                    }}
+                    className="rounded"
+                  />
+                </div>
               </div>
 
               {/* Criteria Set Selection */}
@@ -463,28 +518,163 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                   <label className={`block mb-2 ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
                     Criteria Set
                   </label>
-                  <select
-                    value={selectedSurvey.config?.criteria_set_id || ''}
-                    onChange={(e) => {
-                      const updatedConfig = {
-                        ...selectedSurvey.config,
-                        criteria_set_id: e.target.value || undefined
-                      };
-                      updateSurveyConfig(selectedSurvey.survey_id, updatedConfig);
-                    }}
-                    className={`w-full p-2 rounded border ${
-                      isDarkMode 
-                        ? 'bg-slate-600 border-slate-500 text-white' 
-                        : 'bg-white border-gray-300 text-stone-800'
-                    }`}
-                  >
+                  <div className="flex items-center gap-2">
+                    {updatingStates[selectedSurvey.survey_id]?.criteria_set_id && (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    )}
+                    <select
+                      value={selectedSurvey.config?.criteria_set_id || ''}
+                      disabled={updatingStates[selectedSurvey.survey_id]?.criteria_set_id}
+                      onChange={(e) => {
+                        const updatedConfig = {
+                          ...selectedSurvey.config,
+                          criteria_set_id: e.target.value || undefined
+                        };
+                        updateSurveyConfig(selectedSurvey.survey_id, updatedConfig, 'criteria_set_id');
+                      }}
+                      className={`w-full p-2 rounded border ${
+                        isDarkMode 
+                          ? 'bg-slate-600 border-slate-500 text-white' 
+                          : 'bg-white border-gray-300 text-stone-800'
+                      }`}
+                    >
                     <option value="">Select Criteria Set</option>
                     {criteriaSets.map((criteriaSet) => (
                       <option key={criteriaSet._id} value={criteriaSet._id}>
                         {criteriaSet.name}
                       </option>
                     ))}
-                  </select>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Dynamic Redirect Configuration */}
+              {selectedSurvey.config?.pass_fail_enabled && (
+                <div className="mt-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className={`${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
+                      Enable Dynamic Redirect
+                    </label>
+                    <div className="flex items-center gap-2">
+                      {updatingStates[selectedSurvey.survey_id]?.dynamic_redirect_enabled && (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                      )}
+                      <input
+                        type="checkbox"
+                        checked={selectedSurvey.config?.dynamic_redirect_enabled || false}
+                        disabled={updatingStates[selectedSurvey.survey_id]?.dynamic_redirect_enabled}
+                        onChange={(e) => {
+                          const updatedConfig = {
+                            ...selectedSurvey.config,
+                            dynamic_redirect_enabled: e.target.checked,
+                            dynamic_redirect_config: selectedSurvey.config?.dynamic_redirect_config || {
+                              pass_redirect_url: '',
+                              fail_redirect_url: '',
+                              parameter_mappings: {}
+                            }
+                          };
+                          updateSurveyConfig(selectedSurvey.survey_id, updatedConfig, 'dynamic_redirect_enabled');
+                        }}
+                        className="rounded"
+                      />
+                    </div>
+                  </div>
+
+                  {selectedSurvey.config?.dynamic_redirect_enabled && (
+                    <div className="space-y-4 p-4 border rounded-lg bg-gray-50 dark:bg-slate-700/30">
+                      <h4 className={`font-medium ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
+                        Dynamic Redirect Settings
+                      </h4>
+                      
+                      {/* Pass Redirect URL */}
+                      <div>
+                        <label className={`block mb-2 text-sm ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
+                          Pass Redirect URL Template
+                        </label>
+                        <input
+                          type="text"
+                          value={selectedSurvey.config?.dynamic_redirect_config?.pass_redirect_url || ''}
+                          onChange={(e) => {
+                            const updatedConfig = {
+                              ...selectedSurvey.config,
+                              dynamic_redirect_config: {
+                                ...selectedSurvey.config?.dynamic_redirect_config,
+                                pass_redirect_url: e.target.value
+                              }
+                            };
+                            updateSurveyConfig(selectedSurvey.survey_id, updatedConfig, 'dynamic_redirect_config');
+                          }}
+                          placeholder="https://example.com/?aff_sub={session_id}&sub1={timestamp}&click_id={user_id}"
+                          className={`w-full p-2 rounded border text-sm ${
+                            isDarkMode 
+                              ? 'bg-slate-600 border-slate-500 text-white' 
+                              : 'bg-white border-gray-300 text-stone-800'
+                          }`}
+                        />
+                        <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                          Use placeholders: {'{session_id}'}, {'{timestamp}'}, {'{user_id}'}, {'{survey_id}'}, {'{query_param_X}'}
+                        </p>
+                      </div>
+
+                      {/* Fail Redirect URL */}
+                      <div>
+                        <label className={`block mb-2 text-sm ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
+                          Fail Redirect URL Template
+                        </label>
+                        <input
+                          type="text"
+                          value={selectedSurvey.config?.dynamic_redirect_config?.fail_redirect_url || ''}
+                          onChange={(e) => {
+                            const updatedConfig = {
+                              ...selectedSurvey.config,
+                              dynamic_redirect_config: {
+                                ...selectedSurvey.config?.dynamic_redirect_config,
+                                fail_redirect_url: e.target.value
+                              }
+                            };
+                            updateSurveyConfig(selectedSurvey.survey_id, updatedConfig, 'dynamic_redirect_config');
+                          }}
+                          placeholder="https://failpage.com/?reason={fail_reason}&session={session_id}"
+                          className={`w-full p-2 rounded border text-sm ${
+                            isDarkMode 
+                              ? 'bg-slate-600 border-slate-500 text-white' 
+                              : 'bg-white border-gray-300 text-stone-800'
+                          }`}
+                        />
+                      </div>
+
+                      {/* URL Preview */}
+                      <div className="mt-3">
+                        <label className={`block mb-2 text-sm ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
+                          Preview (with sample data)
+                        </label>
+                        <div className={`p-3 rounded border text-xs font-mono ${
+                          isDarkMode 
+                            ? 'bg-slate-800 border-slate-600 text-slate-300' 
+                            : 'bg-gray-100 border-gray-200 text-gray-700'
+                        }`}>
+                          <div className="mb-2">
+                            <strong>Pass URL:</strong><br />
+                            {selectedSurvey.config?.dynamic_redirect_config?.pass_redirect_url
+                              ?.replace('{session_id}', 'sess_12345')
+                              ?.replace('{timestamp}', '1642684800')
+                              ?.replace('{user_id}', 'user_67890')
+                              ?.replace('{survey_id}', selectedSurvey.survey_id)
+                              || 'No URL configured'}
+                          </div>
+                          <div>
+                            <strong>Fail URL:</strong><br />
+                            {selectedSurvey.config?.dynamic_redirect_config?.fail_redirect_url
+                              ?.replace('{session_id}', 'sess_12345')
+                              ?.replace('{fail_reason}', 'criteria_not_met')
+                              ?.replace('{survey_id}', selectedSurvey.survey_id)
+                              || 'No URL configured'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -495,18 +685,24 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                     <label className={`${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
                       Enable Pass Redirect (PepperAds)
                     </label>
-                    <input
-                      type="checkbox"
-                      checked={selectedSurvey.config?.pepperads_redirect_enabled || false}
-                      onChange={(e) => {
-                        const updatedConfig = {
-                          ...selectedSurvey.config,
-                          pepperads_redirect_enabled: e.target.checked
-                        };
-                        updateSurveyConfig(selectedSurvey.survey_id, updatedConfig);
-                      }}
-                      className="rounded"
-                    />
+                    <div className="flex items-center gap-2">
+                      {updatingStates[selectedSurvey.survey_id]?.pepperads_redirect_enabled && (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                      )}
+                      <input
+                        type="checkbox"
+                        checked={selectedSurvey.config?.pepperads_redirect_enabled || false}
+                        disabled={updatingStates[selectedSurvey.survey_id]?.pepperads_redirect_enabled}
+                        onChange={(e) => {
+                          const updatedConfig = {
+                            ...selectedSurvey.config,
+                            pepperads_redirect_enabled: e.target.checked
+                          };
+                          updateSurveyConfig(selectedSurvey.survey_id, updatedConfig, 'pepperads_redirect_enabled');
+                        }}
+                        className="rounded"
+                      />
+                    </div>
                   </div>
 
                   {selectedSurvey.config?.pepperads_redirect_enabled && (
@@ -518,12 +714,13 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                         <div className="flex-1 flex gap-2">
                           <select
                             value={selectedSurvey.config?.pepperads_offer_id || ''}
+                            disabled={updatingStates[selectedSurvey.survey_id]?.pepperads_offer_id}
                             onChange={(e) => {
                               const updatedConfig = {
                                 ...selectedSurvey.config,
                                 pepperads_offer_id: e.target.value || undefined
                               };
-                              updateSurveyConfig(selectedSurvey.survey_id, updatedConfig);
+                              updateSurveyConfig(selectedSurvey.survey_id, updatedConfig, 'pepperads_offer_id');
                             }}
                             className={`flex-1 p-2 rounded border ${
                               isDarkMode 
@@ -554,7 +751,11 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                                     setShowOfferForm(true);
                                   }
                                 }}
-                                className={`px-2 py-1 rounded text-sm ${isDarkMode ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'}`}
+                                className={`px-2 py-1 rounded text-sm flex items-center gap-1 ${
+                                  isDarkMode 
+                                    ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                                    : 'bg-blue-500 hover:bg-blue-600 text-white'
+                                }`}
                                 title="Edit selected offer"
                               >
                                 ✏️

@@ -3,6 +3,10 @@ import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import './CustomerFeedbackTemplate.css';
 import type { Survey } from '../types/Survey';
+import { 
+  buildRedirectUrl, 
+  createSessionContext
+} from '../utils/redirectBuilder';
 
 interface Question {
   id: string;
@@ -270,7 +274,29 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
       console.log('🔍 Redirect URL?', redirect?.redirect_url);
       
       if (redirect?.should_redirect && redirect?.redirect_url) {
-        console.log('🚀 Redirecting to:', redirect.redirect_url);
+        console.log('🚀 Processing redirect...');
+        console.log('📝 Original redirect URL:', redirect.redirect_url);
+        console.log('📋 Session ID from result:', result.session_id);
+        console.log('👤 User info:', { clickId, username });
+        
+        // Build dynamic redirect URL on frontend
+        const sessionContext = createSessionContext(
+          result.session_id || `sess_${Date.now()}`,
+          survey.id,
+          clickId || username || undefined
+        );
+        
+        console.log('🔍 Session context created:', sessionContext);
+        console.log('🔍 Query params from URL:', new URLSearchParams(window.location.search));
+        console.log('🔍 Template URL from backend:', redirect.redirect_url);
+        
+        const finalRedirectUrl = buildRedirectUrl(
+          redirect.redirect_url,
+          sessionContext
+        );
+        
+        console.log('🎯 Final redirect URL:', finalRedirectUrl);
+        console.log('🔍 Did placeholders get replaced?', !finalRedirectUrl.includes('{'));
         
         // Show success message briefly before redirect
         setSubmitted(true);
@@ -281,7 +307,7 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
         
         setTimeout(() => {
           console.log('🔄 Executing redirect now...');
-          window.location.href = redirect.redirect_url;
+          window.location.href = finalRedirectUrl;
         }, delay * 1000);
         
         return;

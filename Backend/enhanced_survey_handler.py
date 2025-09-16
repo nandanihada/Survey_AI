@@ -154,7 +154,35 @@ class EnhancedSurveyHandler:
             print(f"🔄 Redirect decision: {redirect_decision['reason']}")
             print(f"📍 Redirect type: {redirect_decision['redirect_type']}")
             
-            if redirect_decision["should_redirect"]:
+            # Check for dynamic redirect first
+            dynamic_redirect_url = self._build_dynamic_redirect_url(survey_id, evaluation_result, session_id, user_info, request_data)
+            
+            if dynamic_redirect_url:
+                print(f"🎯 Using dynamic redirect template for frontend processing")
+                # Return the template URL for frontend processing, not the processed URL
+                config = self.db.survey_configurations.find_one({"survey_id": survey_id})
+                dynamic_config = config.get("dynamic_redirect_config", {})
+                status = evaluation_result.get("status", "fail")
+                
+                if status == "pass":
+                    template_url = dynamic_config.get("pass_redirect_url", "")
+                else:
+                    template_url = dynamic_config.get("fail_redirect_url", "")
+                
+                redirect_info = {
+                    "redirect_url": template_url,  # Send template, not processed URL
+                    "redirect_type": "dynamic",
+                    "custom_message": "Redirecting..."
+                }
+                redirect_decision["should_redirect"] = True
+                redirect_decision["redirect_type"] = "dynamic"
+                
+                # Track dynamic redirect
+                track_step(session_id, "redirect", 
+                          redirect_type="dynamic",
+                          redirect_url=dynamic_redirect_url)
+                          
+            elif redirect_decision["should_redirect"]:
                 # Build PepperAds URL
                 redirect_info = build_pepperads_url(
                     survey_id, 
@@ -244,6 +272,83 @@ class EnhancedSurveyHandler:
             import traceback
             print(f"Full traceback: {traceback.format_exc()}")
             return self._error_response(f"Internal server error: {str(e)}", 500)
+    
+    def _build_dynamic_redirect_url(self, survey_id: str, evaluation_result: dict, session_id: str, user_info: dict, request_data: dict) -> str:
+        """Build dynamic redirect URL with parameter replacement"""
+        
+        try:
+            # Get survey configuration
+            config = self.db.survey_configurations.find_one({"survey_id": survey_id})
+            
+            if not config or not config.get("dynamic_redirect_enabled"):
+                print(f"❌ Dynamic redirect not enabled for survey {survey_id}")
+                print(f"   Config exists: {bool(config)}")
+                if config:
+                    print(f"   Dynamic redirect enabled: {config.get('dynamic_redirect_enabled')}")
+                return None
+                
+            dynamic_config = config.get("dynamic_redirect_config", {})
+            
+            # Determine which URL to use based on pass/fail status
+            status = evaluation_result.get("status", "fail")
+            if status == "pass":
+                url_template = dynamic_config.get("pass_redirect_url", "")
+            else:
+                url_template = dynamic_config.get("fail_redirect_url", "")
+                
+            if not url_template:
+                return None
+                
+            print(f"🎯 Building dynamic redirect URL for {status} status")
+            print(f"📝 Template: {url_template}")
+            print(f"✅ Dynamic redirect IS ENABLED for survey {survey_id}")
+            
+            # Return just a marker to indicate dynamic redirect should be used
+            # The actual template will be sent by the frontend processing logic above
+            return "DYNAMIC_REDIRECT_ENABLED"
+            
+            # Build replacement parameters
+            import time
+            from urllib.parse import parse_qs, urlparse
+            
+            # Don't extract query parameters for dynamic redirect - we only want template replacement
+            # The extra parameters are causing the double ? issue
+            
+            # Build parameter mapping
+            replacements = {
+                'session_id': session_id,
+                'timestamp': str(int(time.time())),
+                'user_id': user_info.get('click_id', '') or user_info.get('username', ''),
+                'survey_id': survey_id,
+                'status': status,
+                'score': str(evaluation_result.get('score', 0)),
+                'fail_reason': 'criteria_not_met' if status == 'fail' else '',
+                'username': user_info.get('username', ''),
+                'email': user_info.get('email', ''),
+                'click_id': user_info.get('click_id', ''),
+                'ip_address': user_info.get('ip_address', ''),
+            }
+            
+            # Replace placeholders in URL
+            final_url = url_template
+            for key, value in replacements.items():
+                placeholder = '{' + key + '}'
+                final_url = final_url.replace(placeholder, value)
+            
+            print(f"🔍 Replacements made:")
+            for key, value in replacements.items():
+                print(f"   {{{key}}} → {value}")
+            print(f"✅ Dynamic URL built: {final_url}")
+            
+            # Ensure we don't have leftover placeholders
+            if '{' in final_url and '}' in final_url:
+                print(f"⚠️ Warning: URL still contains unreplaced placeholders: {final_url}")
+            
+            return final_url
+            
+        except Exception as e:
+            print(f"❌ Error building dynamic redirect URL: {e}")
+            return None
     
     def _send_conditional_postbacks(
         self, 
