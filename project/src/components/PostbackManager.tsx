@@ -267,16 +267,16 @@ const PostbackSender: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
 
     // Standardized 10 fixed parameters (placeholders to use in partner URLs)
     const availableParams = [
-        '[CLICK_ID]',
-        '[PAYOUT]',
-        '[CURRENCY]',
-        '[OFFER_ID]',
-        '[CONVERSION_STATUS]',
-        '[TRANSACTION_ID]',
-        '[SUB1]',
-        '[SUB2]',
-        '[EVENT_NAME]',
-        '[TIMESTAMP]'
+        { square: '[CLICK_ID]', curly: '{CLICK_ID}' },
+        { square: '[PAYOUT]', curly: '{PAYOUT}' },
+        { square: '[CURRENCY]', curly: '{CURRENCY}' },
+        { square: '[OFFER_ID]', curly: '{OFFER_ID}' },
+        { square: '[CONVERSION_STATUS]', curly: '{CONVERSION_STATUS}' },
+        { square: '[TRANSACTION_ID]', curly: '{TRANSACTION_ID}' },
+        { square: '[SUB1]', curly: '{SUB1}' },
+        { square: '[SUB2]', curly: '{SUB2}' },
+        { square: '[EVENT_NAME]', curly: '{EVENT_NAME}' },
+        { square: '[TIMESTAMP]', curly: '{TIMESTAMP}' }
     ];
 
     return (
@@ -346,11 +346,18 @@ const PostbackSender: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
             <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-slate-700/50' : 'bg-gray-50'}`}>
                 <h4 className="font-semibold mb-2">Available Parameters</h4>
                 <p className={`text-sm mb-2 ${isDarkMode ? 'text-slate-300' : 'text-gray-600'}`}>
-                    Use these placeholders in your URL. They will be replaced with actual data from the survey response.
+                    Use these placeholders in your URL. They will be replaced with actual data from the survey response. 
+                    Both square brackets [PARAM] and curly brackets {`{PARAM}`} are supported.
                 </p>
-                <div className="grid grid-cols-3 gap-2 text-sm">
-                    {availableParams.map(param => (
-                         <pre key={param} className={`p-2 rounded text-center ${isDarkMode ? 'bg-slate-600' : 'bg-gray-200'}`}>{param}</pre>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                    {availableParams.map((param, index) => (
+                        <div key={`param-${index}`} className={`p-2 rounded ${isDarkMode ? 'bg-slate-600' : 'bg-gray-200'}`}>
+                            <div className="flex justify-between items-center">
+                                <pre className="font-mono text-xs">{param.square}</pre>
+                                <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>or</span>
+                                <pre className="font-mono text-xs">{param.curly}</pre>
+                            </div>
+                        </div>
                     ))}
                 </div>
             </div>
@@ -725,16 +732,16 @@ const PostbackSharingManager: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode 
     
     const defaultParameters = {
         global: {
-            click_id: { enabled: false, description: 'Unique identifier for the click/conversion event' },
-            payout: { enabled: false, description: 'Commission/payout amount earned for the conversion' },
-            currency: { enabled: false, description: 'Currency code (USD, EUR, etc.)' },
-            offer_id: { enabled: false, description: 'Unique identifier for the offer/campaign' },
-            conversion_status: { enabled: false, description: 'Status of the conversion (confirmed, pending, reversed)' },
-            transaction_id: { enabled: false, description: 'Unique transaction identifier' },
-            sub1: { enabled: false, description: 'SubID1 - First level tracking parameter' },
-            sub2: { enabled: false, description: 'SubID2 - Second level tracking parameter' },
-            event_name: { enabled: false, description: 'Name of the conversion event (conversion, lead, sale, etc.)' },
-            timestamp: { enabled: false, description: 'Timestamp of when the conversion occurred' }
+            click_id: { enabled: false, description: 'Unique identifier for the click/conversion event', bracketFormat: 'square' },
+            payout: { enabled: false, description: 'Commission/payout amount earned for the conversion', bracketFormat: 'square' },
+            currency: { enabled: false, description: 'Currency code (USD, EUR, etc.)', bracketFormat: 'square' },
+            offer_id: { enabled: false, description: 'Unique identifier for the offer/campaign', bracketFormat: 'square' },
+            conversion_status: { enabled: false, description: 'Status of the conversion (confirmed, pending, reversed)', bracketFormat: 'square' },
+            transaction_id: { enabled: false, description: 'Unique transaction identifier', bracketFormat: 'square' },
+            sub1: { enabled: false, description: 'SubID1 - First level tracking parameter', bracketFormat: 'square' },
+            sub2: { enabled: false, description: 'SubID2 - Second level tracking parameter', bracketFormat: 'square' },
+            event_name: { enabled: false, description: 'Name of the conversion event (conversion, lead, sale, etc.)', bracketFormat: 'square' },
+            timestamp: { enabled: false, description: 'Timestamp of when the conversion occurred', bracketFormat: 'square' }
         }
     };
     
@@ -779,7 +786,18 @@ const PostbackSharingManager: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode 
             const userConfig = editedShare.parameters?.[paramName];
             if (userConfig?.enabled) {
                 const customName = userConfig.customName || paramName;
-                const value = userConfig.customValue || `[${paramName.toUpperCase()}]`;
+                let value = userConfig.customValue;
+                
+                // If no custom value, use placeholder with selected bracket format
+                if (!value) {
+                    const bracketFormat = userConfig.bracketFormat || 'square';
+                    if (bracketFormat === 'curly') {
+                        value = `{${paramName.toUpperCase()}}`;
+                    } else {
+                        value = `[${paramName.toUpperCase()}]`;
+                    }
+                }
+                
                 params.push(`${customName}=${value}`);
             }
         });
@@ -933,19 +951,36 @@ const PostbackSharingManager: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode 
                                       </div>
                                     </div>
                                     {enabled && (
-                                      <div className="ml-6">
-                                        <label className={`block text-xs font-medium mb-1 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
-                                          Custom Value for {paramName}:
-                                        </label>
-                                        <input
-                                          type="text"
-                                          value={mergedConfig.customValue || ''}
-                                          onChange={(e) => updateParameterConfig(paramName, { ...mergedConfig, customValue: e.target.value })}
-                                          placeholder={`e.g., ${getPlaceholderValue(paramName)}`}
-                                          className={`w-full p-2 text-sm border rounded ${isDarkMode ? 'bg-slate-700 border-slate-500 text-white' : 'bg-white border-gray-300'}`}
-                                        />
-                                        <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
-                                          Leave empty to use placeholder [{paramName.toUpperCase()}] in URL
+                                      <div className="ml-6 space-y-3">
+                                        <div>
+                                          <label className={`block text-xs font-medium mb-1 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
+                                            Custom Value for {paramName}:
+                                          </label>
+                                          <input
+                                            type="text"
+                                            value={mergedConfig.customValue || ''}
+                                            onChange={(e) => updateParameterConfig(paramName, { ...mergedConfig, customValue: e.target.value })}
+                                            placeholder={`e.g., ${getPlaceholderValue(paramName)}`}
+                                            className={`w-full p-2 text-sm border rounded ${isDarkMode ? 'bg-slate-700 border-slate-500 text-white' : 'bg-white border-gray-300'}`}
+                                          />
+                                        </div>
+                                        
+                                        <div>
+                                          <label className={`block text-xs font-medium mb-1 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
+                                            Bracket Format:
+                                          </label>
+                                          <select
+                                            value={mergedConfig.bracketFormat || 'square'}
+                                            onChange={(e) => updateParameterConfig(paramName, { ...mergedConfig, bracketFormat: e.target.value })}
+                                            className={`w-full p-2 text-sm border rounded ${isDarkMode ? 'bg-slate-700 border-slate-500 text-white' : 'bg-white border-gray-300'}`}
+                                          >
+                                            <option value="square">Square Brackets: [{paramName.toUpperCase()}]</option>
+                                            <option value="curly">Curly Brackets: {`{${paramName.toUpperCase()}}`}</option>
+                                          </select>
+                                        </div>
+                                        
+                                        <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                                          Leave custom value empty to use placeholder {mergedConfig.bracketFormat === 'curly' ? `{${paramName.toUpperCase()}}` : `[${paramName.toUpperCase()}]`} in URL
                                         </p>
                                       </div>
                                     )}

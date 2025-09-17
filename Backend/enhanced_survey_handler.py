@@ -17,6 +17,7 @@ from pepperads_integration import (
     get_fail_page_config
 )
 from pass_fail_schema import get_system_config
+from click_tracking_api import update_click_submission_status
 
 class EnhancedSurveyHandler:
     """Enhanced handler for survey responses with complete pass/fail workflow"""
@@ -139,7 +140,18 @@ class EnhancedSurveyHandler:
                 }
                 response_data["evaluation_result"] = evaluation_result
             
-            # Step 7: Save response to database
+            # Step 7: Get click tracking data and enhance response
+            click_data = self._get_click_tracking_data(survey_id, user_info)
+            if click_data:
+                response_data["click_tracking"] = {
+                    "click_count": click_data.get("click_count", 1),
+                    "first_click_time": click_data.get("first_click_time"),
+                    "total_clicks": click_data.get("total_clicks", 1),
+                    "click_record_id": click_data.get("click_record_id")
+                }
+                print(f"📊 Click data added: {click_data.get('click_count', 1)} clicks by {click_data.get('username', 'unknown')}")
+            
+            # Step 8: Save response to database
             try:
                 self.db.responses.insert_one(response_data)
                 print(f"💾 Response saved to database: {response_id}")
@@ -147,7 +159,16 @@ class EnhancedSurveyHandler:
                 print(f"❌ Database error: {db_error}")
                 return self._error_response(f"Database error: {str(db_error)}", 500)
             
-            # Step 8: Determine redirect action
+            # Step 9: Update click tracking with submission status
+            submission_data = {
+                "response_id": response_id,
+                "session_id": session_id,
+                "evaluation_status": evaluation_result.get("status", "unknown"),
+                "evaluation_score": evaluation_result.get("score", 0)
+            }
+            update_click_submission_status(survey_id, user_info, submission_data)
+            
+            # Step 10: Determine redirect action
             redirect_decision = get_redirect_decision(survey_id, evaluation_result)
             redirect_info = None
             
@@ -202,7 +223,7 @@ class EnhancedSurveyHandler:
                     redirect_decision["should_redirect"] = False
                     redirect_decision["redirect_type"] = "thankyou_page"
             
-            # Step 9: Get fail/thank you page config if needed
+            # Step 11: Get fail/thank you page config if needed
             if not redirect_decision["should_redirect"]:
                 fail_page_config = get_fail_page_config(survey_id)
                 redirect_info = {
@@ -216,7 +237,7 @@ class EnhancedSurveyHandler:
                           redirect_type=redirect_decision["redirect_type"],
                           redirect_url=redirect_info["redirect_url"])
             
-            # Step 10: Send postbacks (BOTH pass and fail cases)
+            # Step 12: Send postbacks (BOTH pass and fail cases)
             postback_results = self._send_conditional_postbacks(
                 survey_id,
                 session_id, 
@@ -224,7 +245,7 @@ class EnhancedSurveyHandler:
                 evaluation_result
             )
             
-            # Step 11: Prepare final response
+            # Step 13: Prepare final response
             final_response = {
                 "message": "Survey submitted successfully",
                 "response_id": response_id,
@@ -455,27 +476,37 @@ class EnhancedSurveyHandler:
         evaluation_result: dict,
         extra_params: dict = None
     ) -> str:
-        """Replace placeholders in postback URL"""
+        """Replace placeholders in postback URL - supports both [param] and {param} formats"""
         
-        # Standard replacements for ONLY 10 fixed parameters
-        replacements = {
-            # 10 Fixed Parameters ONLY
-            '[CLICK_ID]': response_data.get("user_info", {}).get("click_id", ""),
-            '[PAYOUT]': str(evaluation_result.get("payout", 0)),
-            '[CURRENCY]': "USD",  # Default currency
-            '[OFFER_ID]': response_data.get("survey_id", ""),
-            '[CONVERSION_STATUS]': "confirmed" if evaluation_result.get("status") == "pass" else "rejected",
-            '[TRANSACTION_ID]': response_data.get("_id", ""),
-            '[SUB1]': response_data.get("user_info", {}).get("click_id", ""),  # Use click_id as sub1
-            '[SUB2]': response_data.get("session_id", ""),  # Use session_id as sub2
-            '[EVENT_NAME]': "survey_conversion",
-            '[TIMESTAMP]': str(int(datetime.now(timezone.utc).timestamp()))
+        # Standard parameter values for ONLY 10 fixed parameters
+        param_values = {
+            'CLICK_ID': response_data.get("user_info", {}).get("click_id", ""),
+            'PAYOUT': str(evaluation_result.get("payout", 0)),
+            'CURRENCY': "USD",  # Default currency
+            'OFFER_ID': response_data.get("survey_id", ""),
+            'CONVERSION_STATUS': "confirmed" if evaluation_result.get("status") == "pass" else "rejected",
+            'TRANSACTION_ID': response_data.get("_id", ""),
+            'SUB1': response_data.get("user_info", {}).get("click_id", ""),  # Use click_id as sub1
+            'SUB2': response_data.get("session_id", ""),  # Use session_id as sub2
+            'EVENT_NAME': "survey_conversion",
+            'TIMESTAMP': str(int(datetime.now(timezone.utc).timestamp()))
         }
         
         # Add extra parameters
         if extra_params:
             for key, value in extra_params.items():
-                replacements[f'[{key.upper()}]'] = str(value)
+                param_values[key.upper()] = str(value)
+        
+        # Create replacements for both square and curly bracket formats
+        replacements = {}
+        for param_name, param_value in param_values.items():
+            # Square bracket format: [PARAM]
+            replacements[f'[{param_name}]'] = param_value
+            # Curly bracket format: {PARAM}
+            replacements[f'{{{param_name}}}'] = param_value
+            # Also support lowercase versions
+            replacements[f'[{param_name.lower()}]'] = param_value
+            replacements[f'{{{param_name.lower()}}}'] = param_value
         
         # Apply replacements
         processed_url = url
@@ -520,6 +551,42 @@ class EnhancedSurveyHandler:
                 "error": str(e),
                 "timestamp": datetime.now(timezone.utc)
             }
+    
+    def _get_click_tracking_data(self, survey_id: str, user_info: dict) -> dict:
+        """Get click tracking data for this user/survey combination"""
+        try:
+            # Try to find click record by different identifiers
+            click_id = user_info.get('click_id', '')
+            ip_address = user_info.get('ip_address', '')
+            
+            query_conditions = []
+            if click_id:
+                query_conditions.append({"click_id": click_id})
+            if ip_address and ip_address != 'unknown':
+                query_conditions.append({"ip_address": ip_address})
+            
+            if not query_conditions:
+                return None
+            
+            click_record = self.db.survey_clicks.find_one({
+                "survey_id": survey_id,
+                "$or": query_conditions
+            })
+            
+            if click_record:
+                return {
+                    "click_record_id": str(click_record.get("_id", "")),
+                    "click_count": click_record.get("click_count", 1),
+                    "total_clicks": click_record.get("click_count", 1),
+                    "first_click_time": click_record.get("first_click_time"),
+                    "username": click_record.get("username", "unknown")
+                }
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ Error getting click tracking data: {e}")
+            return None
     
     def _error_response(self, message: str, status_code: int = 400) -> dict:
         """Generate error response"""

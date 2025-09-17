@@ -128,6 +128,8 @@ try:
     from survey_routes import survey_bp
     from admin_routes import admin_bp
     from response_logs_api import response_logs_bp
+    from enhanced_response_logs_api import enhanced_response_logs_bp
+    from click_tracking_api import click_tracking_bp
     
     # Register blueprints
     print("Registering blueprints...")
@@ -140,6 +142,8 @@ try:
     app.register_blueprint(survey_bp)  # Survey routes at /api/surveys
     app.register_blueprint(admin_bp)  # Admin routes at /api/admin
     app.register_blueprint(response_logs_bp)
+    app.register_blueprint(enhanced_response_logs_bp)
+    app.register_blueprint(click_tracking_bp)
     print("✅ All blueprints registered successfully")
 except ImportError as e:
     print(f"⚠️ Failed to import blueprints: {e}")

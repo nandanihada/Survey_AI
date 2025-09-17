@@ -139,7 +139,45 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
         .then(data => data.tracking_id && setTrackingId(data.tracking_id))
         .catch(err => console.error('Tracking error:', err));
     }
+    
+    // Track initial survey load/click
+    if (survey.id && !previewMode) {
+      setTimeout(() => {
+        trackClickInteraction('survey_loaded', { 
+          survey_title: survey.title,
+          total_questions: normalizedQuestions.length 
+        });
+      }, 1000);
+    }
   }, [location.search, survey.id]);
+
+  const trackClickInteraction = async (action: string, data?: any) => {
+    if (!survey.id) return;
+    
+    try {
+      const params = new URLSearchParams(location.search);
+      const trackingData = {
+        action,
+        data,
+        username: username || params.get('username'),
+        email: email || params.get('email'),
+        click_id: clickId,
+        user_agent: navigator.userAgent,
+        timestamp: new Date().toISOString(),
+        url_params: Object.fromEntries(params.entries())
+      };
+
+      console.log('🎯 Tracking click interaction:', trackingData);
+
+      await fetch(`${apiBaseUrl}/api/track-click/${survey.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(trackingData),
+      });
+    } catch (error) {
+      console.error('Click tracking error:', error);
+    }
+  };
 
   useEffect(() => {
     let completed = 0;
@@ -160,6 +198,9 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
   const handleChange = async (id: string, value: string | number) => {
     // Update form data first
     setFormData(prev => ({ ...prev, [id]: value }));
+    
+    // Track click interaction when user selects an answer
+    trackClickInteraction('answer_selected', { questionId: id, answer: value });
     
     // Skip branching logic in preview mode
     if (previewMode) return;

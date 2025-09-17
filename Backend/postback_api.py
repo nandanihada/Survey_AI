@@ -244,16 +244,16 @@ def create_postback_share():
         default_params = {
             'global': {
                 # 10 Fixed Parameters ONLY - default disabled; enable explicitly from UI
-                'click_id': {'enabled': False, 'description': 'Unique identifier for the click/conversion event'},
-                'payout': {'enabled': False, 'description': 'Commission/payout amount earned for the conversion'},
-                'currency': {'enabled': False, 'description': 'Currency code (USD, EUR, etc.)'},
-                'offer_id': {'enabled': False, 'description': 'Unique identifier for the offer/campaign'},
-                'conversion_status': {'enabled': False, 'description': 'Status of the conversion (confirmed, pending, reversed)'},
-                'transaction_id': {'enabled': False, 'description': 'Unique transaction identifier'},
-                'sub1': {'enabled': False, 'description': 'SubID1 - First level tracking parameter'},
-                'sub2': {'enabled': False, 'description': 'SubID2 - Second level tracking parameter'},
-                'event_name': {'enabled': False, 'description': 'Name of the conversion event (conversion, lead, sale, etc.)'},
-                'timestamp': {'enabled': False, 'description': 'Timestamp of when the conversion occurred'}
+                'click_id': {'enabled': False, 'description': 'Unique identifier for the click/conversion event', 'bracketFormat': 'square'},
+                'payout': {'enabled': False, 'description': 'Commission/payout amount earned for the conversion', 'bracketFormat': 'square'},
+                'currency': {'enabled': False, 'description': 'Currency code (USD, EUR, etc.)', 'bracketFormat': 'square'},
+                'offer_id': {'enabled': False, 'description': 'Unique identifier for the offer/campaign', 'bracketFormat': 'square'},
+                'conversion_status': {'enabled': False, 'description': 'Status of the conversion (confirmed, pending, reversed)', 'bracketFormat': 'square'},
+                'transaction_id': {'enabled': False, 'description': 'Unique transaction identifier', 'bracketFormat': 'square'},
+                'sub1': {'enabled': False, 'description': 'SubID1 - First level tracking parameter', 'bracketFormat': 'square'},
+                'sub2': {'enabled': False, 'description': 'SubID2 - Second level tracking parameter', 'bracketFormat': 'square'},
+                'event_name': {'enabled': False, 'description': 'Name of the conversion event (conversion, lead, sale, etc.)', 'bracketFormat': 'square'},
+                'timestamp': {'enabled': False, 'description': 'Timestamp of when the conversion occurred', 'bracketFormat': 'square'}
             }
         }
         
@@ -373,7 +373,12 @@ def generate_postback_url(share_id):
                 if param_config.get('customValue'):
                     value = param_config['customValue']
                 else:
-                    value = f"[{param_name.upper()}]"
+                    # Support both bracket formats - check if user prefers curly brackets
+                    bracket_format = param_config.get('bracketFormat', 'square')  # default to square
+                    if bracket_format == 'curly':
+                        value = f"{{{param_name.upper()}}}"
+                    else:
+                        value = f"[{param_name.upper()}]"
                 params.append(f"{custom_name}={value}")
         
         # Construct final URL

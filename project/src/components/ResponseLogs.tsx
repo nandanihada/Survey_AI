@@ -9,23 +9,26 @@ import {
   Activity, 
   Download, 
   RefreshCw,
-  Filter,
   Search,
   Eye,
   CheckCircle,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  Monitor,
+  Smartphone,
+  Tablet
 } from 'lucide-react';
 
 interface ResponseLog {
   _id: string;
   survey_id: string;
-  session_id: string;
+  session_id: string | null;
   username: string;
+  enhanced_username: string;
   email: string;
   ip_address: string;
   click_id: string;
-  submitted_at: string;
+  submitted_at: string | null;
   status: string;
   duration_seconds: number;
   duration_formatted: string;
@@ -36,14 +39,26 @@ interface ResponseLog {
   };
   responses_count: number;
   postback_status: string;
+  record_type: 'submitted' | 'clicked_only';
+  click_tracking?: {
+    click_count: number;
+    first_click_time: string;
+    last_click_time: string;
+    total_clicks: number;
+    device_type: string;
+    browser: string;
+  };
 }
 
 interface ResponseLogsSummary {
-  total_responses: number;
-  completed_responses: number;
-  completion_rate: number;
+  total_clicks: number;
+  total_unique_clicks: number;
+  total_submissions: number;
+  clicked_not_submitted: number;
+  conversion_rate: number;
   average_duration: number;
   average_duration_formatted: string;
+  completion_rate: number;
 }
 
 interface ResponseLogsProps {
@@ -67,7 +82,7 @@ const ResponseLogs: React.FC<ResponseLogsProps> = ({ surveyId }) => {
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
       const token = localStorage.getItem('auth_token');
       
-      const response = await fetch(`${baseUrl}/api/response-logs/${surveyId}`, {
+      const response = await fetch(`${baseUrl}/api/enhanced-response-logs/${surveyId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -113,8 +128,23 @@ const ResponseLogs: React.FC<ResponseLogsProps> = ({ surveyId }) => {
       case 'failed':
       case 'error':
         return <XCircle size={16} className="text-red-500" />;
+      case 'clicked_not_submitted':
+        return <MousePointer size={16} className="text-orange-500" />;
       default:
         return <AlertCircle size={16} className="text-yellow-500" />;
+    }
+  };
+
+  const getDeviceIcon = (deviceType: string) => {
+    switch (deviceType.toLowerCase()) {
+      case 'mobile':
+        return <Smartphone size={14} className="text-gray-400" />;
+      case 'tablet':
+        return <Tablet size={14} className="text-gray-400" />;
+      case 'desktop':
+        return <Monitor size={14} className="text-gray-400" />;
+      default:
+        return <Globe size={14} className="text-gray-400" />;
     }
   };
 
@@ -129,6 +159,8 @@ const ResponseLogs: React.FC<ResponseLogsProps> = ({ surveyId }) => {
         return `${baseClasses} bg-red-100 text-red-800`;
       case 'pending':
         return `${baseClasses} bg-yellow-100 text-yellow-800`;
+      case 'clicked_not_submitted':
+        return `${baseClasses} bg-orange-100 text-orange-800`;
       default:
         return `${baseClasses} bg-gray-100 text-gray-800`;
     }
@@ -139,7 +171,7 @@ const ResponseLogs: React.FC<ResponseLogsProps> = ({ surveyId }) => {
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
       const token = localStorage.getItem('auth_token');
       
-      const response = await fetch(`${baseUrl}/api/response-logs/${surveyId}/export`, {
+      const response = await fetch(`${baseUrl}/api/enhanced-response-logs/${surveyId}/export`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -171,10 +203,10 @@ const ResponseLogs: React.FC<ResponseLogsProps> = ({ surveyId }) => {
 
   const filteredLogs = logs.filter(log => {
     const matchesSearch = searchTerm === '' || 
-      log.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.ip_address.includes(searchTerm) ||
-      log.click_id.toLowerCase().includes(searchTerm.toLowerCase());
+      (log.enhanced_username || log.username || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (log.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (log.ip_address || '').includes(searchTerm) ||
+      (log.click_id || '').toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = statusFilter === 'all' || log.status === statusFilter;
     
@@ -212,15 +244,15 @@ const ResponseLogs: React.FC<ResponseLogsProps> = ({ surveyId }) => {
 
   return (
     <div className="space-y-6">
-      {/* Summary Cards */}
+      {/* Enhanced Summary Cards */}
       {summary && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg p-4 text-white">
             <div className="flex items-center">
-              <Activity className="h-8 w-8 mb-2" />
+              <MousePointer className="h-8 w-8 mb-2" />
               <div className="ml-3">
-                <p className="text-blue-100 text-sm">Total Responses</p>
-                <p className="text-2xl font-bold">{summary.total_responses}</p>
+                <p className="text-blue-100 text-sm">Total Clicks</p>
+                <p className="text-2xl font-bold">{summary.total_clicks}</p>
               </div>
             </div>
           </div>
@@ -229,8 +261,18 @@ const ResponseLogs: React.FC<ResponseLogsProps> = ({ surveyId }) => {
             <div className="flex items-center">
               <CheckCircle className="h-8 w-8 mb-2" />
               <div className="ml-3">
-                <p className="text-green-100 text-sm">Completed</p>
-                <p className="text-2xl font-bold">{summary.completed_responses}</p>
+                <p className="text-green-100 text-sm">Submissions</p>
+                <p className="text-2xl font-bold">{summary.total_submissions}</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg p-4 text-white">
+            <div className="flex items-center">
+              <XCircle className="h-8 w-8 mb-2" />
+              <div className="ml-3">
+                <p className="text-orange-100 text-sm">Click Only</p>
+                <p className="text-2xl font-bold">{summary.clicked_not_submitted}</p>
               </div>
             </div>
           </div>
@@ -239,17 +281,17 @@ const ResponseLogs: React.FC<ResponseLogsProps> = ({ surveyId }) => {
             <div className="flex items-center">
               <Globe className="h-8 w-8 mb-2" />
               <div className="ml-3">
-                <p className="text-purple-100 text-sm">Completion Rate</p>
-                <p className="text-2xl font-bold">{summary.completion_rate.toFixed(1)}%</p>
+                <p className="text-purple-100 text-sm">Conversion Rate</p>
+                <p className="text-2xl font-bold">{summary.conversion_rate.toFixed(1)}%</p>
               </div>
             </div>
           </div>
           
-          <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg p-4 text-white">
+          <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-lg p-4 text-white">
             <div className="flex items-center">
               <Clock className="h-8 w-8 mb-2" />
               <div className="ml-3">
-                <p className="text-orange-100 text-sm">Avg Duration</p>
+                <p className="text-indigo-100 text-sm">Avg Duration</p>
                 <p className="text-2xl font-bold">{summary.average_duration_formatted}</p>
               </div>
             </div>
@@ -288,6 +330,7 @@ const ResponseLogs: React.FC<ResponseLogsProps> = ({ surveyId }) => {
             <option value="completed">Completed</option>
             <option value="failed">Failed</option>
             <option value="pending">Pending</option>
+            <option value="clicked_not_submitted">Clicked Only</option>
           </select>
           
           <button
@@ -331,10 +374,10 @@ const ResponseLogs: React.FC<ResponseLogsProps> = ({ surveyId }) => {
                     User Info
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Session Details
+                    Click Tracking
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Network Info
+                    Session Details
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Timing
@@ -354,7 +397,7 @@ const ResponseLogs: React.FC<ResponseLogsProps> = ({ surveyId }) => {
                       <div className="space-y-1">
                         <div className="flex items-center text-sm text-gray-900">
                           <User size={14} className="mr-2 text-gray-400" />
-                          <span className="font-medium">{log.username || 'Anonymous'}</span>
+                          <span className="font-medium">{log.enhanced_username || log.username || 'Anonymous'}</span>
                         </div>
                         {log.email && (
                           <div className="flex items-center text-sm text-gray-600">
@@ -362,40 +405,74 @@ const ResponseLogs: React.FC<ResponseLogsProps> = ({ surveyId }) => {
                             {log.email}
                           </div>
                         )}
-                      </div>
-                    </td>
-                    
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="space-y-1">
-                        <div className="text-xs text-gray-500 font-mono">
-                          Session: {log.session_id.substring(0, 8)}...
+                        <div className="flex items-center text-xs text-gray-500">
+                          <Globe size={12} className="mr-1" />
+                          {log.ip_address || 'N/A'}
                         </div>
-                        {log.click_id && (
-                          <div className="flex items-center text-xs text-gray-500">
-                            <MousePointer size={12} className="mr-1" />
-                            {log.click_id}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center text-sm text-gray-600">
-                        <Globe size={14} className="mr-2 text-gray-400" />
-                        {log.ip_address || 'N/A'}
                       </div>
                     </td>
                     
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="space-y-1">
                         <div className="flex items-center text-sm text-gray-900">
-                          <Calendar size={14} className="mr-2 text-gray-400" />
-                          {formatDate(log.submitted_at)}
+                          <MousePointer size={14} className="mr-2 text-gray-400" />
+                          <span className="font-medium">{log.click_tracking?.total_clicks || 1} clicks</span>
                         </div>
-                        <div className="flex items-center text-xs text-gray-500">
-                          <Clock size={12} className="mr-1" />
-                          Duration: {log.duration_formatted}
+                        {log.click_tracking && (
+                          <div className="flex items-center text-xs text-gray-500">
+                            {getDeviceIcon(log.click_tracking.device_type)}
+                            <span className="ml-1">{log.click_tracking.device_type} • {log.click_tracking.browser}</span>
+                          </div>
+                        )}
+                        {log.click_id && (
+                          <div className="text-xs text-gray-500 font-mono">
+                            ID: {log.click_id}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="space-y-1">
+                        {log.session_id ? (
+                          <div className="text-xs text-gray-500 font-mono">
+                            Session: {log.session_id.substring(0, 8)}...
+                          </div>
+                        ) : (
+                          <div className="text-xs text-gray-400 italic">
+                            No session (click only)
+                          </div>
+                        )}
+                        <div className="text-xs text-gray-500">
+                          Type: {log.record_type === 'submitted' ? 'Submitted' : 'Click Only'}
                         </div>
+                      </div>
+                    </td>
+                    
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="space-y-1">
+                        {log.submitted_at ? (
+                          <>
+                            <div className="flex items-center text-sm text-gray-900">
+                              <Calendar size={14} className="mr-2 text-gray-400" />
+                              {formatDate(log.submitted_at)}
+                            </div>
+                            <div className="flex items-center text-xs text-gray-500">
+                              <Clock size={12} className="mr-1" />
+                              Duration: {log.duration_formatted}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex items-center text-sm text-gray-900">
+                              <Calendar size={14} className="mr-2 text-gray-400" />
+                              {log.click_tracking?.first_click_time ? formatDate(log.click_tracking.first_click_time) : 'N/A'}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              First click time
+                            </div>
+                          </>
+                        )}
                       </div>
                     </td>
                     
@@ -404,12 +481,17 @@ const ResponseLogs: React.FC<ResponseLogsProps> = ({ surveyId }) => {
                         <div className="flex items-center">
                           {getStatusIcon(log.status)}
                           <span className={`ml-2 ${getStatusBadge(log.status)}`}>
-                            {log.status}
+                            {log.status === 'clicked_not_submitted' ? 'Clicked Only' : log.status}
                           </span>
                         </div>
-                        {log.evaluation_result && (
+                        {log.evaluation_result && log.evaluation_result.status !== 'not_submitted' && (
                           <div className="text-xs text-gray-500">
                             Score: {log.evaluation_result.score}%
+                          </div>
+                        )}
+                        {log.record_type === 'clicked_only' && (
+                          <div className="text-xs text-orange-600">
+                            No submission
                           </div>
                         )}
                       </div>
@@ -463,7 +545,7 @@ const ResponseLogs: React.FC<ResponseLogsProps> = ({ surveyId }) => {
                   <h4 className="font-semibold text-gray-900 border-b pb-2">Session Information</h4>
                   <div className="space-y-2 text-sm">
                     <div><span className="font-medium">Survey ID:</span> <code className="bg-gray-100 px-1 rounded">{selectedLog.survey_id}</code></div>
-                    <div><span className="font-medium">Session ID:</span> <code className="bg-gray-100 px-1 rounded">{selectedLog.session_id}</code></div>
+                    <div><span className="font-medium">Session ID:</span> <code className="bg-gray-100 px-1 rounded">{selectedLog.session_id || 'No session (click only)'}</code></div>
                     <div><span className="font-medium">Response ID:</span> <code className="bg-gray-100 px-1 rounded">{selectedLog._id}</code></div>
                     <div><span className="font-medium">Responses Count:</span> {selectedLog.responses_count}</div>
                   </div>
@@ -472,9 +554,16 @@ const ResponseLogs: React.FC<ResponseLogsProps> = ({ surveyId }) => {
                 <div className="space-y-4">
                   <h4 className="font-semibold text-gray-900 border-b pb-2">Timing Details</h4>
                   <div className="space-y-2 text-sm">
-                    <div><span className="font-medium">Submitted At:</span> {formatDate(selectedLog.submitted_at)}</div>
+                    <div><span className="font-medium">Submitted At:</span> {selectedLog.submitted_at ? formatDate(selectedLog.submitted_at) : 'Not submitted'}</div>
                     <div><span className="font-medium">Duration:</span> {selectedLog.duration_formatted}</div>
-                    <div><span className="font-medium">Timestamp:</span> {formatDate(selectedLog.timestamp)}</div>
+                    <div><span className="font-medium">Timestamp:</span> {selectedLog.timestamp ? formatDate(selectedLog.timestamp) : 'N/A'}</div>
+                    {selectedLog.click_tracking && (
+                      <>
+                        <div><span className="font-medium">First Click:</span> {selectedLog.click_tracking.first_click_time ? formatDate(selectedLog.click_tracking.first_click_time) : 'N/A'}</div>
+                        <div><span className="font-medium">Total Clicks:</span> {selectedLog.click_tracking.total_clicks}</div>
+                        <div><span className="font-medium">Device:</span> {selectedLog.click_tracking.device_type} • {selectedLog.click_tracking.browser}</div>
+                      </>
+                    )}
                   </div>
                 </div>
                 
