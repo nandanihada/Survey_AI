@@ -73,14 +73,33 @@ class AuthService {
    */
   async login(credentials: LoginRequest): Promise<{ user: User; token: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/user/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(credentials),
-      });
+      // Try new endpoint first, fallback to old endpoint if it doesn't exist
+      let response;
+      try {
+        response = await fetch(`${this.baseUrl}/api/user/login`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify(credentials),
+        });
+        
+        // If new endpoint returns 404, try old endpoint
+        if (!response.ok && response.status === 404) {
+          throw new Error('New endpoint not found, trying old endpoint');
+        }
+      } catch (error) {
+        console.log('New login endpoint not available, using legacy endpoint');
+        response = await fetch(`${this.baseUrl}/api/auth/login`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify(credentials),
+        });
+      }
 
       if (!response.ok) {
         const error = await response.json();
@@ -94,7 +113,7 @@ class AuthService {
         localStorage.setItem('user_data', JSON.stringify(data.user));
       }
       
-      return { user: data.user, token: 'mock-token' };
+      return { user: data.user, token: data.token || 'mock-token' };
     } catch (error) {
       console.error('Login failed:', error);
       throw error;
