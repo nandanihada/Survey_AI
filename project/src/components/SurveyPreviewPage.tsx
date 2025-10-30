@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Edit3, Eye, Share2, Copy, CheckCircle, ArrowLeft, Settings, BarChart3 } from 'lucide-react';
+import { Edit3, Eye, Share2, Copy, CheckCircle, ArrowLeft, Settings, ExternalLink } from 'lucide-react';
 import { fetchSurveyData } from '../utils/api';
 import { generateSurveyLink, parseParamString, stringifyParams, type SurveyLinkParams } from '../utils/surveyLinkUtils';
 import { useAuth } from '../contexts/AuthContext';
 import type { Survey } from '../types/Survey';
 import SurveyResponses from './SurveyResponses';
 import ResponseLogs from './ResponseLogs';
+import PartnerMapping from './PartnerMapping';
 
 const SurveyPreviewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -306,6 +307,13 @@ const SurveyPreviewPage: React.FC = () => {
               >
                 Response Logs
               </button>
+              <button
+                onClick={() => setActiveTab('partner-mapping')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg ${activeTab === 'partner-mapping' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              >
+                <ExternalLink size={16} />
+                Partner Mapping
+              </button>
             </div>
             {activeTab === 'preview' ? (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -325,10 +333,12 @@ const SurveyPreviewPage: React.FC = () => {
                 </div>
               </div>
             ) : activeTab === 'responses' ? (
-              <SurveyResponses surveyId={id} />
-            ) : (
-              <ResponseLogs surveyId={id} />
-            )}
+              <SurveyResponses surveyId={id || ''} />
+            ) : activeTab === 'response-logs' ? (
+              <ResponseLogs surveyId={id || ''} />
+            ) : activeTab === 'partner-mapping' ? (
+              <PartnerMapping surveyId={id || ''} />
+            ) : null}
           </div>
         </div>
       </div>

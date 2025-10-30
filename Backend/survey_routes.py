@@ -3,6 +3,7 @@ Protected survey routes with user ownership
 """
 from flask import Blueprint, request, jsonify, g
 from auth_middleware import requireAuth, requireAdmin, optionalAuth
+from simple_auth_middleware import simple_auth_required
 from mongodb_config import db
 from bson import ObjectId
 from datetime import datetime
@@ -26,7 +27,7 @@ def convert_objectid_to_string(doc):
     return doc
 
 @survey_bp.route('/', methods=['GET'])
-@requireAuth
+@simple_auth_required
 def get_user_surveys():
     """Get surveys for the current user (My Surveys)"""
     try:

@@ -1,5 +1,6 @@
 
 from flask import Blueprint, request, jsonify
+from flask_cors import cross_origin
 from mongodb_config import db
 from datetime import datetime, timedelta
 from bson import ObjectId
@@ -16,8 +17,22 @@ def convert_objectid(doc):
 
 # --- Partner Management (CRUD) ---
 
-@postback_api_bp.route('/partners', methods=['GET'])
+@postback_api_bp.route('/partners', methods=['GET', 'OPTIONS'])
+@cross_origin(
+    supports_credentials=True,
+    origins=[
+        "http://localhost:5173",
+        "https://pepperadsresponses.web.app", 
+        "https://hostsliceresponse.web.app",
+        "https://theinterwebsite.space"
+    ],
+    allow_headers=["Content-Type", "Authorization"],
+    methods=["GET", "OPTIONS"]
+)
 def get_partners():
+    if request.method == 'OPTIONS':
+        return '', 200
+        
     try:
         partners_cursor = db.partners.find()
         partners = [convert_objectid(p) for p in partners_cursor]
@@ -25,8 +40,22 @@ def get_partners():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@postback_api_bp.route('/partners', methods=['POST'])
+@postback_api_bp.route('/partners', methods=['POST', 'OPTIONS'])
+@cross_origin(
+    supports_credentials=True,
+    origins=[
+        "http://localhost:5173",
+        "https://pepperadsresponses.web.app", 
+        "https://hostsliceresponse.web.app",
+        "https://theinterwebsite.space"
+    ],
+    allow_headers=["Content-Type", "Authorization"],
+    methods=["POST", "OPTIONS"]
+)
 def add_partner():
+    if request.method == 'OPTIONS':
+        return '', 200
+        
     try:
         data = request.json
         if not data or 'name' not in data or 'url' not in data:

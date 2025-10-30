@@ -2,16 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FolderOpen,
+  Plus,
+  Search,
+  Filter,
   Calendar,
   Users,
-  MoreVertical,
-  Plus,
-  Filter,
-  Search,
-  Edit,
   Eye,
-  Trash2,
-  ExternalLink
+  Edit
 } from 'lucide-react';
 
 interface SurveyListProps {
@@ -43,12 +40,26 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false }) => {
 
   const fetchSurveys = async () => {
     try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${apiBaseUrl}/api/surveys`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+      // Get user data from localStorage (new auth system)
+      const userData = localStorage.getItem('user_data');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      
+      // Add Authorization header with user_id if user is logged in
+      if (userData) {
+        try {
+          const user = JSON.parse(userData);
+          if (user.id) {
+            headers['Authorization'] = `Bearer ${user.id}`;
+          }
+        } catch (e) {
+          console.error('Error parsing user data:', e);
         }
+      }
+      
+      const response = await fetch(`${apiBaseUrl}/api/surveys`, {
+        headers
       });
       if (!response.ok) throw new Error('Failed to fetch surveys');
       const data = await response.json();

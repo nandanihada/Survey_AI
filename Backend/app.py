@@ -50,6 +50,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.short_id import generate_short_id, is_valid_short_id
 from auth_middleware import requireAuth
+from simple_auth_middleware import simple_auth_required
 from flask import g
 
 # Import enhanced survey handler
@@ -110,10 +111,10 @@ from mongodb_config import db
 print("✅ MongoDB initialized successfully")
 
 # Gemini API Configuration
-GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY", "AIzaSyDKsjeKLBjrbEtVhed015yRimBpIk5CU6s")
+GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY", "AIzaSyAow3CLyLCftsX-A5coU3kHuIfS817GBts")
 print(f"Using Gemini API Key: {GEMINI_API_KEY[:20]}...")
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-1.5-flash-latest")
+model = genai.GenerativeModel("gemini-2.5-flash-lite")
 print("✅ Gemini API configured successfully")
 
 # Import blueprints after MongoDB is initialized
@@ -130,6 +131,8 @@ try:
     from response_logs_api import response_logs_bp
     from enhanced_response_logs_api import enhanced_response_logs_bp
     from click_tracking_api import click_tracking_bp
+    from survey_partner_mapping_api import survey_partner_mapping_bp
+    from user_postback_api import user_postback_bp
     
     # Register blueprints
     print("Registering blueprints...")
@@ -144,6 +147,8 @@ try:
     app.register_blueprint(response_logs_bp)
     app.register_blueprint(enhanced_response_logs_bp)
     app.register_blueprint(click_tracking_bp)
+    app.register_blueprint(survey_partner_mapping_bp, url_prefix='/api')
+    app.register_blueprint(user_postback_bp, url_prefix='/api')
     print("✅ All blueprints registered successfully")
 except ImportError as e:
     print(f"⚠️ Failed to import blueprints: {e}")
@@ -386,7 +391,7 @@ def validate_color(color):
     allow_headers=["Content-Type", "Authorization", "Access-Control-Allow-Origin"],
     methods=["GET", "POST", "OPTIONS"]
 )
-@requireAuth
+@simple_auth_required
 def generate_survey():
     if request.method == 'OPTIONS':
         return '', 200
@@ -883,10 +888,14 @@ def submit_public_response(survey_id):
             print(f"DATABASE ERROR: {db_error}")
             return jsonify({"error": f"Database error: {str(db_error)}"}), 500
 
-        # Forward to partners (optional) - Prepare postback data
+        # Send postback to survey creator - NEW USER-BASED SYSTEM
         try:
-            # Create postback data with required fields
+            # Import the user-based postback sender
+            from user_postback_sender import send_postback_to_survey_creator
+            
+            # Create comprehensive postback data with all available fields
             postback_data = {
+                "response_id": response_id,
                 "transaction_id": response_id,  # Use response ID as transaction ID
                 "survey_id": survey_id,
                 "email": response_data.get("email", ""),
@@ -897,19 +906,53 @@ def submit_public_response(survey_id):
                 "currency": "USD",
                 "session_id": response_id,
                 "complete_id": response_id,
-                "submitted_at": response_data["submitted_at"]
+                "submitted_at": response_data["submitted_at"],
+                "user_id": response_data.get("user_id", ""),
+                "simple_user_id": response_data.get("simple_user_id", ""),
+                "click_id": response_data.get("click_id", ""),
+                "ip_address": response_data.get("ip_address", ""),
+                "user_agent": response_data.get("user_agent", ""),
+                "aff_sub": response_data.get("aff_sub", ""),
+                "sub1": response_data.get("sub1", ""),
+                "sub2": response_data.get("sub2", ""),
+                "referrer": response_data.get("referrer", ""),
+                "started_at": response_data.get("started_at", ""),
+                "completion_time": "0"  # Could calculate this if needed
             }
             
-            print(f"🔥 TRIGGERING POSTBACK: Sending postback data for survey {survey_id}")
+            print(f"🎯 USER-BASED POSTBACK: Sending to survey creator for survey {survey_id}")
             print(f"Postback data: {postback_data}")
             
-            forward_success = forward_survey_data_to_partners(postback_data)
-            if forward_success:
-                print("✅ SUCCESS: Postback forwarding completed successfully")
+            # Send postback to the survey creator
+            creator_postback_result = send_postback_to_survey_creator(survey_id, postback_data)
+            
+            if creator_postback_result['success']:
+                creator_name = creator_postback_result.get('creator_name', 'Unknown')
+                print(f"✅ SUCCESS: Postback sent to survey creator {creator_name}")
             else:
-                print("⚠️ WARNING: Survey forwarding failed to all partners")
-        except Exception as forward_error:
-            print(f"❌ ERROR: Partner forwarding error: {forward_error}")
+                error_msg = creator_postback_result.get('error', 'Unknown error')
+                print(f"⚠️ WARNING: Failed to send postback to survey creator: {error_msg}")
+                
+        except Exception as creator_postback_error:
+            print(f"❌ ERROR: Creator postback error: {creator_postback_error}")
+
+        # LEGACY: Also send to mapped partners if any exist (for backward compatibility)
+        try:
+            # Import the enhanced postback sender
+            from enhanced_postback_sender import send_postbacks_to_mapped_partners
+            
+            # Send postbacks to mapped partners (if any exist)
+            partner_postback_result = send_postbacks_to_mapped_partners(survey_id, postback_data)
+            
+            if partner_postback_result['total_mappings'] > 0:
+                successful = partner_postback_result['successful_postbacks']
+                total = partner_postback_result['total_mappings']
+                print(f"📤 LEGACY: Partner postback completed ({successful}/{total} successful)")
+            else:
+                print("ℹ️ No partner mappings found (expected for user-based system)")
+                
+        except Exception as partner_error:
+            print(f"❌ ERROR: Partner postback error: {partner_error}")
 
         # Handle tracking (optional)
         if tracking_id:

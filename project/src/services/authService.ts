@@ -69,15 +69,16 @@ class AuthService {
   }
 
   /**
-   * Login with email and password
+   * Login user
    */
   async login(credentials: LoginRequest): Promise<{ user: User; token: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/auth/login`, {
+      const response = await fetch(`${this.baseUrl}/api/user/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify(credentials),
       });
 
@@ -87,8 +88,13 @@ class AuthService {
       }
 
       const data = await response.json();
-      this.setToken(data.token);
-      return data;
+      
+      // For our new system, we don't use tokens yet, just store user data
+      if (data.user) {
+        localStorage.setItem('user_data', JSON.stringify(data.user));
+      }
+      
+      return { user: data.user, token: 'mock-token' };
     } catch (error) {
       console.error('Login failed:', error);
       throw error;

@@ -96,19 +96,18 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onSwitchToRegister }) 
           </button>
         </form>
 
-        {onSwitchToRegister && (
-          <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
-              Don't have an account?{' '}
-              <button
-                onClick={onSwitchToRegister}
-                className="text-blue-600 hover:text-blue-500 font-medium"
-              >
-                Sign up
-              </button>
-            </p>
-          </div>
-        )}
+        {/* Single signup link */}
+        <div className="mt-6 text-center">
+          <p className="text-sm text-gray-600">
+            Don't have an account?{' '}
+            <a
+              href="/signup"
+              className="text-red-600 hover:text-red-500 font-medium"
+            >
+              Create Account with Postback Setup
+            </a>
+          </p>
+        </div>
       </div>
     </div>
   );

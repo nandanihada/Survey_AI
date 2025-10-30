@@ -32,9 +32,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const refreshAuth = async () => {
     try {
       setLoading(true);
-      const currentUser = await authService.getCurrentUser();
-      setAuthenticated(!!currentUser);
-      setUser(currentUser);
+      // Check if user data exists in localStorage
+      const userData = localStorage.getItem('user_data');
+      if (userData) {
+        const user = JSON.parse(userData);
+        setAuthenticated(true);
+        setUser(user);
+      } else {
+        setAuthenticated(false);
+        setUser(null);
+      }
     } catch (error) {
       console.error('Failed to refresh auth:', error);
       setAuthenticated(false);
@@ -68,60 +75,34 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async () => {
     try {
-      await authService.logout();
+      // Clear localStorage
+      localStorage.removeItem('user_data');
+      localStorage.removeItem('auth_token');
       setUser(null);
       setAuthenticated(false);
     } catch (error) {
       console.error('Logout failed:', error);
-      // Still clear local state even if backend call fails
+      // Still clear local state even if there's an error
       setUser(null);
       setAuthenticated(false);
-      throw error;
     }
   };
 
   useEffect(() => {
-    // Check for existing token on mount
-    const initAuth = async () => {
-      try {
-        setLoading(true);
-        const currentUser = await authService.getCurrentUser();
-        if (currentUser) {
-          setUser(currentUser);
-          setAuthenticated(true);
-          
-          // Redirect to dashboard after successful authentication
-          if (window.location.pathname === '/' || window.location.pathname.includes('auth')) {
-            window.location.href = '/dashboard';
-          }
-        } else {
-          setUser(null);
-          setAuthenticated(false);
-        }
-      } catch (error) {
-        console.error('Failed to initialize auth:', error);
-        setUser(null);
-        setAuthenticated(false);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initAuth();
+    // Check for existing user data on mount
+    refreshAuth();
   }, []);
 
-  const isAdmin = authService.isAdmin(user);
-  const hasFeature = (feature: string) => authService.hasFeature(user, feature);
-  const hasPremiumAccess = authService.hasPremiumAccess(user);
-  const hasEnterpriseAccess = authService.hasEnterpriseAccess(user);
-
-  // Global refresh function for permission updates
-  React.useEffect(() => {
-    (window as any).refreshUserPermissions = refreshAuth;
-    return () => {
-      delete (window as any).refreshUserPermissions;
-    };
-  }, [refreshAuth]);
+  const isAdmin = user?.role === 'admin';
+  const hasFeature = (feature: string) => {
+    // Simple feature check based on role
+    if (user?.role === 'admin') return true;
+    if (user?.role === 'enterprise') return ['survey', 'analytics', 'postback', 'pass_fail', 'test_lab'].includes(feature);
+    if (user?.role === 'premium') return ['survey', 'analytics', 'postback'].includes(feature);
+    return ['survey'].includes(feature);
+  };
+  const hasPremiumAccess = user?.role === 'premium' || user?.role === 'enterprise' || user?.role === 'admin';
+  const hasEnterpriseAccess = user?.role === 'enterprise' || user?.role === 'admin';
 
   const value: AuthContextType = {
     user,

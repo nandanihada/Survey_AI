@@ -18,6 +18,8 @@ import { AuthProvider } from './contexts/AuthContext';
 import UserDashboard from './pages/Dashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import LoginPage from './pages/LoginPage';
+import SignupPage from './pages/SignupPage';
+import ProfilePage from './pages/ProfilePage';
 import ProtectedRoute from './components/ProtectedRoute';
 import { PenSquare, FolderOpen, TrendingUp, Link, Sun, Moon, Settings, Lock } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
@@ -468,6 +470,7 @@ export default function App() {
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
         <Route path="/survey/:id" element={<PublicSurveyPage />} />
         <Route path="/survey" element={<PublicSurveyPage />} />
         <Route path="/preview/:id" element={<SurveyPreviewPage />} />
@@ -486,6 +489,11 @@ export default function App() {
         <Route path="/edit/:id" element={
           <ProtectedRoute>
             <SurveyEditor />
+          </ProtectedRoute>
+        } />
+        <Route path="/profile" element={
+          <ProtectedRoute>
+            <ProfilePage />
           </ProtectedRoute>
         } />
         

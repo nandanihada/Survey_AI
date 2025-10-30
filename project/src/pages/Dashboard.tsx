@@ -44,12 +44,26 @@ const Dashboard: React.FC = () => {
       // Use admin endpoint if user is admin
       const endpoint = isAdmin ? '/api/surveys/admin/all' : '/api/surveys';
       
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${baseUrl}${endpoint}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+      // Get user data from localStorage (new auth system)
+      const userData = localStorage.getItem('user_data');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      
+      // Add Authorization header with user_id if user is logged in
+      if (userData) {
+        try {
+          const user = JSON.parse(userData);
+          if (user.id) {
+            headers['Authorization'] = `Bearer ${user.id}`;
+          }
+        } catch (e) {
+          console.error('Error parsing user data:', e);
         }
+      }
+      
+      const response = await fetch(`${baseUrl}${endpoint}`, {
+        headers,
       });
 
       if (!response.ok) {

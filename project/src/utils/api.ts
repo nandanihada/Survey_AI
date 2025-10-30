@@ -28,16 +28,23 @@ export const generateSurvey = async (data: SurveyRequest) => {
   
   console.log('Sending request to backend:', requestData);
   
-  // Get auth token from localStorage
-  const token = localStorage.getItem('auth_token');
+  // Get user data from localStorage (new auth system)
+  const userData = localStorage.getItem('user_data');
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   };
   
-  // Add Authorization header if token exists
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+  // Add Authorization header with user_id if user is logged in
+  if (userData) {
+    try {
+      const user = JSON.parse(userData);
+      if (user.id) {
+        headers['Authorization'] = `Bearer ${user.id}`;
+      }
+    } catch (e) {
+      console.error('Error parsing user data:', e);
+    }
   }
   
   const response = await fetch(`${SERVER_URL}/generate`, {
@@ -69,15 +76,22 @@ export const generateSurvey = async (data: SurveyRequest) => {
 };
 
 export const fetchSurveys = async () => {
-  // Get auth token from localStorage
-  const token = localStorage.getItem('auth_token');
+  // Get user data from localStorage (new auth system)
+  const userData = localStorage.getItem('user_data');
   const headers: Record<string, string> = {
     'Content-Type': 'application/json'
   };
   
-  // Add Authorization header if token exists
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+  // Add Authorization header with user_id if user is logged in
+  if (userData) {
+    try {
+      const user = JSON.parse(userData);
+      if (user.id) {
+        headers['Authorization'] = `Bearer ${user.id}`;
+      }
+    } catch (e) {
+      console.error('Error parsing user data:', e);
+    }
   }
   
   const response = await fetch(`${SERVER_URL}/api/surveys/`, {
