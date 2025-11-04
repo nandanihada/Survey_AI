@@ -40,21 +40,27 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false }) => {
 
   const fetchSurveys = async () => {
     try {
-      // Get user data from localStorage (new auth system)
-      const userData = localStorage.getItem('user_data');
+      // Get authentication token (JWT preferred)
+      const token = localStorage.getItem('auth_token');
       const headers: Record<string, string> = {
         'Content-Type': 'application/json'
       };
       
-      // Add Authorization header with user_id if user is logged in
-      if (userData) {
-        try {
-          const user = JSON.parse(userData);
-          if (user.id) {
-            headers['Authorization'] = `Bearer ${user.id}`;
+      // Add Authorization header
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      } else {
+        // Fallback to user ID if no JWT token
+        const userData = localStorage.getItem('user_data');
+        if (userData) {
+          try {
+            const user = JSON.parse(userData);
+            if (user.id) {
+              headers['Authorization'] = `Bearer ${user.id}`;
+            }
+          } catch (e) {
+            console.error('Error parsing user data:', e);
           }
-        } catch (e) {
-          console.error('Error parsing user data:', e);
         }
       }
       

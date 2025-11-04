@@ -39,26 +39,35 @@ const Dashboard: React.FC = () => {
   const fetchSurveys = async () => {
     try {
       setLoading(true);
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      // Dynamic API URL based on environment
+      const baseUrl = window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1'
+        ? 'http://localhost:5000'
+        : 'https://api.theinterwebsite.space';
       
       // Use admin endpoint if user is admin
       const endpoint = isAdmin ? '/api/surveys/admin/all' : '/api/surveys';
       
-      // Get user data from localStorage (new auth system)
-      const userData = localStorage.getItem('user_data');
+      // Get authentication token (JWT preferred)
+      const token = localStorage.getItem('auth_token');
       const headers: Record<string, string> = {
         'Content-Type': 'application/json'
       };
       
-      // Add Authorization header with user_id if user is logged in
-      if (userData) {
-        try {
-          const user = JSON.parse(userData);
-          if (user.id) {
-            headers['Authorization'] = `Bearer ${user.id}`;
+      // Add Authorization header
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      } else {
+        // Fallback to user ID if no JWT token
+        const userData = localStorage.getItem('user_data');
+        if (userData) {
+          try {
+            const user = JSON.parse(userData);
+            if (user.id) {
+              headers['Authorization'] = `Bearer ${user.id}`;
+            }
+          } catch (e) {
+            console.error('Error parsing user data:', e);
           }
-        } catch (e) {
-          console.error('Error parsing user data:', e);
         }
       }
       

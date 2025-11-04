@@ -73,44 +73,39 @@ class AuthService {
    */
   async login(credentials: LoginRequest): Promise<{ user: User; token: string }> {
     try {
-      // Try new endpoint first, fallback to old endpoint if it doesn't exist
-      let response;
-      try {
-        response = await fetch(`${this.baseUrl}/api/user/login`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-          body: JSON.stringify(credentials),
-        });
-        
-        // If new endpoint returns 404, try old endpoint
-        if (!response.ok && response.status === 404) {
-          throw new Error('New endpoint not found, trying old endpoint');
-        }
-      } catch (error) {
-        console.log('New login endpoint not available, using legacy endpoint');
-        response = await fetch(`${this.baseUrl}/api/auth/login`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-          body: JSON.stringify(credentials),
-        });
-      }
+      const response = await fetch(`${this.baseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(credentials),
+      });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Login failed');
+        // Check if we got HTML instead of JSON (endpoint not found)
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('text/html')) {
+          throw new Error('Login service is temporarily unavailable. Please try again later.');
+        }
+        
+        try {
+          const error = await response.json();
+          throw new Error(error.error || 'Login failed');
+        } catch {
+          throw new Error(`Login failed with status ${response.status}`);
+        }
       }
 
       const data = await response.json();
       
-      // For our new system, we don't use tokens yet, just store user data
+      // Store user data and token
       if (data.user) {
         localStorage.setItem('user_data', JSON.stringify(data.user));
+      }
+      if (data.token) {
+        localStorage.setItem('auth_token', data.token);
+        this.setToken(data.token);
       }
       
       return { user: data.user, token: data.token || 'mock-token' };
@@ -130,17 +125,37 @@ class AuthService {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify(userData),
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Registration failed');
+        // Check if we got HTML instead of JSON (endpoint not found)
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('text/html')) {
+          throw new Error('Registration service is temporarily unavailable. Please try again later.');
+        }
+        
+        try {
+          const error = await response.json();
+          throw new Error(error.error || 'Registration failed');
+        } catch {
+          throw new Error(`Registration failed with status ${response.status}`);
+        }
       }
 
       const data = await response.json();
-      this.setToken(data.token);
-      return data;
+      
+      // Store user data and token
+      if (data.user) {
+        localStorage.setItem('user_data', JSON.stringify(data.user));
+      }
+      if (data.token) {
+        localStorage.setItem('auth_token', data.token);
+        this.setToken(data.token);
+      }
+      
+      return { user: data.user, token: data.token || 'mock-token' };
     } catch (error) {
       console.error('Registration failed:', error);
       throw error;

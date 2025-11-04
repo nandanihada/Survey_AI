@@ -12,57 +12,77 @@ from bson import ObjectId
 
 def simple_auth_required(f):
     """
-    Simple authentication decorator that works with our localStorage login system
-    Expects user_id in request headers or body
+    Hybrid authentication decorator that works with BOTH JWT tokens and raw user IDs
+    Compatible with both old and new authentication systems
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
         try:
-            # Try to get user_id from different sources
-            user_id = None
-            
-            # 1. Try Authorization header (Bearer token format)
+            # Try to get token/user_id from Authorization header
             auth_header = request.headers.get('Authorization', '')
+            token_or_id = None
+            
             if auth_header.startswith('Bearer '):
-                user_id = auth_header.replace('Bearer ', '')
+                token_or_id = auth_header.replace('Bearer ', '').strip()
             
-            # 2. Try X-User-ID header
-            if not user_id:
-                user_id = request.headers.get('X-User-ID')
+            if not token_or_id:
+                # Try X-User-ID header
+                token_or_id = request.headers.get('X-User-ID')
             
-            # 3. Try request body (for POST requests)
-            if not user_id and request.is_json:
+            if not token_or_id and request.is_json:
+                # Try request body
                 data = request.get_json()
                 if data:
-                    user_id = data.get('user_id')
+                    token_or_id = data.get('user_id')
             
-            # 4. Try query parameter
-            if not user_id:
-                user_id = request.args.get('user_id')
+            if not token_or_id:
+                # Try query parameter
+                token_or_id = request.args.get('user_id')
             
-            if not user_id:
-                print("❌ No user_id found in request")
+            if not token_or_id:
+                print("❌ No token or user_id found in request")
                 return jsonify({'error': 'Authorization token required'}), 401
             
-            # Find user in database
             user = None
             
-            # Try different ways to find the user
+            # STEP 1: Try as JWT token first (deployed backend uses JWT)
             try:
-                # Try as ObjectId first
+                from auth_service import AuthService
+                auth_service = AuthService()
+                user = auth_service.get_user_from_token(token_or_id)
+                if user:
+                    print(f"✅ Authenticated via JWT: {user.get('email', 'Unknown')}")
+                    g.current_user = user
+                    return f(*args, **kwargs)
+            except Exception as e:
+                print(f"JWT verification failed (will try as user ID): {e}")
+            
+            # STEP 2: Try as raw user_id (fallback for simple auth)
+            user_id = token_or_id
+            
+            # Try as ObjectId
+            try:
                 if ObjectId.is_valid(user_id):
                     user = db.users.find_one({"_id": ObjectId(user_id)})
             except Exception as e:
                 print(f"ObjectId lookup failed: {e}")
             
-            # If ObjectId lookup failed, try as string
+            # Try as string ID
             if not user:
                 try:
                     user = db.users.find_one({"_id": user_id})
                 except Exception as e:
                     print(f"String ID lookup failed: {e}")
             
-            # If still not found, try by email (fallback)
+            # Try by simpleUserId
+            if not user:
+                try:
+                    simple_id = int(user_id)
+                    user = db.users.find_one({"simpleUserId": simple_id})
+                except Exception as e:
+                    print(f"SimpleUserId lookup failed: {e}")
+            
+            # Try by email as last resort
             if not user and '@' in user_id:
                 try:
                     user = db.users.find_one({"email": user_id})
@@ -70,12 +90,12 @@ def simple_auth_required(f):
                     print(f"Email lookup failed: {e}")
             
             if not user:
-                print(f"❌ User not found: {user_id}")
+                print(f"❌ User not found with token/ID: {token_or_id}")
                 return jsonify({'error': 'Invalid or expired token'}), 401
             
-            print(f"✅ Authenticated user: {user.get('email', 'Unknown')} (ID: {user_id})")
+            print(f"✅ Authenticated via user ID: {user.get('email', 'Unknown')}")
             
-            # Attach user to request context (compatible with existing code)
+            # Attach user to request context
             g.current_user = user
             
             return f(*args, **kwargs)

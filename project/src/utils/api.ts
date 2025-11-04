@@ -1,6 +1,6 @@
-const SERVER_URL = window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1'
-  ? 'http://127.0.0.1:5000'
-  : 'https://api.theinterwebsite.space';
+import { getApiBaseUrl, makeApiRequest, handleApiError } from './deploymentFix';
+
+const SERVER_URL = getApiBaseUrl();
 
 export interface SurveyRequest {
   prompt: string;
@@ -28,89 +28,59 @@ export const generateSurvey = async (data: SurveyRequest) => {
   
   console.log('Sending request to backend:', requestData);
   
-  // Get user data from localStorage (new auth system)
-  const userData = localStorage.getItem('user_data');
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json'
-  };
-  
-  // Add Authorization header with user_id if user is logged in
-  if (userData) {
-    try {
-      const user = JSON.parse(userData);
-      if (user.id) {
-        headers['Authorization'] = `Bearer ${user.id}`;
+  // Use deployment fix for consistent authentication
+  try {
+    const response = await makeApiRequest('/generate', {
+      method: 'POST',
+      body: JSON.stringify(requestData)
+    });
+
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Server error: ${response.status}`);
+      } else {
+        throw new Error(`Server error: ${response.status}`);
       }
-    } catch (e) {
-      console.error('Error parsing user data:', e);
     }
-  }
-  
-  const response = await fetch(`${SERVER_URL}/generate`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(requestData),
-    credentials: 'include'
-  });
 
-  if (!response.ok) {
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || `Server error: ${response.status}`);
-    } else {
-      throw new Error(`Server error: ${response.status}`);
+    const result = await response.json();
+    
+    console.log('Backend response:', result);
+    
+    if (result.error) {
+      throw new Error(result.error);
     }
-  }
 
-  const result = await response.json();
-  
-  console.log('Backend response:', result);
-  
-  if (result.error) {
-    throw new Error(result.error);
+    return result;
+  } catch (error) {
+    console.error('Survey generation failed:', error);
+    throw new Error(handleApiError(error, 'Survey generation'));
   }
-
-  return result;
 };
 
 export const fetchSurveys = async () => {
-  // Get user data from localStorage (new auth system)
-  const userData = localStorage.getItem('user_data');
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json'
-  };
-  
-  // Add Authorization header with user_id if user is logged in
-  if (userData) {
-    try {
-      const user = JSON.parse(userData);
-      if (user.id) {
-        headers['Authorization'] = `Bearer ${user.id}`;
-      }
-    } catch (e) {
-      console.error('Error parsing user data:', e);
+  try {
+    const response = await makeApiRequest('/api/surveys/', {
+      method: 'GET'
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch surveys: ${response.status}`);
     }
-  }
-  
-  const response = await fetch(`${SERVER_URL}/api/surveys/`, {
-    method: 'GET',
-    headers,
-    credentials: 'include'
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Failed to fetch surveys: ${response.status}`);
-  }
 
-  const data = await response.json();
-  
-  if (data.error) {
-    throw new Error(data.error);
-  }
+    const data = await response.json();
+    
+    if (data.error) {
+      throw new Error(data.error);
+    }
 
-  return data;
+    return data;
+  } catch (error) {
+    console.error('Fetch surveys failed:', error);
+    throw new Error(handleApiError(error, 'Fetch surveys'));
+  }
 };
 
 export const generateInsights = async (surveyId: string) => {
