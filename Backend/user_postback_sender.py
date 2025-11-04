@@ -80,11 +80,15 @@ def send_postback_to_survey_creator(survey_id, survey_completion_data):
         # Get postback URL and parameter mappings
         postback_url = creator_user.get('postbackUrl', '')
         parameter_mappings = creator_user.get('parameterMappings', {})
+        postback_method = creator_user.get('postbackMethod', 'GET')  # GET or POST
+        include_responses = creator_user.get('includeResponses', True)  # Include survey answers
         creator_name = creator_user.get('name', 'Unknown')
         
         print(f"✅ Creator found: {creator_name} ({creator_user.get('email', 'No email')})")
         print(f"🔗 Postback URL: {postback_url}")
         print(f"📋 Parameter mappings: {parameter_mappings}")
+        print(f"📤 Postback method: {postback_method}")
+        print(f"📝 Include responses: {include_responses}")
         
         if not postback_url:
             print(f"❌ No postback URL configured for creator")
@@ -96,17 +100,28 @@ def send_postback_to_survey_creator(survey_id, survey_completion_data):
             }
         
         # Step 3: Build the postback URL with user's custom parameter mappings
-        final_url = build_user_postback_url(
+        final_url, post_data = build_user_postback_url(
             postback_url, 
             parameter_mappings, 
             survey_completion_data,
-            survey_id
+            survey_id,
+            postback_method,
+            include_responses
         )
         
         print(f"🚀 Final postback URL: {final_url}")
+        if post_data:
+            print(f"📦 POST data size: {len(json.dumps(post_data))} bytes")
         
         # Step 4: Send the postback
-        result = send_single_postback(creator_name, final_url, creator_user_id, survey_id)
+        result = send_single_postback(
+            creator_name, 
+            final_url, 
+            creator_user_id, 
+            survey_id,
+            method=postback_method,
+            post_data=post_data
+        )
         
         # Step 5: Log the result
         log_user_postback_attempt(result, survey_id, creator_user_id)
@@ -127,7 +142,7 @@ def send_postback_to_survey_creator(survey_id, survey_completion_data):
             "survey_id": survey_id
         }
 
-def build_user_postback_url(base_url, parameter_mappings, completion_data, survey_id):
+def build_user_postback_url(base_url, parameter_mappings, completion_data, survey_id, method='GET', include_responses=True):
     """
     Build postback URL using user's custom parameter mappings
     
@@ -136,9 +151,11 @@ def build_user_postback_url(base_url, parameter_mappings, completion_data, surve
         parameter_mappings: User's custom parameter mappings
         completion_data: Survey completion data
         survey_id: Survey ID
+        method: 'GET' or 'POST'
+        include_responses: Whether to include survey responses
     
     Returns:
-        str: Final postback URL with parameters
+        tuple: (final_url, post_data) - post_data is None for GET requests
     """
     
     # Prepare comprehensive data that can be mapped
@@ -159,12 +176,16 @@ def build_user_postback_url(base_url, parameter_mappings, completion_data, surve
         'aff_sub': completion_data.get('aff_sub', ''),
         'sub1': completion_data.get('sub1', ''),
         'sub2': completion_data.get('sub2', ''),
-        'responses': json.dumps(completion_data.get('responses', {})),
-        'responses_count': str(len(completion_data.get('responses', {}))),
+        'responses_count': str(len(completion_data.get('responses', []))),
         'completion_time': completion_data.get('completion_time', '0'),
         'user_agent': completion_data.get('user_agent', ''),
-        'referrer': completion_data.get('referrer', '')
+        'referrer': completion_data.get('referrer', ''),
+        'evaluation_result': completion_data.get('evaluation_result', 'unknown')
     }
+    
+    # Add responses if enabled
+    if include_responses:
+        available_data['responses'] = completion_data.get('responses', [])
     
     print(f"📊 Available data for mapping: {list(available_data.keys())}")
     
@@ -172,38 +193,69 @@ def build_user_postback_url(base_url, parameter_mappings, completion_data, surve
     parsed_url = urlparse(base_url)
     query_params = parse_qs(parsed_url.query, keep_blank_values=True)
     
-    # Apply user's parameter mappings
-    for our_field, user_param_name in parameter_mappings.items():
-        if our_field in available_data and user_param_name:
-            # Add or update the parameter
-            query_params[user_param_name] = [available_data[our_field]]
-            print(f"   Mapped: {our_field} → {user_param_name} = {available_data[our_field]}")
+    # For POST method, send data in body
+    if method == 'POST':
+        # Build POST data with all available data
+        post_data = {}
+        
+        # Apply parameter mappings
+        for our_field, user_param_name in parameter_mappings.items():
+            if our_field in available_data and user_param_name:
+                value = available_data[our_field]
+                # Keep responses as array/list for POST
+                post_data[user_param_name] = value
+                print(f"   Mapped (POST): {our_field} → {user_param_name}")
+        
+        # If no mappings, send all data with original field names
+        if not post_data:
+            post_data = available_data.copy()
+            print(f"   Using all available data (no custom mappings)")
+        
+        # Return base URL and POST data
+        return base_url, post_data
     
-    # Also replace any placeholders in the URL template
-    final_url = base_url
-    for our_field, value in available_data.items():
-        # Replace {field_name} placeholders
-        placeholder = '{' + our_field + '}'
-        if placeholder in final_url:
-            final_url = final_url.replace(placeholder, str(value))
-            print(f"   Replaced placeholder: {placeholder} → {value}")
-    
-    # If we added query parameters, rebuild the URL
-    if any(our_field in parameter_mappings for our_field in available_data.keys()):
-        # Convert query_params back to string format
-        new_query = urlencode(query_params, doseq=True)
-        final_url = urlunparse((
-            parsed_url.scheme,
-            parsed_url.netloc,
-            parsed_url.path,
-            parsed_url.params,
-            new_query,
-            parsed_url.fragment
-        ))
-    
-    return final_url
+    # For GET method, use query parameters
+    else:
+        # Apply user's parameter mappings
+        for our_field, user_param_name in parameter_mappings.items():
+            if our_field in available_data and user_param_name:
+                value = available_data[our_field]
+                # Convert responses to JSON string for GET
+                if our_field == 'responses' and isinstance(value, (list, dict)):
+                    value = json.dumps(value)
+                query_params[user_param_name] = [str(value)]
+                print(f"   Mapped (GET): {our_field} → {user_param_name} = {str(value)[:50]}...")
+        
+        # Also replace any placeholders in the URL template
+        final_url = base_url
+        for our_field, value in available_data.items():
+            # Replace {field_name} placeholders
+            placeholder = '{' + our_field + '}'
+            if placeholder in final_url:
+                # Convert to string, handle responses specially
+                if our_field == 'responses' and isinstance(value, (list, dict)):
+                    value_str = json.dumps(value)
+                else:
+                    value_str = str(value)
+                final_url = final_url.replace(placeholder, value_str)
+                print(f"   Replaced placeholder: {placeholder} → {value_str[:50]}...")
+        
+        # If we added query parameters, rebuild the URL
+        if any(our_field in parameter_mappings for our_field in available_data.keys()):
+            # Convert query_params back to string format
+            new_query = urlencode(query_params, doseq=True)
+            final_url = urlunparse((
+                parsed_url.scheme,
+                parsed_url.netloc,
+                parsed_url.path,
+                parsed_url.params,
+                new_query,
+                parsed_url.fragment
+            ))
+        
+        return final_url, None
 
-def send_single_postback(creator_name, postback_url, creator_user_id, survey_id):
+def send_single_postback(creator_name, postback_url, creator_user_id, survey_id, method='GET', post_data=None):
     """
     Send a single postback to the survey creator
     
@@ -212,15 +264,29 @@ def send_single_postback(creator_name, postback_url, creator_user_id, survey_id)
         postback_url: Complete postback URL with parameters
         creator_user_id: Creator's user ID
         survey_id: Survey ID
+        method: 'GET' or 'POST'
+        post_data: Data to send in POST body (for POST method)
     
     Returns:
         dict: Result of the postback attempt
     """
     try:
-        print(f"🚀 Sending postback to creator {creator_name}: {postback_url}")
-        
-        # Send the postback request
-        response = requests.get(postback_url, timeout=15)
+        if method == 'POST' and post_data:
+            print(f"🚀 Sending POST postback to creator {creator_name}: {postback_url}")
+            print(f"📦 POST data keys: {list(post_data.keys())}")
+            
+            # Send POST request with JSON body
+            response = requests.post(
+                postback_url, 
+                json=post_data,
+                headers={'Content-Type': 'application/json'},
+                timeout=15
+            )
+        else:
+            print(f"🚀 Sending GET postback to creator {creator_name}: {postback_url}")
+            
+            # Send GET request
+            response = requests.get(postback_url, timeout=15)
         
         # Prepare result
         result = {

@@ -189,6 +189,8 @@ def get_user_profile():
             "email": user.get('email', ''),
             "website": user.get('website', ''),
             "postbackUrl": user.get('postbackUrl', ''),
+            "postbackMethod": user.get('postbackMethod', 'POST'),
+            "includeResponses": user.get('includeResponses', True),
             "parameterMappings": user.get('parameterMappings', {}),
             "createdAt": user.get('createdAt', datetime.utcnow()).isoformat(),
             "totalSurveys": total_surveys,
@@ -244,6 +246,10 @@ def update_user_profile():
             update_data['website'] = data['website']
         if 'postbackUrl' in data:
             update_data['postbackUrl'] = data['postbackUrl']
+        if 'postbackMethod' in data:
+            update_data['postbackMethod'] = data['postbackMethod']
+        if 'includeResponses' in data:
+            update_data['includeResponses'] = data['includeResponses']
         if 'parameterMappings' in data:
             update_data['parameterMappings'] = data['parameterMappings']
         

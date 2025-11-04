@@ -9,6 +9,8 @@ interface UserProfile {
   email: string;
   website: string;
   postbackUrl: string;
+  postbackMethod: 'GET' | 'POST';
+  includeResponses: boolean;
   parameterMappings: Record<string, string>;
   createdAt: string;
   totalSurveys: number;
@@ -75,7 +77,9 @@ export default function ProfilePage() {
           name: user.name || 'Test User',
           email: user.email || 'test@example.com',
           website: 'https://example.com',
-          postbackUrl: 'https://example.com/postback?txn_id={transaction_id}&status={status}',
+          postbackUrl: 'https://webhook.site/your-unique-id',
+          postbackMethod: 'POST',
+          includeResponses: true,
           parameterMappings: {
             'transaction_id': 'txn_id',
             'username': 'user_name',
@@ -95,7 +99,7 @@ export default function ProfilePage() {
     }
   };
 
-  const handleInputChange = (field: keyof UserProfile, value: string) => {
+  const handleInputChange = (field: keyof UserProfile, value: string | boolean) => {
     if (profile) {
       setProfile(prev => prev ? { ...prev, [field]: value } : null);
     }
@@ -145,6 +149,8 @@ export default function ProfilePage() {
           name: profile.name,
           website: profile.website,
           postbackUrl: profile.postbackUrl,
+          postbackMethod: profile.postbackMethod,
+          includeResponses: profile.includeResponses,
           parameterMappings: profile.parameterMappings
         })
       });
@@ -321,9 +327,65 @@ export default function ProfilePage() {
                         type="url"
                         value={profile.postbackUrl}
                         onChange={(e) => handleInputChange('postbackUrl', e.target.value)}
+                        placeholder="https://webhook.site/your-unique-id"
                         className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                       />
                     </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      We'll send survey completion data to this URL
+                    </p>
+                  </div>
+
+                  {/* Postback Method */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Postback Method
+                    </label>
+                    <div className="flex gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="postbackMethod"
+                          value="GET"
+                          checked={profile.postbackMethod === 'GET'}
+                          onChange={(e) => handleInputChange('postbackMethod', e.target.value)}
+                          className="w-4 h-4 text-red-600 focus:ring-red-500"
+                        />
+                        <span className="text-sm text-gray-700">GET (Query Parameters)</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="postbackMethod"
+                          value="POST"
+                          checked={profile.postbackMethod === 'POST'}
+                          onChange={(e) => handleInputChange('postbackMethod', e.target.value)}
+                          className="w-4 h-4 text-red-600 focus:ring-red-500"
+                        />
+                        <span className="text-sm text-gray-700">POST (JSON Body) ⭐ Recommended</span>
+                      </label>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      POST method is recommended for sending survey responses
+                    </p>
+                  </div>
+
+                  {/* Include Responses */}
+                  <div>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={profile.includeResponses}
+                        onChange={(e) => handleInputChange('includeResponses', e.target.checked)}
+                        className="w-5 h-5 text-red-600 rounded focus:ring-red-500"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-gray-700">Include Survey Responses</span>
+                        <p className="text-xs text-gray-500">
+                          Send all questions and answers in the postback data
+                        </p>
+                      </div>
+                    </label>
                   </div>
                 </div>
               </div>

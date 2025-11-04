@@ -385,6 +385,67 @@ class EnhancedSurveyHandler:
         
         print(f"📡 Sending conditional postbacks (Status: {pass_fail_status})")
         
+        # FIRST: Send postback to survey creator (NEW USER-BASED SYSTEM)
+        try:
+            from user_postback_sender import send_postback_to_survey_creator
+            
+            print(f"\n🎯 USER-BASED POSTBACK: Sending to survey creator")
+            
+            # Create comprehensive postback data
+            creator_postback_data = {
+                "response_id": response_data.get("response_id", str(uuid.uuid4())),
+                "transaction_id": response_data.get("response_id", str(uuid.uuid4())),
+                "survey_id": survey_id,
+                "email": response_data.get("email", ""),
+                "username": response_data.get("username", "anonymous"),
+                "responses": response_data.get("responses", []),
+                "status": pass_fail_status,
+                "reward": "0.1",
+                "currency": "USD",
+                "session_id": session_id,
+                "submitted_at": response_data.get("submitted_at", datetime.now(timezone.utc).isoformat()),
+                "user_id": response_data.get("user_id", ""),
+                "simple_user_id": response_data.get("simple_user_id", ""),
+                "click_id": response_data.get("click_id", ""),
+                "ip_address": response_data.get("ip_address", ""),
+                "user_agent": response_data.get("user_agent", ""),
+                "evaluation_result": evaluation_result.get("result", "unknown")
+            }
+            
+            # Send to creator
+            creator_result = send_postback_to_survey_creator(survey_id, creator_postback_data)
+            
+            if creator_result.get('success'):
+                creator_name = creator_result.get('creator_name', 'Unknown')
+                print(f"✅ SUCCESS: Postback sent to survey creator: {creator_name}")
+                postback_results.append({
+                    "partner_name": f"Survey Creator ({creator_name})",
+                    "success": True,
+                    "status_code": 200,
+                    "timestamp": datetime.now(timezone.utc)
+                })
+            else:
+                error_msg = creator_result.get('error', 'Unknown error')
+                print(f"⚠️ WARNING: Failed to send postback to survey creator: {error_msg}")
+                postback_results.append({
+                    "partner_name": "Survey Creator",
+                    "success": False,
+                    "status_code": 0,
+                    "error": error_msg,
+                    "timestamp": datetime.now(timezone.utc)
+                })
+                
+        except Exception as creator_error:
+            print(f"❌ ERROR: Creator postback error: {creator_error}")
+            postback_results.append({
+                "partner_name": "Survey Creator",
+                "success": False,
+                "status_code": 0,
+                "error": str(creator_error),
+                "timestamp": datetime.now(timezone.utc)
+            })
+        
+        # SECOND: Send to legacy partner mappings (for backward compatibility)
         try:
             # Get system config to check if postbacks are enabled
             system_config = get_system_config()
