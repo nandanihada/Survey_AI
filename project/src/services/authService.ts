@@ -34,9 +34,16 @@ class AuthService {
 
   constructor() {
     // Dynamic API URL based on environment
-    this.baseUrl = window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1'
-      ? 'http://localhost:5000'
-      : 'https://api.theinterwebsite.space';
+    const hostname = window.location.hostname;
+    const isLocal = hostname.includes('localhost') || hostname === '127.0.0.1';
+    this.baseUrl = isLocal ? 'http://localhost:5000' : 'https://api.theinterwebsite.space';
+    
+    // Debug logging
+    console.log('🔧 AuthService initialized');
+    console.log('   Hostname:', hostname);
+    console.log('   Is Local:', isLocal);
+    console.log('   API Base URL:', this.baseUrl);
+    
     // Load token from localStorage on initialization
     this.token = localStorage.getItem('auth_token');
   }
@@ -72,8 +79,11 @@ class AuthService {
    * Login user
    */
   async login(credentials: LoginRequest): Promise<{ user: User; token: string }> {
+    const url = `${this.baseUrl}/api/auth/login`;
+    console.log('🔐 Attempting login to:', url);
+    
     try {
-      const response = await fetch(`${this.baseUrl}/api/auth/login`, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -82,22 +92,27 @@ class AuthService {
         body: JSON.stringify(credentials),
       });
 
+      console.log('📥 Login response status:', response.status);
+      console.log('📥 Login response content-type:', response.headers.get('content-type'));
+
       if (!response.ok) {
         // Check if we got HTML instead of JSON (endpoint not found)
         const contentType = response.headers.get('content-type');
         if (contentType && contentType.includes('text/html')) {
+          console.error('❌ Got HTML response instead of JSON - endpoint not found');
           throw new Error('Login service is temporarily unavailable. Please try again later.');
         }
         
         try {
           const error = await response.json();
           throw new Error(error.error || 'Login failed');
-        } catch {
+        } catch (e) {
           throw new Error(`Login failed with status ${response.status}`);
         }
       }
 
       const data = await response.json();
+      console.log('✅ Login successful');
       
       // Store user data and token
       if (data.user) {
@@ -110,7 +125,7 @@ class AuthService {
       
       return { user: data.user, token: data.token || 'mock-token' };
     } catch (error) {
-      console.error('Login failed:', error);
+      console.error('❌ Login failed:', error);
       throw error;
     }
   }
@@ -119,8 +134,12 @@ class AuthService {
    * Register new user
    */
   async register(userData: RegisterRequest): Promise<{ user: User; token: string }> {
+    const url = `${this.baseUrl}/api/auth/register`;
+    console.log('📝 Attempting registration to:', url);
+    console.log('📝 Registration data:', { email: userData.email, name: userData.name });
+    
     try {
-      const response = await fetch(`${this.baseUrl}/api/auth/register`, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -129,22 +148,31 @@ class AuthService {
         body: JSON.stringify(userData),
       });
 
+      console.log('📥 Register response status:', response.status);
+      console.log('📥 Register response content-type:', response.headers.get('content-type'));
+
       if (!response.ok) {
         // Check if we got HTML instead of JSON (endpoint not found)
         const contentType = response.headers.get('content-type');
         if (contentType && contentType.includes('text/html')) {
+          console.error('❌ Got HTML response instead of JSON - endpoint not found');
+          console.error('   This means the backend endpoint /api/auth/register does not exist');
+          console.error('   Backend URL:', this.baseUrl);
           throw new Error('Registration service is temporarily unavailable. Please try again later.');
         }
         
         try {
           const error = await response.json();
+          console.error('❌ Registration error:', error);
           throw new Error(error.error || 'Registration failed');
-        } catch {
+        } catch (e) {
+          console.error('❌ Could not parse error response');
           throw new Error(`Registration failed with status ${response.status}`);
         }
       }
 
       const data = await response.json();
+      console.log('✅ Registration successful');
       
       // Store user data and token
       if (data.user) {
@@ -157,7 +185,7 @@ class AuthService {
       
       return { user: data.user, token: data.token || 'mock-token' };
     } catch (error) {
-      console.error('Registration failed:', error);
+      console.error('❌ Registration failed:', error);
       throw error;
     }
   }
