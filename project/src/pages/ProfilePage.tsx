@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { User, Mail, Globe, Link, Settings, Save, Plus, X, BarChart3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Navigation from '../components/Navigation';
+import { makeApiRequest, handleApiError } from '../utils/deploymentFix';
 
 interface UserProfile {
   id: string;
@@ -60,10 +61,9 @@ export default function ProfilePage() {
         return;
       }
       
-      // Try to load real profile data
-      const response = await fetch(`/api/user/profile?user_id=${user.id}`, {
-        method: 'GET',
-        credentials: 'include'
+      // Try to load real profile data using deployment fix utilities
+      const response = await makeApiRequest(`/api/user/profile?user_id=${user.id}`, {
+        method: 'GET'
       });
 
       if (response.ok) {
@@ -92,7 +92,8 @@ export default function ProfilePage() {
         setProfile(mockProfile);
       }
     } catch (err) {
-      setError('Error loading profile');
+      const errorMessage = handleApiError(err, 'Profile load');
+      setError(errorMessage);
       console.error('Profile load error:', err);
     } finally {
       setIsLoading(false);
@@ -138,12 +139,11 @@ export default function ProfilePage() {
     setSuccess('');
 
     try {
-      const response = await fetch('/api/user/profile', {
+      const response = await makeApiRequest('/api/user/profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
         body: JSON.stringify({
           user_id: user?.id,
           name: profile.name,
@@ -163,7 +163,8 @@ export default function ProfilePage() {
         setError(errorData.message || 'Failed to update profile');
       }
     } catch (err) {
-      setError('Error updating profile');
+      const errorMessage = handleApiError(err, 'Profile update');
+      setError(errorMessage);
       console.error('Profile update error:', err);
     } finally {
       setIsSaving(false);

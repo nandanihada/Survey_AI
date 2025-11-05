@@ -157,17 +157,24 @@ def login_user():
     supports_credentials=True,
     origins=[
         "http://localhost:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5173",
         "https://pepperadsresponses.web.app", 
         "https://hostsliceresponse.web.app",
         "https://theinterwebsite.space"
     ],
     allow_headers=["Content-Type", "Authorization"],
-    methods=["GET", "OPTIONS"]
+    methods=["GET", "PUT", "POST", "DELETE", "OPTIONS"]
 )
 def get_user_profile():
     """Get user profile with postback configuration"""
     if request.method == 'OPTIONS':
-        return '', 200
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Methods', 'GET, PUT, POST, DELETE, OPTIONS')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response, 200
         
     try:
         # Get user ID from query parameter (simple auth for now)
@@ -208,17 +215,24 @@ def get_user_profile():
     supports_credentials=True,
     origins=[
         "http://localhost:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5173",
         "https://pepperadsresponses.web.app", 
         "https://hostsliceresponse.web.app",
         "https://theinterwebsite.space"
     ],
     allow_headers=["Content-Type", "Authorization"],
-    methods=["PUT", "OPTIONS"]
+    methods=["GET", "PUT", "POST", "DELETE", "OPTIONS"]
 )
 def update_user_profile():
     """Update user profile and postback configuration"""
     if request.method == 'OPTIONS':
-        return '', 200
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Methods', 'GET, PUT, POST, DELETE, OPTIONS')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response, 200
         
     try:
         data = request.json
