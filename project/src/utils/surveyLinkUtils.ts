@@ -20,9 +20,7 @@ export function generateSurveyLink(
   additionalParams: SurveyLinkParams = {},
   username?: string
 ): string {
-  const baseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? 'http://localhost:5173'
-    : 'https://theinterwebsite.space';
+  const baseUrl = window.location.origin;
   
   // Create URL with query parameters - ALWAYS go to /survey page
   const url = new URL(`${baseUrl}/survey`);

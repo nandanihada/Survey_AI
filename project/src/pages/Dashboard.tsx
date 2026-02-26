@@ -44,7 +44,7 @@ const Dashboard: React.FC = () => {
       // Dynamic API URL based on environment
       const baseUrl = window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1'
         ? 'http://localhost:5000'
-        : 'https://api.theinterwebsite.space';
+        : 'https://hostslice.onrender.com';
       
       // Use admin endpoint if user is admin
       const endpoint = isAdmin ? '/api/surveys/admin/all' : '/api/surveys';

@@ -36,7 +36,7 @@ class AuthService {
     // Dynamic API URL based on environment
     const hostname = window.location.hostname;
     const isLocal = hostname.includes('localhost') || hostname === '127.0.0.1';
-    this.baseUrl = isLocal ? 'http://localhost:5000' : 'https://api.theinterwebsite.space';
+    this.baseUrl = isLocal ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
     
     // Debug logging
     console.log('🔧 AuthService initialized');

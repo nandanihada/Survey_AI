@@ -71,7 +71,7 @@ except ImportError:
 if os.getenv("FLASK_ENV") == "development":
     BASE_URL = "http://127.0.0.1:5000"
 else:
-    BASE_URL = "https://api.theinterwebsite.space"
+    BASE_URL = "https://hostslice.onrender.com"
 
 app = Flask(__name__)
 app.secret_key = os.getenv('JWT_SECRET', 'your-super-secret-jwt-key-for-local-development')
@@ -86,6 +86,7 @@ CORS(app,
          "https://pepperadsresponses.web.app",
          "https://hostsliceresponse.web.app",
          "https://theinterwebsite.space",
+         "https://dashboard-pepperads.onrender.com",
          "http://localhost:3000",         # Dashboard frontend
          "https://pepperads.in"           # Main site
      ],
@@ -400,7 +401,8 @@ def validate_color(color):
         "http://127.0.0.1:5174",
         "https://pepperadsresponses.web.app",
         "https://hostsliceresponse.web.app",
-        "https://theinterwebsite.space"
+        "https://theinterwebsite.space",
+        "https://dashboard-pepperads.onrender.com"
     ],
     allow_headers=["Content-Type", "Authorization", "Access-Control-Allow-Origin"],
     methods=["POST", "OPTIONS"]
@@ -458,7 +460,8 @@ def parse_image():
         "http://127.0.0.1:5174",
         "https://pepperadsresponses.web.app",
         "https://hostsliceresponse.web.app",
-        "https://theinterwebsite.space"
+        "https://theinterwebsite.space",
+        "https://dashboard-pepperads.onrender.com"
     ],
     allow_headers=["Content-Type", "Authorization", "Access-Control-Allow-Origin"],
     methods=["GET", "POST", "OPTIONS"]
@@ -756,7 +759,7 @@ def generate_survey():
         if "localhost" in request.host or "127.0.0.1" in request.host:
             FRONTEND_URL = "http://localhost:5173"
         else:
-            FRONTEND_URL = "https://theinterwebsite.space"
+            FRONTEND_URL = "https://dashboard-pepperads.onrender.com"
         # Create and save survey document
         try:
             print(f"DEBUG: About to create survey with db object: {db}")
@@ -881,7 +884,8 @@ def generate_survey():
         "http://127.0.0.1:5174",
         "https://pepperadsresponses.web.app",
         "https://hostsliceresponse.web.app",
-        "https://theinterwebsite.space"
+        "https://theinterwebsite.space",
+        "https://dashboard-pepperads.onrender.com"
     ],
     allow_headers=["Content-Type", "Authorization"],
     methods=["POST", "OPTIONS"]

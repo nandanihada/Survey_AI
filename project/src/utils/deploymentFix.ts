@@ -4,6 +4,11 @@
  */
 
 export const getApiBaseUrl = (): string => {
+  // Use environment variable if set
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+
   // Check if we're in development or production
   const isDevelopment = window.location.hostname.includes('localhost') || 
                        window.location.hostname === '127.0.0.1';
@@ -13,7 +18,7 @@ export const getApiBaseUrl = (): string => {
   }
   
   // Production API URL
-  return 'https://api.theinterwebsite.space';
+  return 'https://hostslice.onrender.com';
 };
 
 export const getAuthHeaders = (): Record<string, string> => {

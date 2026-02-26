@@ -105,7 +105,7 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
 
   const API_BASE = window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1'
     ? 'http://127.0.0.1:5000'
-    : 'https://api.theinterwebsite.space/';
+    : 'https://hostslice.onrender.com/';
 
   useEffect(() => {
     loadSurveysWithConfig();

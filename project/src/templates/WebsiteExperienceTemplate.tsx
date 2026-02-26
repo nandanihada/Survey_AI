@@ -41,7 +41,7 @@ const WebsiteExperienceTemplate: React.FC<Props> = ({ survey, previewMode = fals
   const [submitted, setSubmitted] = useState(false);
 
   const isLocalhost = window.location.hostname === 'localhost';
-  const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://api.theinterwebsite.space/';
+  const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com/';
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
