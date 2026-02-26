@@ -3,7 +3,6 @@ Protected survey routes with user ownership
 """
 from flask import Blueprint, request, jsonify, g
 from auth_middleware import requireAuth, requireAdmin, optionalAuth
-from simple_auth_middleware import simple_auth_required
 from mongodb_config import db
 from bson import ObjectId
 from datetime import datetime
@@ -27,7 +26,7 @@ def convert_objectid_to_string(doc):
     return doc
 
 @survey_bp.route('/', methods=['GET'])
-@simple_auth_required
+@requireAuth
 def get_user_surveys():
     """Get surveys for the current user (My Surveys)"""
     try:
@@ -188,8 +187,10 @@ def update_survey(survey_id):
         update_data = {
             'title': data.get('title', survey.get('title')),
             'description': data.get('description', survey.get('description')),
+            'subtitle': data.get('subtitle', survey.get('subtitle')),
             'questions': data.get('questions', survey.get('questions')),
             'settings': data.get('settings', survey.get('settings')),
+            'template_type': data.get('template_type', survey.get('template_type')),
             'updated_at': datetime.utcnow()
         }
         

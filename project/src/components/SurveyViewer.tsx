@@ -1,7 +1,14 @@
 import React from 'react';
 import CustomerFeedbackTemplate from '../templates/CustomerFeedbackTemplate';
 import EmployeeCheckInTemplate from '../templates/EmployeeCheckInTemplate';
-import AICustomTemplate from '../templates/AICustomTemplate';
+import BasicSurveyTemplate from '../templates/BasicSurveyTemplate';
+import EventFeedbackTemplate from '../templates/EventFeedbackTemplate';
+import ProductFeedbackTemplate from '../templates/ProductFeedbackTemplate';
+import TeamCollaborationTemplate from '../templates/TeamCollaborationTemplate';
+import OnboardingReviewTemplate from '../templates/OnboardingReviewTemplate';
+import WebsiteExperienceTemplate from '../templates/WebsiteExperienceTemplate';
+import TrainingFeedbackTemplate from '../templates/TrainingFeedbackTemplate';
+import ServiceCancellationTemplate from '../templates/ServiceCancellationTemplate';
 import type { Survey } from '../types/Survey';
 
 interface SurveyViewerProps {
@@ -11,7 +18,14 @@ interface SurveyViewerProps {
 const templateMap: Record<string, React.ComponentType<{ survey: Survey }>> = {
   customer_feedback: CustomerFeedbackTemplate,
   employee_checkin: EmployeeCheckInTemplate,
-  custom: AICustomTemplate,
+  custom: BasicSurveyTemplate,
+  event_feedback: EventFeedbackTemplate,
+  product_feedback: ProductFeedbackTemplate,
+  team_collaboration: TeamCollaborationTemplate,
+  onboarding_review: OnboardingReviewTemplate,
+  website_experience: WebsiteExperienceTemplate,
+  training_feedback: TrainingFeedbackTemplate,
+  service_cancellation: ServiceCancellationTemplate,
 };
 
 const SurveyViewer: React.FC<SurveyViewerProps> = ({ survey }) => {

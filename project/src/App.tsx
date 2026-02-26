@@ -1,33 +1,51 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Routes, Route } from 'react-router-dom';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/Tabs';
-import SurveyForm from './components/SurveyForm';
-import SurveyList from './components/SurveyList';
-import PostbackManager from './components/PostbackManager';
-import ResponseAnalytics from './components/ResponseAnalytics';
-import SurveyEditor from './components/SurveyEditor';
-import PublicSurveyPage from './components/PublicSurveyPage';
-import SurveyPreviewPage from './components/SurveyPreviewPage';
-import { FloatingWidgetProvider } from './components/FloatingWidgetProvider';
-import WidgetTestPage from './components/WidgetTestPage';
-import FloatingWidget from './components/FloatingWidget';
-import { WidgetResponsesView } from './components/WidgetResponsesView';
-import { WidgetCustomizer, WidgetCustomizerSettings } from './components/WidgetCustomizer';
-import PassFailAdmin from './components/PassFailAdmin';
+import React, { lazy, Suspense } from 'react';
+import { Routes, Route, useSearchParams } from 'react-router-dom';
+import OptimizedLoader from './components/OptimizedLoader';
 import { AuthProvider } from './contexts/AuthContext';
-import UserDashboard from './pages/Dashboard';
-import AdminDashboard from './pages/AdminDashboard';
-import LoginPage from './pages/LoginPage';
-import SignupPage from './pages/SignupPage';
-import ProfilePage from './pages/ProfilePage';
 import ProtectedRoute from './components/ProtectedRoute';
-import { PenSquare, FolderOpen, TrendingUp, Link, Sun, Moon, Settings, Lock } from 'lucide-react';
-import { useAuth } from './contexts/AuthContext';
+import PublicRoute from './components/PublicRoute';
+import LandingRedirect from './components/LandingRedirect';
 import './styles/mobile-responsive.css';
 
+// Lazy load pages and components
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const SignupPage = lazy(() => import('./pages/SignupPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+const Unauthorized = lazy(() => import('./pages/Unauthorized'));
+
+// Survey components
+const SurveyEditor = lazy(() => import('./components/SurveyEditor'));
+const PublicSurveyPage = lazy(() => import('./components/PublicSurveyPage'));
+const SurveyPreviewPage = lazy(() => import('./components/SurveyPreviewPage'));
+const SurveyResponsesPage = lazy(() => import('./components/SurveyResponsesPage'));
+
+// Widget components
+const WidgetTestPage = lazy(() => import('./components/WidgetTestPage'));
+
+// Import legacy dashboard for backward compatibility
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/Tabs';
+import { PenSquare, FolderOpen, TrendingUp, Link, Sun, Moon, Settings, Lock } from 'lucide-react';
+import { useAuth } from './contexts/AuthContext';
+import { FloatingWidgetProvider } from './components/FloatingWidgetProvider';
+import type { WidgetCustomizerSettings } from './components/WidgetCustomizer';
+
+const SurveyForm = lazy(() => import('./components/SurveyForm'));
+const SurveyList = lazy(() => import('./components/SurveyList'));
+const PostbackManager = lazy(() => import('./components/PostbackManager'));
+const ResponseAnalytics = lazy(() => import('./components/ResponseAnalytics'));
+const FloatingWidget = lazy(() => import('./components/FloatingWidget'));
+const WidgetResponsesView = lazy(() => import('./components/WidgetResponsesView'));
+const PassFailAdmin = lazy(() => import('./components/PassFailAdmin'));
+
+// Legacy dashboard component - will be removed after migration
 function LegacyDashboard() {
   const { hasFeature } = useAuth();
-  const [activeTab, setActiveTab] = useState('create');
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'create');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showPreviewWidget, setShowPreviewWidget] = useState(false);
   const [autoPreviewEnabled, setAutoPreviewEnabled] = useState(true);
@@ -283,52 +301,29 @@ function LegacyDashboard() {
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsContent value="create">
               <div className="space-y-4 sm:space-y-6">
-                <SurveyForm isDarkMode={isDarkMode} />
-                
-                {/* Widget Preview Section */}
-                <div className={`p-4 sm:p-6 rounded-lg border ${
-                  isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-stone-200'
-                }`}>
-                  <h3 className={`text-base sm:text-lg font-semibold mb-3 ${
-                    isDarkMode ? 'text-white' : 'text-stone-800'
-                  }`}>Widget Preview</h3>
-                  <p className={`text-sm mb-4 ${
-                    isDarkMode ? 'text-slate-300' : 'text-stone-600'
-                  }`}>
-                    See how your survey widget will appear to visitors.
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-                    <button
-                      onClick={showWidgetPreview}
-                      className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm sm:text-base"
-                    >
-                      Preview Widget
-                    </button>
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={autoPreviewEnabled}
-                        onChange={toggleAutoPreview}
-                        className="rounded"
-                      />
-                      <span className={isDarkMode ? 'text-slate-300' : 'text-stone-600'}>
-                        Auto-preview
-                      </span>
-                    </label>
-                  </div>
-                </div>
+                <Suspense fallback={<OptimizedLoader type="component" message="Loading survey form..." />}>
+                  <SurveyForm isDarkMode={isDarkMode} onNavigateToSurveys={() => setActiveTab('surveys')} />
+                </Suspense>
               </div>
             </TabsContent>
-            <TabsContent value="surveys"><SurveyList isDarkMode={isDarkMode} /></TabsContent>
+            <TabsContent value="surveys">
+              <Suspense fallback={<OptimizedLoader type="component" message="Loading surveys..." />}>
+                <SurveyList isDarkMode={isDarkMode} />
+              </Suspense>
+            </TabsContent>
             <TabsContent value="responses">
               <div className="space-y-6">
-                <ResponseAnalytics isDarkMode={isDarkMode} />
-                <WidgetResponsesView isDarkMode={isDarkMode} />
+                <Suspense fallback={<OptimizedLoader type="component" message="Loading analytics..." />}>
+                  <ResponseAnalytics isDarkMode={isDarkMode} />
+                  <WidgetResponsesView isDarkMode={isDarkMode} />
+                </Suspense>
               </div>
             </TabsContent>
             <TabsContent value="postback">
               {hasFeature('postback') ? (
-                <PostbackManager isDarkMode={isDarkMode} />
+                <Suspense fallback={<OptimizedLoader type="component" message="Loading postback manager..." />}>
+                  <PostbackManager isDarkMode={isDarkMode} />
+                </Suspense>
               ) : (
                 <div className={`p-6 rounded-lg border text-center ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-stone-200'}`}>
                   <Lock size={48} className="mx-auto mb-4 text-red-500" />
@@ -339,7 +334,9 @@ function LegacyDashboard() {
             </TabsContent>
             <TabsContent value="passfail">
               {hasFeature('pass_fail') ? (
-                <PassFailAdmin isDarkMode={isDarkMode} />
+                <Suspense fallback={<OptimizedLoader type="component" message="Loading pass/fail admin..." />}>
+                  <PassFailAdmin isDarkMode={isDarkMode} />
+                </Suspense>
               ) : (
                 <div className={`p-6 rounded-lg border text-center ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-stone-200'}`}>
                   <Lock size={48} className="mx-auto mb-4 text-red-500" />
@@ -381,17 +378,19 @@ function LegacyDashboard() {
       
       {/* Preview Widget */}
       {showPreviewWidget && widgetSettings && (
-        <FloatingWidget
-          isDarkMode={isDarkMode}
-          customColor={widgetSettings.color}
-          glassEffect={widgetSettings.glassEffect}
-          transparency={widgetSettings.transparency}
-          animationSpeed={widgetSettings.animationSpeed}
-          questionDelay={widgetSettings.questionDelay}
-          customQuestions={widgetSettings.questions}
-          onComplete={handleWidgetComplete}
-          onDismiss={handleWidgetDismiss}
-        />
+        <Suspense fallback={null}>
+          <FloatingWidget
+            isDarkMode={isDarkMode}
+            customColor={widgetSettings.color}
+            glassEffect={widgetSettings.glassEffect}
+            transparency={widgetSettings.transparency}
+            animationSpeed={widgetSettings.animationSpeed}
+            questionDelay={widgetSettings.questionDelay}
+            customQuestions={widgetSettings.questions}
+            onComplete={handleWidgetComplete}
+            onDismiss={handleWidgetDismiss}
+          />
+        </Suspense>
       )}
     </FloatingWidgetProvider>
   );
@@ -434,30 +433,34 @@ function WidgetCustomizerPage() {
           <p className="text-gray-600">Customize your survey widget and see changes in real-time.</p>
         </div>
         
-        <WidgetCustomizer
-          isDarkMode={isDarkMode}
-          onSettingsChange={setWidgetSettings}
-          onShowWidget={() => setIsWidgetVisible(true)}
-          onHideWidget={() => setIsWidgetVisible(false)}
-          isWidgetVisible={isWidgetVisible}
-          initialSettings={widgetSettings}
-        />
+        <Suspense fallback={<OptimizedLoader type="component" message="Loading customizer..." />}>
+          <WidgetCustomizer
+            isDarkMode={isDarkMode}
+            onSettingsChange={setWidgetSettings}
+            onShowWidget={() => setIsWidgetVisible(true)}
+            onHideWidget={() => setIsWidgetVisible(false)}
+            isWidgetVisible={isWidgetVisible}
+            initialSettings={widgetSettings}
+          />
+        </Suspense>
         
         {isWidgetVisible && (
-          <FloatingWidget
-            isDarkMode={isDarkMode}
-            customColor={widgetSettings.color}
-            glassEffect={widgetSettings.glassEffect}
-            transparency={widgetSettings.transparency}
-            animationSpeed={widgetSettings.animationSpeed}
-            questionDelay={widgetSettings.questionDelay}
-            customQuestions={widgetSettings.questions}
-            onComplete={(responses) => {
-              console.log('Widget completed:', responses);
-              setIsWidgetVisible(false);
-            }}
-            onDismiss={() => setIsWidgetVisible(false)}
-          />
+          <Suspense fallback={null}>
+            <FloatingWidget
+              isDarkMode={isDarkMode}
+              customColor={widgetSettings.color}
+              glassEffect={widgetSettings.glassEffect}
+              transparency={widgetSettings.transparency}
+              animationSpeed={widgetSettings.animationSpeed}
+              questionDelay={widgetSettings.questionDelay}
+              customQuestions={widgetSettings.questions}
+              onComplete={(responses) => {
+                console.log('Widget completed:', responses);
+                setIsWidgetVisible(false);
+              }}
+              onDismiss={() => setIsWidgetVisible(false)}
+            />
+          </Suspense>
         )}
       </div>
     </div>
@@ -467,54 +470,100 @@ function WidgetCustomizerPage() {
 export default function App() {
   return (
     <AuthProvider>
-      <Routes>
-        {/* Public routes */}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
-        <Route path="/survey/:id" element={<PublicSurveyPage />} />
-        <Route path="/survey" element={<PublicSurveyPage />} />
-        <Route path="/preview/:id" element={<SurveyPreviewPage />} />
-        
-        {/* Protected routes */}
-        <Route path="/dashboard" element={
-          <ProtectedRoute>
-            <UserDashboard />
-          </ProtectedRoute>
-        } />
-        <Route path="/create" element={
-          <ProtectedRoute>
-            <LegacyDashboard />
-          </ProtectedRoute>
-        } />
-        <Route path="/edit/:id" element={
-          <ProtectedRoute>
-            <SurveyEditor />
-          </ProtectedRoute>
-        } />
-        <Route path="/profile" element={
-          <ProtectedRoute>
-            <ProfilePage />
-          </ProtectedRoute>
-        } />
-        
-        {/* Admin routes */}
-        <Route path="/admin" element={
-          <ProtectedRoute requireAdmin>
-            <AdminDashboard />
-          </ProtectedRoute>
-        } />
-        
-        {/* Test routes */}
-        <Route path="/widget-test" element={<WidgetTestPage />} />
-        <Route path="/widget-customizer" element={<WidgetCustomizerPage />} />
-        
-        {/* Default route */}
-        <Route path="*" element={
-          <ProtectedRoute>
-            <UserDashboard />
-          </ProtectedRoute>
-        } />
-      </Routes>
+      <Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center bg-light-theme">
+          <OptimizedLoader type="page" message="Loading..." />
+        </div>
+      }>
+        <Routes>
+          {/* Landing page - redirects based on auth */}
+          <Route path="/" element={<LandingRedirect />} />
+          
+          {/* Public routes */}
+          <Route path="/login" element={
+            <PublicRoute>
+              <LoginPage />
+            </PublicRoute>
+          } />
+          <Route path="/signup" element={
+            <PublicRoute>
+              <SignupPage />
+            </PublicRoute>
+          } />
+          
+          {/* Public survey routes */}
+          <Route path="/survey/:id" element={<PublicSurveyPage />} />
+          <Route path="/survey" element={<PublicSurveyPage />} />
+          <Route path="/s/:shortId" element={<PublicSurveyPage />} />
+          
+          {/* Protected routes */}
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          } />
+          
+          {/* Dashboard nested routes */}
+          <Route path="/dashboard/create" element={
+            <ProtectedRoute>
+              <LegacyDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/dashboard/edit/:id" element={
+            <ProtectedRoute>
+              <SurveyEditor />
+            </ProtectedRoute>
+          } />
+          <Route path="/dashboard/preview/:id" element={
+            <ProtectedRoute>
+              <SurveyPreviewPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/dashboard/responses/:id" element={
+            <ProtectedRoute>
+              <SurveyResponsesPage />
+            </ProtectedRoute>
+          } />
+          
+          {/* Legacy routes - redirect to dashboard */}
+          <Route path="/create" element={
+            <ProtectedRoute>
+              <LegacyDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/edit/:id" element={
+            <ProtectedRoute>
+              <SurveyEditor />
+            </ProtectedRoute>
+          } />
+          <Route path="/preview/:id" element={
+            <ProtectedRoute>
+              <SurveyPreviewPage />
+            </ProtectedRoute>
+          } />
+          
+          {/* User routes */}
+          <Route path="/profile" element={
+            <ProtectedRoute>
+              <ProfilePage />
+            </ProtectedRoute>
+          } />
+          
+          {/* Admin routes */}
+          <Route path="/admin" element={
+            <ProtectedRoute requireAdmin>
+              <AdminDashboard />
+            </ProtectedRoute>
+          } />
+          
+          {/* Widget routes */}
+          <Route path="/widget-test" element={<WidgetTestPage />} />
+          
+          {/* Error routes */}
+          <Route path="/unauthorized" element={<Unauthorized />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
     </AuthProvider>
   );
 }

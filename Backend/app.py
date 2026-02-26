@@ -50,7 +50,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.short_id import generate_short_id, is_valid_short_id
 from auth_middleware import requireAuth
-from simple_auth_middleware import simple_auth_required
 from flask import g
 
 # Import enhanced survey handler
@@ -110,19 +109,34 @@ print("Initializing MongoDB...")
 from mongodb_config import db
 print("✅ MongoDB initialized successfully")
 
-# Gemini API Configuration
-GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY", "AIzaSyAow3CLyLCftsX-A5coU3kHuIfS817GBts")
-print(f"Using Gemini API Key: {GEMINI_API_KEY[:20]}...")
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-2.5-flash-lite")
-print("✅ Gemini API configured successfully")
+# AI API Configuration (OpenRouter)
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "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")
+print(f"Using OpenRouter API Key: {OPENROUTER_API_KEY[:20]}...")
+
+def generate_ai_content(prompt_text, temperature=0.7, max_tokens=1024):
+    """Generate content using OpenRouter API"""
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": "google/gemini-2.0-flash-001",
+        "messages": [{"role": "user", "content": prompt_text}],
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    resp = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=60)
+    resp.raise_for_status()
+    data = resp.json()
+    return data["choices"][0]["message"]["content"]
+
+print("✅ OpenRouter API configured successfully")
 
 # Import blueprints after MongoDB is initialized
 try:
     print("Importing blueprints...")
     from postback_handler import postback_bp
     from postback_api import postback_api_bp
-    from postback_testing import postback_testing_bp
     from outbound_postback_api import outbound_postback_bp
     from partners_api import partners_api_bp
     from auth_routes import auth_bp
@@ -138,7 +152,6 @@ try:
     print("Registering blueprints...")
     app.register_blueprint(postback_bp)
     app.register_blueprint(postback_api_bp, url_prefix='/api')
-    app.register_blueprint(postback_testing_bp)
     app.register_blueprint(outbound_postback_bp, url_prefix='/api')
     app.register_blueprint(partners_api_bp, url_prefix='/api')
     app.register_blueprint(auth_bp)  # Auth routes at /api/auth
@@ -155,9 +168,10 @@ except ImportError as e:
     print("Make sure all blueprint files exist and don't have syntax errors.")
     print("Files should be in the same directory as app.py:")
     print("- postback_handler.py")
-    print("- postback_api.py") 
-    print("- postback_testing.py")
+    print("- postback_api.py")
     print("- auth_routes.py")
+    print("- survey_routes.py")
+    print("- admin_routes.py")
     raise  # Re-raise the exception to see the full traceback
 
 
@@ -376,6 +390,64 @@ def validate_color(color):
         
     return f"#{color.lower()}"
 
+@app.route('/parse-image', methods=['POST', 'OPTIONS'])
+@cross_origin(
+    supports_credentials=True,
+    origins=[
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "https://pepperadsresponses.web.app",
+        "https://hostsliceresponse.web.app",
+        "https://theinterwebsite.space"
+    ],
+    allow_headers=["Content-Type", "Authorization", "Access-Control-Allow-Origin"],
+    methods=["POST", "OPTIONS"]
+)
+def parse_image():
+    """Parse an uploaded image to extract questions/text for survey generation"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    # Manual auth check (after OPTIONS is handled)
+    from auth_middleware import requireAuth as _reqAuth
+    auth_header = request.headers.get('Authorization')
+    if not auth_header:
+        return jsonify({"error": "Authorization required"}), 401
+    
+    try:
+        data = request.get_json()
+        image_data = data.get('image', '')  # base64 image data
+        if not image_data:
+            return jsonify({"error": "No image data provided"}), 400
+        
+        # Use OpenRouter with vision model to extract text from image
+        headers = {
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": "google/gemini-2.0-flash-001",
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Extract all text, questions, and survey content from this image. List each question or piece of text on a new line. If there are answer options, include them. Be thorough and accurate."},
+                    {"type": "image_url", "image_url": {"url": image_data}}
+                ]
+            }],
+            "max_tokens": 2048,
+        }
+        resp = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=60)
+        resp.raise_for_status()
+        result = resp.json()
+        extracted_text = result["choices"][0]["message"]["content"]
+        
+        return jsonify({"extracted_text": extracted_text})
+    except Exception as e:
+        print(f"Image parsing error: {e}")
+        return jsonify({"error": f"Failed to parse image: {str(e)}"}), 500
+
 @app.route('/generate', methods=['POST', 'OPTIONS'])
 @cross_origin(
     supports_credentials=True,
@@ -391,7 +463,7 @@ def validate_color(color):
     allow_headers=["Content-Type", "Authorization", "Access-Control-Allow-Origin"],
     methods=["GET", "POST", "OPTIONS"]
 )
-@simple_auth_required
+@requireAuth
 def generate_survey():
     if request.method == 'OPTIONS':
         return '', 200
@@ -420,6 +492,9 @@ def generate_survey():
         if not prompt:
             return jsonify({"error": "Prompt is required and cannot be empty"}), 400
 
+        # Handle image content (base64 encoded image with text extracted by frontend or sent as description)
+        image_context = data.get("image_context", "").strip()
+        
         # Get template type first
         template_type = data.get("template_type", "customer_feedback")
         response_type = data.get("response_type", "multiple_choice")
@@ -428,6 +503,19 @@ def generate_survey():
         print(f"Template type: {template_type}")
         print(f"Response type: {response_type}")
         print(f"Prompt: {prompt[:100]}...")
+        if image_context:
+            print(f"Image context provided: {image_context[:200]}...")
+
+        # Build enhanced prompt that respects user-specified questions
+        user_questions_hint = ""
+        if image_context:
+            user_questions_hint = f"\n\nThe user also uploaded an image with the following content/questions:\n{image_context}\nYou MUST include these questions in the survey, adapting them to the proper format. Fill remaining slots with AI-generated questions.\n"
+        
+        # Detect if user specified specific questions in their prompt
+        specific_q_markers = ["include", "add this", "I want", "I need", "make sure", "must have", "should have", "these questions", "this question"]
+        has_specific_questions = any(marker in prompt.lower() for marker in specific_q_markers)
+        if has_specific_questions:
+            user_questions_hint += f"\n\nIMPORTANT: The user has specified particular questions they want included. Extract any specific questions from their prompt and include them EXACTLY as stated. Generate additional questions to reach the total count.\n"
 
         # Get question count - flexible for all templates
         try:
@@ -442,7 +530,7 @@ def generate_survey():
         prompt_templates = {
             "custom": f"""
             Generate a comprehensive survey about "{prompt}" with exactly {question_count} questions that thoroughly explore this topic.
-            
+            {user_questions_hint}
             Create exactly {question_count} questions that cover all important aspects. Be creative and thorough.
             
             Use this exact format:
@@ -477,6 +565,7 @@ def generate_survey():
             
             "customer_feedback": f"""
             Generate exactly {question_count} survey questions for customer feedback about "{prompt}".
+            {user_questions_hint}
 
             Use this exact format:
 
@@ -515,6 +604,7 @@ def generate_survey():
 
             "employee_checkin": f"""
             Generate exactly {question_count} employee check-in survey questions about "{prompt}".
+            {user_questions_hint}
 
             Use this exact format:
 
@@ -553,6 +643,7 @@ def generate_survey():
 
             "default": f"""
                                  Generate exactly {question_count} survey questions about "{prompt}".
+                                 {user_questions_hint}
 
                                  Use this exact format:
 
@@ -621,22 +712,14 @@ def generate_survey():
             try:
                 print(f"Attempt {attempt + 1} for template: {template_type}")
                 
-                # Generate content with timeout
-                response = model.generate_content(
-                    ai_prompt,
-                    generation_config={
-                        "temperature": 0.7,
-                        "top_p": 0.8,
-                        "top_k": 40,
-                        "max_output_tokens": 1024,
-                    }
-                )
+                # Generate content via OpenRouter
+                raw_response = generate_ai_content(ai_prompt, temperature=0.7, max_tokens=1024)
 
-                if not response or not response.text:
+                if not raw_response:
                     raise ValueError("Empty response from AI model")
 
-                raw_response = response.text.strip()
-                print("Gemini Response:\n", raw_response)
+                raw_response = raw_response.strip()
+                print("AI Response:\n", raw_response)
 
                 # Parse and validate questions
                 questions = parse_survey_response(raw_response)
@@ -653,12 +736,12 @@ def generate_survey():
                 last_error = retry_error
                 print(f"Retry {attempt + 1} failed: {retry_error}")
                 
-                # Check for quota exceeded error
-                if "RATE_LIMIT_EXCEEDED" in str(retry_error) or "Quota exceeded" in str(retry_error):
+                # Check for rate limit / quota errors
+                if "429" in str(retry_error) or "rate_limit" in str(retry_error).lower() or "quota" in str(retry_error).lower():
                     return jsonify({
                         "error": "API quota exceeded. Please try again later or upgrade your API plan.",
                         "error_type": "quota_exceeded",
-                        "message": "The Google Gemini API has reached its rate limit. Please wait a few minutes before trying again."
+                        "message": "The AI API has reached its rate limit. Please wait a few minutes before trying again."
                     }), 429
                 
                 if attempt == max_retries - 1:
@@ -711,6 +794,8 @@ def generate_survey():
             survey_data = {
                 "_id": survey_id,
                 "id": survey_id,
+                "title": prompt[:100],
+                "subtitle": "",
                 "prompt": prompt,
                 "response_type": response_type,
                 "template_type": template_type,
@@ -1018,8 +1103,8 @@ def generate_insights():
             f"Responses:\n{full_text}\n\nBusiness Ideas:"
         )
 
-        ai_response = model.generate_content(prompt)
-        insights = ai_response.text.strip()
+        ai_response_text = generate_ai_content(prompt)
+        insights = ai_response_text.strip()
 
         return jsonify({"insights": insights})
 

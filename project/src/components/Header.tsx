@@ -3,9 +3,11 @@
  */
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const Header: React.FC = () => {
   const { user, authenticated, logout, isAdmin } = useAuth();
+  const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const handleLogout = async () => {
@@ -22,32 +24,35 @@ const Header: React.FC = () => {
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <div className="flex items-center">
-            <h1 className="text-xl font-bold text-gray-900">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="text-xl font-bold text-gray-900 hover:text-gray-700 transition-colors"
+            >
               Survey Dashboard
-            </h1>
+            </button>
           </div>
 
           {/* Navigation */}
           <nav className="hidden md:flex space-x-8">
-            <a
-              href="/dashboard"
+            <button
+              onClick={() => navigate('/dashboard')}
               className="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium"
             >
               My Surveys
-            </a>
-            <a
-              href="/create"
+            </button>
+            <button
+              onClick={() => navigate('/dashboard/create')}
               className="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium"
             >
               Create Survey
-            </a>
+            </button>
             {isAdmin && (
-              <a
-                href="/admin"
+              <button
+                onClick={() => navigate('/admin')}
                 className="text-blue-600 hover:text-blue-700 px-3 py-2 rounded-md text-sm font-medium"
               >
                 Admin
-              </a>
+              </button>
             )}
           </nav>
 
@@ -131,25 +136,25 @@ const Header: React.FC = () => {
       {/* Mobile menu */}
       <div className="md:hidden">
         <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-          <a
-            href="/dashboard"
-            className="text-gray-500 hover:text-gray-700 block px-3 py-2 rounded-md text-base font-medium"
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="text-gray-500 hover:text-gray-700 block px-3 py-2 rounded-md text-base font-medium w-full text-left"
           >
             My Surveys
-          </a>
-          <a
-            href="/create"
-            className="text-gray-500 hover:text-gray-700 block px-3 py-2 rounded-md text-base font-medium"
+          </button>
+          <button
+            onClick={() => navigate('/dashboard/create')}
+            className="text-gray-500 hover:text-gray-700 block px-3 py-2 rounded-md text-base font-medium w-full text-left"
           >
             Create Survey
-          </a>
+          </button>
           {isAdmin && (
-            <a
-              href="/admin"
-              className="text-blue-600 hover:text-blue-700 block px-3 py-2 rounded-md text-base font-medium"
+            <button
+              onClick={() => navigate('/admin')}
+              className="text-blue-600 hover:text-blue-700 block px-3 py-2 rounded-md text-base font-medium w-full text-left"
             >
               Admin
-            </a>
+            </button>
           )}
         </div>
       </div>

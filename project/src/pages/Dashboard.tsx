@@ -3,16 +3,17 @@
  */
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { 
-  Eye, 
   Edit3, 
-  Share2, 
+  BarChart3, 
   Calendar, 
   User, 
   FileText,
   Plus,
-  AlertCircle
+  AlertCircle,
+  Eye
 } from 'lucide-react';
 
 interface Survey {
@@ -31,6 +32,7 @@ interface Survey {
 
 const Dashboard: React.FC = () => {
   const { user, isAdmin } = useAuth();
+  const navigate = useNavigate();
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -173,13 +175,13 @@ const Dashboard: React.FC = () => {
               </p>
             </div>
             <div className="mt-4 flex md:mt-0 md:ml-4">
-              <a
-                href="/create"
+              <button
+                onClick={() => navigate('/dashboard/create')}
                 className="ml-3 inline-flex items-center px-6 py-3 border border-transparent rounded-xl shadow-lg text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 transform hover:scale-105"
               >
                 <Plus size={16} className="mr-2" />
                 Create Survey
-              </a>
+              </button>
             </div>
           </div>
 
@@ -206,13 +208,13 @@ const Dashboard: React.FC = () => {
                   Get started by creating your first survey.
                 </p>
                 <div className="mt-6">
-                  <a
-                    href="/create"
+                  <button
+                    onClick={() => navigate('/dashboard/create')}
                     className="inline-flex items-center px-6 py-3 border border-transparent shadow-lg text-sm font-medium rounded-xl text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 transition-all duration-200 transform hover:scale-105"
                   >
                     <Plus size={16} className="mr-2" />
                     Create Survey
-                  </a>
+                  </button>
                 </div>
               </div>
             </div>
@@ -262,40 +264,26 @@ const Dashboard: React.FC = () => {
                     
                     {/* Action Buttons */}
                     <div className="flex justify-center space-x-3">
-                      {/* View Button */}
-                      <a
-                        href={`/survey/${survey.short_id}`}
-                        className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 transition-all duration-200 transform hover:scale-110 shadow-lg group"
-                        title="View Survey"
-                      >
-                        <Eye size={18} className="group-hover:scale-110 transition-transform" />
-                      </a>
-                      
                       {/* Edit Button */}
-                      <a
-                        href={`/edit/${survey.short_id}`}
-                        className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 transition-all duration-200 transform hover:scale-110 shadow-lg group"
+                      <button
+                        onClick={() => navigate(`/dashboard/edit/${survey.short_id}`)}
+                        className="flex items-center justify-center gap-2 px-4 h-10 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-lg group text-sm font-medium"
                         title="Edit Survey"
                       >
-                        <Edit3 size={18} className="group-hover:scale-110 transition-transform" />
-                      </a>
+                        <Edit3 size={15} />
+                        Edit
+                      </button>
                       
-                      {/* Share Button */}
+                      {/* Responses Button */}
                       <button
-                        onClick={() => handleShare(survey)}
-                        className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 text-white hover:from-purple-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-110 shadow-lg group"
-                        title={copiedSurvey === survey._id ? "Copied!" : "Share Survey"}
+                        onClick={() => navigate(`/dashboard/responses/${survey.short_id}`)}
+                        className="flex items-center justify-center gap-2 px-4 h-10 rounded-xl bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-lg group text-sm font-medium"
+                        title="View Responses"
                       >
-                        <Share2 size={18} className={`group-hover:scale-110 transition-transform ${copiedSurvey === survey._id ? 'animate-pulse' : ''}`} />
+                        <BarChart3 size={15} />
+                        Responses
                       </button>
                     </div>
-                    
-                    {/* Copied Feedback */}
-                    {copiedSurvey === survey._id && (
-                      <div className="mt-3 text-center">
-                        <span className="text-xs text-green-600 font-medium">Link copied to clipboard!</span>
-                      </div>
-                    )}
                   </div>
                 </div>
               ))}

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import './EmployeeCheckInTemplate.css';
+import './ProductFeedbackTemplate.css';
 import type { Survey } from '../types/Survey';
 import { buildRedirectUrl, createSessionContext } from '../utils/redirectBuilder';
 
@@ -11,7 +11,7 @@ interface Props { survey: Survey; previewMode?: boolean; }
 
 const OPTION_KEYS = ['A','B','C','D','E','F','G','H','I','J'];
 
-const EmployeeCheckInTemplate: React.FC<Props> = ({ survey, previewMode = false }) => {
+const ProductFeedbackTemplate: React.FC<Props> = ({ survey, previewMode = false }) => {
   const location = useLocation();
   const [username, setUsername] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
@@ -94,24 +94,24 @@ const EmployeeCheckInTemplate: React.FC<Props> = ({ survey, previewMode = false 
   };
 
   const renderRadio = (q: Question) => (
-    <div className="ec-options">
+    <div className="pf-options">
       {q.options?.map((opt, i) => (
-        <motion.div key={i} className={`ec-option ${formData[q.id] === opt ? 'selected' : ''}`} onClick={() => handleAnswer(q.id, opt)} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }} whileTap={{ scale: 0.98 }}>
-          <span className="ec-option-key">{OPTION_KEYS[i] || i + 1}</span>
-          <span className="ec-option-label">{opt}</span>
+        <motion.div key={i} className={`pf-option ${formData[q.id] === opt ? 'selected' : ''}`} onClick={() => handleAnswer(q.id, opt)} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }} whileTap={{ scale: 0.98 }}>
+          <span className="pf-option-key">{OPTION_KEYS[i] || i + 1}</span>
+          <span className="pf-option-label">{opt}</span>
         </motion.div>
       ))}
     </div>
   );
 
-  const renderText = (q: Question) => (<textarea value={formData[q.id] as string} onChange={e => handleAnswer(q.id, e.target.value)} placeholder="Type your answer here..." className="ec-textarea" rows={4} />);
+  const renderText = (q: Question) => (<textarea value={formData[q.id] as string} onChange={e => handleAnswer(q.id, e.target.value)} placeholder="Type your answer here..." className="pf-textarea" rows={4} />);
 
   const renderScale = (q: Question) => (
-    <div className="ec-scale">
-      <div className="ec-scale-labels"><span>Not at all</span><span>Extremely</span></div>
-      <div className="ec-scale-track">
+    <div className="pf-scale">
+      <div className="pf-scale-labels"><span>Not at all</span><span>Extremely</span></div>
+      <div className="pf-scale-track">
         {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
-          <motion.button key={n} type="button" className={`ec-scale-point ${formData[q.id] === n ? 'active' : ''}`} onClick={() => handleAnswer(q.id, n)} whileTap={{ scale: 0.9 }}>{n}</motion.button>
+          <motion.button key={n} type="button" className={`pf-scale-point ${formData[q.id] === n ? 'active' : ''}`} onClick={() => handleAnswer(q.id, n)} whileTap={{ scale: 0.9 }}>{n}</motion.button>
         ))}
       </div>
     </div>
@@ -121,11 +121,11 @@ const EmployeeCheckInTemplate: React.FC<Props> = ({ survey, previewMode = false 
     if (!previewMode && idx !== currentQuestionIndex) return null;
     if (previewMode && idx > 2) return null;
     return (
-      <motion.div key={q.id} className="ec-question-area" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} transition={{ duration: 0.35 }}>
-        <div className="ec-question-number"><span className="ec-num-badge">{idx + 1}</span> Question {idx + 1} of {normalizedQuestions.length}</div>
-        <h2 className="ec-question-text">{q.question}</h2>
-        {q.questionDescription && <p className="ec-question-desc">{q.questionDescription}</p>}
-        {q.answerDescription && <div className="ec-answer-hint">{q.answerDescription}</div>}
+      <motion.div key={q.id} className="pf-question-area" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} transition={{ duration: 0.35 }}>
+        <div className="pf-question-number"><span className="pf-num-badge">{idx + 1}</span> Question {idx + 1} of {normalizedQuestions.length}</div>
+        <h2 className="pf-question-text">{q.question}</h2>
+        {q.questionDescription && <p className="pf-question-desc">{q.questionDescription}</p>}
+        {q.answerDescription && <div className="pf-answer-hint">{q.answerDescription}</div>}
         {q.type === 'radio' && renderRadio(q)}
         {q.type === 'text' && renderText(q)}
         {q.type === 'range' && renderScale(q)}
@@ -134,37 +134,37 @@ const EmployeeCheckInTemplate: React.FC<Props> = ({ survey, previewMode = false 
   };
 
   return (
-    <div className="employee-checkin-container">
-      <div className="ec-card-wrapper">
-        <div className="ec-pin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path fill="#2D2520" d="M288.6 76.8C344.8 20.6 436 20.6 492.2 76.8C548.4 133 548.4 224.2 492.2 280.4L328.2 444.4C293.8 478.8 238.1 478.8 203.7 444.4C169.3 410 169.3 354.3 203.7 319.9L356.5 167.3C369 154.8 389.3 154.8 401.8 167.3C414.3 179.8 414.3 200.1 401.8 212.6L249 365.3C239.6 374.7 239.6 389.9 249 399.2C258.4 408.5 273.6 408.6 282.9 399.2L446.9 235.2C478.1 204 478.1 153.3 446.9 122.1C415.7 90.9 365 90.9 333.8 122.1L169.8 286.1C116.7 339.2 116.7 425.3 169.8 478.4C222.9 531.5 309 531.5 362.1 478.4L492.3 348.3C504.8 335.8 525.1 335.8 537.6 348.3C550.1 360.8 550.1 381.1 537.6 393.6L407.4 523.6C329.3 601.7 202.7 601.7 124.6 523.6C46.5 445.5 46.5 318.9 124.6 240.8L288.6 76.8z"/></svg></div>
-        <div className="ec-card">
-          <div className="ec-header">
-            <div className="ec-brand"><div className="ec-brand-icon"></div></div>
-            <h1 className="ec-title">{survey.title || 'Employee Check-In'}</h1>
-            {survey.subtitle && <p className="ec-subtitle">{survey.subtitle}</p>}
+    <div className="product-feedback-container">
+      <div className="pf-card-wrapper">
+        <div className="pf-pin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path fill="#2D2520" d="M288.6 76.8C344.8 20.6 436 20.6 492.2 76.8C548.4 133 548.4 224.2 492.2 280.4L328.2 444.4C293.8 478.8 238.1 478.8 203.7 444.4C169.3 410 169.3 354.3 203.7 319.9L356.5 167.3C369 154.8 389.3 154.8 401.8 167.3C414.3 179.8 414.3 200.1 401.8 212.6L249 365.3C239.6 374.7 239.6 389.9 249 399.2C258.4 408.5 273.6 408.6 282.9 399.2L446.9 235.2C478.1 204 478.1 153.3 446.9 122.1C415.7 90.9 365 90.9 333.8 122.1L169.8 286.1C116.7 339.2 116.7 425.3 169.8 478.4C222.9 531.5 309 531.5 362.1 478.4L492.3 348.3C504.8 335.8 525.1 335.8 537.6 348.3C550.1 360.8 550.1 381.1 537.6 393.6L407.4 523.6C329.3 601.7 202.7 601.7 124.6 523.6C46.5 445.5 46.5 318.9 124.6 240.8L288.6 76.8z"/></svg></div>
+        <div className="pf-card">
+          <div className="pf-header">
+            <div className="pf-brand"><div className="pf-brand-icon"></div></div>
+            <h1 className="pf-title">{survey.title || 'Product Feedback'}</h1>
+            {survey.subtitle && <p className="pf-subtitle">{survey.subtitle}</p>}
           </div>
-          <div className="ec-progress">
-            <div className="ec-progress-track" style={{ '--progress-width': `${((currentQuestionIndex + 1) / normalizedQuestions.length) * 100}%` } as React.CSSProperties} />
-            <span className="ec-progress-counter">{currentQuestionIndex + 1}/{normalizedQuestions.length}</span>
+          <div className="pf-progress">
+            <div className="pf-progress-track" style={{ '--progress-width': `${((currentQuestionIndex + 1) / normalizedQuestions.length) * 100}%` } as React.CSSProperties} />
+            <span className="pf-progress-counter">{currentQuestionIndex + 1}/{normalizedQuestions.length}</span>
           </div>
           <form onSubmit={handleSubmit}>
             <AnimatePresence mode="wait">{normalizedQuestions.map((q, i) => renderQuestion(q, i))}</AnimatePresence>
             {!previewMode && (
-              <div className="ec-footer">
-                {currentQuestionIndex > 0 ? <button type="button" className="ec-btn ec-btn-back" onClick={handlePrev}>← Back</button> : <div />}
-                {currentQuestionIndex < normalizedQuestions.length - 1 ? <button type="button" className="ec-btn ec-btn-next" onClick={handleNext} disabled={!isCurrentAnswered}>Next →</button> : <button type="submit" className="ec-btn ec-btn-submit" disabled={!isCurrentAnswered}>Submit</button>}
+              <div className="pf-footer">
+                {currentQuestionIndex > 0 ? <button type="button" className="pf-btn pf-btn-back" onClick={handlePrev}>← Back</button> : <div />}
+                {currentQuestionIndex < normalizedQuestions.length - 1 ? <button type="button" className="pf-btn pf-btn-next" onClick={handleNext} disabled={!isCurrentAnswered}>Next →</button> : <button type="submit" className="pf-btn pf-btn-submit" disabled={!isCurrentAnswered}>Submit</button>}
               </div>
             )}
-            {previewMode && <div className="ec-footer"><div /><button type="submit" className="ec-btn ec-btn-submit">Submit</button></div>}
-            {!previewMode && isCurrentAnswered && currentQuestionIndex < normalizedQuestions.length - 1 && <div className="ec-keyboard-hint">Press <kbd>Enter ↵</kbd> to continue</div>}
+            {previewMode && <div className="pf-footer"><div /><button type="submit" className="pf-btn pf-btn-submit">Submit</button></div>}
+            {!previewMode && isCurrentAnswered && currentQuestionIndex < normalizedQuestions.length - 1 && <div className="pf-keyboard-hint">Press <kbd>Enter ↵</kbd> to continue</div>}
           </form>
         </div>
       </div>
-      <div className="ec-powered">Powered by <a href="#">PepperAds</a></div>
+      <div className="pf-powered">Powered by <a href="#">PepperAds</a></div>
       {submitted && (
-        <motion.div className="ec-success-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <motion.div className="ec-success-card" initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ delay: 0.15 }}>
-            <div className="ec-success-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg></div>
+        <motion.div className="pf-success-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+          <motion.div className="pf-success-card" initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ delay: 0.15 }}>
+            <div className="pf-success-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg></div>
             <h2>Thank you!</h2><p>Your responses have been recorded. We appreciate your time.</p>
           </motion.div>
         </motion.div>
@@ -173,4 +173,4 @@ const EmployeeCheckInTemplate: React.FC<Props> = ({ survey, previewMode = false 
   );
 };
 
-export default EmployeeCheckInTemplate;
+export default ProductFeedbackTemplate;

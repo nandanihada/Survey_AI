@@ -7,6 +7,7 @@ export interface SurveyRequest {
   response_type?: string;
   template_type: string;
   question_count?: number;
+  image_context?: string;
   theme: {
     font: string;
     intent: string;
@@ -152,4 +153,20 @@ export const fetchSurveyData = async (surveyId: string, email?: string, username
   }
 
   return data;
+};
+
+
+export const parseImage = async (imageBase64: string): Promise<string> => {
+  try {
+    const response = await makeApiRequest('/parse-image', {
+      method: 'POST',
+      body: JSON.stringify({ image: imageBase64 }),
+    });
+    if (!response.ok) throw new Error(`Image parse failed: ${response.status}`);
+    const data = await response.json();
+    return data.extracted_text || '';
+  } catch (error) {
+    console.error('Image parsing failed:', error);
+    throw new Error(handleApiError(error, 'Image parsing'));
+  }
 };

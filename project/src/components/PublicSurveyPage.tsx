@@ -7,7 +7,14 @@ import type { Survey } from '../types/Survey';
 // Import all templates
 import CustomerFeedbackTemplate from '../templates/CustomerFeedbackTemplate';
 import EmployeeCheckInTemplate from '../templates/EmployeeCheckInTemplate';
-import AICustomTemplate from '../templates/AICustomTemplate';
+import BasicSurveyTemplate from '../templates/BasicSurveyTemplate';
+import EventFeedbackTemplate from '../templates/EventFeedbackTemplate';
+import ProductFeedbackTemplate from '../templates/ProductFeedbackTemplate';
+import TeamCollaborationTemplate from '../templates/TeamCollaborationTemplate';
+import OnboardingReviewTemplate from '../templates/OnboardingReviewTemplate';
+import WebsiteExperienceTemplate from '../templates/WebsiteExperienceTemplate';
+import TrainingFeedbackTemplate from '../templates/TrainingFeedbackTemplate';
+import ServiceCancellationTemplate from '../templates/ServiceCancellationTemplate';
 
 // Define fallback Survey type if you don't have a separate shared file
 // interface Question {
@@ -29,10 +36,15 @@ import AICustomTemplate from '../templates/AICustomTemplate';
 const templateMap: Record<string, React.ComponentType<{ survey: Survey }>> = {
   customer_feedback: CustomerFeedbackTemplate,
   employee_checkin: EmployeeCheckInTemplate,
-  custom: AICustomTemplate, // AI Custom template
+  custom: BasicSurveyTemplate, // Basic Survey template (PepperAds signature)
+  event_feedback: EventFeedbackTemplate,
+  product_feedback: ProductFeedbackTemplate,
+  team_collaboration: TeamCollaborationTemplate,
+  onboarding_review: OnboardingReviewTemplate,
+  website_experience: WebsiteExperienceTemplate,
+  training_feedback: TrainingFeedbackTemplate,
+  service_cancellation: ServiceCancellationTemplate,
   default: CustomerFeedbackTemplate, // Fallback
-
-  // Add other templates here...
 };
 
 
@@ -75,9 +87,8 @@ setSurvey(data.survey || data)
   if (loading) return <div>Loading survey...</div>;
   if (!survey) return <div>Survey not found</div>;
 
-  const TemplateComponent = templateMap[survey.template_type];
-  
-  
+  console.log('Survey template_type:', survey.template_type, '| Available templates:', Object.keys(templateMap));
+  const TemplateComponent = templateMap[survey.template_type] || templateMap['default'];
 
   if (!TemplateComponent) {
     return <div>No template found for: {survey.template_type}</div>;
