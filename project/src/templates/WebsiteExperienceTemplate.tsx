@@ -9,8 +9,6 @@ interface Question { id: string; question: string; questionDescription?: string;
 interface RawQuestion { id: string; question: string; questionDescription?: string; answerDescription?: string; type: string; options?: string[]; }
 interface Props { survey: Survey; previewMode?: boolean; }
 
-const OPTION_KEYS = ['A','B','C','D','E','F','G','H','I','J'];
-
 const WebsiteExperienceTemplate: React.FC<Props> = ({ survey, previewMode = false }) => {
   const location = useLocation();
   const [username, setUsername] = useState<string | null>(null);
@@ -41,7 +39,7 @@ const WebsiteExperienceTemplate: React.FC<Props> = ({ survey, previewMode = fals
   const [submitted, setSubmitted] = useState(false);
 
   const isLocalhost = window.location.hostname === 'localhost';
-  const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com/';
+  const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -93,79 +91,71 @@ const WebsiteExperienceTemplate: React.FC<Props> = ({ survey, previewMode = fals
     } catch (error: unknown) { alert(error instanceof Error ? error.message : 'Submission failed'); }
   };
 
-  const renderRadio = (q: Question) => (
-    <div className="we-options">
-      {q.options?.map((opt, i) => (
-        <motion.div key={i} className={`we-option ${formData[q.id] === opt ? 'selected' : ''}`} onClick={() => handleAnswer(q.id, opt)} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }} whileTap={{ scale: 0.98 }}>
-          <span className="we-option-key">{OPTION_KEYS[i] || i + 1}</span>
-          <span className="we-option-label">{opt}</span>
-        </motion.div>
-      ))}
-    </div>
-  );
-
-  const renderText = (q: Question) => (<textarea value={formData[q.id] as string} onChange={e => handleAnswer(q.id, e.target.value)} placeholder="Type your answer here..." className="we-textarea" rows={4} />);
-
-  const renderScale = (q: Question) => (
-    <div className="we-scale">
-      <div className="we-scale-labels"><span>Not at all</span><span>Extremely</span></div>
-      <div className="we-scale-track">
-        {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
-          <motion.button key={n} type="button" className={`we-scale-point ${formData[q.id] === n ? 'active' : ''}`} onClick={() => handleAnswer(q.id, n)} whileTap={{ scale: 0.9 }}>{n}</motion.button>
-        ))}
-      </div>
-    </div>
-  );
-
   const renderQuestion = (q: Question, idx: number) => {
     if (!previewMode && idx !== currentQuestionIndex) return null;
     if (previewMode && idx > 2) return null;
     return (
-      <motion.div key={q.id} className="we-question-area" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} transition={{ duration: 0.35 }}>
-        <div className="we-question-number"><span className="we-num-badge">{idx + 1}</span> Question {idx + 1} of {normalizedQuestions.length}</div>
-        <h2 className="we-question-text">{q.question}</h2>
-        {q.questionDescription && <p className="we-question-desc">{q.questionDescription}</p>}
-        {q.answerDescription && <div className="we-answer-hint">{q.answerDescription}</div>}
-        {q.type === 'radio' && renderRadio(q)}
-        {q.type === 'text' && renderText(q)}
-        {q.type === 'range' && renderScale(q)}
+      <motion.div key={q.id} className="we-q-block" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.3 }}>
+        <h2 className="we-q-title">{q.question}</h2>
+        {q.questionDescription && <p className="we-q-hint">{q.questionDescription}</p>}
+        {q.type === 'radio' && (
+          <div className="we-pill-options">
+            {q.options?.map((opt, i) => (
+              <motion.button key={i} type="button" className={`we-pill ${formData[q.id] === opt ? 'on' : ''}`} onClick={() => handleAnswer(q.id, opt)} whileTap={{ scale: 0.97 }}>{opt}</motion.button>
+            ))}
+          </div>
+        )}
+        {q.type === 'text' && <input type="text" value={formData[q.id] as string} onChange={e => handleAnswer(q.id, e.target.value)} placeholder="Your answer..." className="we-text-input" />}
+        {q.type === 'range' && (
+          <div className="we-slider-wrap">
+            <input type="range" min="1" max="10" value={formData[q.id] as number || 1} onChange={e => handleAnswer(q.id, parseInt(e.target.value))} className="we-range-slider" />
+            <div className="we-range-labels"><span>1</span><span className="we-range-val">{formData[q.id] || 0}</span><span>10</span></div>
+          </div>
+        )}
       </motion.div>
     );
   };
 
   return (
-    <div className="website-exp-container">
-      <div className="we-card-wrapper">
-        <div className="we-pin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path fill="#2D2520" d="M288.6 76.8C344.8 20.6 436 20.6 492.2 76.8C548.4 133 548.4 224.2 492.2 280.4L328.2 444.4C293.8 478.8 238.1 478.8 203.7 444.4C169.3 410 169.3 354.3 203.7 319.9L356.5 167.3C369 154.8 389.3 154.8 401.8 167.3C414.3 179.8 414.3 200.1 401.8 212.6L249 365.3C239.6 374.7 239.6 389.9 249 399.2C258.4 408.5 273.6 408.6 282.9 399.2L446.9 235.2C478.1 204 478.1 153.3 446.9 122.1C415.7 90.9 365 90.9 333.8 122.1L169.8 286.1C116.7 339.2 116.7 425.3 169.8 478.4C222.9 531.5 309 531.5 362.1 478.4L492.3 348.3C504.8 335.8 525.1 335.8 537.6 348.3C550.1 360.8 550.1 381.1 537.6 393.6L407.4 523.6C329.3 601.7 202.7 601.7 124.6 523.6C46.5 445.5 46.5 318.9 124.6 240.8L288.6 76.8z"/></svg></div>
-        <div className="we-card">
-          <div className="we-header">
-            <div className="we-brand"><div className="we-brand-icon"></div></div>
-            <h1 className="we-title">{survey.title || 'Website Experience'}</h1>
-            {survey.subtitle && <p className="we-subtitle">{survey.subtitle}</p>}
-          </div>
-          <div className="we-progress">
-            <div className="we-progress-track" style={{ '--progress-width': `${((currentQuestionIndex + 1) / normalizedQuestions.length) * 100}%` } as React.CSSProperties} />
-            <span className="we-progress-counter">{currentQuestionIndex + 1}/{normalizedQuestions.length}</span>
-          </div>
-          <form onSubmit={handleSubmit}>
-            <AnimatePresence mode="wait">{normalizedQuestions.map((q, i) => renderQuestion(q, i))}</AnimatePresence>
-            {!previewMode && (
-              <div className="we-footer">
-                {currentQuestionIndex > 0 ? <button type="button" className="we-btn we-btn-back" onClick={handlePrev}>← Back</button> : <div />}
-                {currentQuestionIndex < normalizedQuestions.length - 1 ? <button type="button" className="we-btn we-btn-next" onClick={handleNext} disabled={!isCurrentAnswered}>Next →</button> : <button type="submit" className="we-btn we-btn-submit" disabled={!isCurrentAnswered}>Submit</button>}
-              </div>
-            )}
-            {previewMode && <div className="we-footer"><div /><button type="submit" className="we-btn we-btn-submit">Submit</button></div>}
-            {!previewMode && isCurrentAnswered && currentQuestionIndex < normalizedQuestions.length - 1 && <div className="we-keyboard-hint">Press <kbd>Enter ↵</kbd> to continue</div>}
-          </form>
+    <div className="we-fullscreen">
+      <div className="we-hero-band">
+        <div className="we-hero-content">
+          <div className="we-hero-logo"></div>
+          <h1>{survey.title || 'Website Experience'}</h1>
+          {survey.subtitle && <p>{survey.subtitle}</p>}
+        </div>
+        <div className="we-hero-dots">
+          {normalizedQuestions.map((_, i) => (
+            <div key={i} className={`we-dot ${i === currentQuestionIndex ? 'active' : ''} ${formData[normalizedQuestions[i].id] !== '' && formData[normalizedQuestions[i].id] !== 0 ? 'done' : ''}`} />
+          ))}
         </div>
       </div>
-      <div className="we-powered">Powered by <a href="#">PepperAds</a></div>
+
+      <div className="we-body">
+        <form onSubmit={handleSubmit} className="we-form-card">
+          <div className="we-counter">Question {currentQuestionIndex + 1} of {normalizedQuestions.length}</div>
+          <AnimatePresence mode="wait">{normalizedQuestions.map((q, i) => renderQuestion(q, i))}</AnimatePresence>
+          {!previewMode && (
+            <div className="we-btns">
+              {currentQuestionIndex > 0 && <button type="button" className="we-btn we-btn-prev" onClick={handlePrev}>Back</button>}
+              <div style={{ flex: 1 }} />
+              {currentQuestionIndex < normalizedQuestions.length - 1
+                ? <button type="button" className="we-btn we-btn-go" onClick={handleNext} disabled={!isCurrentAnswered}>Next</button>
+                : <button type="submit" className="we-btn we-btn-done" disabled={!isCurrentAnswered}>Submit</button>}
+            </div>
+          )}
+          {previewMode && <div className="we-btns"><div style={{ flex: 1 }} /><button type="submit" className="we-btn we-btn-done">Submit</button></div>}
+        </form>
+      </div>
+
+      <div className="we-foot">Powered by PepperAds</div>
+
       {submitted && (
-        <motion.div className="we-success-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <motion.div className="we-success-card" initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ delay: 0.15 }}>
-            <div className="we-success-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg></div>
-            <h2>Thank you!</h2><p>Your responses have been recorded. We appreciate your time.</p>
+        <motion.div className="we-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+          <motion.div className="we-done" initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
+            <div className="we-done-check">✓</div>
+            <h2>Thank you!</h2>
+            <p>Your feedback helps us improve the experience.</p>
           </motion.div>
         </motion.div>
       )}

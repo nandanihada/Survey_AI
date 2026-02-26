@@ -32,7 +32,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false }) => {
   const isLocalhost = window.location.hostname === 'localhost';
   const apiBaseUrl = isLocalhost
     ? 'http://localhost:5000'
-    : 'https://hostslice.onrender.com/';
+    : 'https://hostslice.onrender.com';
 
   useEffect(() => {
     fetchSurveys();

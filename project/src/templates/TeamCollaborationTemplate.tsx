@@ -9,8 +9,6 @@ interface Question { id: string; question: string; questionDescription?: string;
 interface RawQuestion { id: string; question: string; questionDescription?: string; answerDescription?: string; type: string; options?: string[]; }
 interface Props { survey: Survey; previewMode?: boolean; }
 
-const OPTION_KEYS = ['A','B','C','D','E','F','G','H','I','J'];
-
 const TeamCollaborationTemplate: React.FC<Props> = ({ survey, previewMode = false }) => {
   const location = useLocation();
   const [username, setUsername] = useState<string | null>(null);
@@ -41,7 +39,7 @@ const TeamCollaborationTemplate: React.FC<Props> = ({ survey, previewMode = fals
   const [submitted, setSubmitted] = useState(false);
 
   const isLocalhost = window.location.hostname === 'localhost';
-  const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com/';
+  const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -93,79 +91,85 @@ const TeamCollaborationTemplate: React.FC<Props> = ({ survey, previewMode = fals
     } catch (error: unknown) { alert(error instanceof Error ? error.message : 'Submission failed'); }
   };
 
-  const renderRadio = (q: Question) => (
-    <div className="tc-options">
-      {q.options?.map((opt, i) => (
-        <motion.div key={i} className={`tc-option ${formData[q.id] === opt ? 'selected' : ''}`} onClick={() => handleAnswer(q.id, opt)} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }} whileTap={{ scale: 0.98 }}>
-          <span className="tc-option-key">{OPTION_KEYS[i] || i + 1}</span>
-          <span className="tc-option-label">{opt}</span>
-        </motion.div>
-      ))}
-    </div>
-  );
-
-  const renderText = (q: Question) => (<textarea value={formData[q.id] as string} onChange={e => handleAnswer(q.id, e.target.value)} placeholder="Type your answer here..." className="tc-textarea" rows={4} />);
-
-  const renderScale = (q: Question) => (
-    <div className="tc-scale">
-      <div className="tc-scale-labels"><span>Not at all</span><span>Extremely</span></div>
-      <div className="tc-scale-track">
-        {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
-          <motion.button key={n} type="button" className={`tc-scale-point ${formData[q.id] === n ? 'active' : ''}`} onClick={() => handleAnswer(q.id, n)} whileTap={{ scale: 0.9 }}>{n}</motion.button>
-        ))}
-      </div>
-    </div>
-  );
-
   const renderQuestion = (q: Question, idx: number) => {
     if (!previewMode && idx !== currentQuestionIndex) return null;
     if (previewMode && idx > 2) return null;
     return (
-      <motion.div key={q.id} className="tc-question-area" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} transition={{ duration: 0.35 }}>
-        <div className="tc-question-number"><span className="tc-num-badge">{idx + 1}</span> Question {idx + 1} of {normalizedQuestions.length}</div>
-        <h2 className="tc-question-text">{q.question}</h2>
-        {q.questionDescription && <p className="tc-question-desc">{q.questionDescription}</p>}
-        {q.answerDescription && <div className="tc-answer-hint">{q.answerDescription}</div>}
-        {q.type === 'radio' && renderRadio(q)}
-        {q.type === 'text' && renderText(q)}
-        {q.type === 'range' && renderScale(q)}
+      <motion.div key={q.id} className="tc-question-content" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} transition={{ duration: 0.4 }}>
+        <h2 className="tc-q-text">{q.question}</h2>
+        {q.questionDescription && <p className="tc-q-desc">{q.questionDescription}</p>}
+        {q.type === 'radio' && (
+          <div className="tc-grid-options">
+            {q.options?.map((opt, i) => (
+              <motion.button key={i} type="button" className={`tc-grid-opt ${formData[q.id] === opt ? 'active' : ''}`} onClick={() => handleAnswer(q.id, opt)} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <span className="tc-opt-num">{i + 1}</span>
+                <span>{opt}</span>
+              </motion.button>
+            ))}
+          </div>
+        )}
+        {q.type === 'text' && <textarea value={formData[q.id] as string} onChange={e => handleAnswer(q.id, e.target.value)} placeholder="Share your thoughts..." className="tc-input" rows={4} />}
+        {q.type === 'range' && (
+          <div className="tc-emoji-scale">
+            {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
+              <button key={n} type="button" className={`tc-emoji-btn ${formData[q.id] === n ? 'active' : ''}`} onClick={() => handleAnswer(q.id, n)}>{n}</button>
+            ))}
+            <div className="tc-scale-ends"><span>Low</span><span>High</span></div>
+          </div>
+        )}
       </motion.div>
     );
   };
 
   return (
-    <div className="team-collab-container">
-      <div className="tc-card-wrapper">
-        <div className="tc-pin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path fill="#2D2520" d="M288.6 76.8C344.8 20.6 436 20.6 492.2 76.8C548.4 133 548.4 224.2 492.2 280.4L328.2 444.4C293.8 478.8 238.1 478.8 203.7 444.4C169.3 410 169.3 354.3 203.7 319.9L356.5 167.3C369 154.8 389.3 154.8 401.8 167.3C414.3 179.8 414.3 200.1 401.8 212.6L249 365.3C239.6 374.7 239.6 389.9 249 399.2C258.4 408.5 273.6 408.6 282.9 399.2L446.9 235.2C478.1 204 478.1 153.3 446.9 122.1C415.7 90.9 365 90.9 333.8 122.1L169.8 286.1C116.7 339.2 116.7 425.3 169.8 478.4C222.9 531.5 309 531.5 362.1 478.4L492.3 348.3C504.8 335.8 525.1 335.8 537.6 348.3C550.1 360.8 550.1 381.1 537.6 393.6L407.4 523.6C329.3 601.7 202.7 601.7 124.6 523.6C46.5 445.5 46.5 318.9 124.6 240.8L288.6 76.8z"/></svg></div>
-        <div className="tc-card">
-          <div className="tc-header">
-            <div className="tc-brand"><div className="tc-brand-icon"></div></div>
-            <h1 className="tc-title">{survey.title || 'Team Collaboration'}</h1>
-            {survey.subtitle && <p className="tc-subtitle">{survey.subtitle}</p>}
-          </div>
-          <div className="tc-progress">
-            <div className="tc-progress-track" style={{ '--progress-width': `${((currentQuestionIndex + 1) / normalizedQuestions.length) * 100}%` } as React.CSSProperties} />
-            <span className="tc-progress-counter">{currentQuestionIndex + 1}/{normalizedQuestions.length}</span>
+    <div className="tc-layout">
+      {/* Left sidebar with steps */}
+      <aside className="tc-sidebar">
+        <div className="tc-sidebar-brand">
+          <div className="tc-logo"></div>
+          <span>PepperAds</span>
+        </div>
+        <h1 className="tc-sidebar-title">{survey.title || 'Team Collaboration'}</h1>
+        {survey.subtitle && <p className="tc-sidebar-sub">{survey.subtitle}</p>}
+        <div className="tc-steps">
+          {normalizedQuestions.map((q, i) => (
+            <div key={q.id} className={`tc-step ${i === currentQuestionIndex ? 'current' : ''} ${formData[q.id] !== '' && formData[q.id] !== 0 ? 'done' : ''}`}>
+              <div className="tc-step-dot">{formData[q.id] !== '' && formData[q.id] !== 0 ? '✓' : i + 1}</div>
+              <span className="tc-step-label">Q{i + 1}</span>
+            </div>
+          ))}
+        </div>
+        <div className="tc-sidebar-footer">Step {currentQuestionIndex + 1} of {normalizedQuestions.length}</div>
+      </aside>
+
+      {/* Right content area */}
+      <main className="tc-main">
+        <div className="tc-main-inner">
+          <div className="tc-step-indicator">
+            <span className="tc-step-tag">Question {currentQuestionIndex + 1}</span>
           </div>
           <form onSubmit={handleSubmit}>
             <AnimatePresence mode="wait">{normalizedQuestions.map((q, i) => renderQuestion(q, i))}</AnimatePresence>
             {!previewMode && (
-              <div className="tc-footer">
-                {currentQuestionIndex > 0 ? <button type="button" className="tc-btn tc-btn-back" onClick={handlePrev}>← Back</button> : <div />}
-                {currentQuestionIndex < normalizedQuestions.length - 1 ? <button type="button" className="tc-btn tc-btn-next" onClick={handleNext} disabled={!isCurrentAnswered}>Next →</button> : <button type="submit" className="tc-btn tc-btn-submit" disabled={!isCurrentAnswered}>Submit</button>}
+              <div className="tc-nav">
+                {currentQuestionIndex > 0 && <button type="button" className="tc-nav-btn tc-back" onClick={handlePrev}>← Previous</button>}
+                <div className="tc-nav-spacer" />
+                {currentQuestionIndex < normalizedQuestions.length - 1
+                  ? <button type="button" className="tc-nav-btn tc-next" onClick={handleNext} disabled={!isCurrentAnswered}>Continue →</button>
+                  : <button type="submit" className="tc-nav-btn tc-submit" disabled={!isCurrentAnswered}>Submit Survey</button>}
               </div>
             )}
-            {previewMode && <div className="tc-footer"><div /><button type="submit" className="tc-btn tc-btn-submit">Submit</button></div>}
-            {!previewMode && isCurrentAnswered && currentQuestionIndex < normalizedQuestions.length - 1 && <div className="tc-keyboard-hint">Press <kbd>Enter ↵</kbd> to continue</div>}
+            {previewMode && <div className="tc-nav"><div className="tc-nav-spacer" /><button type="submit" className="tc-nav-btn tc-submit">Submit</button></div>}
           </form>
         </div>
-      </div>
-      <div className="tc-powered">Powered by <a href="#">PepperAds</a></div>
+      </main>
+
       {submitted && (
-        <motion.div className="tc-success-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <motion.div className="tc-success-card" initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ delay: 0.15 }}>
-            <div className="tc-success-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg></div>
-            <h2>Thank you!</h2><p>Your responses have been recorded. We appreciate your time.</p>
+        <motion.div className="tc-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+          <motion.div className="tc-done-card" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
+            <div className="tc-done-icon">✓</div>
+            <h2>All done!</h2>
+            <p>Your team feedback has been submitted successfully.</p>
           </motion.div>
         </motion.div>
       )}

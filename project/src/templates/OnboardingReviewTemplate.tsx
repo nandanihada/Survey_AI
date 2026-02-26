@@ -9,8 +9,6 @@ interface Question { id: string; question: string; questionDescription?: string;
 interface RawQuestion { id: string; question: string; questionDescription?: string; answerDescription?: string; type: string; options?: string[]; }
 interface Props { survey: Survey; previewMode?: boolean; }
 
-const OPTION_KEYS = ['A','B','C','D','E','F','G','H','I','J'];
-
 const OnboardingReviewTemplate: React.FC<Props> = ({ survey, previewMode = false }) => {
   const location = useLocation();
   const [username, setUsername] = useState<string | null>(null);
@@ -41,7 +39,7 @@ const OnboardingReviewTemplate: React.FC<Props> = ({ survey, previewMode = false
   const [submitted, setSubmitted] = useState(false);
 
   const isLocalhost = window.location.hostname === 'localhost';
-  const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com/';
+  const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -93,79 +91,89 @@ const OnboardingReviewTemplate: React.FC<Props> = ({ survey, previewMode = false
     } catch (error: unknown) { alert(error instanceof Error ? error.message : 'Submission failed'); }
   };
 
-  const renderRadio = (q: Question) => (
-    <div className="or-options">
-      {q.options?.map((opt, i) => (
-        <motion.div key={i} className={`or-option ${formData[q.id] === opt ? 'selected' : ''}`} onClick={() => handleAnswer(q.id, opt)} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }} whileTap={{ scale: 0.98 }}>
-          <span className="or-option-key">{OPTION_KEYS[i] || i + 1}</span>
-          <span className="or-option-label">{opt}</span>
-        </motion.div>
-      ))}
-    </div>
-  );
-
-  const renderText = (q: Question) => (<textarea value={formData[q.id] as string} onChange={e => handleAnswer(q.id, e.target.value)} placeholder="Type your answer here..." className="or-textarea" rows={4} />);
-
-  const renderScale = (q: Question) => (
-    <div className="or-scale">
-      <div className="or-scale-labels"><span>Not at all</span><span>Extremely</span></div>
-      <div className="or-scale-track">
-        {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
-          <motion.button key={n} type="button" className={`or-scale-point ${formData[q.id] === n ? 'active' : ''}`} onClick={() => handleAnswer(q.id, n)} whileTap={{ scale: 0.9 }}>{n}</motion.button>
-        ))}
-      </div>
-    </div>
-  );
-
   const renderQuestion = (q: Question, idx: number) => {
     if (!previewMode && idx !== currentQuestionIndex) return null;
     if (previewMode && idx > 2) return null;
     return (
-      <motion.div key={q.id} className="or-question-area" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} transition={{ duration: 0.35 }}>
-        <div className="or-question-number"><span className="or-num-badge">{idx + 1}</span> Question {idx + 1} of {normalizedQuestions.length}</div>
-        <h2 className="or-question-text">{q.question}</h2>
-        {q.questionDescription && <p className="or-question-desc">{q.questionDescription}</p>}
-        {q.answerDescription && <div className="or-answer-hint">{q.answerDescription}</div>}
-        {q.type === 'radio' && renderRadio(q)}
-        {q.type === 'text' && renderText(q)}
-        {q.type === 'range' && renderScale(q)}
+      <motion.div key={q.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.35 }}>
+        {/* Bot message bubble */}
+        <div className="or-bubble or-bot">
+          <div className="or-avatar">🤖</div>
+          <div className="or-msg">
+            <p className="or-msg-text">{q.question}</p>
+            {q.questionDescription && <p className="or-msg-sub">{q.questionDescription}</p>}
+          </div>
+        </div>
+        {/* User response area */}
+        <div className="or-bubble or-user">
+          <div className="or-response-area">
+            {q.type === 'radio' && (
+              <div className="or-chips">
+                {q.options?.map((opt, i) => (
+                  <motion.button key={i} type="button" className={`or-chip ${formData[q.id] === opt ? 'picked' : ''}`} onClick={() => handleAnswer(q.id, opt)} whileTap={{ scale: 0.95 }}>{opt}</motion.button>
+                ))}
+              </div>
+            )}
+            {q.type === 'text' && (
+              <div className="or-text-wrap">
+                <textarea value={formData[q.id] as string} onChange={e => handleAnswer(q.id, e.target.value)} placeholder="Type your reply..." className="or-reply-input" rows={3} />
+              </div>
+            )}
+            {q.type === 'range' && (
+              <div className="or-rating-row">
+                {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
+                  <button key={n} type="button" className={`or-rate-dot ${formData[q.id] === n ? 'lit' : ''} ${typeof formData[q.id] === 'number' && (formData[q.id] as number) >= n ? 'filled' : ''}`} onClick={() => handleAnswer(q.id, n)}>{n}</button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </motion.div>
     );
   };
 
   return (
-    <div className="onboarding-wizard-container">
-      <div className="or-card-wrapper">
-        <div className="or-pin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path fill="#2D2520" d="M288.6 76.8C344.8 20.6 436 20.6 492.2 76.8C548.4 133 548.4 224.2 492.2 280.4L328.2 444.4C293.8 478.8 238.1 478.8 203.7 444.4C169.3 410 169.3 354.3 203.7 319.9L356.5 167.3C369 154.8 389.3 154.8 401.8 167.3C414.3 179.8 414.3 200.1 401.8 212.6L249 365.3C239.6 374.7 239.6 389.9 249 399.2C258.4 408.5 273.6 408.6 282.9 399.2L446.9 235.2C478.1 204 478.1 153.3 446.9 122.1C415.7 90.9 365 90.9 333.8 122.1L169.8 286.1C116.7 339.2 116.7 425.3 169.8 478.4C222.9 531.5 309 531.5 362.1 478.4L492.3 348.3C504.8 335.8 525.1 335.8 537.6 348.3C550.1 360.8 550.1 381.1 537.6 393.6L407.4 523.6C329.3 601.7 202.7 601.7 124.6 523.6C46.5 445.5 46.5 318.9 124.6 240.8L288.6 76.8z"/></svg></div>
-        <div className="or-card">
-          <div className="or-header">
-            <div className="or-brand"><div className="or-brand-icon"></div></div>
-            <h1 className="or-title">{survey.title || 'Onboarding Review'}</h1>
-            {survey.subtitle && <p className="or-subtitle">{survey.subtitle}</p>}
+    <div className="or-chat-container">
+      <div className="or-chat-header">
+        <div className="or-chat-brand">
+          <div className="or-chat-logo"></div>
+          <div>
+            <h1 className="or-chat-title">{survey.title || 'Onboarding Review'}</h1>
+            {survey.subtitle && <p className="or-chat-sub">{survey.subtitle}</p>}
           </div>
-          <div className="or-progress">
-            <div className="or-progress-track" style={{ '--progress-width': `${((currentQuestionIndex + 1) / normalizedQuestions.length) * 100}%` } as React.CSSProperties} />
-            <span className="or-progress-counter">{currentQuestionIndex + 1}/{normalizedQuestions.length}</span>
+        </div>
+        <div className="or-chat-progress">
+          <div className="or-chat-bar">
+            <div className="or-chat-bar-fill" style={{ width: `${((currentQuestionIndex + 1) / normalizedQuestions.length) * 100}%` }} />
           </div>
-          <form onSubmit={handleSubmit}>
-            <AnimatePresence mode="wait">{normalizedQuestions.map((q, i) => renderQuestion(q, i))}</AnimatePresence>
-            {!previewMode && (
-              <div className="or-footer">
-                {currentQuestionIndex > 0 ? <button type="button" className="or-btn or-btn-back" onClick={handlePrev}>← Back</button> : <div />}
-                {currentQuestionIndex < normalizedQuestions.length - 1 ? <button type="button" className="or-btn or-btn-next" onClick={handleNext} disabled={!isCurrentAnswered}>Next →</button> : <button type="submit" className="or-btn or-btn-submit" disabled={!isCurrentAnswered}>Submit</button>}
-              </div>
-            )}
-            {previewMode && <div className="or-footer"><div /><button type="submit" className="or-btn or-btn-submit">Submit</button></div>}
-            {!previewMode && isCurrentAnswered && currentQuestionIndex < normalizedQuestions.length - 1 && <div className="or-keyboard-hint">Press <kbd>Enter ↵</kbd> to continue</div>}
-          </form>
+          <span className="or-chat-count">{currentQuestionIndex + 1}/{normalizedQuestions.length}</span>
         </div>
       </div>
-      <div className="or-powered">Powered by <a href="#">PepperAds</a></div>
+
+      <div className="or-chat-body">
+        <form onSubmit={handleSubmit}>
+          <AnimatePresence mode="wait">{normalizedQuestions.map((q, i) => renderQuestion(q, i))}</AnimatePresence>
+          {!previewMode && (
+            <div className="or-chat-actions">
+              {currentQuestionIndex > 0 && <button type="button" className="or-action-btn or-action-back" onClick={handlePrev}>← Back</button>}
+              <div style={{ flex: 1 }} />
+              {currentQuestionIndex < normalizedQuestions.length - 1
+                ? <button type="button" className="or-action-btn or-action-send" onClick={handleNext} disabled={!isCurrentAnswered}>Send →</button>
+                : <button type="submit" className="or-action-btn or-action-finish" disabled={!isCurrentAnswered}>Complete ✓</button>}
+            </div>
+          )}
+          {previewMode && <div className="or-chat-actions"><div style={{ flex: 1 }} /><button type="submit" className="or-action-btn or-action-finish">Complete ✓</button></div>}
+        </form>
+      </div>
+
+      <div className="or-chat-footer">Powered by PepperAds</div>
+
       {submitted && (
         <motion.div className="or-success-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <motion.div className="or-success-card" initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ delay: 0.15 }}>
-            <div className="or-success-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg></div>
-            <h2>Thank you!</h2><p>Your responses have been recorded. We appreciate your time.</p>
+          <motion.div className="or-success-bubble" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
+            <div className="or-success-emoji">🎉</div>
+            <h2>Welcome aboard!</h2>
+            <p>Your onboarding feedback has been recorded. Thank you!</p>
           </motion.div>
         </motion.div>
       )}

@@ -9,8 +9,6 @@ interface Question { id: string; question: string; questionDescription?: string;
 interface RawQuestion { id: string; question: string; questionDescription?: string; answerDescription?: string; type: string; options?: string[]; }
 interface Props { survey: Survey; previewMode?: boolean; }
 
-const OPTION_KEYS = ['A','B','C','D','E','F','G','H','I','J'];
-
 const TrainingFeedbackTemplate: React.FC<Props> = ({ survey, previewMode = false }) => {
   const location = useLocation();
   const [username, setUsername] = useState<string | null>(null);
@@ -41,7 +39,7 @@ const TrainingFeedbackTemplate: React.FC<Props> = ({ survey, previewMode = false
   const [submitted, setSubmitted] = useState(false);
 
   const isLocalhost = window.location.hostname === 'localhost';
-  const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com/';
+  const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -93,79 +91,85 @@ const TrainingFeedbackTemplate: React.FC<Props> = ({ survey, previewMode = false
     } catch (error: unknown) { alert(error instanceof Error ? error.message : 'Submission failed'); }
   };
 
-  const renderRadio = (q: Question) => (
-    <div className="tf-options">
-      {q.options?.map((opt, i) => (
-        <motion.div key={i} className={`tf-option ${formData[q.id] === opt ? 'selected' : ''}`} onClick={() => handleAnswer(q.id, opt)} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }} whileTap={{ scale: 0.98 }}>
-          <span className="tf-option-key">{OPTION_KEYS[i] || i + 1}</span>
-          <span className="tf-option-label">{opt}</span>
-        </motion.div>
-      ))}
-    </div>
-  );
-
-  const renderText = (q: Question) => (<textarea value={formData[q.id] as string} onChange={e => handleAnswer(q.id, e.target.value)} placeholder="Type your answer here..." className="tf-textarea" rows={4} />);
-
-  const renderScale = (q: Question) => (
-    <div className="tf-scale">
-      <div className="tf-scale-labels"><span>Not at all</span><span>Extremely</span></div>
-      <div className="tf-scale-track">
-        {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
-          <motion.button key={n} type="button" className={`tf-scale-point ${formData[q.id] === n ? 'active' : ''}`} onClick={() => handleAnswer(q.id, n)} whileTap={{ scale: 0.9 }}>{n}</motion.button>
-        ))}
-      </div>
-    </div>
-  );
-
   const renderQuestion = (q: Question, idx: number) => {
     if (!previewMode && idx !== currentQuestionIndex) return null;
     if (previewMode && idx > 2) return null;
     return (
-      <motion.div key={q.id} className="tf-question-area" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} transition={{ duration: 0.35 }}>
-        <div className="tf-question-number"><span className="tf-num-badge">{idx + 1}</span> Question {idx + 1} of {normalizedQuestions.length}</div>
-        <h2 className="tf-question-text">{q.question}</h2>
-        {q.questionDescription && <p className="tf-question-desc">{q.questionDescription}</p>}
-        {q.answerDescription && <div className="tf-answer-hint">{q.answerDescription}</div>}
-        {q.type === 'radio' && renderRadio(q)}
-        {q.type === 'text' && renderText(q)}
-        {q.type === 'range' && renderScale(q)}
+      <motion.div key={q.id} className="tf-lined-area" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.3 }}>
+        <div className="tf-q-label">📝 Question {idx + 1}</div>
+        <h2 className="tf-q-text">{q.question}</h2>
+        {q.questionDescription && <p className="tf-q-sub">{q.questionDescription}</p>}
+        {q.type === 'radio' && (
+          <div className="tf-radio-list">
+            {q.options?.map((opt, i) => (
+              <label key={i} className={`tf-radio-item ${formData[q.id] === opt ? 'checked' : ''}`}>
+                <input type="radio" name={q.id} checked={formData[q.id] === opt} onChange={() => handleAnswer(q.id, opt)} />
+                <span className="tf-radio-circle" />
+                <span className="tf-radio-text">{opt}</span>
+              </label>
+            ))}
+          </div>
+        )}
+        {q.type === 'text' && <textarea value={formData[q.id] as string} onChange={e => handleAnswer(q.id, e.target.value)} placeholder="Write your answer on the lines..." className="tf-lined-input" rows={4} />}
+        {q.type === 'range' && (
+          <div className="tf-star-row">
+            {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
+              <button key={n} type="button" className={`tf-star ${typeof formData[q.id] === 'number' && (formData[q.id] as number) >= n ? 'filled' : ''}`} onClick={() => handleAnswer(q.id, n)}>★</button>
+            ))}
+          </div>
+        )}
       </motion.div>
     );
   };
 
   return (
-    <div className="training-notebook-container">
-      <div className="tf-card-wrapper">
-        <div className="tf-pin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path fill="#2D2520" d="M288.6 76.8C344.8 20.6 436 20.6 492.2 76.8C548.4 133 548.4 224.2 492.2 280.4L328.2 444.4C293.8 478.8 238.1 478.8 203.7 444.4C169.3 410 169.3 354.3 203.7 319.9L356.5 167.3C369 154.8 389.3 154.8 401.8 167.3C414.3 179.8 414.3 200.1 401.8 212.6L249 365.3C239.6 374.7 239.6 389.9 249 399.2C258.4 408.5 273.6 408.6 282.9 399.2L446.9 235.2C478.1 204 478.1 153.3 446.9 122.1C415.7 90.9 365 90.9 333.8 122.1L169.8 286.1C116.7 339.2 116.7 425.3 169.8 478.4C222.9 531.5 309 531.5 362.1 478.4L492.3 348.3C504.8 335.8 525.1 335.8 537.6 348.3C550.1 360.8 550.1 381.1 537.6 393.6L407.4 523.6C329.3 601.7 202.7 601.7 124.6 523.6C46.5 445.5 46.5 318.9 124.6 240.8L288.6 76.8z"/></svg></div>
-        <div className="tf-card">
-          <div className="tf-header">
-            <div className="tf-brand"><div className="tf-brand-icon"></div></div>
-            <h1 className="tf-title">{survey.title || 'Training Feedback'}</h1>
-            {survey.subtitle && <p className="tf-subtitle">{survey.subtitle}</p>}
+    <div className="tf-notebook">
+      <div className="tf-spiral">
+        {Array.from({ length: 12 }).map((_, i) => <div key={i} className="tf-ring" />)}
+      </div>
+      <div className="tf-page">
+        <div className="tf-page-header">
+          <div className="tf-page-brand">
+            <div className="tf-page-logo"></div>
+            <div>
+              <h1 className="tf-page-title">{survey.title || 'Training Feedback'}</h1>
+              {survey.subtitle && <p className="tf-page-sub">{survey.subtitle}</p>}
+            </div>
           </div>
-          <div className="tf-progress">
-            <div className="tf-progress-track" style={{ '--progress-width': `${((currentQuestionIndex + 1) / normalizedQuestions.length) * 100}%` } as React.CSSProperties} />
-            <span className="tf-progress-counter">{currentQuestionIndex + 1}/{normalizedQuestions.length}</span>
+          <div className="tf-page-tabs">
+            {normalizedQuestions.map((_, i) => (
+              <div key={i} className={`tf-tab ${i === currentQuestionIndex ? 'active' : ''} ${formData[normalizedQuestions[i].id] !== '' && formData[normalizedQuestions[i].id] !== 0 ? 'done' : ''}`}>
+                {i + 1}
+              </div>
+            ))}
           </div>
+        </div>
+
+        <div className="tf-page-body">
           <form onSubmit={handleSubmit}>
             <AnimatePresence mode="wait">{normalizedQuestions.map((q, i) => renderQuestion(q, i))}</AnimatePresence>
             {!previewMode && (
-              <div className="tf-footer">
-                {currentQuestionIndex > 0 ? <button type="button" className="tf-btn tf-btn-back" onClick={handlePrev}>← Back</button> : <div />}
-                {currentQuestionIndex < normalizedQuestions.length - 1 ? <button type="button" className="tf-btn tf-btn-next" onClick={handleNext} disabled={!isCurrentAnswered}>Next →</button> : <button type="submit" className="tf-btn tf-btn-submit" disabled={!isCurrentAnswered}>Submit</button>}
+              <div className="tf-page-nav">
+                {currentQuestionIndex > 0 && <button type="button" className="tf-nav-btn tf-nav-back" onClick={handlePrev}>← Previous</button>}
+                <div style={{ flex: 1 }} />
+                {currentQuestionIndex < normalizedQuestions.length - 1
+                  ? <button type="button" className="tf-nav-btn tf-nav-next" onClick={handleNext} disabled={!isCurrentAnswered}>Next →</button>
+                  : <button type="submit" className="tf-nav-btn tf-nav-submit" disabled={!isCurrentAnswered}>Submit Feedback</button>}
               </div>
             )}
-            {previewMode && <div className="tf-footer"><div /><button type="submit" className="tf-btn tf-btn-submit">Submit</button></div>}
-            {!previewMode && isCurrentAnswered && currentQuestionIndex < normalizedQuestions.length - 1 && <div className="tf-keyboard-hint">Press <kbd>Enter ↵</kbd> to continue</div>}
+            {previewMode && <div className="tf-page-nav"><div style={{ flex: 1 }} /><button type="submit" className="tf-nav-btn tf-nav-submit">Submit</button></div>}
           </form>
         </div>
+
+        <div className="tf-page-footer">Powered by PepperAds</div>
       </div>
-      <div className="tf-powered">Powered by <a href="#">PepperAds</a></div>
+
       {submitted && (
-        <motion.div className="tf-success-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <motion.div className="tf-success-card" initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ delay: 0.15 }}>
-            <div className="tf-success-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg></div>
-            <h2>Thank you!</h2><p>Your responses have been recorded. We appreciate your time.</p>
+        <motion.div className="tf-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+          <motion.div className="tf-complete" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
+            <div className="tf-complete-icon">🎓</div>
+            <h2>Feedback Submitted!</h2>
+            <p>Thank you for helping us improve our training programs.</p>
           </motion.div>
         </motion.div>
       )}

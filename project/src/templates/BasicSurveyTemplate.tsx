@@ -86,7 +86,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const isLocalhost = window.location.hostname === 'localhost';
   const apiBaseUrl = isLocalhost
     ? 'http://localhost:5000'
-    : 'https://hostslice.onrender.com/';
+    : 'https://hostslice.onrender.com';
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
