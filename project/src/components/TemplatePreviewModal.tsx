@@ -10,6 +10,7 @@ import OnboardingReviewTemplate from '../templates/OnboardingReviewTemplate';
 import WebsiteExperienceTemplate from '../templates/WebsiteExperienceTemplate';
 import TrainingFeedbackTemplate from '../templates/TrainingFeedbackTemplate';
 import ServiceCancellationTemplate from '../templates/ServiceCancellationTemplate';
+import IframePreview from './IframePreview';
 import type { Survey } from '../types/Survey';
 
 interface TemplatePreviewModalProps {
@@ -96,7 +97,7 @@ const TemplatePreviewModal: React.FC<TemplatePreviewModalProps> = ({
         </button>
 
         {showLivePreview ? (
-          /* Live Template Preview */
+          /* Live Template Preview via iframe */
           <div className="p-4">
             <div className="mb-4 text-center">
               <h2 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -106,10 +107,10 @@ const TemplatePreviewModal: React.FC<TemplatePreviewModalProps> = ({
                 This is how your survey will look to respondents
               </p>
             </div>
-            <div className="border-4 border-gray-200 rounded-xl overflow-auto bg-gray-50" style={{ height: '70vh' }}>
-              <div style={{ transform: 'scale(0.8)', transformOrigin: 'top center', width: '125%', marginLeft: '-12.5%' }}>
+            <div className="border-4 border-gray-200 rounded-xl overflow-hidden bg-gray-50 relative" style={{ height: '70vh' }}>
+              <IframePreview style={{ width: '100%', height: '100%' }}>
                 {TemplateComponent && <TemplateComponent survey={mockSurvey} />}
-              </div>
+              </IframePreview>
             </div>
             <div className="mt-6 flex gap-4">
               <button

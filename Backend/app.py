@@ -145,6 +145,12 @@ def generate_ai_content(prompt_text, temperature=0.7, max_tokens=1024):
         "max_tokens": max_tokens,
     }
     resp = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=60)
+    if resp.status_code == 401:
+        raise ValueError("AI API key is invalid or expired. Please update your OpenRouter API key.")
+    if resp.status_code == 402:
+        raise ValueError("AI API credits exhausted. Please add credits to your OpenRouter account.")
+    if resp.status_code == 429:
+        raise ValueError("AI API rate limit reached. Please try again in a few minutes.")
     resp.raise_for_status()
     data = resp.json()
     return data["choices"][0]["message"]["content"]
@@ -757,8 +763,22 @@ def generate_survey():
                 last_error = retry_error
                 print(f"Retry {attempt + 1} failed: {retry_error}")
                 
+                # Check for auth errors - don't retry, bail immediately
+                error_str = str(retry_error).lower()
+                if "invalid or expired" in error_str or "401" in str(retry_error):
+                    return jsonify({
+                        "error": "AI API key is invalid or expired. Please contact the administrator to update the OpenRouter API key.",
+                        "error_type": "auth_error"
+                    }), 503
+                
+                if "credits exhausted" in error_str or "402" in str(retry_error):
+                    return jsonify({
+                        "error": "AI API credits exhausted. Please contact the administrator to add credits.",
+                        "error_type": "credits_exhausted"
+                    }), 503
+                
                 # Check for rate limit / quota errors
-                if "429" in str(retry_error) or "rate_limit" in str(retry_error).lower() or "quota" in str(retry_error).lower():
+                if "429" in str(retry_error) or "rate_limit" in error_str or "quota" in error_str:
                     return jsonify({
                         "error": "API quota exceeded. Please try again later or upgrade your API plan.",
                         "error_type": "quota_exceeded",

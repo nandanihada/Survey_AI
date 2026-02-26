@@ -9,6 +9,7 @@ import OnboardingReviewTemplate from '../templates/OnboardingReviewTemplate';
 import WebsiteExperienceTemplate from '../templates/WebsiteExperienceTemplate';
 import TrainingFeedbackTemplate from '../templates/TrainingFeedbackTemplate';
 import ServiceCancellationTemplate from '../templates/ServiceCancellationTemplate';
+import IframePreview from './IframePreview';
 import type { Survey } from '../types/Survey';
 
 interface SurveyViewerProps {
@@ -40,15 +41,10 @@ const SurveyViewer: React.FC<SurveyViewerProps> = ({ survey }) => {
   }
 
   return (
-    <div
-      style={{
-        transform: 'scale(0.75)',
-        transformOrigin: 'top left',
-        width: '133%',
-        pointerEvents: 'none',
-      }}
-    >
-      <TemplateComponent survey={survey} />
+    <div style={{ height: '600px', borderRadius: '8px', overflow: 'hidden', pointerEvents: 'none' }}>
+      <IframePreview style={{ width: '100%', height: '100%' }}>
+        <TemplateComponent survey={survey} />
+      </IframePreview>
     </div>
   );
 };
