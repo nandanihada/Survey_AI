@@ -40,6 +40,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false, onNavigateT
   const [loadingPhase, setLoadingPhase] = useState(0);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showAllSuggestions, setShowAllSuggestions] = useState(false);
+  const [selectedSuggestion, setSelectedSuggestion] = useState<{ label: string; prompt: string } | null>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
   const SUGGESTION_PROMPTS = [
@@ -67,8 +68,8 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false, onNavigateT
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showSuggestions]);
 
-  const handleSelectSuggestion = (prompt: string) => {
-    setSurveyTopic(prompt);
+  const handleSelectSuggestion = (suggestion: typeof SUGGESTION_PROMPTS[0]) => {
+    setSelectedSuggestion({ label: suggestion.label, prompt: suggestion.prompt });
     setShowSuggestions(false);
     setShowAllSuggestions(false);
   };
@@ -104,12 +105,19 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false, onNavigateT
   const removeImage = () => { setImagePreview(null); setImageContext(''); if (fileInputRef.current) fileInputRef.current.value = ''; };
 
   const handleGenerateSurvey = useCallback(async () => {
-    if (!surveyTopic.trim() && !imageContext) { setError('Please enter a survey topic or upload an image'); return; }
+    if (!surveyTopic.trim() && !imageContext && !selectedSuggestion) { setError('Please enter a survey topic or pick a suggestion'); return; }
     setIsLoading(true); setError(''); setLoadingPhase(0);
     const phaseInterval = setInterval(() => setLoadingPhase(p => p < 3 ? p + 1 : p), 2000);
     try {
+      // Merge user prompt with hidden suggestion context
+      let finalPrompt = surveyTopic.trim();
+      if (selectedSuggestion) {
+        finalPrompt = finalPrompt
+          ? `${selectedSuggestion.prompt}. Additionally: ${finalPrompt}`
+          : selectedSuggestion.prompt;
+      }
       const result = await generateSurvey({
-        prompt: surveyTopic, template_type: 'custom', question_count: questionCount,
+        prompt: finalPrompt, template_type: 'custom', question_count: questionCount,
         image_context: imageContext || undefined,
         theme: { font: 'DM Sans, sans-serif', intent: 'professional', colors: { primary: '#E8503A', background: '#F7F7FB', text: '#2D3142' } },
       });
@@ -120,7 +128,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false, onNavigateT
       clearInterval(phaseInterval);
       setError(err instanceof Error ? err.message : 'Failed to generate survey');
     } finally { setIsLoading(false); }
-  }, [surveyTopic, questionCount, imageContext]);
+  }, [surveyTopic, questionCount, imageContext, selectedSuggestion]);
 
   const getQuestionText = (q: Question) => q.question || q.text || 'Untitled Question';
   const normalizeType = (type: string): string => {
@@ -169,6 +177,19 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false, onNavigateT
               </div>
             </div>
           )}
+          {selectedSuggestion && (
+            <div className="mx-2 sm:mx-3 mt-2 sm:mt-3 mb-1">
+              <div className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[10px] sm:text-xs font-medium ${
+                isDarkMode ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20' : 'bg-amber-50 text-amber-700 border border-amber-200'
+              }`}>
+                <Lightbulb size={11} />
+                <span>{selectedSuggestion.label}</span>
+                <button onClick={() => setSelectedSuggestion(null)} className={`ml-0.5 p-0.5 rounded-full transition-colors ${isDarkMode ? 'hover:bg-white/10' : 'hover:bg-amber-100'}`}>
+                  <X size={10} />
+                </button>
+              </div>
+            </div>
+          )}
           <textarea
             value={surveyTopic} onChange={(e) => setSurveyTopic(e.target.value)}
             placeholder="Describe your survey topic, or paste specific questions you want included..."
@@ -176,7 +197,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false, onNavigateT
               isDarkMode ? 'bg-transparent text-white placeholder-slate-500' : 'bg-transparent text-stone-800 placeholder-stone-400'
             }`}
             rows={3}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && surveyTopic.trim()) { e.preventDefault(); handleGenerateSurvey(); } }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && (surveyTopic.trim() || selectedSuggestion)) { e.preventDefault(); handleGenerateSurvey(); } }}
           />
           <div className="flex items-center justify-between px-2 sm:px-3 pb-2 sm:pb-3">
             <div className="flex items-center gap-1.5 sm:gap-2">
@@ -227,7 +248,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false, onNavigateT
                       {(showAllSuggestions ? SUGGESTION_PROMPTS : SUGGESTION_PROMPTS.slice(0, 4)).map((s, i) => (
                         <button
                           key={i}
-                          onClick={() => handleSelectSuggestion(s.prompt)}
+                          onClick={() => handleSelectSuggestion(s)}
                           className={`w-full text-left px-3 py-2 rounded-xl flex items-center gap-2.5 transition-all group ${
                             isDarkMode
                               ? 'hover:bg-slate-700/70 active:bg-slate-600'
@@ -276,7 +297,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false, onNavigateT
                 </select>
               </div>
             </div>
-            <button onClick={handleGenerateSurvey} disabled={isLoading || (!surveyTopic.trim() && !imageContext)}
+            <button onClick={handleGenerateSurvey} disabled={isLoading || (!surveyTopic.trim() && !imageContext && !selectedSuggestion)}
               className="p-2 sm:p-2.5 rounded-xl bg-gradient-to-r from-red-500 to-orange-400 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-lg transition-all">
               {isLoading ? <Loader2 className="animate-spin" size={15} /> : <ChevronRight size={15} />}
             </button>
@@ -367,7 +388,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false, onNavigateT
                 style={{ animation: 'sfFadeUp 0.4s 0.3s ease-out both', backdropFilter: 'blur(8px)' }}
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
-                <span className="truncate">{surveyTopic.length > 50 ? surveyTopic.slice(0, 50) + '...' : surveyTopic}</span>
+                <span className="truncate">{(surveyTopic || selectedSuggestion?.label || '').length > 50 ? (surveyTopic || selectedSuggestion?.label || '').slice(0, 50) + '...' : (surveyTopic || selectedSuggestion?.label || '')}</span>
               </div>
             </div>
 

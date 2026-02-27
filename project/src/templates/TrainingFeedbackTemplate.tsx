@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import './TrainingFeedbackTemplate.css';
 import type { Survey } from '../types/Survey';
 import { buildRedirectUrl, createSessionContext } from '../utils/redirectBuilder';
+import { getQuestionVariants, getAnswerVariants } from '../utils/animationConfig';
 
 interface Question { id: string; question: string; questionDescription?: string; answerDescription?: string; type: 'text' | 'radio' | 'range'; options?: string[]; }
 interface RawQuestion { id: string; question: string; questionDescription?: string; answerDescription?: string; type: string; options?: string[]; }
@@ -91,23 +92,36 @@ const TrainingFeedbackTemplate: React.FC<Props> = ({ survey, previewMode = false
     } catch (error: unknown) { alert(error instanceof Error ? error.message : 'Submission failed'); }
   };
 
+  const qVariants = getQuestionVariants(survey.animation);
+
   const renderQuestion = (q: Question, idx: number) => {
     if (!previewMode && idx !== currentQuestionIndex) return null;
     if (previewMode && idx > 2) return null;
     return (
-      <motion.div key={q.id} className="tf-lined-area" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.3 }}>
+      <div key={q.id} className="tf-lined-area">
         <div className="tf-q-label">📝 Question {idx + 1}</div>
-        <h2 className="tf-q-text">{q.question}</h2>
+        {!previewMode ? (
+          <motion.h2 className="tf-q-text" variants={qVariants} initial="initial" animate="animate" exit="exit">{q.question}</motion.h2>
+        ) : (
+          <h2 className="tf-q-text">{q.question}</h2>
+        )}
         {q.questionDescription && <p className="tf-q-sub">{q.questionDescription}</p>}
         {q.type === 'radio' && (
           <div className="tf-radio-list">
-            {q.options?.map((opt, i) => (
+            {q.options?.map((opt, i) => {
+              const aVariants = getAnswerVariants(survey.animation, i);
+              return (
               <label key={i} className={`tf-radio-item ${formData[q.id] === opt ? 'checked' : ''}`}>
                 <input type="radio" name={q.id} checked={formData[q.id] === opt} onChange={() => handleAnswer(q.id, opt)} />
                 <span className="tf-radio-circle" />
-                <span className="tf-radio-text">{opt}</span>
+                {!previewMode ? (
+                  <motion.span className="tf-radio-text" variants={aVariants} initial="initial" animate="animate">{opt}</motion.span>
+                ) : (
+                  <span className="tf-radio-text">{opt}</span>
+                )}
               </label>
-            ))}
+              );
+            })}
           </div>
         )}
         {q.type === 'text' && <textarea value={formData[q.id] as string} onChange={e => handleAnswer(q.id, e.target.value)} placeholder="Write your answer on the lines..." className="tf-lined-input" rows={4} />}
@@ -118,7 +132,7 @@ const TrainingFeedbackTemplate: React.FC<Props> = ({ survey, previewMode = false
             ))}
           </div>
         )}
-      </motion.div>
+      </div>
     );
   };
 

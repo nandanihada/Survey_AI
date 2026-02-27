@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import './WebsiteExperienceTemplate.css';
 import type { Survey } from '../types/Survey';
 import { buildRedirectUrl, createSessionContext } from '../utils/redirectBuilder';
+import { getQuestionVariants, getAnswerVariants } from '../utils/animationConfig';
 
 interface Question { id: string; question: string; questionDescription?: string; answerDescription?: string; type: 'text' | 'radio' | 'range'; options?: string[]; }
 interface RawQuestion { id: string; question: string; questionDescription?: string; answerDescription?: string; type: string; options?: string[]; }
@@ -91,18 +92,33 @@ const WebsiteExperienceTemplate: React.FC<Props> = ({ survey, previewMode = fals
     } catch (error: unknown) { alert(error instanceof Error ? error.message : 'Submission failed'); }
   };
 
+  const qVariants = getQuestionVariants(survey.animation);
+
   const renderQuestion = (q: Question, idx: number) => {
     if (!previewMode && idx !== currentQuestionIndex) return null;
     if (previewMode && idx > 2) return null;
     return (
-      <motion.div key={q.id} className="we-q-block" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.3 }}>
-        <h2 className="we-q-title">{q.question}</h2>
+      <div key={q.id} className="we-q-block">
+        {!previewMode ? (
+          <motion.h2 className="we-q-title" variants={qVariants} initial="initial" animate="animate" exit="exit">{q.question}</motion.h2>
+        ) : (
+          <h2 className="we-q-title">{q.question}</h2>
+        )}
         {q.questionDescription && <p className="we-q-hint">{q.questionDescription}</p>}
         {q.type === 'radio' && (
           <div className="we-pill-options">
-            {q.options?.map((opt, i) => (
-              <motion.button key={i} type="button" className={`we-pill ${formData[q.id] === opt ? 'on' : ''}`} onClick={() => handleAnswer(q.id, opt)} whileTap={{ scale: 0.97 }}>{opt}</motion.button>
-            ))}
+            {q.options?.map((opt, i) => {
+              const aVariants = getAnswerVariants(survey.animation, i);
+              return (
+              <button key={i} type="button" className={`we-pill ${formData[q.id] === opt ? 'on' : ''}`} onClick={() => handleAnswer(q.id, opt)}>
+                {!previewMode ? (
+                  <motion.span variants={aVariants} initial="initial" animate="animate">{opt}</motion.span>
+                ) : (
+                  <span>{opt}</span>
+                )}
+              </button>
+              );
+            })}
           </div>
         )}
         {q.type === 'text' && <input type="text" value={formData[q.id] as string} onChange={e => handleAnswer(q.id, e.target.value)} placeholder="Your answer..." className="we-text-input" />}
@@ -112,7 +128,7 @@ const WebsiteExperienceTemplate: React.FC<Props> = ({ survey, previewMode = fals
             <div className="we-range-labels"><span>1</span><span className="we-range-val">{formData[q.id] || 0}</span><span>10</span></div>
           </div>
         )}
-      </motion.div>
+      </div>
     );
   };
 

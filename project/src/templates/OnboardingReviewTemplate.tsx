@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import './OnboardingReviewTemplate.css';
 import type { Survey } from '../types/Survey';
 import { buildRedirectUrl, createSessionContext } from '../utils/redirectBuilder';
+import { getQuestionVariants, getAnswerVariants } from '../utils/animationConfig';
 
 interface Question { id: string; question: string; questionDescription?: string; answerDescription?: string; type: 'text' | 'radio' | 'range'; options?: string[]; }
 interface RawQuestion { id: string; question: string; questionDescription?: string; answerDescription?: string; type: string; options?: string[]; }
@@ -91,16 +92,22 @@ const OnboardingReviewTemplate: React.FC<Props> = ({ survey, previewMode = false
     } catch (error: unknown) { alert(error instanceof Error ? error.message : 'Submission failed'); }
   };
 
+  const qVariants = getQuestionVariants(survey.animation);
+
   const renderQuestion = (q: Question, idx: number) => {
     if (!previewMode && idx !== currentQuestionIndex) return null;
     if (previewMode && idx > 2) return null;
     return (
-      <motion.div key={q.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.35 }}>
+      <div key={q.id}>
         {/* Bot message bubble */}
         <div className="or-bubble or-bot">
           <div className="or-avatar">🤖</div>
           <div className="or-msg">
-            <p className="or-msg-text">{q.question}</p>
+            {!previewMode ? (
+              <motion.p className="or-msg-text" variants={qVariants} initial="initial" animate="animate" exit="exit">{q.question}</motion.p>
+            ) : (
+              <p className="or-msg-text">{q.question}</p>
+            )}
             {q.questionDescription && <p className="or-msg-sub">{q.questionDescription}</p>}
           </div>
         </div>
@@ -109,9 +116,18 @@ const OnboardingReviewTemplate: React.FC<Props> = ({ survey, previewMode = false
           <div className="or-response-area">
             {q.type === 'radio' && (
               <div className="or-chips">
-                {q.options?.map((opt, i) => (
-                  <motion.button key={i} type="button" className={`or-chip ${formData[q.id] === opt ? 'picked' : ''}`} onClick={() => handleAnswer(q.id, opt)} whileTap={{ scale: 0.95 }}>{opt}</motion.button>
-                ))}
+                {q.options?.map((opt, i) => {
+                  const aVariants = getAnswerVariants(survey.animation, i);
+                  return (
+                  <button key={i} type="button" className={`or-chip ${formData[q.id] === opt ? 'picked' : ''}`} onClick={() => handleAnswer(q.id, opt)}>
+                    {!previewMode ? (
+                      <motion.span variants={aVariants} initial="initial" animate="animate">{opt}</motion.span>
+                    ) : (
+                      <span>{opt}</span>
+                    )}
+                  </button>
+                  );
+                })}
               </div>
             )}
             {q.type === 'text' && (
@@ -128,7 +144,7 @@ const OnboardingReviewTemplate: React.FC<Props> = ({ survey, previewMode = false
             )}
           </div>
         </div>
-      </motion.div>
+      </div>
     );
   };
 

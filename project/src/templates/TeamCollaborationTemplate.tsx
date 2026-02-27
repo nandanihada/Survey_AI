@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import './TeamCollaborationTemplate.css';
 import type { Survey } from '../types/Survey';
 import { buildRedirectUrl, createSessionContext } from '../utils/redirectBuilder';
+import { getQuestionVariants, getAnswerVariants } from '../utils/animationConfig';
 
 interface Question { id: string; question: string; questionDescription?: string; answerDescription?: string; type: 'text' | 'radio' | 'range'; options?: string[]; }
 interface RawQuestion { id: string; question: string; questionDescription?: string; answerDescription?: string; type: string; options?: string[]; }
@@ -91,21 +92,34 @@ const TeamCollaborationTemplate: React.FC<Props> = ({ survey, previewMode = fals
     } catch (error: unknown) { alert(error instanceof Error ? error.message : 'Submission failed'); }
   };
 
+  const qVariants = getQuestionVariants(survey.animation);
+
   const renderQuestion = (q: Question, idx: number) => {
     if (!previewMode && idx !== currentQuestionIndex) return null;
     if (previewMode && idx > 2) return null;
     return (
-      <motion.div key={q.id} className="tc-question-content" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} transition={{ duration: 0.4 }}>
-        <h2 className="tc-q-text">{q.question}</h2>
+      <div key={q.id} className="tc-question-content">
+        {!previewMode ? (
+          <motion.h2 className="tc-q-text" variants={qVariants} initial="initial" animate="animate" exit="exit">{q.question}</motion.h2>
+        ) : (
+          <h2 className="tc-q-text">{q.question}</h2>
+        )}
         {q.questionDescription && <p className="tc-q-desc">{q.questionDescription}</p>}
         {q.type === 'radio' && (
           <div className="tc-grid-options">
-            {q.options?.map((opt, i) => (
-              <motion.button key={i} type="button" className={`tc-grid-opt ${formData[q.id] === opt ? 'active' : ''}`} onClick={() => handleAnswer(q.id, opt)} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+            {q.options?.map((opt, i) => {
+              const aVariants = getAnswerVariants(survey.animation, i);
+              return (
+              <button key={i} type="button" className={`tc-grid-opt ${formData[q.id] === opt ? 'active' : ''}`} onClick={() => handleAnswer(q.id, opt)}>
                 <span className="tc-opt-num">{i + 1}</span>
-                <span>{opt}</span>
-              </motion.button>
-            ))}
+                {!previewMode ? (
+                  <motion.span variants={aVariants} initial="initial" animate="animate">{opt}</motion.span>
+                ) : (
+                  <span>{opt}</span>
+                )}
+              </button>
+              );
+            })}
           </div>
         )}
         {q.type === 'text' && <textarea value={formData[q.id] as string} onChange={e => handleAnswer(q.id, e.target.value)} placeholder="Share your thoughts..." className="tc-input" rows={4} />}
@@ -117,7 +131,7 @@ const TeamCollaborationTemplate: React.FC<Props> = ({ survey, previewMode = fals
             <div className="tc-scale-ends"><span>Low</span><span>High</span></div>
           </div>
         )}
-      </motion.div>
+      </div>
     );
   };
 

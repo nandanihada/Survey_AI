@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import './EventFeedbackTemplate.css';
 import type { Survey } from '../types/Survey';
 import { buildRedirectUrl, createSessionContext } from '../utils/redirectBuilder';
+import { getQuestionVariants, getAnswerVariants } from '../utils/animationConfig';
 
 interface Question { id: string; question: string; questionDescription?: string; answerDescription?: string; type: 'text' | 'radio' | 'range'; options?: string[]; }
 interface RawQuestion { id: string; question: string; questionDescription?: string; answerDescription?: string; type: string; options?: string[]; }
@@ -95,12 +96,19 @@ const EventFeedbackTemplate: React.FC<Props> = ({ survey, previewMode = false })
 
   const renderRadio = (q: Question) => (
     <div className="ef-options">
-      {q.options?.map((opt, i) => (
-        <motion.div key={i} className={`ef-option ${formData[q.id] === opt ? 'selected' : ''}`} onClick={() => handleAnswer(q.id, opt)} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }} whileTap={{ scale: 0.98 }}>
+      {q.options?.map((opt, i) => {
+        const aVariants = getAnswerVariants(survey.animation, i);
+        return (
+        <div key={i} className={`ef-option ${formData[q.id] === opt ? 'selected' : ''}`} onClick={() => handleAnswer(q.id, opt)}>
           <span className="ef-option-key">{OPTION_KEYS[i] || i + 1}</span>
-          <span className="ef-option-label">{opt}</span>
-        </motion.div>
-      ))}
+          {!previewMode ? (
+            <motion.span className="ef-option-label" variants={aVariants} initial="initial" animate="animate">{opt}</motion.span>
+          ) : (
+            <span className="ef-option-label">{opt}</span>
+          )}
+        </div>
+        );
+      })}
     </div>
   );
 
@@ -117,19 +125,25 @@ const EventFeedbackTemplate: React.FC<Props> = ({ survey, previewMode = false })
     </div>
   );
 
+  const qVariants = getQuestionVariants(survey.animation);
+
   const renderQuestion = (q: Question, idx: number) => {
     if (!previewMode && idx !== currentQuestionIndex) return null;
     if (previewMode && idx > 2) return null;
     return (
-      <motion.div key={q.id} className="ef-question-area" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} transition={{ duration: 0.35 }}>
+      <div key={q.id} className="ef-question-area">
         <div className="ef-question-number"><span className="ef-num-badge">{idx + 1}</span> Question {idx + 1} of {normalizedQuestions.length}</div>
-        <h2 className="ef-question-text">{q.question}</h2>
+        {!previewMode ? (
+          <motion.h2 className="ef-question-text" variants={qVariants} initial="initial" animate="animate" exit="exit">{q.question}</motion.h2>
+        ) : (
+          <h2 className="ef-question-text">{q.question}</h2>
+        )}
         {q.questionDescription && <p className="ef-question-desc">{q.questionDescription}</p>}
         {q.answerDescription && <div className="ef-answer-hint">{q.answerDescription}</div>}
         {q.type === 'radio' && renderRadio(q)}
         {q.type === 'text' && renderText(q)}
         {q.type === 'range' && renderScale(q)}
-      </motion.div>
+      </div>
     );
   };
 

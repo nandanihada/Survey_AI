@@ -2,10 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import OptimizedLoader from './OptimizedLoader';
 import TemplateSelector from './TemplateSelector';
-import type { Survey, Question } from '../types/Survey';
+import type { Survey, Question, AnimationConfig } from '../types/Survey';
 import { generateSurveyLink, type SurveyLinkParams } from '../utils/surveyLinkUtils';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, Save, ArrowLeft, Grid3X3, Copy, CheckCircle, Settings, ExternalLink, Share2, Trash2, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Save, ArrowLeft, Grid3X3, Copy, CheckCircle, Settings, ExternalLink, Share2, Trash2, X, ChevronUp, ChevronDown, Zap } from 'lucide-react';
 import './SurveyEditor.css';
 
 const QUESTION_TYPES = [
@@ -17,6 +17,33 @@ const QUESTION_TYPES = [
 ];
 
 const OPTION_KEYS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+
+const QUESTION_ANIMATIONS = [
+  { value: 'fadeSlideUp', label: 'Fade & Slide Up', icon: '↑', desc: 'Smooth upward entrance' },
+  { value: 'typewriter', label: 'Typewriter', icon: '⌨', desc: 'Text types letter by letter' },
+  { value: 'flipIn', label: 'Flip In', icon: '🔄', desc: '3D flip rotation' },
+  { value: 'zoomBounce', label: 'Zoom Bounce', icon: '💥', desc: 'Zoom in with bounce' },
+  { value: 'slideFromLeft', label: 'Slide from Left', icon: '←', desc: 'Slides in from left' },
+  { value: 'blurReveal', label: 'Blur Reveal', icon: '✨', desc: 'Blurs in from nothing' },
+] as const;
+
+const ANSWER_ANIMATIONS = [
+  { value: 'fadeIn', label: 'Fade In', icon: '◐', desc: 'Simple fade appearance' },
+  { value: 'popScale', label: 'Pop Scale', icon: '🫧', desc: 'Pops in with scale' },
+  { value: 'slideUp', label: 'Slide Up', icon: '⬆', desc: 'Slides up into place' },
+  { value: 'staggerFade', label: 'Stagger Fade', icon: '▦', desc: 'Options appear one by one' },
+  { value: 'elastic', label: 'Elastic', icon: '🪀', desc: 'Springy elastic entrance' },
+  { value: 'glowReveal', label: 'Glow Reveal', icon: '💡', desc: 'Glows in with highlight' },
+] as const;
+
+const DEFAULT_ANIMATION: AnimationConfig = {
+  questionAnimation: 'fadeSlideUp',
+  answerAnimation: 'fadeIn',
+  delayMs: 100,
+  speedMs: 400,
+  autoAdvance: false,
+  autoAdvanceDelay: 1500,
+};
 
 // Theme colors per template — applied to the center editor panel
 interface EditorTheme {
@@ -105,6 +132,13 @@ const SurveyEditor: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [showSharePopup, setShowSharePopup] = useState(false);
   const [shareLinkRevealed, setShareLinkRevealed] = useState(false);
+  const [showAnimationPanel, setShowAnimationPanel] = useState(false);
+
+  const animConfig = survey?.animation || DEFAULT_ANIMATION;
+  const updateAnimation = (field: keyof AnimationConfig, value: AnimationConfig[keyof AnimationConfig]) => {
+    if (!survey) return;
+    setSurvey({ ...survey, animation: { ...animConfig, [field]: value } });
+  };
 
   const isLocalhost = window.location.hostname === 'localhost';
   const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
@@ -480,6 +514,163 @@ const SurveyEditor: React.FC = () => {
         </div>
       )}
 
+      {/* ── Animation Settings Modal ── */}
+      {showAnimationPanel && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => setShowAnimationPanel(false)}>
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+            style={{ animation: 'editorModalIn 0.25s ease-out' }}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                <Zap size={15} className="text-purple-500" /> Animation Settings
+              </h3>
+              <button onClick={() => setShowAnimationPanel(false)} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5 overflow-y-auto flex-1 space-y-6">
+              {/* Two-column: Question & Answer animations */}
+              <div className="grid grid-cols-2 gap-5">
+                {/* Question Animation */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Question Animation</label>
+                  <div className="space-y-1">
+                    {QUESTION_ANIMATIONS.map(a => (
+                      <button
+                        key={a.value}
+                        onClick={() => updateAnimation('questionAnimation', a.value)}
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors ${
+                          animConfig.questionAnimation === a.value
+                            ? 'bg-purple-100 text-purple-700 font-medium ring-1 ring-purple-200'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        <span className="text-base w-5 text-center">{a.icon}</span>
+                        <div className="text-left">
+                          <div>{a.label}</div>
+                          <div className="text-[9px] text-gray-400">{a.desc}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Answer Animation */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Answer Animation</label>
+                  <div className="space-y-1">
+                    {ANSWER_ANIMATIONS.map(a => (
+                      <button
+                        key={a.value}
+                        onClick={() => updateAnimation('answerAnimation', a.value)}
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors ${
+                          animConfig.answerAnimation === a.value
+                            ? 'bg-purple-100 text-purple-700 font-medium ring-1 ring-purple-200'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        <span className="text-base w-5 text-center">{a.icon}</span>
+                        <div className="text-left">
+                          <div>{a.label}</div>
+                          <div className="text-[9px] text-gray-400">{a.desc}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Sliders row */}
+              <div className="grid grid-cols-2 gap-5">
+                {/* Delay */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Delay <span className="text-gray-400 normal-case font-normal">({animConfig.delayMs}ms)</span>
+                  </label>
+                  <input
+                    type="range" min={0} max={2000} step={50}
+                    value={animConfig.delayMs}
+                    onChange={e => updateAnimation('delayMs', parseInt(e.target.value))}
+                    className="w-full accent-purple-500"
+                  />
+                  <div className="flex justify-between text-[10px] text-gray-400 mt-1">
+                    <span>None</span><span>2s</span>
+                  </div>
+                </div>
+
+                {/* Speed */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Speed <span className="text-gray-400 normal-case font-normal">({animConfig.speedMs}ms)</span>
+                  </label>
+                  <input
+                    type="range" min={200} max={1500} step={50}
+                    value={animConfig.speedMs}
+                    onChange={e => updateAnimation('speedMs', parseInt(e.target.value))}
+                    className="w-full accent-purple-500"
+                  />
+                  <div className="flex justify-between text-[10px] text-gray-400 mt-1">
+                    <span>Fast</span><span>Slow</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Auto Advance */}
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div>
+                    <span className="text-[11px] font-semibold text-gray-600 uppercase tracking-wider">Auto-advance</span>
+                    <p className="text-[10px] text-gray-400 mt-0.5">Automatically move to next question after answering</p>
+                  </div>
+                  <div
+                    onClick={() => updateAnimation('autoAdvance', !animConfig.autoAdvance)}
+                    className={`w-10 h-[22px] rounded-full transition-colors relative cursor-pointer shrink-0 ${
+                      animConfig.autoAdvance ? 'bg-purple-500' : 'bg-gray-300'
+                    }`}
+                  >
+                    <div className={`absolute top-[3px] w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                      animConfig.autoAdvance ? 'translate-x-[22px]' : 'translate-x-[3px]'
+                    }`} />
+                  </div>
+                </label>
+
+                {animConfig.autoAdvance && (
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                      Advance Delay <span className="text-gray-400 normal-case font-normal">({(animConfig.autoAdvanceDelay / 1000).toFixed(1)}s)</span>
+                    </label>
+                    <input
+                      type="range" min={500} max={5000} step={250}
+                      value={animConfig.autoAdvanceDelay}
+                      onChange={e => updateAnimation('autoAdvanceDelay', parseInt(e.target.value))}
+                      className="w-full accent-purple-500"
+                    />
+                    <div className="flex justify-between text-[10px] text-gray-400 mt-1">
+                      <span>0.5s</span><span>5s</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-100 shrink-0 flex justify-end">
+              <button
+                onClick={() => setShowAnimationPanel(false)}
+                className="px-5 py-2 bg-purple-500 text-white rounded-lg text-xs font-medium hover:bg-purple-600 transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Main 3-Panel Layout ── */}
       <div className="flex flex-1 overflow-hidden">
 
@@ -797,8 +988,15 @@ const SurveyEditor: React.FC = () => {
                 </div>
               </div>
 
-              {/* Delete */}
-              <div className="pt-3 border-t border-gray-100">
+              {/* Actions */}
+              <div className="pt-3 border-t border-gray-100 space-y-2">
+                <button
+                  onClick={() => setShowAnimationPanel(true)}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-medium rounded-lg transition-colors text-purple-600 border border-purple-200 bg-purple-50 hover:bg-purple-100"
+                >
+                  <Zap size={13} /> Animation Settings
+                </button>
+
                 <button
                   onClick={() => deleteQuestion(activeQuestionIndex)}
                   disabled={survey.questions.length <= 1}

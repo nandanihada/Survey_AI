@@ -7,6 +7,7 @@ import {
   buildRedirectUrl, 
   createSessionContext
 } from '../utils/redirectBuilder';
+import { getQuestionVariants, getAnswerVariants } from '../utils/animationConfig';
 
 interface Question {
   id: string;
@@ -248,23 +249,27 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
   };
 
   /* ── Render Helpers ── */
+  const qVariants = getQuestionVariants(survey.animation);
 
   const renderRadioOptions = (question: Question) => (
     <div className="cf-options">
-      {question.options?.map((option, i) => (
-        <motion.div
+      {question.options?.map((option, i) => {
+        const aVariants = getAnswerVariants(survey.animation, i);
+        return (
+        <div
           key={i}
           className={`cf-option ${formData[question.id] === option ? 'selected' : ''}`}
           onClick={() => handleChange(question.id, option)}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: i * 0.05, duration: 0.25 }}
-          whileTap={{ scale: 0.98 }}
         >
           <span className="cf-option-key">{OPTION_KEYS[i] || i + 1}</span>
-          <span className="cf-option-label">{option}</span>
-        </motion.div>
-      ))}
+          {!previewMode ? (
+            <motion.span className="cf-option-label" variants={aVariants} initial="initial" animate="animate">{option}</motion.span>
+          ) : (
+            <span className="cf-option-label">{option}</span>
+          )}
+        </div>
+        );
+      })}
     </div>
   );
 
@@ -305,25 +310,25 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
     const isAnswered = formData[q.id] !== undefined && formData[q.id] !== '' && !(q.type === 'range' && formData[q.id] === 5);
 
     return (
-      <motion.div
+      <div
         key={q.id}
         className={`cf-question-block ${isAnswered ? 'answered' : ''}`}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 20 }}
-        transition={{ duration: 0.4, ease: 'easeOut' }}
       >
         <div className="cf-question-number">
           <span className="cf-num-badge">{idx + 1}</span>
           Question {idx + 1}
         </div>
-        <h3 className="cf-question-text">{q.question}</h3>
+        {!previewMode ? (
+          <motion.h3 className="cf-question-text" variants={qVariants} initial="initial" animate="animate" exit="exit">{q.question}</motion.h3>
+        ) : (
+          <h3 className="cf-question-text">{q.question}</h3>
+        )}
         {q.questionDescription && <p className="cf-question-desc">{q.questionDescription}</p>}
         {q.answerDescription && <div className="cf-answer-hint">{q.answerDescription}</div>}
         {q.type === 'radio' && renderRadioOptions(q)}
         {q.type === 'text' && renderTextInput(q)}
         {q.type === 'range' && renderScale(q)}
-      </motion.div>
+      </div>
     );
   };
 

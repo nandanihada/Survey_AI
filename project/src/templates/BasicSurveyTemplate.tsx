@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import './BasicSurveyTemplate.css';
 import type { Survey } from '../types/Survey';
+import { getQuestionVariants, getAnswerVariants } from '../utils/animationConfig';
 import {
   buildRedirectUrl,
   createSessionContext
@@ -253,22 +254,27 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
   /* ── Render Helpers ── */
 
+  const qVariants = getQuestionVariants(survey.animation);
+
   const renderRadioOptions = (question: Question) => (
     <div className="pepper-options">
-      {question.options?.map((option, i) => (
-        <motion.div
-          key={i}
-          className={`pepper-option ${formData[question.id] === option ? 'selected' : ''}`}
-          onClick={() => handleAnswer(question.id, option)}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: i * 0.06, duration: 0.3 }}
-          whileTap={{ scale: 0.98 }}
-        >
-          <span className="pepper-option-key">{OPTION_KEYS[i] || i + 1}</span>
-          <span className="pepper-option-label">{option}</span>
-        </motion.div>
-      ))}
+      {question.options?.map((option, i) => {
+        const aVariants = getAnswerVariants(survey.animation, i);
+        return (
+          <div
+            key={i}
+            className={`pepper-option ${formData[question.id] === option ? 'selected' : ''}`}
+            onClick={() => handleAnswer(question.id, option)}
+          >
+            <span className="pepper-option-key">{OPTION_KEYS[i] || i + 1}</span>
+            {!previewMode ? (
+              <motion.span className="pepper-option-label" variants={aVariants} initial="initial" animate="animate">{option}</motion.span>
+            ) : (
+              <span className="pepper-option-label">{option}</span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 
@@ -309,37 +315,39 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     if (previewMode && index > 2) return null;
 
     return (
-      <motion.div
+      <div
         key={question.id}
         className="pepper-question-area pepper-animate-question"
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -16 }}
-        transition={{ duration: 0.35 }}
       >
         <div className="pepper-question-number">
           <span className="num-badge">{index + 1}</span>
           Question {index + 1} of {normalizedQuestions.length}
         </div>
 
-        <h2 className="pepper-question-text">
-          {editMode ? (
-            <input
-              type="text"
-              value={question.question}
-              onChange={(e) => {
-                const updated = { ...survey };
-                if (updated.questions[index]) {
-                  updated.questions[index].question = e.target.value;
-                  onSurveyChange?.(updated);
-                }
-              }}
-              className="pepper-editable-input"
-            />
-          ) : (
-            question.question
-          )}
-        </h2>
+        {!previewMode ? (
+          <motion.h2 className="pepper-question-text" variants={qVariants} initial="initial" animate="animate" exit="exit">
+            {question.question}
+          </motion.h2>
+        ) : (
+          <h2 className="pepper-question-text">
+            {editMode ? (
+              <input
+                type="text"
+                value={question.question}
+                onChange={(e) => {
+                  const updated = { ...survey };
+                  if (updated.questions[index]) {
+                    updated.questions[index].question = e.target.value;
+                    onSurveyChange?.(updated);
+                  }
+                }}
+                className="pepper-editable-input"
+              />
+            ) : (
+              question.question
+            )}
+          </h2>
+        )}
 
         {question.questionDescription && (
           <p className="pepper-question-desc">{question.questionDescription}</p>
@@ -352,7 +360,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         {question.type === 'radio' && renderRadioOptions(question)}
         {question.type === 'text' && renderTextInput(question)}
         {question.type === 'range' && renderScale(question)}
-      </motion.div>
+      </div>
     );
   };
 

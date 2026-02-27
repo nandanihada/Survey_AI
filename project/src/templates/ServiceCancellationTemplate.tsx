@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import './ServiceCancellationTemplate.css';
 import type { Survey } from '../types/Survey';
 import { buildRedirectUrl, createSessionContext } from '../utils/redirectBuilder';
+import { getQuestionVariants, getAnswerVariants } from '../utils/animationConfig';
 
 interface Question { id: string; question: string; questionDescription?: string; answerDescription?: string; type: 'text' | 'radio' | 'range'; options?: string[]; }
 interface RawQuestion { id: string; question: string; questionDescription?: string; answerDescription?: string; type: string; options?: string[]; }
@@ -91,21 +92,34 @@ const ServiceCancellationTemplate: React.FC<Props> = ({ survey, previewMode = fa
     } catch (error: unknown) { alert(error instanceof Error ? error.message : 'Submission failed'); }
   };
 
+  const qVariants = getQuestionVariants(survey.animation);
+
   const renderQuestion = (q: Question, idx: number) => {
     if (!previewMode && idx !== currentQuestionIndex) return null;
     if (previewMode && idx > 2) return null;
     return (
-      <motion.div key={q.id} className="sc-q-wrap" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} transition={{ duration: 0.3 }}>
-        <h2 className="sc-q-title">{q.question}</h2>
+      <div key={q.id} className="sc-q-wrap">
+        {!previewMode ? (
+          <motion.h2 className="sc-q-title" variants={qVariants} initial="initial" animate="animate" exit="exit">{q.question}</motion.h2>
+        ) : (
+          <h2 className="sc-q-title">{q.question}</h2>
+        )}
         {q.questionDescription && <p className="sc-q-desc">{q.questionDescription}</p>}
         {q.type === 'radio' && (
           <div className="sc-card-options">
-            {q.options?.map((opt, i) => (
-              <motion.button key={i} type="button" className={`sc-card-opt ${formData[q.id] === opt ? 'selected' : ''}`} onClick={() => handleAnswer(q.id, opt)} whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }}>
+            {q.options?.map((opt, i) => {
+              const aVariants = getAnswerVariants(survey.animation, i);
+              return (
+              <button key={i} type="button" className={`sc-card-opt ${formData[q.id] === opt ? 'selected' : ''}`} onClick={() => handleAnswer(q.id, opt)}>
                 <div className="sc-card-icon">{['😔','😐','🤔','😊','🎯','💡','⭐','🔥','💪','🚀'][i] || '📌'}</div>
-                <span>{opt}</span>
-              </motion.button>
-            ))}
+                {!previewMode ? (
+                  <motion.span variants={aVariants} initial="initial" animate="animate">{opt}</motion.span>
+                ) : (
+                  <span>{opt}</span>
+                )}
+              </button>
+              );
+            })}
           </div>
         )}
         {q.type === 'text' && <textarea value={formData[q.id] as string} onChange={e => handleAnswer(q.id, e.target.value)} placeholder="Tell us more..." className="sc-text-area" rows={4} />}
@@ -119,7 +133,7 @@ const ServiceCancellationTemplate: React.FC<Props> = ({ survey, previewMode = fa
             ))}
           </div>
         )}
-      </motion.div>
+      </div>
     );
   };
 
