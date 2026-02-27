@@ -1,0 +1,8 @@
+{
+  "name": "survey-ai-root",
+  "private": true,
+  "scripts": {
+    "build": "cd project && npm install && npm run build",
+    "install:frontend": "cd project && npm install"
+  }
+}
