@@ -7,39 +7,88 @@ import PublicRoute from './components/PublicRoute';
 import LandingRedirect from './components/LandingRedirect';
 import './styles/mobile-responsive.css';
 
-// Lazy load pages and components
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
-const LoginPage = lazy(() => import('./pages/LoginPage'));
-const SignupPage = lazy(() => import('./pages/SignupPage'));
-const ProfilePage = lazy(() => import('./pages/ProfilePage'));
-const NotFound = lazy(() => import('./pages/NotFound'));
-const Unauthorized = lazy(() => import('./pages/Unauthorized'));
+// Retry wrapper for lazy imports - retries up to 3 times on chunk load failure
+function lazyRetry(importFn: () => Promise<{ default: React.ComponentType<any> }>) {
+  return lazy(() =>
+    importFn().catch((err) => {
+      console.error('[LazyRetry] Chunk load failed, retrying...', err);
+      return new Promise<{ default: React.ComponentType<any> }>((resolve) => {
+        setTimeout(() => resolve(importFn()), 1500);
+      });
+    })
+  );
+}
+
+// Global error boundary for catching chunk load failures
+class AppErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: string }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: '' };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error: error.message || 'Unknown error' };
+  }
+  componentDidCatch(error: Error) {
+    console.error('[AppErrorBoundary]', error);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui, sans-serif', background: '#f9fafb', padding: 24 }}>
+          <div style={{ textAlign: 'center', maxWidth: 400 }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+            <h2 style={{ fontSize: 18, color: '#374151', marginBottom: 8 }}>Page failed to load</h2>
+            <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>{this.state.error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              style={{ padding: '10px 28px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 500 }}
+            >
+              Reload Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// Lazy load pages and components with retry
+const Dashboard = lazyRetry(() => import('./pages/Dashboard'));
+const AdminDashboard = lazyRetry(() => import('./pages/AdminDashboard'));
+const LoginPage = lazyRetry(() => import('./pages/LoginPage'));
+const SignupPage = lazyRetry(() => import('./pages/SignupPage'));
+const ProfilePage = lazyRetry(() => import('./pages/ProfilePage'));
+const NotFound = lazyRetry(() => import('./pages/NotFound'));
+const Unauthorized = lazyRetry(() => import('./pages/Unauthorized'));
 
 // Survey components
-const SurveyEditor = lazy(() => import('./components/SurveyEditor'));
-const PublicSurveyPage = lazy(() => import('./components/PublicSurveyPage'));
-const SurveyPreviewPage = lazy(() => import('./components/SurveyPreviewPage'));
-const SurveyResponsesPage = lazy(() => import('./components/SurveyResponsesPage'));
+const SurveyEditor = lazyRetry(() => import('./components/SurveyEditor'));
+const PublicSurveyPage = lazyRetry(() => import('./components/PublicSurveyPage'));
+const SurveyPreviewPage = lazyRetry(() => import('./components/SurveyPreviewPage'));
+const SurveyResponsesPage = lazyRetry(() => import('./components/SurveyResponsesPage'));
 
 // Widget components
-const WidgetTestPage = lazy(() => import('./components/WidgetTestPage'));
+const WidgetTestPage = lazyRetry(() => import('./components/WidgetTestPage'));
 
 // Import legacy dashboard for backward compatibility
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/Tabs';
-import { PenSquare, FolderOpen, TrendingUp, Link, Sun, Moon, Settings, Lock } from 'lucide-react';
+import { PenSquare, FolderOpen, TrendingUp, Link, Sun, Moon, Settings, Lock, Menu, X } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { FloatingWidgetProvider } from './components/FloatingWidgetProvider';
 import type { WidgetCustomizerSettings } from './components/WidgetCustomizer';
 
-const SurveyForm = lazy(() => import('./components/SurveyForm'));
-const SurveyList = lazy(() => import('./components/SurveyList'));
-const PostbackManager = lazy(() => import('./components/PostbackManager'));
-const ResponseAnalytics = lazy(() => import('./components/ResponseAnalytics'));
-const FloatingWidget = lazy(() => import('./components/FloatingWidget'));
-const WidgetResponsesView = lazy(() => import('./components/WidgetResponsesView'));
-const PassFailAdmin = lazy(() => import('./components/PassFailAdmin'));
+const SurveyForm = lazyRetry(() => import('./components/SurveyForm'));
+const SurveyList = lazyRetry(() => import('./components/SurveyList'));
+const PostbackManager = lazyRetry(() => import('./components/PostbackManager'));
+const ResponseAnalytics = lazyRetry(() => import('./components/ResponseAnalytics'));
+const FloatingWidget = lazyRetry(() => import('./components/FloatingWidget'));
+const WidgetResponsesView = lazyRetry(() => import('./components/WidgetResponsesView'));
+const PassFailAdmin = lazyRetry(() => import('./components/PassFailAdmin'));
 
 // Legacy dashboard component - will be removed after migration
 function LegacyDashboard() {
@@ -49,6 +98,7 @@ function LegacyDashboard() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showPreviewWidget, setShowPreviewWidget] = useState(false);
   const [autoPreviewEnabled, setAutoPreviewEnabled] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
 // State for widget settings
   const [widgetSettings, setWidgetSettings] = useState<WidgetCustomizerSettings | null>(null);
@@ -238,53 +288,30 @@ function LegacyDashboard() {
             </Tabs>
           </div>
 
-          {/* Mobile Tabs - Visible only on mobile */}
-          <div className="md:hidden w-full order-3">
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className={`grid grid-cols-6 rounded-lg p-1 text-xs w-full ${isDarkMode ? 'bg-slate-700/40' : 'bg-stone-100'}`}>
-                {[
-                  { value: 'create', icon: PenSquare, label: 'Create', requiresFeature: 'create' },
-                  { value: 'surveys', icon: FolderOpen, label: 'Surveys', requiresFeature: 'survey' },
-                  { value: 'responses', icon: TrendingUp, label: 'Analytics', requiresFeature: 'analytics' },
-                  { value: 'postback', icon: Link, label: 'Postback', requiresFeature: 'postback' },
-                  { value: 'passfail', icon: Settings, label: 'Pass/Fail', requiresFeature: 'pass_fail' },
-                  { value: 'testlab', icon: () => <span className="text-xs">🧪</span>, label: 'Test Lab', requiresFeature: 'test_lab' }
-                ].map(({ value, icon: Icon, label, requiresFeature }) => {
-                  const hasAccess = hasFeature(requiresFeature);
-                  return (
-                    <TabsTrigger
-                      key={value}
-                      value={value}
-                      className={`flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-md transition-all duration-150 relative ${
-                        !hasAccess
-                          ? 'opacity-50 cursor-not-allowed'
-                          : isDarkMode
-                          ? 'data-[state=active]:bg-red-500 data-[state=active]:text-white text-slate-300 hover:text-white'
-                          : 'data-[state=active]:bg-white data-[state=active]:text-red-600 text-stone-600 hover:text-stone-800'
-                      }`}
-                    >
-                      {!hasAccess ? (
-                        <>
-                          <Lock size={12} className="text-red-500" />
-                          <span className="text-xs leading-none">{label}</span>
-                        </>
-                      ) : (
-                        <>
-                          <Icon size={12} />
-                          <span className="text-xs leading-none">{label}</span>
-                        </>
-                      )}
-                    </TabsTrigger>
-                  );
-                })}
-              </TabsList>
-            </Tabs>
+          {/* Mobile Hamburger - Visible only on mobile */}
+          <div className="flex items-center gap-2 md:hidden">
+            <button
+              onClick={toggleTheme}
+              className={`p-2 rounded-md transition-colors ${
+                isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-yellow-400' : 'bg-stone-100 hover:bg-stone-200 text-stone-600'
+              }`}
+            >
+              {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className={`p-2 rounded-md transition-colors ${
+                isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
+              }`}
+            >
+              <Menu size={20} />
+            </button>
           </div>
 
-          {/* Theme Toggle */}
+          {/* Theme Toggle - Desktop only */}
           <button
             onClick={toggleTheme}
-            className={`p-2 rounded-md transition-colors ${
+            className={`hidden md:block p-2 rounded-md transition-colors ${
               isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-yellow-400' : 'bg-stone-100 hover:bg-stone-200 text-stone-600'
             }`}
           >
@@ -292,6 +319,69 @@ function LegacyDashboard() {
           </button>
         </div>
       </div>
+
+      {/* Mobile Navigation Drawer */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
+          <div
+            className={`absolute top-0 right-0 h-full w-72 shadow-2xl flex flex-col ${
+              isDarkMode ? 'bg-slate-800' : 'bg-white'
+            }`}
+            style={{ animation: 'slideInRight 0.25s ease-out' }}
+          >
+            <div className={`flex items-center justify-between px-5 py-4 border-b ${isDarkMode ? 'border-slate-700' : 'border-stone-200'}`}>
+              <span className={`text-sm font-semibold ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>Navigation</span>
+              <button onClick={() => setMobileMenuOpen(false)} className={`p-1.5 rounded-lg ${isDarkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-stone-100 text-stone-500'}`}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex-1 py-2 overflow-y-auto">
+              {[
+                { value: 'create', icon: PenSquare, label: 'Create', desc: 'Generate AI surveys', requiresFeature: 'create' },
+                { value: 'surveys', icon: FolderOpen, label: 'Surveys', desc: 'Manage your surveys', requiresFeature: 'survey' },
+                { value: 'responses', icon: TrendingUp, label: 'Analytics', desc: 'View responses & data', requiresFeature: 'analytics' },
+                { value: 'postback', icon: Link, label: 'Postback', desc: 'Configure postbacks', requiresFeature: 'postback' },
+                { value: 'passfail', icon: Settings, label: 'Pass/Fail', desc: 'Set evaluation rules', requiresFeature: 'pass_fail' },
+                { value: 'testlab', icon: () => <span className="text-lg">🧪</span>, label: 'Test Lab', desc: 'Widget testing', requiresFeature: 'test_lab' }
+              ].map(({ value, icon: Icon, label, desc, requiresFeature }) => {
+                const hasAccess = hasFeature(requiresFeature);
+                const isActive = activeTab === value;
+                return (
+                  <button
+                    key={value}
+                    onClick={() => { if (hasAccess) { setActiveTab(value); setMobileMenuOpen(false); } }}
+                    disabled={!hasAccess}
+                    className={`w-full flex items-center gap-3 px-5 py-3.5 text-left transition-colors ${
+                      !hasAccess
+                        ? 'opacity-40 cursor-not-allowed'
+                        : isActive
+                          ? isDarkMode ? 'bg-red-500/10 border-r-2 border-red-500' : 'bg-red-50 border-r-2 border-red-500'
+                          : isDarkMode ? 'hover:bg-slate-700/50' : 'hover:bg-stone-50'
+                    }`}
+                  >
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                      isActive
+                        ? 'bg-red-500 text-white'
+                        : isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-stone-100 text-stone-500'
+                    }`}>
+                      {!hasAccess ? <Lock size={16} className="text-red-500" /> : <Icon size={16} />}
+                    </div>
+                    <div>
+                      <p className={`text-sm font-medium ${isActive ? (isDarkMode ? 'text-red-400' : 'text-red-600') : isDarkMode ? 'text-white' : 'text-stone-800'}`}>{label}</p>
+                      <p className={`text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-stone-400'}`}>{desc}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className={`px-5 py-4 border-t text-center ${isDarkMode ? 'border-slate-700' : 'border-stone-200'}`}>
+              <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-stone-400'}`}>PepperAds AI Survey</p>
+            </div>
+          </div>
+          <style>{`@keyframes slideInRight { from { transform: translateX(100%) } to { transform: translateX(0) } }`}</style>
+        </div>
+      )}
 
       {/* Main Content Area */}
       <div className="flex flex-col lg:flex-row max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8 gap-4 sm:gap-6 min-h-screen">
@@ -469,6 +559,7 @@ function WidgetCustomizerPage() {
 
 export default function App() {
   return (
+    <AppErrorBoundary>
     <AuthProvider>
       <Suspense fallback={
         <div className="min-h-screen flex items-center justify-center bg-light-theme">
@@ -565,5 +656,6 @@ export default function App() {
         </Routes>
       </Suspense>
     </AuthProvider>
+    </AppErrorBoundary>
   );
 }

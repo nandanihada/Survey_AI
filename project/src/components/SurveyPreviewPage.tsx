@@ -59,28 +59,28 @@ const SurveyPreviewPage: React.FC = () => {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
-                <ArrowLeft size={16} /> Back
+          <div className="flex items-center justify-between h-14 sm:h-16 gap-2">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+              <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-gray-600 hover:text-gray-900 transition-colors flex-shrink-0">
+                <ArrowLeft size={16} /> <span className="hidden sm:inline">Back</span>
               </button>
-              <div className="w-px h-6 bg-gray-300" />
-              <h1 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                <Eye size={20} /> Preview: {survey.title || 'Survey'}
+              <div className="w-px h-5 bg-gray-300 hidden sm:block" />
+              <h1 className="text-sm sm:text-xl font-semibold text-gray-900 flex items-center gap-1.5 sm:gap-2 truncate">
+                <Eye size={16} className="flex-shrink-0" /> <span className="truncate">Preview: {survey.title || 'Survey'}</span>
               </h1>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
               <button
                 onClick={() => navigate(`/dashboard/edit/${id}`)}
-                className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
-                <Edit3 size={14} /> Edit
+                <Edit3 size={13} /> <span className="hidden sm:inline">Edit</span>
               </button>
               <button
                 onClick={() => navigate(`/dashboard/responses/${id}`)}
-                className="flex items-center gap-2 px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                className="flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
               >
-                <BarChart3 size={14} /> Responses
+                <BarChart3 size={13} /> <span className="hidden sm:inline">Responses</span>
               </button>
             </div>
           </div>

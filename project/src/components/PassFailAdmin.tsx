@@ -390,10 +390,10 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
   ];
 
   return (
-    <div className={`p-6 rounded-lg border ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-stone-200'}`}>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
-          <Settings className="inline mr-2" size={20} />
+    <div className={`p-4 sm:p-6 rounded-lg border ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-stone-200'}`}>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
+        <h2 className={`text-lg sm:text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
+          <Settings className="inline mr-2" size={18} />
           Pass/Fail Configuration
         </h2>
         <button
@@ -402,7 +402,7 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
             setEditingCriteriaSet(null);
             resetCriteriaForm();
           }}
-          className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${
+          className={`px-3 sm:px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm ${
             isDarkMode 
               ? 'bg-red-500 hover:bg-red-600 text-white' 
               : 'bg-red-500 hover:bg-red-600 text-white'

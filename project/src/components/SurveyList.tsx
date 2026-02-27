@@ -103,30 +103,30 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false }) => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <FolderOpen className={isDarkMode ? 'text-blue-400' : 'text-blue-600'} size={20} />
-          <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
+          <h2 className={`text-lg sm:text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
             Your Surveys
           </h2>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
           <div className="flex items-center gap-2">
-            <div className="relative">
+            <div className="relative flex-1 sm:flex-initial">
               <Search size={16} className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-stone-400'}`} />
               <input
                 type="text"
                 placeholder="Search surveys..."
-                className={`${inputBase} ${isDarkMode ? 'bg-slate-700/50 border-slate-600 text-white placeholder-slate-400' : 'bg-stone-50 border-stone-300 placeholder-stone-500'}`}
+                className={`w-full ${inputBase} ${isDarkMode ? 'bg-slate-700/50 border-slate-600 text-white placeholder-slate-400' : 'bg-stone-50 border-stone-300 placeholder-stone-500'}`}
               />
             </div>
-            <button className={`p-2 border rounded-lg transition-colors ${isDarkMode ? 'border-slate-600 hover:bg-slate-700 text-slate-300' : 'border-stone-300 hover:bg-stone-50 text-stone-600'}`}>
+            <button className={`p-2 border rounded-lg transition-colors flex-shrink-0 ${isDarkMode ? 'border-slate-600 hover:bg-slate-700 text-slate-300' : 'border-stone-300 hover:bg-stone-50 text-stone-600'}`}>
               <Filter size={16} />
             </button>
           </div>
-          <button className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center gap-2">
+          <button className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2">
             <Plus size={16} />
-            Create New Survey
+            <span className="sm:inline">Create New</span>
           </button>
         </div>
       </div>
@@ -159,12 +159,17 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false }) => {
                 key={survey.id}
                 className={`${cardBase} ${isDarkMode ? 'bg-slate-800/50 border-slate-700 hover:border-slate-600' : 'bg-white border-stone-200 hover:border-stone-300'}`}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <h3 className={`text-base font-medium mb-2 ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
-                      {survey.title || 'Untitled Survey'}
-                    </h3>
-                    <div className={`flex items-center flex-wrap gap-4 text-sm ${isDarkMode ? 'text-slate-400' : 'text-stone-500'}`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <h3 className={`text-sm sm:text-base font-medium truncate ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
+                        {survey.title || 'Untitled Survey'}
+                      </h3>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium flex-shrink-0 ${statusBadge(getStatus(survey))}`}>
+                        {getStatus(survey)}
+                      </span>
+                    </div>
+                    <div className={`flex items-center flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-stone-500'}`}>
                       <span className="flex items-center gap-1">
                         <Calendar size={12} />
                         {survey.created_at ? formatDate(survey.created_at) : 'Unknown'}
@@ -173,16 +178,13 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false }) => {
                         <Users size={12} />
                         {getResponseCount()} responses
                       </span>
-                      <span className={`px-2 py-1 rounded-full text-xs ${isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-stone-100 text-stone-600'}`}>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] sm:text-xs ${isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-stone-100 text-stone-600'}`}>
                         {survey.template_type || 'Unknown'}
                       </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 ml-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusBadge(getStatus(survey))}`}>
-                      {getStatus(survey)}
-                    </span>
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     <button
                       onClick={() => navigate(`/dashboard/edit/${survey.id}`)}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${

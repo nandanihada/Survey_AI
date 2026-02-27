@@ -329,39 +329,39 @@ const SurveyEditor: React.FC = () => {
     <div className="min-h-screen bg-white flex flex-col">
       {/* ── Top Bar ── */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-30 shrink-0">
-        <div className="px-4 sm:px-6 flex items-center justify-between h-14">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-gray-500 hover:text-gray-900 text-sm transition-colors">
-              <ArrowLeft size={16} /> Back
+        <div className="px-3 sm:px-6 flex items-center justify-between h-12 sm:h-14 gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-gray-500 hover:text-gray-900 text-xs sm:text-sm transition-colors flex-shrink-0">
+              <ArrowLeft size={14} /> <span className="hidden sm:inline">Back</span>
             </button>
-            <span className="text-gray-300">|</span>
+            <span className="text-gray-300 hidden sm:inline">|</span>
             <input
               type="text"
               value={survey.title || ''}
               onChange={(e) => setSurvey({ ...survey, title: e.target.value })}
-              className="text-sm font-semibold text-gray-900 bg-transparent border-none outline-none max-w-[220px] hover:bg-gray-50 focus:bg-gray-50 rounded px-2 py-1 transition-colors"
+              className="text-xs sm:text-sm font-semibold text-gray-900 bg-transparent border-none outline-none min-w-0 flex-1 max-w-[140px] sm:max-w-[220px] hover:bg-gray-50 focus:bg-gray-50 rounded px-1 sm:px-2 py-1 transition-colors"
               placeholder="Untitled Survey"
             />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
             <button
               onClick={() => setShowSettings(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-1 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              <Settings size={13} /> Settings
+              <Settings size={12} /> <span className="hidden sm:inline">Settings</span>
             </button>
             <button
               onClick={() => { setShareLinkRevealed(false); setShowSharePopup(true); setTimeout(() => setShareLinkRevealed(true), 1800); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-1 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              <Share2 size={13} /> Share
+              <Share2 size={12} /> <span className="hidden sm:inline">Share</span>
             </button>
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:bg-gray-400 transition-colors text-xs font-medium"
+              className="flex items-center gap-1 px-2.5 sm:px-4 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:bg-gray-400 transition-colors text-[10px] sm:text-xs font-medium"
             >
-              <Save size={13} /> {isSaving ? 'Saving...' : 'Save'}
+              <Save size={12} /> {isSaving ? '...' : 'Save'}
             </button>
           </div>
         </div>
@@ -672,10 +672,10 @@ const SurveyEditor: React.FC = () => {
       )}
 
       {/* ── Main 3-Panel Layout ── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
 
         {/* ── Left Panel: Question List ── */}
-        <div className="w-64 bg-white border-r border-gray-200 flex flex-col shrink-0">
+        <div className="w-full md:w-64 bg-white border-b md:border-b-0 md:border-r border-gray-200 flex flex-col shrink-0 max-h-[35vh] md:max-h-none">
           <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Questions</span>
             <button
@@ -685,14 +685,14 @@ const SurveyEditor: React.FC = () => {
               <Plus size={12} /> Add
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto py-1">
+          <div className="flex-1 overflow-y-auto py-1 flex md:flex-col flex-row md:overflow-x-hidden overflow-x-auto">
             {(survey.questions || []).map((q, index) => {
               const qTypeIcon = QUESTION_TYPES.find(t => t.value === q.type)?.icon || '✎';
               return (
                 <button
                   key={q.id || index}
                   onClick={() => setActiveQuestionIndex(index)}
-                  className={`w-full text-left px-4 py-3 flex items-start gap-3 transition-colors border-l-3 ${
+                  className={`text-left px-3 md:px-4 py-2.5 md:py-3 flex items-start gap-2 md:gap-3 transition-colors border-l-3 min-w-[120px] md:min-w-0 flex-shrink-0 md:flex-shrink md:w-full ${
                     index === activeQuestionIndex
                       ? 'bg-red-50 border-l-[3px] border-l-red-500'
                       : 'border-l-[3px] border-l-transparent hover:bg-gray-50'
@@ -941,15 +941,15 @@ const SurveyEditor: React.FC = () => {
 
         {/* ── Right Panel: Question Settings ── */}
         {activeQ && (
-          <div className="w-72 bg-white border-l border-gray-200 flex flex-col shrink-0 overflow-y-auto">
-            <div className="px-5 py-4 border-b border-gray-100">
+          <div className="w-full md:w-72 bg-white border-t md:border-t-0 md:border-l border-gray-200 flex flex-col shrink-0 overflow-y-auto max-h-[40vh] md:max-h-none">
+            <div className="px-4 md:px-5 py-3 md:py-4 border-b border-gray-100">
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Question Settings</h3>
             </div>
-            <div className="px-5 py-4 space-y-5 flex-1">
+            <div className="px-4 md:px-5 py-3 md:py-4 space-y-4 md:space-y-5 flex-1">
               {/* Question Type */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-2">Type</label>
-                <div className="space-y-1.5">
+                <div className="grid grid-cols-2 md:grid-cols-1 gap-1.5">
                   {QUESTION_TYPES.map(t => (
                     <button
                       key={t.value}
@@ -1012,7 +1012,7 @@ const SurveyEditor: React.FC = () => {
 
       {/* ── Save Status Toast ── */}
       {saveStatus !== 'idle' && (
-        <div className={`fixed bottom-4 right-4 px-4 py-2.5 rounded-lg shadow-lg z-50 flex items-center gap-2 text-sm ${
+        <div className={`fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:w-auto px-4 py-2.5 rounded-lg shadow-lg z-50 flex items-center justify-center sm:justify-start gap-2 text-sm ${
           saveStatus === 'saved' ? 'bg-green-500 text-white' : saveStatus === 'error' ? 'bg-red-500 text-white' : 'bg-blue-500 text-white'
         }`}>
           {saveStatus === 'saving' && <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />}

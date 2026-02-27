@@ -125,16 +125,16 @@ const ResponseAnalytics: React.FC<ResponseAnalyticsProps> = ({ isDarkMode = fals
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <h2 className={`text-2xl font-bold flex items-center gap-2 ${base.text}`}>
-          <TrendingUp size={24} className="text-red-600" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <h2 className={`text-xl sm:text-2xl font-bold flex items-center gap-2 ${base.text}`}>
+          <TrendingUp size={20} className="text-red-600" />
           Response Analytics
         </h2>
       </div>
 
       {/* Survey Selection */}
-      <div className={`${base.card} rounded-2xl p-6 shadow-lg border ${base.border}`}>
-        <div className="flex flex-col md:flex-row gap-4 items-end">
+      <div className={`${base.card} rounded-2xl p-4 sm:p-6 shadow-lg border ${base.border}`}>
+        <div className="flex flex-col gap-3">
           <div className="flex-1">
             <label className={`block text-sm font-medium mb-2 ${base.label}`}>
               Select Survey
@@ -142,7 +142,7 @@ const ResponseAnalytics: React.FC<ResponseAnalyticsProps> = ({ isDarkMode = fals
             <select
               value={selectedSurvey}
               onChange={(e) => setSelectedSurvey(e.target.value)}
-              className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 ${base.select} ${base.border}`}
+              className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 border rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 ${base.select} ${base.border}`}
             >
               <option value="">Choose a survey...</option>
               {surveys.map((survey) => (
@@ -155,7 +155,7 @@ const ResponseAnalytics: React.FC<ResponseAnalyticsProps> = ({ isDarkMode = fals
           <button
             onClick={handleGenerateInsights}
             disabled={loading || !selectedSurvey}
-            className="px-6 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white font-semibold rounded-xl transition-colors flex items-center gap-2"
+            className="w-full sm:w-auto px-6 py-2.5 sm:py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
           >
             {loading ? (
               <>
@@ -179,7 +179,7 @@ const ResponseAnalytics: React.FC<ResponseAnalyticsProps> = ({ isDarkMode = fals
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
         {[
           {
             title: 'Total Responses',
@@ -202,12 +202,12 @@ const ResponseAnalytics: React.FC<ResponseAnalyticsProps> = ({ isDarkMode = fals
         ].map((stat, i) => (
           <div
             key={i}
-            className={`${base.card} rounded-2xl p-6 shadow-lg border ${base.border}`}
+            className={`${base.card} rounded-2xl p-4 sm:p-6 shadow-lg border ${base.border}`}
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className={`text-sm font-medium ${base.sub}`}>{stat.title}</p>
-                <p className={`text-3xl font-bold ${base.text}`}>{stat.value}</p>
+                <p className={`text-xs sm:text-sm font-medium ${base.sub}`}>{stat.title}</p>
+                <p className={`text-2xl sm:text-3xl font-bold ${base.text}`}>{stat.value}</p>
               </div>
               <div className={`p-3 rounded-xl ${stat.iconBg}`}>{stat.icon}</div>
             </div>
@@ -216,11 +216,11 @@ const ResponseAnalytics: React.FC<ResponseAnalyticsProps> = ({ isDarkMode = fals
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Pie Chart */}
-        <div className={`${base.card} rounded-2xl p-6 shadow-lg border ${base.border}`}>
-          <h3 className={`text-lg font-semibold mb-4 ${base.text}`}>Response Distribution</h3>
-          <ResponsiveContainer width="100%" height={300}>
+        <div className={`${base.card} rounded-2xl p-4 sm:p-6 shadow-lg border ${base.border}`}>
+          <h3 className={`text-base sm:text-lg font-semibold mb-4 ${base.text}`}>Response Distribution</h3>
+          <ResponsiveContainer width="100%" height={250}>
             <PieChart>
               <Pie
                 data={sampleResponseData}
@@ -241,9 +241,9 @@ const ResponseAnalytics: React.FC<ResponseAnalyticsProps> = ({ isDarkMode = fals
         </div>
 
         {/* Bar Chart */}
-        <div className={`${base.card} rounded-2xl p-6 shadow-lg border ${base.border}`}>
-          <h3 className={`text-lg font-semibold mb-4 ${base.text}`}>Responses by Question</h3>
-          <ResponsiveContainer width="100%" height={300}>
+        <div className={`${base.card} rounded-2xl p-4 sm:p-6 shadow-lg border ${base.border}`}>
+          <h3 className={`text-base sm:text-lg font-semibold mb-4 ${base.text}`}>Responses by Question</h3>
+          <ResponsiveContainer width="100%" height={250}>
             <BarChart data={sampleBarData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="question" stroke={isDarkMode ? '#ccc' : '#000'} />

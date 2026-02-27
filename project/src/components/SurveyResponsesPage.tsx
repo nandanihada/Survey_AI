@@ -64,35 +64,36 @@ const SurveyResponsesPage: React.FC = () => {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
-                <ArrowLeft size={16} /> Back
+          <div className="flex items-center justify-between h-14 sm:h-16 gap-2">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+              <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-gray-600 hover:text-gray-900 transition-colors flex-shrink-0">
+                <ArrowLeft size={16} /> <span className="hidden sm:inline">Back</span>
               </button>
-              <div className="w-px h-6 bg-gray-300" />
-              <h1 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                <BarChart3 size={20} />
-                {survey.title || 'Survey'} — Responses
+              <div className="w-px h-5 bg-gray-300 hidden sm:block" />
+              <h1 className="text-sm sm:text-xl font-semibold text-gray-900 flex items-center gap-1.5 sm:gap-2 truncate">
+                <BarChart3 size={16} className="flex-shrink-0" />
+                <span className="truncate">{survey.title || 'Survey'} — Responses</span>
               </h1>
             </div>
             <button
               onClick={() => navigate(`/dashboard/edit/${id}`)}
-              className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex-shrink-0"
             >
-              Edit Survey
+              <span className="hidden sm:inline">Edit Survey</span>
+              <span className="sm:hidden">Edit</span>
             </button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
         {/* Tabs */}
-        <div className="flex items-center gap-2 mb-6">
+        <div className="flex items-center gap-1.5 sm:gap-2 mb-4 sm:mb-6 overflow-x-auto">
           {tabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
                 activeTab === tab.key
                   ? 'bg-red-500 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'

@@ -11,10 +11,82 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="theme-color" content="#d90429">
     <meta name="description" content="AI-powered survey generation platform with advanced customization">
-    <title>Test</title>
+    <title>PepperAds Survey</title>
+    <style>
+      /* Inline fallback styles so something shows even if CSS/JS fails */
+      #root:empty::after {
+        content: '';
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      #app-loader {
+        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+        background: #f9fafb; font-family: system-ui, -apple-system, sans-serif; z-index: 9999;
+      }
+      #app-loader .spinner {
+        width: 28px; height: 28px; border: 3px solid #e5e7eb; border-top-color: #ef4444;
+        border-radius: 50%; animation: app-spin 0.7s linear infinite;
+      }
+      #app-loader p { margin-top: 12px; font-size: 13px; color: #6b7280; }
+      @keyframes app-spin { to { transform: rotate(360deg); } }
+      #app-error { display: none; position: fixed; inset: 0; align-items: center; justify-content: center;
+        background: #f9fafb; font-family: system-ui, sans-serif; z-index: 10000; text-align: center; padding: 32px; }
+      #app-error h2 { font-size: 18px; color: #374151; margin-bottom: 8px; }
+      #app-error p { font-size: 14px; color: #6b7280; margin-bottom: 16px; }
+      #app-error button { padding: 8px 24px; background: #ef4444; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="app-loader">
+        <div style="text-align:center">
+          <div class="spinner"></div>
+          <p>Loading...</p>
+        </div>
+      </div>
+    </div>
+    <div id="app-error">
+      <div>
+        <h2>Something went wrong</h2>
+        <p id="app-error-msg">The page failed to load. Please try again.</p>
+        <button onclick="window.location.reload()">Reload Page</button>
+      </div>
+    </div>
+    <script>
+      // Global error handler - catches chunk load failures and other JS errors
+      window.addEventListener('error', function(e) {
+        // Check if it's a script loading error (chunk failed)
+        if (e.target && e.target.tagName === 'SCRIPT') {
+          console.error('[App] Script failed to load:', e.target.src);
+          document.getElementById('app-loader').style.display = 'none';
+          document.getElementById('app-error').style.display = 'flex';
+          document.getElementById('app-error-msg').textContent = 'A required file failed to load. Please reload the page.';
+        }
+      }, true);
+      window.addEventListener('unhandledrejection', function(e) {
+        console.error('[App] Unhandled rejection:', e.reason);
+        if (e.reason && e.reason.message && e.reason.message.includes('Loading chunk')) {
+          document.getElementById('app-loader').style.display = 'none';
+          document.getElementById('app-error').style.display = 'flex';
+          document.getElementById('app-error-msg').textContent = 'Failed to load page resources. Please reload.';
+        }
+      });
+      // Safety timeout - if React hasn't mounted after 15s, show error
+      setTimeout(function() {
+        var loader = document.getElementById('app-loader');
+        if (loader && loader.parentNode) {
+          // Check if React has mounted (loader would be removed)
+          if (document.getElementById('app-loader')) {
+            console.warn('[App] React did not mount within 15 seconds');
+            document.getElementById('app-error').style.display = 'flex';
+            loader.style.display = 'none';
+          }
+        }
+      }, 15000);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

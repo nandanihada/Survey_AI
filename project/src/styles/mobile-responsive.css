@@ -4,11 +4,12 @@
 @media (max-width: 768px) {
   .min-h-screen {
     min-height: 100vh;
+    min-height: 100dvh;
   }
   
   /* Improved touch targets */
-  button, .button {
-    min-height: 44px;
+  button, .button, [role="button"] {
+    min-height: 40px;
     touch-action: manipulation;
   }
   
@@ -31,6 +32,10 @@
   
   .space-y-4 > * + * {
     margin-top: 0.75rem;
+  }
+
+  .space-y-8 > * + * {
+    margin-top: 1.25rem;
   }
   
   /* Tab improvements */
@@ -57,6 +62,29 @@
     right: 0;
     position: fixed;
     z-index: 50;
+  }
+
+  /* Table overflow handling */
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Fix modals on mobile */
+  .fixed.inset-0 {
+    padding: 0;
+  }
+
+  /* Prevent horizontal overflow */
+  body {
+    overflow-x: hidden;
+  }
+
+  /* Better text wrapping */
+  h1, h2, h3, h4, p, span, label {
+    word-break: break-word;
+    overflow-wrap: break-word;
   }
 }
 
@@ -145,6 +173,15 @@
   .mobile-dark-border {
     border-color: #334155;
   }
+}
+
+/* Dark/Light theme base classes */
+.bg-dark-theme {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+}
+
+.bg-light-theme {
+  background: linear-gradient(135deg, #fafaf9 0%, #f5f5f4 100%);
 }
 
 /* Accessibility improvements */

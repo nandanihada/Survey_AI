@@ -100,12 +100,13 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onSwitchToRegister }) 
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-600">
             Don't have an account?{' '}
-            <a
-              href="/signup"
+            <button
+              type="button"
+              onClick={onSwitchToRegister}
               className="text-red-600 hover:text-red-500 font-medium"
             >
               Create Account with Postback Setup
-            </a>
+            </button>
           </p>
         </div>
       </div>

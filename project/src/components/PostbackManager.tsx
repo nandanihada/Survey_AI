@@ -107,59 +107,60 @@ const PostbackManager: React.FC<PostbackManagerProps> = ({ isDarkMode = false })
   const [activeTab, setActiveTab] = useState<'sender' | 'receiver' | 'logs' | 'testing'>('sender');
 
   return (
-    <div className={`p-6 rounded-2xl shadow-lg border ${
+    <div className={`p-4 sm:p-6 rounded-2xl shadow-lg border ${
       isDarkMode 
         ? 'bg-slate-800 border-slate-700' 
         : 'bg-white border-red-100'
     }`}>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className={`text-2xl font-bold flex items-center gap-2 ${
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
+        <h2 className={`text-lg sm:text-2xl font-bold flex items-center gap-2 ${
           isDarkMode ? 'text-white' : 'text-gray-900'
         }`}>
-          <Link size={24} className="text-red-600" />
-          <span className="text-2xl">🌶️</span>
-          Postback & Webhook Integrations
+          <Link size={20} className="text-red-600" />
+          <span className="text-lg sm:text-2xl">🌶️</span>
+          <span className="hidden sm:inline">Postback & Webhook Integrations</span>
+          <span className="sm:hidden">Postbacks</span>
         </h2>
-        <div className={`flex rounded-lg p-1 text-xs ${isDarkMode ? 'bg-slate-700/40' : 'bg-stone-100'}`}>
+        <div className={`flex rounded-lg p-1 text-[10px] sm:text-xs overflow-x-auto ${isDarkMode ? 'bg-slate-700/40' : 'bg-stone-100'}`}>
           <button 
             onClick={() => setActiveTab('sender')}
-            className={`px-4 py-2 rounded-md transition-colors flex items-center gap-2 ${
+            className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md transition-colors flex items-center gap-1 sm:gap-2 whitespace-nowrap flex-shrink-0 ${
               activeTab === 'sender' 
                 ? (isDarkMode ? 'bg-red-500 text-white' : 'bg-white text-red-600 shadow-sm') 
                 : (isDarkMode ? 'text-slate-300 hover:text-white' : 'text-stone-600 hover:text-stone-800')
             }`}
           >
-            <Send size={14} /> Outbound (Sender)
+            <Send size={12} /> <span className="hidden sm:inline">Outbound</span><span className="sm:hidden">Out</span>
           </button>
           <button 
             onClick={() => setActiveTab('receiver')}
-            className={`px-4 py-2 rounded-md transition-colors flex items-center gap-2 ${
+            className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md transition-colors flex items-center gap-1 sm:gap-2 whitespace-nowrap flex-shrink-0 ${
               activeTab === 'receiver' 
                 ? (isDarkMode ? 'bg-red-500 text-white' : 'bg-white text-red-600 shadow-sm') 
                 : (isDarkMode ? 'text-slate-300 hover:text-white' : 'text-stone-600 hover:text-stone-800')
             }`}
           >
-           <Eye size={14} /> Inbound (Receiver)
+           <Eye size={12} /> <span className="hidden sm:inline">Inbound</span><span className="sm:hidden">In</span>
           </button>
            <button 
             onClick={() => setActiveTab('logs')}
-            className={`px-4 py-2 rounded-md transition-colors flex items-center gap-2 ${
+            className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md transition-colors flex items-center gap-1 sm:gap-2 whitespace-nowrap flex-shrink-0 ${
               activeTab === 'logs' 
                 ? (isDarkMode ? 'bg-red-500 text-white' : 'bg-white text-red-600 shadow-sm') 
                 : (isDarkMode ? 'text-slate-300 hover:text-white' : 'text-stone-600 hover:text-stone-800')
             }`}
           >
-           <Activity size={14} /> Logs
+           <Activity size={12} /> Logs
           </button>
           <button 
             onClick={() => setActiveTab('testing')}
-            className={`px-4 py-2 rounded-md transition-colors flex items-center gap-2 ${
+            className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md transition-colors flex items-center gap-1 sm:gap-2 whitespace-nowrap flex-shrink-0 ${
               activeTab === 'testing' 
                 ? (isDarkMode ? 'bg-red-500 text-white' : 'bg-white text-red-600 shadow-sm') 
                 : (isDarkMode ? 'text-slate-300 hover:text-white' : 'text-stone-600 hover:text-stone-800')
             }`}
           >
-           <TestTube size={14} /> Testing
+           <TestTube size={12} /> <span className="hidden sm:inline">Testing</span><span className="sm:hidden">Test</span>
           </button>
         </div>
       </div>
