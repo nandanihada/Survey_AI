@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "build": "cd project && npm install && npm run build",
+    "start": "cd project && node server.cjs",
     "install:frontend": "cd project && npm install"
   }
 }
