@@ -128,34 +128,40 @@ print("Initializing MongoDB...")
 from mongodb_config import db
 print("✅ MongoDB initialized successfully")
 
-# AI API Configuration (OpenRouter)
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "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")
-print(f"Using OpenRouter API Key: {OPENROUTER_API_KEY[:20]}...")
+# AI API Configuration (OpenAI)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+if OPENAI_API_KEY:
+    print(f"Using OpenAI API Key: {OPENAI_API_KEY[:12]}...")
+else:
+    print("⚠️ WARNING: OPENAI_API_KEY not set! Survey generation will fail.")
 
 def generate_ai_content(prompt_text, temperature=0.7, max_tokens=1024):
-    """Generate content using OpenRouter API"""
+    """Generate content using OpenAI API"""
+    if not OPENAI_API_KEY:
+        raise ValueError("OpenAI API key is not configured. Set OPENAI_API_KEY in environment variables.")
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
         "Content-Type": "application/json",
     }
     payload = {
-        "model": "google/gemini-2.0-flash-001",
+        "model": "gpt-4o-mini",
         "messages": [{"role": "user", "content": prompt_text}],
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
-    resp = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=60)
+    resp = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=60)
     if resp.status_code == 401:
-        raise ValueError("AI API key is invalid or expired. Please update your OpenRouter API key.")
-    if resp.status_code == 402:
-        raise ValueError("AI API credits exhausted. Please add credits to your OpenRouter account.")
+        raise ValueError("OpenAI API key is invalid or expired. Please update your OPENAI_API_KEY.")
+    if resp.status_code == 402 or resp.status_code == 400:
+        error_msg = resp.json().get("error", {}).get("message", "Unknown error")
+        raise ValueError(f"OpenAI API error: {error_msg}")
     if resp.status_code == 429:
-        raise ValueError("AI API rate limit reached. Please try again in a few minutes.")
+        raise ValueError("OpenAI API rate limit reached. Please try again in a few minutes.")
     resp.raise_for_status()
     data = resp.json()
     return data["choices"][0]["message"]["content"]
 
-print("✅ OpenRouter API configured successfully")
+print("✅ OpenAI API configured successfully")
 
 # Import blueprints after MongoDB is initialized
 try:
@@ -448,13 +454,13 @@ def parse_image():
         if not image_data:
             return jsonify({"error": "No image data provided"}), 400
         
-        # Use OpenRouter with vision model to extract text from image
+        # Use OpenAI with vision model to extract text from image
         headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
             "Content-Type": "application/json",
         }
         payload = {
-            "model": "google/gemini-2.0-flash-001",
+            "model": "gpt-4o-mini",
             "messages": [{
                 "role": "user",
                 "content": [
@@ -464,7 +470,7 @@ def parse_image():
             }],
             "max_tokens": 2048,
         }
-        resp = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=60)
+        resp = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=60)
         resp.raise_for_status()
         result = resp.json()
         extracted_text = result["choices"][0]["message"]["content"]
@@ -739,7 +745,7 @@ def generate_survey():
             try:
                 print(f"Attempt {attempt + 1} for template: {template_type}")
                 
-                # Generate content via OpenRouter
+                # Generate content via OpenAI
                 raw_response = generate_ai_content(ai_prompt, temperature=0.7, max_tokens=1024)
 
                 if not raw_response:
@@ -767,7 +773,7 @@ def generate_survey():
                 error_str = str(retry_error).lower()
                 if "invalid or expired" in error_str or "401" in str(retry_error):
                     return jsonify({
-                        "error": "AI API key is invalid or expired. Please contact the administrator to update the OpenRouter API key.",
+                        "error": "AI API key is invalid or expired. Please contact the administrator to update the OpenAI API key.",
                         "error_type": "auth_error"
                     }), 503
                 
