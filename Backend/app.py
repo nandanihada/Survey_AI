@@ -87,6 +87,7 @@ CORS(app,
          "https://hostsliceresponse.web.app",
          "https://theinterwebsite.space",
          "https://dashboard-pepperads.onrender.com",
+         "https://pepper-dash.onrender.com",
          "http://localhost:3000",         # Dashboard frontend
          "https://pepperads.in"           # Main site
      ],
@@ -112,6 +113,7 @@ def add_cors_headers(response):
         "https://hostsliceresponse.web.app",
         "https://theinterwebsite.space",
         "https://dashboard-pepperads.onrender.com",
+        "https://pepper-dash.onrender.com",
         "http://localhost:3000",
         "https://pepperads.in"
     ]
@@ -432,7 +434,8 @@ def validate_color(color):
         "https://pepperadsresponses.web.app",
         "https://hostsliceresponse.web.app",
         "https://theinterwebsite.space",
-        "https://dashboard-pepperads.onrender.com"
+        "https://dashboard-pepperads.onrender.com",
+        "https://pepper-dash.onrender.com"
     ],
     allow_headers=["Content-Type", "Authorization", "Access-Control-Allow-Origin"],
     methods=["POST", "OPTIONS"]
@@ -491,7 +494,8 @@ def parse_image():
         "https://pepperadsresponses.web.app",
         "https://hostsliceresponse.web.app",
         "https://theinterwebsite.space",
-        "https://dashboard-pepperads.onrender.com"
+        "https://dashboard-pepperads.onrender.com",
+        "https://pepper-dash.onrender.com"
     ],
     allow_headers=["Content-Type", "Authorization", "Access-Control-Allow-Origin"],
     methods=["GET", "POST", "OPTIONS"]
@@ -803,7 +807,7 @@ def generate_survey():
         if "localhost" in request.host or "127.0.0.1" in request.host:
             FRONTEND_URL = "http://localhost:5173"
         else:
-            FRONTEND_URL = "https://dashboard-pepperads.onrender.com"
+            FRONTEND_URL = "https://pepper-dash.onrender.com"
         # Create and save survey document
         try:
             print(f"DEBUG: About to create survey with db object: {db}")
@@ -929,7 +933,8 @@ def generate_survey():
         "https://pepperadsresponses.web.app",
         "https://hostsliceresponse.web.app",
         "https://theinterwebsite.space",
-        "https://dashboard-pepperads.onrender.com"
+        "https://dashboard-pepperads.onrender.com",
+        "https://pepper-dash.onrender.com"
     ],
     allow_headers=["Content-Type", "Authorization"],
     methods=["POST", "OPTIONS"]
