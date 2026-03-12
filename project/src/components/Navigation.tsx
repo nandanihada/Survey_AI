@@ -20,7 +20,7 @@ export default function Navigation({ isDarkMode = false }: NavigationProps) {
     },
     {
       name: 'My Surveys',
-      href: '/surveys',
+      href: '/dashboard/create?tab=surveys',
       icon: BarChart3,
       requiresFeature: 'survey'
     },

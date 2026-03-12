@@ -8,7 +8,8 @@ import {
   Calendar,
   Users,
   BarChart3,
-  Edit
+  Edit,
+  Eye
 } from 'lucide-react';
 
 interface SurveyListProps {
@@ -73,6 +74,86 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false }) => {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
+  };
+
+  const generateShortTitle = (title: string): string => {
+    if (!title) return 'Untitled Survey';
+    
+    const titleLower = title.toLowerCase();
+    
+    // Common survey patterns and their short versions
+    const patterns = [
+      {
+        match: ['customer satisfaction', 'customer feedback', 'client satisfaction'],
+        short: 'Customer Satisfaction'
+      },
+      {
+        match: ['employee feedback', 'employee satisfaction', 'staff feedback'],
+        short: 'Employee Feedback'
+      },
+      {
+        match: ['product feedback', 'product review', 'product satisfaction'],
+        short: 'Product Feedback'
+      },
+      {
+        match: ['user experience', 'ux feedback', 'usability survey'],
+        short: 'User Experience'
+      },
+      {
+        match: ['onboarding', 'new user', 'first time'],
+        short: 'Onboarding Survey'
+      },
+      {
+        match: ['training feedback', 'course evaluation', 'workshop feedback'],
+        short: 'Training Feedback'
+      },
+      {
+        match: ['event feedback', 'conference feedback', 'meeting feedback'],
+        short: 'Event Feedback'
+      },
+      {
+        match: ['market research', 'market survey', 'opinion research'],
+        short: 'Market Research'
+      },
+      {
+        match: ['website feedback', 'site experience', 'digital experience'],
+        short: 'Website Feedback'
+      }
+    ];
+    
+    // Check for pattern matches
+    for (const pattern of patterns) {
+      for (const match of pattern.match) {
+        if (titleLower.includes(match)) {
+          return pattern.short;
+        }
+      }
+    }
+    
+    // Fallback: Extract key words and create short title
+    const words = title.split(/\s+/).filter(word => word.length > 2);
+    const keyWords = ['survey', 'feedback', 'review', 'assessment', 'evaluation', 'experience', 'satisfaction', 'onboarding', 'training', 'product', 'customer', 'employee'];
+    
+    let importantWords = words.filter(word => 
+      keyWords.some(keyword => word.toLowerCase().includes(keyword))
+    );
+    
+    // Take first 2-3 important words
+    if (importantWords.length >= 2) {
+      return importantWords.slice(0, 3).map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+      ).join(' ');
+    }
+    
+    // Last resort: First few words
+    if (words.length >= 2) {
+      return words.slice(0, 2).map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+      ).join(' ');
+    }
+    
+    // Single word fallback
+    return words[0] ? words[0].charAt(0).toUpperCase() + words[0].slice(1).toLowerCase() : 'Survey';
   };
 
   const getResponseCount = () => {
@@ -162,8 +243,8 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false }) => {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <h3 className={`text-sm sm:text-base font-medium truncate ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
-                        {survey.title || 'Untitled Survey'}
+                      <h3 className={`text-sm sm:text-base font-medium truncate ${isDarkMode ? 'text-white' : 'text-stone-800'}`} title={survey.title || 'Untitled Survey'}>
+                        {generateShortTitle(survey.title || 'Untitled Survey')}
                       </h3>
                       <span className={`px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium flex-shrink-0 ${statusBadge(getStatus(survey))}`}>
                         {getStatus(survey)}
@@ -196,6 +277,21 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false }) => {
                     >
                       <Edit size={13} />
                       Edit
+                    </button>
+                    <button
+                      onClick={() => {
+                        const liveLink = `${window.location.origin}/survey?offer_id=${survey.id}`;
+                        window.open(liveLink, '_blank');
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        isDarkMode
+                          ? 'bg-purple-500/10 text-purple-400 hover:bg-purple-500/20'
+                          : 'bg-purple-50 text-purple-600 hover:bg-purple-100'
+                      }`}
+                      title="Open Live Survey Link"
+                    >
+                      <Eye size={13} />
+                      Open / Live Link
                     </button>
                     <button
                       onClick={() => navigate(`/dashboard/responses/${survey.id}`)}
