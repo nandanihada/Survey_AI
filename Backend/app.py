@@ -229,7 +229,67 @@ def home():
     return "Hello Azure!"
 
 
-@app.route('/save-email', methods=['POST'])
+@app.route('/api/notifications', methods=['GET'])
+def get_user_notifications():
+    """Fetch active notifications for the current user (or all-target ones)"""
+    from auth_middleware import requireAuth as _requireAuth
+    token = request.headers.get('Authorization', '').replace('Bearer ', '')
+    user_email = None
+    if token:
+        try:
+            import jwt as pyjwt
+            secret = app.config.get('JWT_SECRET', 'default_secret')
+            payload = pyjwt.decode(token, secret, algorithms=['HS256'])
+            user_email = payload.get('email', '')
+        except Exception:
+            pass
+
+    try:
+        query = {
+            '$or': [
+                {'target': 'all'},
+                {'target': user_email}
+            ]
+        }
+        if user_email:
+            query['read_by'] = {'$nin': [user_email]}
+
+        notifications = list(db.notifications.find(query).sort('created_at', -1).limit(10))
+        for n in notifications:
+            convert_objectid_to_string(n)
+        return jsonify({'notifications': notifications})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/notifications/<notification_id>/dismiss', methods=['POST'])
+def dismiss_notification(notification_id):
+    """Mark a notification as read/dismissed by the current user"""
+    token = request.headers.get('Authorization', '').replace('Bearer ', '')
+    user_email = None
+    if token:
+        try:
+            import jwt as pyjwt
+            secret = app.config.get('JWT_SECRET', 'default_secret')
+            payload = pyjwt.decode(token, secret, algorithms=['HS256'])
+            user_email = payload.get('email', '')
+        except Exception:
+            pass
+
+    if not user_email:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    try:
+        from bson import ObjectId
+        db.notifications.update_one(
+            {'_id': ObjectId(notification_id)},
+            {'$addToSet': {'read_by': user_email}}
+        )
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 def save_email():
     data = request.json
     email = data.get('email')

@@ -5,6 +5,8 @@ import React, { useEffect, useState } from 'react';
 import ProtectedRoute from '../components/ProtectedRoute';
 import Header from '../components/Header';
 import FancyTable from '../components/FancyTable';
+import SendNotificationModal from '../components/SendNotificationModal';
+import { Bell } from 'lucide-react';
 
 interface User {
   _id?: string;
@@ -57,6 +59,7 @@ const AdminDashboard: React.FC = () => {
   const [surveys, setSurveys] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'users' | 'surveys'>('users');
+  const [showNotifModal, setShowNotifModal] = useState(false);
 
   const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -243,8 +246,19 @@ const AdminDashboard: React.FC = () => {
         <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
           <div className="px-4 py-6 sm:px-0">
             <div className="mb-8">
-              <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-              <p className="mt-2 text-gray-600">Manage users and surveys</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+                  <p className="mt-2 text-gray-600">Manage users and surveys</p>
+                </div>
+                <button
+                  onClick={() => setShowNotifModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-sm font-semibold transition-colors"
+                >
+                  <Bell size={16} />
+                  Send Notification
+                </button>
+              </div>
             </div>
 
             {/* Tabs */}
@@ -539,6 +553,7 @@ const AdminDashboard: React.FC = () => {
           </div>
         </main>
       </div>
+      {showNotifModal && <SendNotificationModal onClose={() => setShowNotifModal(false)} />}
     </ProtectedRoute>
   );
 };

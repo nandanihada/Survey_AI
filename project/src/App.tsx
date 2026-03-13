@@ -5,6 +5,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicRoute from './components/PublicRoute';
 import LandingRedirect from './components/LandingRedirect';
+import NotificationBanner from './components/NotificationBanner';
 import './styles/mobile-responsive.css';
 
 // Retry wrapper for lazy imports - retries up to 3 times on chunk load failure
@@ -655,6 +656,7 @@ export default function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
+      <NotificationBanner />
     </AuthProvider>
     </AppErrorBoundary>
   );

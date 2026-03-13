@@ -382,3 +382,62 @@ def get_comprehensive_survey_data():
     except Exception as e:
         print(f"Error in comprehensive survey data: {e}")
         return jsonify({'error': f'Failed to get comprehensive survey data: {str(e)}'}), 500
+
+
+# ── Notification endpoints ──────────────────────────────────────────────────
+
+@admin_bp.route('/notifications', methods=['POST'])
+@requireAdmin
+def send_notification():
+    """Admin sends a notification to all users or a specific user"""
+    try:
+        data = request.json
+        message = (data.get('message') or '').strip()
+        title = (data.get('title') or 'Support Notification').strip()
+        target = data.get('target', 'all')  # 'all' or a specific user email/uid
+
+        if not message:
+            return jsonify({'error': 'Message is required'}), 400
+
+        notification = {
+            'title': title,
+            'message': message,
+            'target': target,  # 'all' or user email
+            'created_at': datetime.utcnow(),
+            'read_by': []  # list of user emails who dismissed it
+        }
+
+        result = db.notifications.insert_one(notification)
+
+        return jsonify({
+            'success': True,
+            'notification_id': str(result.inserted_id),
+            'message': 'Notification sent successfully'
+        })
+
+    except Exception as e:
+        return jsonify({'error': f'Failed to send notification: {str(e)}'}), 500
+
+
+@admin_bp.route('/notifications', methods=['GET'])
+@requireAdmin
+def list_notifications():
+    """List all notifications (admin view)"""
+    try:
+        notifications = list(db.notifications.find().sort('created_at', -1).limit(50))
+        for n in notifications:
+            convert_objectid_to_string(n)
+        return jsonify({'notifications': notifications})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@admin_bp.route('/notifications/<notification_id>', methods=['DELETE'])
+@requireAdmin
+def delete_notification(notification_id):
+    """Delete a notification"""
+    try:
+        db.notifications.delete_one({'_id': ObjectId(notification_id)})
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
