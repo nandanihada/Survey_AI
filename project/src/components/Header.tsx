@@ -35,7 +35,7 @@ const Header: React.FC = () => {
           {/* Navigation */}
           <nav className="hidden md:flex space-x-8">
             <button
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/dashboard/create?tab=surveys')}
               className="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium"
             >
               My Surveys
@@ -137,7 +137,7 @@ const Header: React.FC = () => {
       <div className="md:hidden">
         <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
           <button
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate('/dashboard/create?tab=surveys')}
             className="text-gray-500 hover:text-gray-700 block px-3 py-2 rounded-md text-base font-medium w-full text-left"
           >
             My Surveys

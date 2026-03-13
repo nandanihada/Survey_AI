@@ -724,7 +724,7 @@ const SurveyEditor: React.FC = () => {
           transition: 'background 0.4s ease',
         }}>
           {activeQ ? (
-            <div style={{ position: 'relative', maxWidth: 560, width: '100%', margin: '40px 20px' }}>
+            <div style={{ position: 'relative', maxWidth: 900, width: '100%', margin: '40px 20px' }}>
               {/* Pin icon */}
               <div style={{
                 position: 'absolute', top: -22, left: 28, width: 44, height: 44, zIndex: 20,
@@ -776,17 +776,18 @@ const SurveyEditor: React.FC = () => {
                 </div>
 
                 {/* Editable question text */}
-                <input
-                  type="text"
+                <textarea
                   value={activeQ.question}
                   onChange={(e) => updateQuestion(activeQuestionIndex, 'question', e.target.value)}
                   placeholder="Type your question here..."
+                  rows={2}
                   style={{
                     width: '100%', fontSize: 22, fontWeight: 600, color: theme.text,
                     background: 'transparent', border: 'none', outline: 'none',
                     fontFamily: "'Outfit', sans-serif", marginBottom: 6,
                     borderBottom: `2px dashed ${theme.dashed}`, paddingBottom: 6,
-                    position: 'relative', zIndex: 1,
+                    position: 'relative', zIndex: 1, resize: 'none',
+                    wordBreak: 'break-word',
                   }}
                 />
 
