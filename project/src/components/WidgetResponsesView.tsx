@@ -194,3 +194,5 @@ export const WidgetResponsesView: React.FC<WidgetResponsesViewProps> = ({ isDark
     </div>
   );
 };
+
+export default WidgetResponsesView;
