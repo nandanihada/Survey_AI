@@ -63,7 +63,7 @@ export const generateSurvey = async (data: SurveyRequest) => {
 
 export const fetchSurveys = async () => {
   try {
-    const response = await makeApiRequest('/api/surveys/', {
+    const response = await makeApiRequest('/api/surveys', {
       method: 'GET'
     });
     
@@ -85,25 +85,27 @@ export const fetchSurveys = async () => {
 };
 
 export const generateInsights = async (surveyId: string) => {
-  const response = await fetch(`${SERVER_URL}/insights`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ survey_id: surveyId })
-  });
+  try {
+    const response = await makeApiRequest('/insights', {
+      method: 'POST',
+      body: JSON.stringify({ survey_id: surveyId })
+    });
 
-  if (!response.ok) {
-    throw new Error(`Failed to generate insights: ${response.status}`);
+    if (!response.ok) {
+      throw new Error(`Failed to generate insights: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Generate insights failed:', error);
+    throw new Error(handleApiError(error, 'Generate insights'));
   }
-
-  const data = await response.json();
-  
-  if (data.error) {
-    throw new Error(data.error);
-  }
-
-  return data;
 };
 
 export const submitSurveyResponse = async (surveyId: string, responses: any, trackingId?: string, email?: string, username?: string) => {

@@ -7,13 +7,21 @@ import PublicRoute from './components/PublicRoute';
 import LandingRedirect from './components/LandingRedirect';
 import './styles/mobile-responsive.css';
 
+// Suppress React Router v7 deprecation warnings
+const routerFutureConfig = {
+  v7_startTransition: true,
+  v7_relativeSplatPath: true
+};
+
 // Retry wrapper for lazy imports - retries up to 3 times on chunk load failure
 function lazyRetry(importFn: () => Promise<{ default: React.ComponentType<any> }>) {
   return lazy(() =>
     importFn().catch((err) => {
       console.error('[LazyRetry] Chunk load failed, retrying...', err);
       return new Promise<{ default: React.ComponentType<any> }>((resolve) => {
-        setTimeout(() => resolve(importFn()), 1500);
+        setTimeout(() => {
+          importFn().then(resolve).catch(resolve);
+        }, 1500);
       });
     })
   );
@@ -566,7 +574,7 @@ export default function App() {
           <OptimizedLoader type="page" message="Loading..." />
         </div>
       }>
-        <Routes>
+        <Routes future={routerFutureConfig}>
           {/* Landing page - redirects based on auth */}
           <Route path="/" element={<LandingRedirect />} />
           
