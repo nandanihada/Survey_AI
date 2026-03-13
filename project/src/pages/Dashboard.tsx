@@ -15,7 +15,8 @@ import {
   Plus,
   TrendingUp,
   Eye,
-  MoreHorizontal
+  MoreHorizontal,
+  AlertCircle
 } from 'lucide-react';
 
 interface Survey {
