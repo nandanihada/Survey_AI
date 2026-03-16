@@ -6,7 +6,7 @@ import ProtectedRoute from '../components/ProtectedRoute';
 import Header from '../components/Header';
 import FancyTable from '../components/FancyTable';
 import SendNotificationModal from '../components/SendNotificationModal';
-import { Bell } from 'lucide-react';
+import { Bell, Filter, Save, Edit2, X, Check, ToggleLeft, ToggleRight, Eye, EyeOff, Play, RotateCcw, AlertCircle } from 'lucide-react';
 
 interface User {
   _id?: string;
@@ -54,15 +54,48 @@ interface Survey {
   };
 }
 
+interface Filter {
+  _id: string;
+  name: string;
+  description: string;
+  category: string;
+  logic: any;
+  rules: string;
+  isEnabled: boolean;
+  priority: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface FilterFormData {
+  name: string;
+  description: string;
+  category: string;
+  logic: string;
+  rules: string;
+  isEnabled: boolean;
+  priority: number;
+}
+
 const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [surveys, setSurveys] = useState<any[]>([]);
+  const [filters, setFilters] = useState<Filter[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'users' | 'surveys'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters'>('users');
   const [showNotifModal, setShowNotifModal] = useState(false);
+  
+  // Filter management states
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<Partial<Filter>>({});
+  const [showJsonEditor, setShowJsonEditor] = useState<string | null>(null);
+  const [filterError, setFilterError] = useState<string | null>(null);
+  const [filterSuccess, setFilterSuccess] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
   const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+  // User functions
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem('auth_token');
@@ -92,6 +125,7 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  // Survey functions
   const fetchAllSurveys = async () => {
     try {
       const token = localStorage.getItem('auth_token');
@@ -123,6 +157,148 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  // Filter functions
+  const fetchFilters = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${baseUrl}/admin/suggestion-filters`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setFilters(data.filters || []);
+        setFilterError(null);
+      } else {
+        const errorData = await response.json();
+        setFilterError(`Failed to fetch filters: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      setFilterError(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const initializeFilters = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${baseUrl}/admin/suggestion-filters/initialize`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setFilterSuccess(data.message);
+        await fetchFilters(); // Refresh the filters list
+      } else {
+        const errorData = await response.json();
+        setFilterError(`Failed to initialize filters: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      setFilterError(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleEdit = (filter: Filter) => {
+    setEditingId(filter._id);
+    setEditForm({
+      name: filter.name,
+      description: filter.description,
+      category: filter.category,
+      logic: typeof filter.logic === 'string' ? filter.logic : JSON.stringify(filter.logic, null, 2),
+      rules: typeof filter.rules === 'string' ? filter.rules : JSON.stringify(filter.rules),
+      isEnabled: filter.isEnabled,
+      priority: filter.priority
+    });
+  };
+
+  const handleCancel = () => {
+    setEditingId(null);
+    setEditForm({});
+    setShowJsonEditor(null);
+  };
+
+  const handleSave = async (filterId: string) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('auth_token');
+      
+      // Parse logic if it's a string
+      let parsedLogic = editForm.logic;
+      if (typeof editForm.logic === 'string') {
+        try {
+          parsedLogic = JSON.parse(editForm.logic);
+        } catch (e) {
+          setFilterError('Invalid JSON in logic configuration');
+          setLoading(false);
+          return;
+        }
+      }
+      
+      const response = await fetch(`${baseUrl}/admin/suggestion-filters/${filterId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: editForm.name,
+          description: editForm.description,
+          category: editForm.category,
+          logic: parsedLogic,
+          rules: editForm.rules,
+          isEnabled: editForm.isEnabled,
+          priority: editForm.priority
+        })
+      });
+
+      if (response.ok) {
+        setFilterSuccess('Filter updated successfully');
+        setEditingId(null);
+        setEditForm({});
+        setShowJsonEditor(null);
+        await fetchFilters();
+      } else {
+        const errorData = await response.json();
+        setFilterError(`Failed to update filter: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      setFilterError(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggle = async (filterId: string) => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${baseUrl}/admin/suggestion-filters/${filterId}/toggle`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setFilterSuccess(data.message);
+        await fetchFilters();
+      } else {
+        const errorData = await response.json();
+        setFilterError(`Failed to toggle filter: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      setFilterError(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
@@ -150,8 +326,10 @@ const AdminDashboard: React.FC = () => {
       
       if (activeTab === 'users') {
         await fetchUsers();
-      } else {
+      } else if (activeTab === 'surveys') {
         await fetchAllSurveys();
+      } else if (activeTab === 'filters') {
+        await fetchFilters();
       }
       setLoading(false);
     };
@@ -238,6 +416,11 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  const categories = ['all', 'Business', 'Demographic', 'Financial', 'Professional', 'Satisfaction', 'Location', 'Behavioral', 'Quality', 'Technical', 'Temporal'];
+  const filteredFilters = selectedCategory === 'all' 
+    ? filters 
+    : filters.filter(f => f.category === selectedCategory);
+
   return (
     <ProtectedRoute requireAdmin>
       <div className="min-h-screen bg-gray-50">
@@ -249,7 +432,7 @@ const AdminDashboard: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-                  <p className="mt-2 text-gray-600">Manage users and surveys</p>
+                  <p className="mt-2 text-gray-600">Manage users, surveys, and system filters</p>
                 </div>
                 <button
                   onClick={() => setShowNotifModal(true)}
@@ -283,6 +466,17 @@ const AdminDashboard: React.FC = () => {
                   }`}
                 >
                   All Surveys
+                </button>
+                <button
+                  onClick={() => setActiveTab('filters')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center gap-1 ${
+                    activeTab === 'filters'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <Filter size={16} />
+                  Suggestion Filters
                 </button>
               </nav>
             </div>
@@ -545,6 +739,296 @@ const AdminDashboard: React.FC = () => {
                         loading={loading}
                         emptyMessage="No surveys found"
                       />
+                    )}
+                  </div>
+                )}
+
+                {/* Filters Tab */}
+                {activeTab === 'filters' && (
+                  <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+                    <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-lg leading-6 font-medium text-gray-900 flex items-center gap-2">
+                            <Filter className="h-5 w-5 text-blue-500" />
+                            Suggestion Filters
+                          </h3>
+                          <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                            Manage all system filters that process and validate survey responses
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={fetchFilters}
+                            className="inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                          >
+                            <RotateCcw className="h-4 w-4 mr-1" />
+                            Refresh
+                          </button>
+                          <button
+                            onClick={initializeFilters}
+                            disabled={loading}
+                            className="inline-flex items-center px-3 py-1 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+                          >
+                            <Play className="h-4 w-4 mr-1" />
+                            Initialize Filters
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Category Filter */}
+                      <div className="mt-4 flex space-x-2">
+                        {categories.map(cat => (
+                          <button
+                            key={cat}
+                            onClick={() => setSelectedCategory(cat)}
+                            className={`px-3 py-1 text-sm font-medium rounded-full ${
+                              selectedCategory === cat
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                          >
+                            {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Status Messages */}
+                      {filterError && (
+                        <div className="mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative flex items-center gap-2">
+                          <AlertCircle className="h-5 w-5" />
+                          <span>{filterError}</span>
+                          <button onClick={() => setFilterError(null)} className="ml-auto">
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
+
+                      {filterSuccess && (
+                        <div className="mt-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded relative flex items-center gap-2">
+                          <Check className="h-5 w-5" />
+                          <span>{filterSuccess}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Filters List */}
+                    <ul className="divide-y divide-gray-200">
+                      {filteredFilters.map((filter) => (
+                        <li key={filter._id} className="px-4 py-4 sm:px-6 hover:bg-gray-50">
+                          {editingId === filter._id ? (
+                            // Edit Mode
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700">Name</label>
+                                  <input
+                                    type="text"
+                                    value={editForm.name || ''}
+                                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700">Category</label>
+                                  <select
+                                    value={editForm.category || 'Business'}
+                                    onChange={(e) => setEditForm({ ...editForm, category: e.target.value as any })}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                  >
+                                    <option value="Business">Business</option>
+                                    <option value="Demographic">Demographic</option>
+                                    <option value="Financial">Financial</option>
+                                    <option value="Professional">Professional</option>
+                                    <option value="Satisfaction">Satisfaction</option>
+                                    <option value="Location">Location</option>
+                                    <option value="Behavioral">Behavioral</option>
+                                    <option value="Quality">Quality</option>
+                                    <option value="Technical">Technical</option>
+                                    <option value="Temporal">Temporal</option>
+                                  </select>
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700">Description</label>
+                                <textarea
+                                  value={editForm.description || ''}
+                                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                                  rows={2}
+                                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700">Rules / Logic Description</label>
+                                <textarea
+                                  value={editForm.rules || ''}
+                                  onChange={(e) => setEditForm({ ...editForm, rules: e.target.value })}
+                                  rows={2}
+                                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                />
+                              </div>
+
+                              <div>
+                                <div className="flex items-center justify-between">
+                                  <label className="block text-sm font-medium text-gray-700">Logic Configuration</label>
+                                  <button
+                                    onClick={() => setShowJsonEditor(showJsonEditor === filter._id ? null : filter._id)}
+                                    className="text-xs text-blue-600 hover:text-blue-800"
+                                  >
+                                    {showJsonEditor === filter._id ? 'Hide JSON' : 'Edit as JSON'}
+                                  </button>
+                                </div>
+                                {showJsonEditor === filter._id ? (
+                                  <textarea
+                                    value={typeof editForm.logic === 'string' ? editForm.logic : JSON.stringify(editForm.logic, null, 2)}
+                                    onChange={(e) => setEditForm({ ...editForm, logic: e.target.value })}
+                                    rows={6}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 font-mono text-xs focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                  />
+                                ) : (
+                                  <pre className="mt-1 p-3 bg-gray-50 rounded-md text-xs overflow-auto max-h-40 border border-gray-200">
+                                    {JSON.stringify(
+                                      typeof editForm.logic === 'string' ? JSON.parse(editForm.logic || '{}') : editForm.logic,
+                                      null, 2
+                                    )}
+                                  </pre>
+                                )}
+                              </div>
+
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-4">
+                                  <div className="flex items-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={editForm.isEnabled || false}
+                                      onChange={(e) => setEditForm({ ...editForm, isEnabled: e.target.checked })}
+                                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    />
+                                    <label className="ml-2 text-sm text-gray-700">Enabled</label>
+                                  </div>
+                                  <div className="flex items-center">
+                                    <label className="text-sm text-gray-700 mr-2">Priority:</label>
+                                    <input
+                                      type="number"
+                                      value={editForm.priority || 0}
+                                      onChange={(e) => setEditForm({ ...editForm, priority: parseInt(e.target.value) })}
+                                      className="w-20 border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="flex space-x-2">
+                                  <button
+                                    onClick={() => handleSave(filter._id)}
+                                    disabled={loading}
+                                    className="inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                                  >
+                                    <Save className="h-4 w-4 mr-1" />
+                                    Save
+                                  </button>
+                                  <button
+                                    onClick={handleCancel}
+                                    className="inline-flex items-center px-3 py-1 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                  >
+                                    <X className="h-4 w-4 mr-1" />
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            // View Mode
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3">
+                                  <h4 className="text-lg font-medium text-gray-900">{filter.name}</h4>
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                    filter.category === 'Business' ? 'bg-blue-100 text-blue-800' :
+                                    filter.category === 'Demographic' ? 'bg-green-100 text-green-800' :
+                                    filter.category === 'Financial' ? 'bg-yellow-100 text-yellow-800' :
+                                    filter.category === 'Professional' ? 'bg-purple-100 text-purple-800' :
+                                    filter.category === 'Satisfaction' ? 'bg-pink-100 text-pink-800' :
+                                    filter.category === 'Location' ? 'bg-indigo-100 text-indigo-800' :
+                                    filter.category === 'Behavioral' ? 'bg-red-100 text-red-800' :
+                                    filter.category === 'Quality' ? 'bg-orange-100 text-orange-800' :
+                                    filter.category === 'Technical' ? 'bg-gray-100 text-gray-800' :
+                                    filter.category === 'Temporal' ? 'bg-teal-100 text-teal-800' :
+                                    'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    {filter.category}
+                                  </span>
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                    filter.isEnabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                  }`}>
+                                    {filter.isEnabled ? 'Enabled' : 'Disabled'}
+                                  </span>
+                                </div>
+                                
+                                <p className="mt-1 text-sm text-gray-600">{filter.description}</p>
+                                
+                                <div className="mt-2">
+                                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Rules:</p>
+                                  <p className="text-sm text-gray-900">{typeof filter.rules === 'string' ? filter.rules : JSON.stringify(filter.rules)}</p>
+                                </div>
+
+                                <div className="mt-2">
+                                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Logic:</p>
+                                  <details className="mt-1">
+                                    <summary className="text-xs text-blue-600 cursor-pointer hover:text-blue-800">
+                                      View configuration
+                                    </summary>
+                                    <pre className="mt-2 p-3 bg-gray-50 rounded-md text-xs overflow-auto max-h-60 border border-gray-200">
+                                      {JSON.stringify(filter.logic, null, 2)}
+                                    </pre>
+                                  </details>
+                                </div>
+
+                                <div className="mt-2 flex items-center gap-4 text-xs text-gray-500">
+                                  <span>Priority: {filter.priority}</span>
+                                  <span>Created: {new Date(filter.created_at).toLocaleDateString()}</span>
+                                </div>
+                              </div>
+
+                              <div className="ml-4 flex flex-col space-y-2">
+                                <button
+                                  onClick={() => handleEdit(filter)}
+                                  className="inline-flex items-center px-3 py-1 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                >
+                                  <Edit2 className="h-4 w-4 mr-1" />
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => handleToggle(filter._id)}
+                                  className={`inline-flex items-center px-3 py-1 border text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                                    filter.isEnabled
+                                      ? 'border-red-300 text-red-700 bg-red-50 hover:bg-red-100 focus:ring-red-500'
+                                      : 'border-green-300 text-green-700 bg-green-50 hover:bg-green-100 focus:ring-green-500'
+                                  }`}
+                                >
+                                  {filter.isEnabled ? (
+                                    <>
+                                      <EyeOff className="h-4 w-4 mr-1" />
+                                      Disable
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Eye className="h-4 w-4 mr-1" />
+                                      Enable
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+
+                    {filteredFilters.length === 0 && (
+                      <div className="px-4 py-8 text-center text-gray-500">
+                        No filters found in this category.
+                      </div>
                     )}
                   </div>
                 )}
