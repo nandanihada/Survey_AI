@@ -6,3 +6,5 @@ export { default as DeviceDistributionChart } from './DeviceDistributionChart';
 export { default as GeographicResponses } from './GeographicResponses';
 export { default as SurveyList } from './SurveyList';
 export { default as SurveyDetailAnalytics } from './SurveyDetailAnalytics';
+export { default as QuestionAnalyticsCard } from './QuestionAnalyticsCard';
+export { default as SummaryAnalytics } from './SummaryAnalytics';

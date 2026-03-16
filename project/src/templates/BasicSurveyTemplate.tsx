@@ -76,7 +76,8 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const [formData, setFormData] = useState<Record<string, string | number>>(() => {
     const initialData: Record<string, string | number> = {};
     normalizedQuestions.forEach(q => {
-      initialData[q.id] = q.type === 'range' ? 0 : '';
+      // Don't initialize range questions with 0, leave them empty until user selects
+      initialData[q.id] = '';
     });
     return initialData;
   });
@@ -151,7 +152,9 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
   const currentQuestion = normalizedQuestions[currentQuestionIndex];
   const isCurrentAnswered = currentQuestion
-    ? formData[currentQuestion.id] !== '' && formData[currentQuestion.id] !== 0
+    ? currentQuestion.type === 'range' 
+      ? formData[currentQuestion.id] !== undefined && formData[currentQuestion.id] !== ''
+      : formData[currentQuestion.id] !== '' && formData[currentQuestion.id] !== 0
     : false;
 
   const handleNext = useCallback(() => {
@@ -189,7 +192,11 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
     const unanswered = normalizedQuestions.find(q => {
       const val = formData[q.id];
-      return val === '' || val === 0;
+      // For range questions, 0 is a valid answer, so don't treat it as unanswered
+      if (q.type === 'range') {
+        return val === undefined || val === '';
+      }
+      return val === '' || val === undefined;
     });
     if (unanswered) return;
 
@@ -197,8 +204,17 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       const responses: Record<string, string | number> = {};
       normalizedQuestions.forEach(q => {
         const val = formData[q.id];
-        if (val !== undefined && val !== '' && val !== 0) {
-          responses[q.question] = val;
+        // Include all valid answers, including 0 for range questions
+        if (val !== undefined && val !== '') {
+          // For range questions, include 0 as valid answer
+          if (q.type === 'range') {
+            responses[q.question] = val;
+          } else {
+            // For other types, exclude empty values
+            if (val !== 0) {
+              responses[q.question] = val;
+            }
+          }
         }
       });
 

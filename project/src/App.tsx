@@ -99,6 +99,7 @@ const FloatingWidget = lazyRetry(() => import('./components/FloatingWidget'));
 const WidgetResponsesView = lazyRetry(() => import('./components/WidgetResponsesView'));
 const PassFailAdmin = lazyRetry(() => import('./components/PassFailAdmin'));
 const AnalyticsDashboard = lazyRetry(() => import('./pages/AnalyticsDashboard'));
+const ProfessionalAnalyticsDashboard = lazyRetry(() => import('./pages/ProfessionalAnalyticsDashboard'));
 
 // Legacy dashboard component - will be removed after migration
 function LegacyDashboard() {
@@ -661,6 +662,11 @@ export default function App() {
           <Route path="/analytics" element={
             <ProtectedRoute>
               <AnalyticsDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/analytics-pro" element={
+            <ProtectedRoute>
+              <ProfessionalAnalyticsDashboard />
             </ProtectedRoute>
           } />
           

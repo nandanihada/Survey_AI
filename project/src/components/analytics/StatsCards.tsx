@@ -53,12 +53,18 @@ const StatsCards: React.FC<StatsCardsProps> = ({ surveys, responses }) => {
 
   const dropOffRate = 100 - completionRate;
 
+  // Calculate trends (mock for now, can be enhanced with historical data)
+  const getTrend = () => {
+    const trends = ['+12%', '+8%', '+5%', '+3%', '-15%', '+25%', '+18%', '-7%'];
+    return trends[Math.floor(Math.random() * trends.length)];
+  };
+
   const stats = [
     {
       title: 'Total Surveys',
       value: totalSurveys,
       icon: FileText,
-      trend: '+12%',
+      trend: getTrend(),
       trendColor: 'text-green-600',
       bgColor: 'bg-blue-50',
       iconColor: 'text-blue-600'
@@ -67,7 +73,7 @@ const StatsCards: React.FC<StatsCardsProps> = ({ surveys, responses }) => {
       title: 'Total Responses',
       value: totalResponses,
       icon: Users,
-      trend: '+8%',
+      trend: getTrend(),
       trendColor: 'text-green-600',
       bgColor: 'bg-green-50',
       iconColor: 'text-green-600'
@@ -76,7 +82,7 @@ const StatsCards: React.FC<StatsCardsProps> = ({ surveys, responses }) => {
       title: 'Active Surveys',
       value: activeSurveys,
       icon: TrendingUp,
-      trend: '+5%',
+      trend: getTrend(),
       trendColor: 'text-green-600',
       bgColor: 'bg-purple-50',
       iconColor: 'text-purple-600'
@@ -85,8 +91,8 @@ const StatsCards: React.FC<StatsCardsProps> = ({ surveys, responses }) => {
       title: 'Completion Rate',
       value: `${completionRate}%`,
       icon: BarChart3,
-      trend: '+3%',
-      trendColor: 'text-green-600',
+      trend: completionRate > 70 ? '+3%' : completionRate > 50 ? '0%' : '-5%',
+      trendColor: completionRate > 70 ? 'text-green-600' : completionRate > 50 ? 'text-yellow-600' : 'text-red-600',
       bgColor: 'bg-yellow-50',
       iconColor: 'text-yellow-600'
     },
@@ -121,8 +127,8 @@ const StatsCards: React.FC<StatsCardsProps> = ({ surveys, responses }) => {
       title: 'Drop-off Rate',
       value: `${dropOffRate}%`,
       icon: AlertCircle,
-      trend: '-7%',
-      trendColor: 'text-green-600',
+      trend: dropOffRate < 30 ? '-7%' : dropOffRate < 50 ? '0%' : '+5%',
+      trendColor: dropOffRate < 30 ? 'text-green-600' : dropOffRate < 50 ? 'text-yellow-600' : 'text-red-600',
       bgColor: 'bg-red-50',
       iconColor: 'text-red-600'
     }

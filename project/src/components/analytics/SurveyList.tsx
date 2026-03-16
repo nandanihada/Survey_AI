@@ -27,6 +27,20 @@ const SurveyList: React.FC<SurveyListProps> = ({ surveys }) => {
     return 'text-red-600 bg-red-50';
   };
 
+  // If no surveys, show empty state
+  if (surveys.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Survey Performance Overview</h2>
+        <div className="text-center py-8 text-gray-500">
+          <BarChart3 className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+          <p>No surveys found</p>
+          <p className="text-sm text-gray-400 mt-1">Create your first survey to see analytics</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <h2 className="text-lg font-semibold text-gray-900 mb-4">Survey Performance Overview</h2>
