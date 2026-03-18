@@ -67,6 +67,20 @@ interface PassFailAdminProps {
 const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
   const [surveys, setSurveys] = useState<SurveyConfig[]>([]);
   const [criteriaSets, setCriteriaSets] = useState<CriteriaSet[]>([]);
+  const defaultConfig = {
+    pass_fail_enabled: false,
+    pepperads_redirect_enabled: false,
+    criteria_set_id: undefined,
+    pepperads_offer_id: undefined,
+    fail_page_config: {
+      fail_page_url: "/survey-thankyou",
+      custom_message: "Thank you for your time!",
+      show_retry_option: false
+    },
+    dynamic_redirect_enabled: false,
+    dynamic_redirect_config: undefined
+  };
+
   const [selectedSurvey, setSelectedSurvey] = useState<SurveyConfig | null>(null);
   const [surveyQuestions, setSurveyQuestions] = useState<Question[]>([]);
   const [offers, setOffers] = useState<OfferSummary[]>([]);
@@ -119,12 +133,14 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
       const response = await fetch(`${API_BASE}/admin/surveys-with-config`);
       const data = await response.json();
       if (response.ok) {
-        setSurveys(data.surveys);
+        setSurveys(data.surveys || []);
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to load surveys' });
+        setSurveys([]); // Set empty array on error
       }
     } catch (error) {
       setMessage({ type: 'error', text: 'Failed to load surveys' });
+      setSurveys([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -135,10 +151,14 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
       const response = await fetch(`${API_BASE}/admin/criteria`);
       const data = await response.json();
       if (response.ok) {
-        setCriteriaSets(data.criteria_sets);
+        setCriteriaSets(data.criteria_sets || []);
+      } else {
+        console.error('Failed to load criteria sets:', data.error);
+        setCriteriaSets([]); // Set empty array on error
       }
     } catch (error) {
       console.error('Failed to load criteria sets:', error);
+      setCriteriaSets([]); // Set empty array on error
     }
   };
 
@@ -147,10 +167,14 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
       const response = await fetch(`${API_BASE}/admin/survey/${surveyId}/questions`);
       const data = await response.json();
       if (response.ok) {
-        setSurveyQuestions(data.questions);
+        setSurveyQuestions(data.questions || []);
+      } else {
+        console.error('Failed to load survey questions:', data.error);
+        setSurveyQuestions([]); // Set empty array on error
       }
     } catch (error) {
       console.error('Failed to load survey questions:', error);
+      setSurveyQuestions([]); // Set empty array on error
     }
   };
 
@@ -160,9 +184,13 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
       const data = await response.json();
       if (response.ok) {
         setOffers(data.offers || []);
+      } else {
+        console.error('Failed to load offers:', data.error);
+        setOffers([]); // Set empty array on error
       }
     } catch (e) {
       console.error('Failed to load offers', e);
+      setOffers([]); // Set empty array on error
     }
   };
 
@@ -194,7 +222,7 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
       // Auto-assign to the currently selected survey if available and not editing
       if (selectedSurvey && !isEditing) {
         await updateSurveyConfig(selectedSurvey.survey_id, {
-          ...selectedSurvey.config,
+          ...(selectedSurvey.config || {}),
           pepperads_offer_id: data._id,
           pepperads_redirect_enabled: true
         });
@@ -208,10 +236,18 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
 
   const handleSurveySelect = async (survey: SurveyConfig) => {
     setSelectedSurvey(survey);
-    await loadSurveyQuestions(survey.survey_id);
+    if (survey.survey_id) {
+      await loadSurveyQuestions(survey.survey_id);
+    }
   };
 
   const updateSurveyConfig = async (surveyId: string, config: any, fieldName?: string) => {
+    // Don't make API call if surveyId is undefined
+    if (!surveyId || surveyId === 'undefined') {
+      console.error('Invalid surveyId:', surveyId);
+      return;
+    }
+    
     try {
       // Optimistic update - immediately update UI
       setSurveys(prev => prev.map(survey => 
@@ -219,6 +255,11 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
           ? { ...survey, config: { ...survey.config, ...config } }
           : survey
       ));
+      
+      // Update selectedSurvey if it's the current one
+      if (selectedSurvey?.survey_id === surveyId) {
+        setSelectedSurvey(prev => prev ? { ...prev, config: { ...prev.config, ...config } } : null);
+      }
       
       // Set loading state for specific field
       if (fieldName) {
@@ -240,8 +281,7 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
       const data = await response.json();
       if (response.ok) {
         setMessage({ type: 'success', text: 'Configuration updated successfully' });
-        // Refresh to get latest data from server
-        loadSurveysWithConfig();
+        // Don't refresh - optimistic update already handled the UI
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to update configuration' });
         // Revert optimistic update on error
@@ -445,7 +485,7 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
             ) : (
               surveys.map((survey) => (
                 <div
-                  key={survey.survey_id}
+                  key={survey.survey_id || `survey-${Math.random()}`}
                   onClick={() => handleSurveySelect(survey)}
                   className={`p-3 rounded-lg cursor-pointer transition-colors ${
                     selectedSurvey?.survey_id === survey.survey_id
@@ -497,7 +537,7 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                     disabled={updatingStates[selectedSurvey.survey_id]?.pass_fail_enabled}
                     onChange={(e) => {
                       const updatedConfig = {
-                        ...selectedSurvey.config,
+                        ...(selectedSurvey.config || {}),
                         pass_fail_enabled: e.target.checked,
                         fail_page_config: selectedSurvey.config?.fail_page_config || {
                           fail_page_url: '/survey-thankyou',
@@ -527,7 +567,7 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                       disabled={updatingStates[selectedSurvey.survey_id]?.criteria_set_id}
                       onChange={(e) => {
                         const updatedConfig = {
-                          ...selectedSurvey.config,
+                          ...(selectedSurvey.config || {}),
                           criteria_set_id: e.target.value || undefined
                         };
                         updateSurveyConfig(selectedSurvey.survey_id, updatedConfig, 'criteria_set_id');
@@ -566,7 +606,7 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                         disabled={updatingStates[selectedSurvey.survey_id]?.dynamic_redirect_enabled}
                         onChange={(e) => {
                           const updatedConfig = {
-                            ...selectedSurvey.config,
+                            ...(selectedSurvey.config || {}),
                             dynamic_redirect_enabled: e.target.checked,
                             dynamic_redirect_config: selectedSurvey.config?.dynamic_redirect_config || {
                               pass_redirect_url: '',
@@ -597,7 +637,7 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                           value={selectedSurvey.config?.dynamic_redirect_config?.pass_redirect_url || ''}
                           onChange={(e) => {
                             const updatedConfig = {
-                              ...selectedSurvey.config,
+                              ...(selectedSurvey.config || {}),
                               dynamic_redirect_config: {
                                 ...selectedSurvey.config?.dynamic_redirect_config,
                                 pass_redirect_url: e.target.value
@@ -627,7 +667,7 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                           value={selectedSurvey.config?.dynamic_redirect_config?.fail_redirect_url || ''}
                           onChange={(e) => {
                             const updatedConfig = {
-                              ...selectedSurvey.config,
+                              ...(selectedSurvey.config || {}),
                               dynamic_redirect_config: {
                                 ...selectedSurvey.config?.dynamic_redirect_config,
                                 fail_redirect_url: e.target.value
@@ -695,7 +735,7 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                         disabled={updatingStates[selectedSurvey.survey_id]?.pepperads_redirect_enabled}
                         onChange={(e) => {
                           const updatedConfig = {
-                            ...selectedSurvey.config,
+                            ...(selectedSurvey.config || {}),
                             pepperads_redirect_enabled: e.target.checked
                           };
                           updateSurveyConfig(selectedSurvey.survey_id, updatedConfig, 'pepperads_redirect_enabled');
@@ -717,7 +757,7 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                             disabled={updatingStates[selectedSurvey.survey_id]?.pepperads_offer_id}
                             onChange={(e) => {
                               const updatedConfig = {
-                                ...selectedSurvey.config,
+                                ...(selectedSurvey.config || {}),
                                 pepperads_offer_id: e.target.value || undefined
                               };
                               updateSurveyConfig(selectedSurvey.survey_id, updatedConfig, 'pepperads_offer_id');
@@ -764,7 +804,7 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                                 type="button"
                                 onClick={() => {
                                   const updatedConfig = {
-                                    ...selectedSurvey.config,
+                                    ...(selectedSurvey.config || {}),
                                     pepperads_offer_id: undefined
                                   };
                                   updateSurveyConfig(selectedSurvey.survey_id, updatedConfig);
@@ -797,15 +837,16 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                 </label>
                 <input
                   type="text"
-                  value={selectedSurvey.config.fail_page_config?.fail_page_url || ''}
+                  value={selectedSurvey.config?.fail_page_config?.fail_page_url || ''}
                   onChange={(e) => {
+                    const currentConfig = selectedSurvey.config || defaultConfig;
                     const updatedConfig = {
-                      ...selectedSurvey.config,
+                      ...currentConfig,
                       fail_page_config: {
-                        ...selectedSurvey.config.fail_page_config,
+                        ...currentConfig?.fail_page_config,
                         fail_page_url: e.target.value,
-                        custom_message: selectedSurvey.config.fail_page_config?.custom_message || 'Thank you for your time!',
-                        show_retry_option: selectedSurvey.config.fail_page_config?.show_retry_option || false
+                        custom_message: currentConfig?.fail_page_config?.custom_message || 'Thank you for your time!',
+                        show_retry_option: currentConfig?.fail_page_config?.show_retry_option || false
                       }
                     };
                     updateSurveyConfig(selectedSurvey.survey_id, updatedConfig);
@@ -824,15 +865,16 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                   Fail Message
                 </label>
                 <textarea
-                  value={selectedSurvey.config.fail_page_config?.custom_message || ''}
+                  value={selectedSurvey.config?.fail_page_config?.custom_message || ''}
                   onChange={(e) => {
+                    const currentConfig = selectedSurvey.config || defaultConfig;
                     const updatedConfig = {
-                      ...selectedSurvey.config,
+                      ...currentConfig,
                       fail_page_config: {
-                        ...selectedSurvey.config.fail_page_config,
+                        ...currentConfig?.fail_page_config,
                         custom_message: e.target.value,
-                        fail_page_url: selectedSurvey.config.fail_page_config?.fail_page_url || '/survey-thankyou',
-                        show_retry_option: selectedSurvey.config.fail_page_config?.show_retry_option || false
+                        fail_page_url: currentConfig?.fail_page_config?.fail_page_url || '/survey-thankyou',
+                        show_retry_option: currentConfig?.fail_page_config?.show_retry_option || false
                       }
                     };
                     updateSurveyConfig(selectedSurvey.survey_id, updatedConfig);

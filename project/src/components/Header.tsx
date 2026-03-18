@@ -46,6 +46,12 @@ const Header: React.FC = () => {
             >
               Create Survey
             </button>
+            <button
+              onClick={() => navigate('/link-masking')}
+              className="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium"
+            >
+              Link Masking
+            </button>
             {isAdmin && (
               <button
                 onClick={() => navigate('/admin')}

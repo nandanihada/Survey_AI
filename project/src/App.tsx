@@ -71,6 +71,7 @@ const AdminDashboard = lazyRetry(() => import('./pages/AdminDashboard'));
 const LoginPage = lazyRetry(() => import('./pages/LoginPage'));
 const SignupPage = lazyRetry(() => import('./pages/SignupPage'));
 const ProfilePage = lazyRetry(() => import('./pages/ProfilePage'));
+const LinkMaskingDashboard = lazyRetry(() => import('./pages/LinkMaskingDashboard'));
 const NotFound = lazyRetry(() => import('./pages/NotFound'));
 const Unauthorized = lazyRetry(() => import('./pages/Unauthorized'));
 
@@ -667,6 +668,13 @@ export default function App() {
           <Route path="/analytics-pro" element={
             <ProtectedRoute>
               <ProfessionalAnalyticsDashboard />
+            </ProtectedRoute>
+          } />
+          
+          {/* Link masking routes */}
+          <Route path="/link-masking" element={
+            <ProtectedRoute>
+              <LinkMaskingDashboard />
             </ProtectedRoute>
           } />
           

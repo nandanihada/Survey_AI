@@ -32,12 +32,52 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const refreshAuth = async () => {
     try {
       setLoading(true);
-      // Check if user data exists in localStorage
+      // Check if user data and token exist in localStorage
       const userData = localStorage.getItem('user_data');
-      if (userData) {
-        const user = JSON.parse(userData);
-        setAuthenticated(true);
-        setUser(user);
+      const token = localStorage.getItem('auth_token');
+      
+      if (userData && token) {
+        // Verify the token with the backend before setting authenticated state
+        try {
+          const user = JSON.parse(userData);
+          // Verify token is still valid
+          const response = await fetch(`${window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1' ? 'http://localhost:5000' : 'https://hostslice.onrender.com'}/api/auth/check`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          
+          if (response.ok) {
+            const authData = await response.json();
+            if (authData.authenticated && authData.user) {
+              setAuthenticated(true);
+              setUser(authData.user);
+              // Update stored user data with fresh data
+              localStorage.setItem('user_data', JSON.stringify(authData.user));
+            } else {
+              // Token is invalid, clear storage
+              localStorage.removeItem('user_data');
+              localStorage.removeItem('auth_token');
+              setAuthenticated(false);
+              setUser(null);
+            }
+          } else {
+            // Token verification failed, clear storage
+            localStorage.removeItem('user_data');
+            localStorage.removeItem('auth_token');
+            setAuthenticated(false);
+            setUser(null);
+          }
+        } catch (verifyError) {
+          console.error('Token verification failed:', verifyError);
+          // Clear storage on verification error
+          localStorage.removeItem('user_data');
+          localStorage.removeItem('auth_token');
+          setAuthenticated(false);
+          setUser(null);
+        }
       } else {
         setAuthenticated(false);
         setUser(null);
@@ -46,6 +86,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.error('Failed to refresh auth:', error);
       setAuthenticated(false);
       setUser(null);
+      // Clear storage on any error
+      localStorage.removeItem('user_data');
+      localStorage.removeItem('auth_token');
     } finally {
       setLoading(false);
     }
@@ -56,8 +99,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await authService.login(credentials);
       setUser(response.user);
       setAuthenticated(true);
+      // Store user data and token
+      localStorage.setItem('user_data', JSON.stringify(response.user));
+      if (response.token) {
+        localStorage.setItem('auth_token', response.token);
+      }
     } catch (error) {
       console.error('Login failed:', error);
+      // Clear any existing data on login failure
+      localStorage.removeItem('user_data');
+      localStorage.removeItem('auth_token');
+      setAuthenticated(false);
+      setUser(null);
       throw error;
     }
   };
@@ -67,8 +120,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await authService.register(userData);
       setUser(response.user);
       setAuthenticated(true);
+      // Store user data and token
+      localStorage.setItem('user_data', JSON.stringify(response.user));
+      if (response.token) {
+        localStorage.setItem('auth_token', response.token);
+      }
     } catch (error) {
       console.error('Registration failed:', error);
+      // Clear any existing data on registration failure
+      localStorage.removeItem('user_data');
+      localStorage.removeItem('auth_token');
+      setAuthenticated(false);
+      setUser(null);
       throw error;
     }
   };

@@ -6,6 +6,8 @@ import ProtectedRoute from '../components/ProtectedRoute';
 import Header from '../components/Header';
 import FancyTable from '../components/FancyTable';
 import SendNotificationModal from '../components/SendNotificationModal';
+import PassFailAdmin from '../components/PassFailAdmin';
+import LinkMasking from '../components/LinkMasking';
 import { Bell, Filter, Save, Edit2, X, Check, ToggleLeft, ToggleRight, Eye, EyeOff, Play, RotateCcw, AlertCircle } from 'lucide-react';
 
 interface User {
@@ -82,7 +84,7 @@ const AdminDashboard: React.FC = () => {
   const [surveys, setSurveys] = useState<any[]>([]);
   const [filters, setFilters] = useState<Filter[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking'>('users');
   const [showNotifModal, setShowNotifModal] = useState(false);
   
   // Filter management states
@@ -477,6 +479,26 @@ const AdminDashboard: React.FC = () => {
                 >
                   <Filter size={16} />
                   Suggestion Filters
+                </button>
+                <button
+                  onClick={() => setActiveTab('pass-fail')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'pass-fail'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Pass/Fail
+                </button>
+                <button
+                  onClick={() => setActiveTab('link-masking')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'link-masking'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Link Masking
                 </button>
               </nav>
             </div>
@@ -1031,6 +1053,16 @@ const AdminDashboard: React.FC = () => {
                       </div>
                     )}
                   </div>
+                )}
+
+                {/* Pass/Fail Tab */}
+                {activeTab === 'pass-fail' && (
+                  <PassFailAdmin isDarkMode={false} />
+                )}
+
+                {/* Link Masking Tab */}
+                {activeTab === 'link-masking' && (
+                  <LinkMasking isDarkMode={false} />
                 )}
               </>
             )}
