@@ -78,6 +78,7 @@ export const useFeatureAccess = () => {
     canCreateSurveys: () => hasFeature('create'),
     canViewAnalytics: () => hasFeature('analytics'),
     canUsePostback: () => hasFeature('postback'),
+    canUseEmail: () => hasFeature('email'),
     canUsePassFail: () => hasFeature('pass_fail'),
     canUseTestLab: () => hasFeature('test_lab'),
     isBasic: () => user?.role === 'basic',

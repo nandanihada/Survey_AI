@@ -87,7 +87,7 @@ const WidgetTestPage = lazyRetry(() => import('./components/WidgetTestPage'));
 // Import legacy dashboard for backward compatibility
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/Tabs';
-import { PenSquare, FolderOpen, TrendingUp, Link, Sun, Moon, Settings, Lock, Menu, X } from 'lucide-react';
+import { PenSquare, FolderOpen, TrendingUp, Link, Mail, Sun, Moon, Settings, Lock, Menu, X } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { FloatingWidgetProvider } from './components/FloatingWidgetProvider';
 import type { WidgetCustomizerSettings } from './components/WidgetCustomizer';
@@ -98,6 +98,7 @@ const PostbackManager = lazyRetry(() => import('./components/PostbackManager'));
 const ResponseAnalytics = lazyRetry(() => import('./components/ResponseAnalytics'));
 const FloatingWidget = lazyRetry(() => import('./components/FloatingWidget'));
 const WidgetResponsesView = lazyRetry(() => import('./components/WidgetResponsesView'));
+const EmailDashboard = lazyRetry(() => import('./pages/EmailDashboard'));
 const PassFailAdmin = lazyRetry(() => import('./components/PassFailAdmin'));
 const AnalyticsDashboard = lazyRetry(() => import('./pages/AnalyticsDashboard'));
 const ProfessionalAnalyticsDashboard = lazyRetry(() => import('./pages/ProfessionalAnalyticsDashboard'));
@@ -111,6 +112,17 @@ function LegacyDashboard() {
   const [showPreviewWidget, setShowPreviewWidget] = useState(false);
   const [autoPreviewEnabled, setAutoPreviewEnabled] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Update activeTab when URL changes
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    console.log('URL tab parameter:', tab);
+    console.log('Current activeTab:', activeTab);
+    if (tab && tab !== activeTab) {
+      console.log('Setting activeTab to:', tab);
+      setActiveTab(tab);
+    }
+  }, [searchParams, activeTab]);
 
 // State for widget settings
   const [widgetSettings, setWidgetSettings] = useState<WidgetCustomizerSettings | null>(null);
@@ -354,6 +366,7 @@ function LegacyDashboard() {
                 { value: 'surveys', icon: FolderOpen, label: 'Surveys', desc: 'Manage your surveys', requiresFeature: 'survey' },
                 { value: 'responses', icon: TrendingUp, label: 'Analytics', desc: 'View responses & data', requiresFeature: 'analytics' },
                 { value: 'postback', icon: Link, label: 'Postback', desc: 'Configure postbacks', requiresFeature: 'postback' },
+                { value: 'email', icon: Mail, label: 'Email', desc: 'Email triggers & templates', requiresFeature: 'email' },
                 { value: 'passfail', icon: Settings, label: 'Pass/Fail', desc: 'Set evaluation rules', requiresFeature: 'pass_fail' },
                 { value: 'testlab', icon: () => <span className="text-lg">🧪</span>, label: 'Test Lab', desc: 'Widget testing', requiresFeature: 'test_lab' }
               ].map(({ value, icon: Icon, label, desc, requiresFeature }) => {
@@ -425,6 +438,19 @@ function LegacyDashboard() {
               {hasFeature('postback') ? (
                 <Suspense fallback={<OptimizedLoader type="component" message="Loading postback manager..." />}>
                   <PostbackManager isDarkMode={isDarkMode} />
+                </Suspense>
+              ) : (
+                <div className={`p-6 rounded-lg border text-center ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-stone-200'}`}>
+                  <Lock size={48} className="mx-auto mb-4 text-red-500" />
+                  <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>Premium Access Required</h3>
+                  <p className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-stone-600'}`}>This feature requires Premium or higher subscription. Please upgrade your account.</p>
+                </div>
+              )}
+            </TabsContent>
+            <TabsContent value="email">
+              {hasFeature('email') ? (
+                <Suspense fallback={<OptimizedLoader type="component" message="Loading email system..." />}>
+                  <EmailDashboard />
                 </Suspense>
               ) : (
                 <div className={`p-6 rounded-lg border text-center ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-stone-200'}`}>
@@ -602,7 +628,7 @@ export default function App() {
           {/* Protected routes */}
           <Route path="/dashboard" element={
             <ProtectedRoute>
-              <Dashboard />
+              <LegacyDashboard />
             </ProtectedRoute>
           } />
           

@@ -8,6 +8,7 @@ import {
   buildRedirectUrl,
   createSessionContext
 } from '../utils/redirectBuilder';
+import EmailCollectionStep from '../components/EmailCollectionStep';
 
 interface Question {
   id: string;
@@ -47,6 +48,9 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const [email, setEmail] = useState<string | null>(null);
   const [trackingId, setTrackingId] = useState<string | null>(null);
   const [clickId, setClickId] = useState<string | null>(null);
+  const [showEmailCollection, setShowEmailCollection] = useState(false);
+  const [collectedEmail, setCollectedEmail] = useState<string | null>(null);
+  const [triggerInfo, setTriggerInfo] = useState<any[]>([]);
 
   const normalizeType = (type: string): 'text' | 'radio' | 'range' => {
     switch (type) {
@@ -148,6 +152,53 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const handleAnswer = (id: string, value: string | number) => {
     setFormData(prev => ({ ...prev, [id]: value }));
     trackClickInteraction('answer_selected', { questionId: id, answer: value });
+    
+    // Check if this answer meets any email trigger conditions
+    if (!previewMode && survey.id && !collectedEmail) {
+      checkEmailTriggers(id, value);
+    }
+  };
+
+  const checkEmailTriggers = async (questionId: string, answerValue: string | number) => {
+    try {
+      const apiBaseUrl = window.location.hostname === 'localhost' 
+        ? 'http://localhost:5000' 
+        : 'https://hostslice.onrender.com';
+      
+      const answers = { ...formData, [questionId]: answerValue };
+      console.log('📧 Checking email triggers:', {
+        surveyId: survey.id,
+        questionId,
+        answerValue,
+        allAnswers: answers
+      });
+      
+      const response = await fetch(`${apiBaseUrl}/api/surveys/${survey.id}/check-email-triggers`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+        },
+        body: JSON.stringify({
+          answers: answers
+        })
+      });
+      
+      const result = await response.json();
+      
+      console.log('📧 Email trigger check result:', result);
+      
+      if (result.success && result.should_collect_email) {
+        // Show email collection step immediately
+        setTriggerInfo(result.triggers_met);
+        setShowEmailCollection(true);
+        console.log('📧 Email trigger met! Showing email collection popup.');
+      } else {
+        console.log('📧 No email triggers met');
+      }
+    } catch (error) {
+      console.error('Error checking email triggers:', error);
+    }
   };
 
   const currentQuestion = normalizedQuestions[currentQuestionIndex];
@@ -158,7 +209,8 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     : false;
 
   const handleNext = useCallback(() => {
-    if (currentQuestionIndex < normalizedQuestions.length - 1 && isCurrentAnswered) {
+    // Only proceed if not currently showing email collection
+    if (!showEmailCollection && currentQuestionIndex < normalizedQuestions.length - 1 && isCurrentAnswered) {
       setCurrentQuestionIndex(prev => prev + 1);
       trackClickInteraction('question_navigation', {
         action: 'next',
@@ -166,11 +218,76 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         to_question: currentQuestionIndex + 2
       });
     }
-  }, [currentQuestionIndex, normalizedQuestions.length, isCurrentAnswered]);
+  }, [currentQuestionIndex, normalizedQuestions.length, isCurrentAnswered, showEmailCollection]);
 
   const handlePrev = () => {
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex(prev => prev - 1);
+    }
+  };
+
+  const handleEmailCollected = (emailAddress: string) => {
+    setCollectedEmail(emailAddress);
+    setShowEmailCollection(false);
+    
+    // Send the survey response immediately after email is collected
+    const responses: Record<string, string | number> = {};
+    normalizedQuestions.forEach(q => {
+      const val = formData[q.id];
+      if (val !== undefined && val !== '') {
+        if (q.type === 'range') {
+          responses[q.id] = val;  // Use question ID as key
+        } else {
+          if (val !== 0) {
+            responses[q.id] = val;  // Use question ID as key
+          }
+        }
+      }
+    });
+
+    // Submit survey immediately
+    submitSurveyWithEmail(emailAddress, responses);
+    
+    trackClickInteraction('email_collected', { email: emailAddress });
+    console.log('📧 Email collected, submitting survey immediately');
+  };
+
+  const submitSurveyWithEmail = async (emailAddress: string, responses: Record<string, string | number>) => {
+    try {
+      const apiBaseUrl = window.location.hostname === 'localhost' 
+        ? 'http://localhost:5000' 
+        : 'https://hostslice.onrender.com';
+
+      console.log('📧 Submitting survey with email:', {
+        responses,
+        email: emailAddress,
+        email_triggers_met: triggerInfo.length > 0,
+        triggerInfo
+      });
+
+      const response = await fetch(`${apiBaseUrl}/survey/${survey.id}/submit-enhanced`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          responses,
+          email: emailAddress,
+          username,
+          tracking_id: trackingId,
+          click_id: clickId,
+          email_triggers_met: triggerInfo.length > 0
+        }),
+      });
+
+      if (!response.ok) throw new Error(await response.text());
+      const result = await response.json();
+
+      console.log('📧 Survey submitted successfully:', result);
+      
+      // Show success message
+      setSubmitted(true);
+      
+    } catch (error) {
+      console.error('Error submitting survey:', error);
     }
   };
 
@@ -204,15 +321,12 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       const responses: Record<string, string | number> = {};
       normalizedQuestions.forEach(q => {
         const val = formData[q.id];
-        // Include all valid answers, including 0 for range questions
         if (val !== undefined && val !== '') {
-          // For range questions, include 0 as valid answer
           if (q.type === 'range') {
-            responses[q.question] = val;
+            responses[q.id] = val;  // Use question ID as key
           } else {
-            // For other types, exclude empty values
             if (val !== 0) {
-              responses[q.question] = val;
+              responses[q.id] = val;  // Use question ID as key
             }
           }
         }
@@ -223,11 +337,21 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           responses,
-          email,
+          email: collectedEmail || email, // Use collected email first, then fallback to URL email
           username,
           tracking_id: trackingId,
-          click_id: clickId
+          click_id: clickId,
+          email_triggers_met: triggerInfo.length > 0 // Flag that triggers were met
         }),
+      });
+
+      console.log('📧 Survey submission data:', {
+        responses,
+        email: collectedEmail || email,
+        email_triggers_met: triggerInfo.length > 0,
+        triggerInfo,
+        collectedEmail,
+        triggerInfoLength: triggerInfo.length
       });
 
       if (!response.ok) throw new Error(await response.text());
@@ -499,6 +623,14 @@ const BasicSurveyTemplate: React.FC<Props> = ({
             <p>Your responses have been recorded successfully. We appreciate your time and feedback.</p>
           </motion.div>
         </motion.div>
+      )}
+      
+      {/* Email Collection Step */}
+      {showEmailCollection && (
+        <EmailCollectionStep
+          onEmailCollected={handleEmailCollected}
+          triggerInfo={triggerInfo}
+        />
       )}
     </div>
   );

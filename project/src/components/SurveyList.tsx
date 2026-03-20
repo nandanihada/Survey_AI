@@ -9,7 +9,8 @@ import {
   Users,
   BarChart3,
   Edit,
-  Eye
+  Eye,
+  Mail
 } from 'lucide-react';
 
 interface SurveyListProps {
@@ -41,13 +42,17 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false }) => {
 
   const fetchSurveys = async () => {
     try {
+      // Get authentication token (JWT preferred)
       const token = localStorage.getItem('auth_token');
       const headers: Record<string, string> = {
         'Content-Type': 'application/json'
       };
+      
+      // Add Authorization header
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       } else {
+        // Fallback to user ID if no JWT token
         const userData = localStorage.getItem('user_data');
         if (userData) {
           try {
@@ -60,9 +65,20 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false }) => {
           }
         }
       }
+      
+      // Add X-User-ID header
+      const userId = localStorage.getItem('userId') || localStorage.getItem('user_id') || '';
+      if (userId) {
+        headers['X-User-ID'] = userId;
+      }
+      
       const response = await fetch(`${apiBaseUrl}/api/surveys`, { headers });
+      console.log('Surveys API response status:', response.status);
+      
       if (!response.ok) throw new Error('Failed to fetch surveys');
       const data = await response.json();
+      console.log('Surveys data:', data);
+      console.log('Setting surveys:', data.surveys);
       setSurveys(data.surveys || []);
     } catch (err) {
       setError('Failed to load surveys');
@@ -292,6 +308,18 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false }) => {
                     >
                       <Eye size={13} />
                       Open / Live Link
+                    </button>
+                    <button
+                      onClick={() => navigate(`/dashboard?tab=email&survey_id=${survey.id}`)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        isDarkMode
+                          ? 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20'
+                          : 'bg-orange-50 text-orange-600 hover:bg-orange-100'
+                      }`}
+                      title="Configure Email Triggers"
+                    >
+                      <Mail size={13} />
+                      Email
                     </button>
                     <button
                       onClick={() => navigate(`/dashboard/responses/${survey.id}`)}

@@ -160,9 +160,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const hasFeature = (feature: string) => {
     // Simple feature check based on role
     if (user?.role === 'admin') return true;
-    if (user?.role === 'enterprise') return ['survey', 'analytics', 'postback', 'pass_fail', 'test_lab'].includes(feature);
-    if (user?.role === 'premium') return ['survey', 'analytics', 'postback'].includes(feature);
-    return ['survey'].includes(feature);
+    if (user?.role === 'enterprise') return ['survey', 'analytics', 'postback', 'email', 'pass_fail', 'test_lab'].includes(feature);
+    if (user?.role === 'premium') return ['survey', 'analytics', 'postback', 'email'].includes(feature);
+    // Temporarily enable email feature for testing
+    return ['survey', 'email'].includes(feature);
   };
   const hasPremiumAccess = user?.role === 'premium' || user?.role === 'enterprise' || user?.role === 'admin';
   const hasEnterpriseAccess = user?.role === 'enterprise' || user?.role === 'admin';
