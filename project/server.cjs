@@ -8,7 +8,7 @@ const distPath = path.join(__dirname, 'dist');
 
 // Backend API URL
 const BACKEND_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://pepper-dash.onrender.com' 
+  ? 'https://dashboard.pepperwahl.com/' 
   : 'http://localhost:5000';
 
 // Proxy API requests to backend
