@@ -6,8 +6,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const distPath = path.join(__dirname, 'dist');
 
-// Backend API URL - uses env var, falls back to production backend
-const BACKEND_URL = process.env.BACKEND_URL || 'https://pepper-dash.onrender.com';
+// Backend API URL
+const BACKEND_URL = process.env.NODE_ENV === 'production' 
+  ? 'https://dashboard.pepperwahl.com/' 
+  : 'http://localhost:5000';
 
 // Proxy API requests to backend
 app.use('/api', createProxyMiddleware({
