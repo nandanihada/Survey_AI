@@ -10750,38 +10750,3 @@ def redirect_masked_link(short_id):
 
 
 
-from flask import Flask, send_from_directory, jsonify
-
-import os
-
-
-
-app = Flask(__name__, static_folder="dist", static_url_path="")
-
-
-
-@app.route("/")
-
-def home():
-
-    if os.path.exists(os.path.join(app.static_folder or "", "index.html")):
-
-        return send_from_directory(app.static_folder, "index.html")
-
-    else:
-
-        return jsonify({"error": "Frontend not built. Please build the frontend first.", "status": "frontend_missing"}), 503
-
-
-
-@app.route("/<path:path>")
-
-def catch_all(path):
-
-    if os.path.exists(os.path.join(app.static_folder or "", "index.html")):
-
-        return send_from_directory(app.static_folder, "index.html")
-
-    else:
-
-        return jsonify({"error": "Frontend not built. Please build the frontend first.", "status": "frontend_missing"}), 503
