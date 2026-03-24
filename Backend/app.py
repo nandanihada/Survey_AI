@@ -1,10 +1,10 @@
-from flask import Flask, request, jsonify, redirect, send_from_directory
+from flask import Flask, request, jsonify, redirect
 
 from link_masking import link_handler
 
 from flask_cors import CORS, cross_origin
 
-
+import google.generativeai as genai
 
 import random
 
@@ -96,7 +96,7 @@ if os.getenv("FLASK_ENV") == "development":
 
 else:
 
-    BASE_URL = "https://api.pepperwahl.com"
+    BASE_URL = "https://hostslice.onrender.com"
 
 
 
@@ -195,8 +195,7 @@ def add_cors_headers(response):
             "https://dashboard-pepperads.onrender.com",
             "https://pepper-dash.onrender.com",
             "http://localhost:3000",
-            "https://pepperads.in",
-            "https://dashboard.pepperwahl.com"
+            "https://pepperads.in"
         ]
         if origin in allowed_origins:
             response.headers['Access-Control-Allow-Origin'] = origin
