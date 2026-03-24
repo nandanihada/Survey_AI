@@ -195,7 +195,9 @@ def add_cors_headers(response):
             "https://dashboard-pepperads.onrender.com",
             "https://pepper-dash.onrender.com",
             "http://localhost:3000",
-            "https://pepperads.in"
+            "https://pepperads.in",
+            "https://dashboard.pepperwahl.com",
+            "https://pepperwahl.com"
         ]
         if origin in allowed_origins:
             response.headers['Access-Control-Allow-Origin'] = origin
