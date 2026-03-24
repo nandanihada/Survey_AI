@@ -18,6 +18,7 @@ from pepperads_integration import (
 )
 from pass_fail_schema import get_system_config
 from click_tracking_api import update_click_submission_status
+from email_trigger_service import email_trigger_service
 
 class EnhancedSurveyHandler:
     """Enhanced handler for survey responses with complete pass/fail workflow"""
@@ -168,7 +169,36 @@ class EnhancedSurveyHandler:
             }
             update_click_submission_status(survey_id, user_info, submission_data)
             
-            # Step 10: Determine redirect action
+            # Step 10: Process email triggers (backend-only, silent automation)
+            print(f"📧 Processing email triggers for survey: {survey_id}")
+            
+            # Prepare response data for email triggers
+            email_response_data = {
+                "response_id": response_id,
+                "name": username,
+                "email": email,
+                "answers": [{"question_id": qid, "answer": answer} for qid, answer in responses.items()],
+                "survey_name": survey.get("name", "Survey"),
+                "product_link": request_data.get("product_link", "")
+            }
+            
+            # Process email triggers silently in backend
+            email_result = email_trigger_service.process_survey_triggers(survey_id, email_response_data)
+            if email_result.get("success"):
+                emails_sent = email_result.get("emails_sent", [])
+                emails_failed = email_result.get("emails_failed", [])
+                if emails_sent:
+                    print(f"✅ Email triggers processed: {len(emails_sent)} emails sent")
+                    for email_info in emails_sent:
+                        print(f"   📧 Sent to: {email_info.get('recipient')} - {email_info.get('subject')}")
+                if emails_failed:
+                    print(f"⚠️ Email triggers: {len(emails_failed)} emails failed")
+                    for email_info in emails_failed:
+                        print(f"   ❌ Failed: {email_info.get('reason')}")
+            else:
+                print(f"❌ Email trigger processing failed: {email_result.get('error', 'Unknown error')}")
+            
+            # Step 11: Determine redirect action
             redirect_decision = get_redirect_decision(survey_id, evaluation_result)
             redirect_info = None
             

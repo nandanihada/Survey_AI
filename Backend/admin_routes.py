@@ -419,6 +419,8 @@ def send_notification():
         return jsonify({'error': f'Failed to send notification: {str(e)}'}), 500
 
 
+# ── Additional admin routes for frontend ──────────────────────────────────────────
+
 @admin_bp.route('/notifications', methods=['GET'])
 @requireAdmin
 def list_notifications():
@@ -430,6 +432,54 @@ def list_notifications():
         return jsonify({'notifications': notifications})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@admin_bp.route('/suggestion-filters', methods=['GET'])
+@requireAdmin
+def get_suggestion_filters():
+    """Get all suggestion filters"""
+    try:
+        filters = list(db.suggestion_filters.find({}))
+        for filter_item in filters:
+            convert_objectid_to_string(filter_item)
+        return jsonify({"filters": filters})
+    except Exception as e:
+        return jsonify({'error': f'Failed to get suggestion filters: {str(e)}'}), 500
+
+@admin_bp.route('/surveys-with-config', methods=['GET'])
+@requireAdmin
+def get_surveys_with_config():
+    """Get surveys with configuration"""
+    try:
+        surveys = list(db.surveys.find({}))
+        for survey in surveys:
+            convert_objectid_to_string(survey)
+        return jsonify({"surveys": surveys})
+    except Exception as e:
+        return jsonify({'error': f'Failed to get surveys with config: {str(e)}'}), 500
+
+@admin_bp.route('/criteria', methods=['GET'])
+@requireAdmin
+def get_criteria_sets():
+    """Get criteria sets"""
+    try:
+        criteria = list(db.criteria_sets.find({}))
+        for crit in criteria:
+            convert_objectid_to_string(crit)
+        return jsonify({"criteria": criteria})
+    except Exception as e:
+        return jsonify({'error': f'Failed to get criteria sets: {str(e)}'}), 500
+
+@admin_bp.route('/pepperads/offers', methods=['GET'])
+@requireAdmin
+def get_pepperads_offers():
+    """Get PepperAds offers"""
+    try:
+        offers = list(db.pepperads_offers.find({}))
+        for offer in offers:
+            convert_objectid_to_string(offer)
+        return jsonify({"offers": offers})
+    except Exception as e:
+        return jsonify({'error': f'Failed to get PepperAds offers: {str(e)}'}), 500
 
 
 @admin_bp.route('/notifications/<notification_id>', methods=['DELETE'])
