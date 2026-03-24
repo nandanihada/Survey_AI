@@ -49,13 +49,13 @@ const LinkMaskingDashboard: React.FC = () => {
                        window.location.hostname.includes('127.0.0.1');
   const apiBaseUrl = isLocalhost
     ? 'http://localhost:5000'
-    : 'https://hostslice.onrender.com';
+    : 'https://api.pepperwahl.com';
     
   // Construct masked URL based on current environment
   const getMaskedUrl = (shortId: string) => {
     return isLocalhost 
       ? `http://localhost:5000/l/${shortId}`
-      : `https://pepper-dash.onrender.com/l/${shortId}`;
+      : `https://api.pepperwahl.com/l/${shortId}`;
   };
 
   // Debug info

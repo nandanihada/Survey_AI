@@ -16,7 +16,7 @@ interface Props {
 
 const API = window.location.hostname === 'localhost'
   ? 'http://localhost:5000'
-  : 'https://hostslice.onrender.com';
+  : 'https://api.pepperwahl.com';
 
 const SendNotificationModal: React.FC<Props> = ({ onClose }) => {
   const [title, setTitle] = useState('');

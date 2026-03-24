@@ -41,7 +41,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         try {
           const user = JSON.parse(userData);
           // Verify token is still valid
-          const response = await fetch(`${window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1' ? 'http://localhost:5000' : 'https://hostslice.onrender.com'}/api/auth/check`, {
+          const response = await fetch(`${window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1' ? 'http://localhost:5000' : 'https://api.pepperwahl.com'}/api/auth/check`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json',

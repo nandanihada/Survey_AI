@@ -9,7 +9,7 @@ interface Notification {
 
 const API = window.location.hostname === 'localhost'
   ? 'http://localhost:5000'
-  : 'https://hostslice.onrender.com';
+  : 'https://api.pepperwahl.com';
 
 const NotificationBanner: React.FC = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);

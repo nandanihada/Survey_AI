@@ -32,7 +32,7 @@ const EmailTemplateManager: React.FC = () => {
   // API URL configuration
   const apiBaseUrl = window.location.hostname === 'localhost' 
     ? 'http://localhost:5000' 
-    : 'https://hostslice.onrender.com';
+    : 'https://api.pepperwahl.com';
   
   const [formData, setFormData] = useState({
     name: '',

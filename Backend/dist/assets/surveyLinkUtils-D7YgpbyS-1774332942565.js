@@ -1,0 +1,1 @@
+function c(i,e,a={},t){const n=window.location.origin,r=new URL(`${n}/survey`);return r.searchParams.set("offer_id",i),e&&r.searchParams.set("user_id",e),t&&r.searchParams.set("sub1",t),Object.entries(a).forEach(([o,s])=>{s!=null&&r.searchParams.set(o,String(s))}),r.toString()}export{c as g};

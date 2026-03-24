@@ -70,7 +70,7 @@ const EmailDashboard: React.FC<EmailDashboardProps> = ({
       }
       
       const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+      const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://api.pepperwahl.com';
       
       const response = await fetch(`${apiBaseUrl}/api/surveys/${id}`, {
         headers
