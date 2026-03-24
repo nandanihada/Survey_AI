@@ -4,7 +4,7 @@ from link_masking import link_handler
 
 from flask_cors import CORS, cross_origin
 
-import google.generativeai as genai
+
 
 import random
 
