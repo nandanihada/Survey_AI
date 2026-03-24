@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Test</title>
+</head>
+<body>
+    <h1>Testing Deployed Frontend API Calls</h1>
+    <div id="results"></div>
+    
+    <script>
+        const results = document.getElementById('results');
+        
+        // Test what URL the frontend is using
+        const hostname = window.location.hostname;
+        const isLocal = hostname.includes('localhost') || hostname === '127.0.0.1';
+        const baseUrl = isLocal ? 'http://localhost:5000' : 'https://api.theinterwebsite.space';
+        
+        results.innerHTML = `
+            <p><strong>Current Hostname:</strong> ${hostname}</p>
+            <p><strong>Is Local:</strong> ${isLocal}</p>
+            <p><strong>API Base URL:</strong> ${baseUrl}</p>
+            <p><strong>Register Endpoint:</strong> ${baseUrl}/api/auth/register</p>
+            <hr>
+            <p>Testing register endpoint...</p>
+        `;
+        
+        // Test the register endpoint
+        fetch(`${baseUrl}/api/auth/register`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                email: 'test@example.com',
+                password: 'Test123!',
+                name: 'Test User'
+            })
+        })
+        .then(response => {
+            results.innerHTML += `
+                <p><strong>Response Status:</strong> ${response.status}</p>
+                <p><strong>Content-Type:</strong> ${response.headers.get('content-type')}</p>
+            `;
+            return response.text();
+        })
+        .then(text => {
+            results.innerHTML += `<p><strong>Response Body:</strong></p><pre>${text.substring(0, 500)}</pre>`;
+        })
+        .catch(error => {
+            results.innerHTML += `<p style="color:red;"><strong>Error:</strong> ${error.message}</p>`;
+        });
+    </script>
+</body>
+</html>
