@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, User, Mail, Download, RefreshCw, Eye } from 'lucide-react';
+import { Calendar, User, Mail, Download, RefreshCw, Eye, Lock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface SurveyResponse {
   _id: string;
@@ -22,6 +23,8 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedResponse, setSelectedResponse] = useState<SurveyResponse | null>(null);
+  const [needsAuth, setNeedsAuth] = useState(false);
+  const navigate = useNavigate();
 
   const fetchResponses = async () => {
     try {
@@ -31,12 +34,24 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
       const token = localStorage.getItem('auth_token');
       
+      if (!token) {
+        setNeedsAuth(true);
+        setLoading(false);
+        return;
+      }
+      
       const response = await fetch(`${baseUrl}/survey/${surveyId}/responses`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
+
+      if (response.status === 401) {
+        setNeedsAuth(true);
+        setLoading(false);
+        return;
+      }
 
       if (!response.ok) {
         throw new Error('Failed to fetch responses');
@@ -113,6 +128,30 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
     a.click();
     window.URL.revokeObjectURL(url);
   };
+
+  if (needsAuth) {
+    return (
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-8 text-center">
+        <Lock className="mx-auto mb-4 text-blue-600" size={48} />
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">Sign up to see your responses</h3>
+        <p className="text-gray-600 mb-6">Create an account to view and manage your survey responses</p>
+        <div className="flex gap-3 justify-center">
+          <button
+            onClick={() => navigate('/login')}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Sign In
+          </button>
+          <button
+            onClick={() => navigate('/signup')}
+            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+          >
+            Create Account
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

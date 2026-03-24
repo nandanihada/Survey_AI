@@ -38,7 +38,7 @@ export const getApiBaseUrl = (): string => {
 
   // Production API URL
 
-  return 'https://hostslice.onrender.com';
+  return 'https://api.pepperwahl.com';
 
 };
 
@@ -112,7 +112,9 @@ export const makeApiRequest = async (
 
   endpoint: string, 
 
-  options: RequestInit = {}
+  options: RequestInit = {},
+
+  allowUnauthenticated: boolean = false
 
 ): Promise<Response> => {
 
@@ -122,7 +124,13 @@ export const makeApiRequest = async (
 
   
 
-  const defaultHeaders = getAuthHeaders();
+  // For unauthenticated requests (like survey creation), don't add auth headers
+
+  const defaultHeaders = allowUnauthenticated 
+
+    ? { 'Content-Type': 'application/json' }
+
+    : getAuthHeaders();
 
   
 

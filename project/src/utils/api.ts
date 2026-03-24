@@ -34,7 +34,7 @@ export const generateSurvey = async (data: SurveyRequest) => {
     const response = await makeApiRequest('/generate', {
       method: 'POST',
       body: JSON.stringify(requestData)
-    });
+    }, true); // Allow unauthenticated survey creation
 
     if (!response.ok) {
       const contentType = response.headers.get('content-type');

@@ -2035,11 +2035,7 @@ def parse_image():
 
 
 @app.route('/generate', methods=['POST', 'OPTIONS'])
-
 @cross_origin(supports_credentials=True, origins="*")
-
-@requireAuth
-
 def generate_survey():
 
 
@@ -3308,39 +3304,45 @@ def generate_survey():
 
 
 
-            # Get authenticated user first (now mandatory with @requireAuth)
-
-
-
-            current_user = g.current_user  # Will always exist due to @requireAuth
-
-
-
+            # Get authenticated user if available, otherwise create temporary user
+            current_user = getattr(g, 'current_user', None)
             
-
-
-
-            # Debug: Print current_user data
-
-
-
-            print(f"DEBUG: Current user data: {current_user}")
-
-
-
-            print(f"DEBUG: simpleUserId: {current_user.get('simpleUserId', 'MISSING')}")
-
-
-
-            
-
-
+            if current_user:
+                # Authenticated user flow
+                print(f"DEBUG: Current user data: {current_user}")
+                print(f"DEBUG: simpleUserId: {current_user.get('simpleUserId', 'MISSING')}")
+                
+                simple_user_id = current_user.get('simpleUserId', 0)
+                
+                # Ensure we have a valid simpleUserId
+                if simple_user_id == 0 or simple_user_id is None:
+                    print("WARNING: simpleUserId is 0 or None, fetching from database")
+                    user_from_db = db.users.find_one({'_id': current_user['_id']})
+                    if user_from_db:
+                        simple_user_id = user_from_db.get('simpleUserId', 0)
+                        print(f"DEBUG: Retrieved simpleUserId from DB: {simple_user_id}")
+                
+                # Get username for aff_sub parameter
+                username = current_user.get('name', current_user.get('email', '').split('@')[0])
+                if not username:
+                    username = f"user_{simple_user_id}"
+                
+                user_id_str = str(current_user['_id'])
+                creator_email = current_user.get('email', '')
+                creator_name = current_user.get('name', '')
+            else:
+                # Unauthenticated user flow - create temporary user
+                import uuid
+                temp_user_id = str(uuid.uuid4())
+                simple_user_id = 0  # No simple user ID for temporary users
+                username = f"temp_{survey_id[:5]}"  # Use part of survey ID as username
+                user_id_str = temp_user_id
+                creator_email = ''
+                creator_name = 'Temporary User'
+                
+                print(f"DEBUG: Creating survey for unauthenticated user with temp ID: {temp_user_id}")
 
             survey_id = short_id
-
-
-
-            simple_user_id = current_user.get('simpleUserId', 0)
 
 
 
@@ -3480,63 +3482,30 @@ def generate_survey():
 
 
 
-            # Link survey to authenticated user
-
-
-
-            user_id_str = str(current_user['_id'])
-
-
-
-            
-
-
-
-            # Add all user identification fields
-
-
-
+            # Link survey to user (authenticated or temporary)
             survey_data["ownerUserId"] = user_id_str
-
-
-
             survey_data["user_id"] = user_id_str
-
-
-
-            survey_data["creator_email"] = current_user.get('email', '')
-
-
-
-            survey_data["creator_name"] = current_user.get('name', '')
-
-
-
+            survey_data["creator_email"] = creator_email
+            survey_data["creator_name"] = creator_name
             survey_data["simple_user_id"] = simple_user_id
-
-
-
-            survey_data["created_by"] = {
-
-
-
-                "user_id": user_id_str,
-
-
-
-                "email": current_user.get('email', ''),
-
-
-
-                "name": current_user.get('name', ''),
-
-
-
-                "simple_id": current_user.get('simpleUserId', 0)
-
-
-
-            }
+            survey_data["is_temporary"] = current_user is None  # Mark if this is a temporary user survey
+            
+            if current_user:
+                survey_data["created_by"] = {
+                    "user_id": user_id_str,
+                    "email": current_user.get('email', ''),
+                    "name": current_user.get('name', ''),
+                    "simple_id": current_user.get('simpleUserId', 0)
+                }
+                print(f"✅ Survey linked to user: {current_user.get('email', 'Unknown')} (ID: {user_id_str}, SimpleID: {current_user.get('simpleUserId', 'None')})")
+            else:
+                survey_data["created_by"] = {
+                    "user_id": user_id_str,
+                    "email": '',
+                    "name": 'Temporary User',
+                    "simple_id": 0
+                }
+                print(f"✅ Survey created for temporary user (ID: {user_id_str})")
 
 
 
