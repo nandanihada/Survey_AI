@@ -2,7 +2,11 @@ from flask import Flask, request, jsonify, redirect
 
 
 
+
+
 from link_masking import link_handler
+
+
 
 
 
@@ -10,7 +14,11 @@ from flask_cors import CORS, cross_origin
 
 
 
+
+
 import google.generativeai as genai
+
+
 
 
 
@@ -18,7 +26,11 @@ import random
 
 
 
+
+
 import string
+
+
 
 
 
@@ -26,7 +38,11 @@ from typing import Optional, Dict, List, Any, Union
 
 
 
+
+
 from datetime import datetime, timedelta
+
+
 
 
 
@@ -34,11 +50,17 @@ import os
 
 
 
+
+
 import json
 
 
 
-import uuid
+
+
+
+
+
 
 
 
@@ -46,7 +68,11 @@ import re
 
 
 
+
+
 import logging
+
+
 
 
 
@@ -54,7 +80,11 @@ import traceback
 
 
 
+
+
 import time
+
+
 
 
 
@@ -62,7 +92,11 @@ from bson import ObjectId, json_util
 
 
 
+
+
 from pymongo import MongoClient, ReturnDocument
+
+
 
 
 
@@ -70,7 +104,11 @@ from dotenv import load_dotenv
 
 
 
+
+
 import requests
+
+
 
 
 
@@ -78,7 +116,11 @@ import urllib.parse
 
 
 
+
+
 from urllib.parse import urlparse, parse_qs, urlencode
+
+
 
 
 
@@ -86,11 +128,9 @@ import sys
 
 
 
-
-
-
-
 # Add the Backend directory to the Python path
+
+
 
 
 
@@ -100,9 +140,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 
-
-
 from utils.short_id import generate_short_id, is_valid_short_id
+
+
 
 
 
@@ -110,15 +150,15 @@ from auth_middleware import requireAuth
 
 
 
+
+
 from flask import g
 
 
 
-
-
-
-
 # Import enhanced survey handler
+
+
 
 
 
@@ -138,6 +178,8 @@ try:
 
 
 
+
+
 except ImportError as e:
 
 
@@ -152,9 +194,9 @@ except ImportError as e:
 
 
 
-
-
 # Load environment variables
+
+
 
 
 
@@ -170,13 +212,13 @@ try:
 
 
 
+
+
 except ImportError:
 
 
 
     print("python-dotenv not installed. Using default environment variables.")
-
-
 
 
 
@@ -190,6 +232,8 @@ if os.getenv("FLASK_ENV") == "development":
 
 
 
+
+
 else:
 
 
@@ -200,33 +244,15 @@ else:
 
 
 
-
-
 app = Flask(__name__)
 
 
 
-app.secret_key = os.getenv('JWT_SECRET', 'your-super-secret-jwt-key-for-local-development')
 
 
+app.secret_key = os.getenv(
 
-
-
-
-
-CORS(app, 
-
-     supports_credentials=True,
-
-     origins="*",  # Allow all origins during development
-
-     allow_headers=["Content-Type", "Authorization", "Access-Control-Allow-Origin", "Access-Control-Allow-Credentials", "X-User-ID"],
-
-     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-
-     expose_headers=["Set-Cookie"],
-
-     max_age=600  # Cache preflight requests for 10 minutes
+    "JWT_SECRET", "your-super-secret-jwt-key-for-local-development"
 
 )
 
@@ -234,97 +260,187 @@ CORS(app,
 
 
 
-@app.route('/api/surveys/<survey_id>', methods=['GET'])
+CORS(
+
+    app,
+
+    supports_credentials=True,
+
+    origins="*",  # Allow all origins during development
+
+    allow_headers=[
+
+        "Content-Type",
+
+        "Authorization",
+
+        "Access-Control-Allow-Origin",
+
+        "Access-Control-Allow-Credentials",
+
+        "X-User-ID",
+
+    ],
+
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+
+    expose_headers=["Set-Cookie"],
+
+    max_age=600,  # Cache preflight requests for 10 minutes
+
+)
+
+
+
+
+
+@app.route("/api/surveys/<survey_id>", methods=["GET"])
 
 def get_survey_details(survey_id):
 
+
+
     print(f"DEBUG: get_survey_details called with survey_id: {survey_id}")
+
+
 
     try:
 
+
+
         # First, let's see what surveys are available
 
-        available_surveys = list(db["surveys"].find({}, {"_id": 1, "id": 1, "prompt": 1}).limit(5))
+
+
+        available_surveys = list(
+
+            db["surveys"].find({}, {"_id": 1, "id": 1, "prompt": 1}).limit(5)
+
+        )
+
+
 
         print(f"DEBUG: Available surveys (first 5): {available_surveys}")
 
-        
+
 
         # Check if survey_id is a valid short ID (5 alphanumeric characters)
 
+
+
         is_short_id = len(survey_id) == 5 and survey_id.isalnum()
+
+
 
         print(f"DEBUG: is_short_id: {is_short_id}")
 
-        
+
 
         # Build query to find survey by ID
 
+
+
         query = {"$or": [{"_id": survey_id}, {"id": survey_id}]}
+
+
 
         print(f"DEBUG: query: {query}")
 
-        
+
 
         # If it's not a short ID, try to convert from UUID string to ObjectId if needed
 
+
+
         if not is_short_id and len(survey_id) == 24:
+
+
 
             try:
 
+
+
                 query["$or"].append({"_id": ObjectId(survey_id)})
+
+
 
                 print(f"DEBUG: Added ObjectId to query")
 
+
+
             except:
+
+
 
                 pass  # Not a valid ObjectId, continue with original query
 
-        
+
 
         print(f"Looking for survey with query: {query}")
 
+
+
         survey = db["surveys"].find_one(query)
+
+
 
         print(f"DEBUG: survey result: {survey}")
 
-        
+
 
         if not survey:
 
+
+
             print(f"Survey {survey_id} not found")
+
+
 
             return jsonify({"error": "Survey not found"}), 404
 
-            
+
 
         # Convert ObjectId to string and ensure id field
 
+
+
         survey_data = convert_objectid_to_string(survey)
 
-        if 'id' not in survey_data and '_id' in survey_data:
 
-            survey_data['id'] = survey_data['_id']
 
-            
+        if "id" not in survey_data and "_id" in survey_data:
+
+
+
+            survey_data["id"] = survey_data["_id"]
+
+
 
         print(f"Found survey: {survey_data.get('id')}")
 
+
+
         return jsonify(survey_data)
 
-        
+
 
     except Exception as e:
 
+
+
         print("Error fetching survey details:", e)
+
+
 
         import traceback
 
+
+
         traceback.print_exc()
 
+
+
         return jsonify({"error": str(e)}), 500
-
-
 
 
 
@@ -334,13 +450,9 @@ def get_survey_details(survey_id):
 
 
 
+
+
 app.url_map.strict_slashes = False
-
-
-
-
-
-
 
 
 
@@ -352,19 +464,31 @@ def add_cors_headers(response):
 
     """Ensure CORS headers are always present on every response"""
 
-    origin = request.headers.get('Origin', '')
 
-    
+
+    origin = request.headers.get("Origin", "")
+
+
 
     # During development, allow all origins
 
+
+
     if os.getenv("FLASK_ENV") == "development" or not os.getenv("FLASK_ENV"):
 
-        response.headers['Access-Control-Allow-Origin'] = origin or '*'
+
+
+        response.headers["Access-Control-Allow-Origin"] = origin or "*"
+
+
 
     else:
 
+
+
         # In production, check against allowed origins
+
+
 
         allowed_origins = [
 
@@ -396,35 +520,45 @@ def add_cors_headers(response):
 
             "https://dashboard.pepperwahl.com",
 
-            "https://pepperwahl.com"
+            "https://pepperwahl.com",
 
         ]
 
+
+
         if origin in allowed_origins:
 
-            response.headers['Access-Control-Allow-Origin'] = origin
+
+
+            response.headers["Access-Control-Allow-Origin"] = origin
+
+
 
         else:
 
-            response.headers['Access-Control-Allow-Origin'] = '*'
 
-    
 
-    response.headers['Access-Control-Allow-Credentials'] = 'true'
+            response.headers["Access-Control-Allow-Origin"] = "*"
 
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-User-ID, Access-Control-Allow-Origin, Access-Control-Allow-Credentials'
 
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
 
-    
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+
+
+
+    response.headers["Access-Control-Allow-Headers"] = (
+
+        "Content-Type, Authorization, X-User-ID, Access-Control-Allow-Origin, Access-Control-Allow-Credentials"
+
+    )
+
+
+
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+
+
 
     return response
-
-
-
-
-
-
 
 
 
@@ -434,7 +568,11 @@ def add_cors_headers(response):
 
 
 
+
+
 print("Initializing MongoDB...")
+
+
 
 
 
@@ -448,13 +586,15 @@ print("✅ MongoDB initialized successfully")
 
 
 
-
-
 # AI API Configuration (OpenAI)
 
 
 
+
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+
+
 
 
 
@@ -463,6 +603,8 @@ if OPENAI_API_KEY:
 
 
     print(f"Using OpenAI API Key: {OPENAI_API_KEY[:12]}...")
+
+
 
 
 
@@ -476,11 +618,7 @@ else:
 
 
 
-
-
 def generate_ai_content(prompt_text, temperature=0.7, max_tokens=1024):
-
-
 
     """Generate content using OpenAI API"""
 
@@ -490,21 +628,19 @@ def generate_ai_content(prompt_text, temperature=0.7, max_tokens=1024):
 
 
 
-        raise ValueError("OpenAI API key is not configured. Set OPENAI_API_KEY in environment variables.")
+        raise ValueError(
+
+            "OpenAI API key is not configured. Set OPENAI_API_KEY in environment variables."
+
+        )
 
 
 
     headers = {
 
-
-
         "Authorization": f"Bearer {OPENAI_API_KEY}",
 
-
-
         "Content-Type": "application/json",
-
-
 
     }
 
@@ -512,29 +648,29 @@ def generate_ai_content(prompt_text, temperature=0.7, max_tokens=1024):
 
     payload = {
 
-
-
         "model": "gpt-4o-mini",
-
-
 
         "messages": [{"role": "user", "content": prompt_text}],
 
-
-
         "temperature": temperature,
 
-
-
         "max_tokens": max_tokens,
-
-
 
     }
 
 
 
-    resp = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=60)
+    resp = requests.post(
+
+        "https://api.openai.com/v1/chat/completions",
+
+        headers=headers,
+
+        json=payload,
+
+        timeout=60,
+
+    )
 
 
 
@@ -542,7 +678,11 @@ def generate_ai_content(prompt_text, temperature=0.7, max_tokens=1024):
 
 
 
-        raise ValueError("OpenAI API key is invalid or expired. Please update your OPENAI_API_KEY.")
+        raise ValueError(
+
+            "OpenAI API key is invalid or expired. Please update your OPENAI_API_KEY."
+
+        )
 
 
 
@@ -562,7 +702,11 @@ def generate_ai_content(prompt_text, temperature=0.7, max_tokens=1024):
 
 
 
-        raise ValueError("OpenAI API rate limit reached. Please try again in a few minutes.")
+        raise ValueError(
+
+            "OpenAI API rate limit reached. Please try again in a few minutes."
+
+        )
 
 
 
@@ -580,17 +724,15 @@ def generate_ai_content(prompt_text, temperature=0.7, max_tokens=1024):
 
 
 
-
-
 print("✅ OpenAI API configured successfully")
 
 
 
 
 
-
-
 # Import blueprints after MongoDB is initialized
+
+
 
 
 
@@ -654,10 +796,6 @@ try:
 
 
 
-    
-
-
-
     # Register blueprints
 
 
@@ -670,15 +808,15 @@ try:
 
 
 
-    app.register_blueprint(postback_api_bp, url_prefix='/api')
+    app.register_blueprint(postback_api_bp, url_prefix="/api")
 
 
 
-    app.register_blueprint(outbound_postback_bp, url_prefix='/api')
+    app.register_blueprint(outbound_postback_bp, url_prefix="/api")
 
 
 
-    app.register_blueprint(partners_api_bp, url_prefix='/api')
+    app.register_blueprint(partners_api_bp, url_prefix="/api")
 
 
 
@@ -706,19 +844,21 @@ try:
 
 
 
-    app.register_blueprint(survey_partner_mapping_bp, url_prefix='/api')
+    app.register_blueprint(survey_partner_mapping_bp, url_prefix="/api")
 
 
 
-    app.register_blueprint(user_postback_bp, url_prefix='/api')
+    app.register_blueprint(user_postback_bp, url_prefix="/api")
 
 
 
-    app.register_blueprint(email_trigger_bp, url_prefix='/api')  # Email trigger routes
+    app.register_blueprint(email_trigger_bp, url_prefix="/api")  # Email trigger routes
 
 
 
     print("✅ All blueprints registered successfully")
+
+
 
 
 
@@ -764,19 +904,13 @@ except ImportError as e:
 
 
 
-
-
-
-
-
-
 # Helper function to convert ObjectId to string
 
 
 
+
+
 def convert_objectid_to_string(doc):
-
-
 
     """Convert MongoDB ObjectId to string for JSON serialization"""
 
@@ -828,39 +962,47 @@ def convert_objectid_to_string(doc):
 
 
 
-@app.route('/')
+@app.route("/")
 
 def home():
+
+
 
     return "Hello Azure!"
 
 
 
-@app.route('/api/notifications', methods=['OPTIONS'])
 
-@app.route('/api/notifications/<path:subpath>', methods=['OPTIONS'])
 
-@app.route('/admin/suggestion-filters', methods=['OPTIONS'])
+@app.route("/api/notifications", methods=["OPTIONS"])
 
-@app.route('/admin/suggestion-filters/<path:subpath>', methods=['OPTIONS'])
+@app.route("/api/notifications/<path:subpath>", methods=["OPTIONS"])
+
+@app.route("/admin/suggestion-filters", methods=["OPTIONS"])
+
+@app.route("/admin/suggestion-filters/<path:subpath>", methods=["OPTIONS"])
 
 def handle_options(subpath=None):
 
     """Handle preflight OPTIONS requests"""
 
-    response = jsonify({'status': 'ok'})
+
+
+    response = jsonify({"status": "ok"})
+
+
 
     return response
 
 
 
-@app.route('/api/notifications', methods=['GET'])
+
+
+@app.route("/api/notifications", methods=["GET"])
 
 @cross_origin()
 
 def get_user_notifications():
-
-
 
     """Fetch active notifications for the current user (or all-target ones)"""
 
@@ -870,7 +1012,7 @@ def get_user_notifications():
 
 
 
-    token = request.headers.get('Authorization', '').replace('Bearer ', '')
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
 
 
 
@@ -890,15 +1032,15 @@ def get_user_notifications():
 
 
 
-            secret = app.config.get('JWT_SECRET', 'default_secret')
+            secret = app.config.get("JWT_SECRET", "default_secret")
 
 
 
-            payload = pyjwt.decode(token, secret, algorithms=['HS256'])
+            payload = pyjwt.decode(token, secret, algorithms=["HS256"])
 
 
 
-            user_email = payload.get('email', '')
+            user_email = payload.get("email", "")
 
 
 
@@ -910,35 +1052,11 @@ def get_user_notifications():
 
 
 
-
-
-
-
     try:
 
 
 
-        query = {
-
-
-
-            '$or': [
-
-
-
-                {'target': 'all'},
-
-
-
-                {'target': user_email}
-
-
-
-            ]
-
-
-
-        }
+        query = {"$or": [{"target": "all"}, {"target": user_email}]}
 
 
 
@@ -946,15 +1064,15 @@ def get_user_notifications():
 
 
 
-            query['read_by'] = {'$nin': [user_email]}
+            query["read_by"] = {"$nin": [user_email]}
 
 
 
+        notifications = list(
 
+            db.notifications.find(query).sort("created_at", -1).limit(10)
 
-
-
-        notifications = list(db.notifications.find(query).sort('created_at', -1).limit(10))
+        )
 
 
 
@@ -966,7 +1084,7 @@ def get_user_notifications():
 
 
 
-        return jsonify({'notifications': notifications})
+        return jsonify({"notifications": notifications})
 
 
 
@@ -974,31 +1092,23 @@ def get_user_notifications():
 
 
 
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
 
 
 
-
-
-
-
-
-
-@app.route('/api/notifications/<notification_id>/dismiss', methods=['POST'])
+@app.route("/api/notifications/<notification_id>/dismiss", methods=["POST"])
 
 @cross_origin()
 
 def dismiss_notification(notification_id):
 
-
-
     """Mark a notification as read/dismissed by the current user"""
 
 
 
-    token = request.headers.get('Authorization', '').replace('Bearer ', '')
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
 
 
 
@@ -1018,15 +1128,15 @@ def dismiss_notification(notification_id):
 
 
 
-            secret = app.config.get('JWT_SECRET', 'default_secret')
+            secret = app.config.get("JWT_SECRET", "default_secret")
 
 
 
-            payload = pyjwt.decode(token, secret, algorithms=['HS256'])
+            payload = pyjwt.decode(token, secret, algorithms=["HS256"])
 
 
 
-            user_email = payload.get('email', '')
+            user_email = payload.get("email", "")
 
 
 
@@ -1038,19 +1148,11 @@ def dismiss_notification(notification_id):
 
 
 
-
-
-
-
     if not user_email:
 
 
 
-        return jsonify({'error': 'Unauthorized'}), 401
-
-
-
-
+        return jsonify({"error": "Unauthorized"}), 401
 
 
 
@@ -1064,21 +1166,13 @@ def dismiss_notification(notification_id):
 
         db.notifications.update_one(
 
-
-
-            {'_id': ObjectId(notification_id)},
-
-
-
-            {'$addToSet': {'read_by': user_email}}
-
-
+            {"_id": ObjectId(notification_id)}, {"$addToSet": {"read_by": user_email}}
 
         )
 
 
 
-        return jsonify({'success': True})
+        return jsonify({"success": True})
 
 
 
@@ -1086,13 +1180,7 @@ def dismiss_notification(notification_id):
 
 
 
-        return jsonify({'error': str(e)}), 500
-
-
-
-
-
-
+        return jsonify({"error": str(e)}), 500
 
 
 
@@ -1106,11 +1194,7 @@ def save_email():
 
 
 
-    email = data.get('email')
-
-
-
-
+    email = data.get("email")
 
 
 
@@ -1122,10 +1206,6 @@ def save_email():
 
 
 
-
-
-
-
     try:
 
 
@@ -1134,31 +1214,11 @@ def save_email():
 
 
 
-        email_data = {
-
-
-
-            "_id": doc_id,
-
-
-
-            "email": email,
-
-
-
-            "saved_at": datetime.utcnow()
-
-
-
-        }
+        email_data = {"_id": doc_id, "email": email, "saved_at": datetime.utcnow()}
 
 
 
         db["user_emails"].insert_one(email_data)
-
-
-
-
 
 
 
@@ -1180,15 +1240,7 @@ def save_email():
 
 
 
-
-
-
-
-
-
-@app.route('/webhook', methods=['POST'])
-
-
+@app.route("/webhook", methods=["POST"])
 
 def webhook():
 
@@ -1216,12 +1268,6 @@ def webhook():
 
 
 
-
-
-
-
-
-
 def parse_survey_response(response_text):
 
 
@@ -1234,19 +1280,11 @@ def parse_survey_response(response_text):
 
 
 
-
-
-
-
     questions = []
 
 
 
     current_question = None
-
-
-
-
 
 
 
@@ -1258,11 +1296,7 @@ def parse_survey_response(response_text):
 
 
 
-        lines = [line.strip() for line in response_text.split('\n') if line.strip()]
-
-
-
-
+        lines = [line.strip() for line in response_text.split("\n") if line.strip()]
 
 
 
@@ -1274,11 +1308,7 @@ def parse_survey_response(response_text):
 
 
 
-            question_match = re.match(r'^(\d+)\.\s*(.+?)(?:\s*\(([^)]+)\))?$', line)
-
-
-
-
+            question_match = re.match(r"^(\d+)\.\s*(.+?)(?:\s*\(([^)]+)\))?$", line)
 
 
 
@@ -1298,7 +1328,11 @@ def parse_survey_response(response_text):
 
 
 
-                    if current_question.get("type") == "multiple_choice" and not current_question.get("options"):
+                    if current_question.get(
+
+                        "type"
+
+                    ) == "multiple_choice" and not current_question.get("options"):
 
 
 
@@ -1310,23 +1344,15 @@ def parse_survey_response(response_text):
 
 
 
-
-
-
-
                 question_num = question_match.group(1)
 
 
 
-                question_text = question_match.group(2).strip().replace('*', '')
+                question_text = question_match.group(2).strip().replace("*", "")
 
 
 
                 question_type = (question_match.group(3) or "").lower().strip()
-
-
-
-
 
 
 
@@ -1382,7 +1408,13 @@ def parse_survey_response(response_text):
 
 
 
-                    if "rate" in question_text.lower() or "scale" in question_text.lower():
+                    if (
+
+                        "rate" in question_text.lower()
+
+                        or "scale" in question_text.lower()
+
+                    ):
 
 
 
@@ -1390,7 +1422,13 @@ def parse_survey_response(response_text):
 
 
 
-                    elif "recommend" in question_text.lower() or "would you" in question_text.lower():
+                    elif (
+
+                        "recommend" in question_text.lower()
+
+                        or "would you" in question_text.lower()
+
+                    ):
 
 
 
@@ -1406,25 +1444,13 @@ def parse_survey_response(response_text):
 
 
 
-
-
-
-
                 current_question = {
-
-
 
                     "question": question_text,
 
-
-
                     "type": normalized_type,
 
-
-
-                    "options": []
-
-
+                    "options": [],
 
                 }
 
@@ -1434,15 +1460,11 @@ def parse_survey_response(response_text):
 
 
 
-
-
-
-
             # Match options with proper format (A) Option, B) Option, etc.)
 
 
 
-            option_match = re.match(r'^([A-Da-d])\)\s*(.+)$', line)
+            option_match = re.match(r"^([A-Da-d])\)\s*(.+)$", line)
 
 
 
@@ -1470,10 +1492,6 @@ def parse_survey_response(response_text):
 
 
 
-
-
-
-
         # Add the last question
 
 
@@ -1486,7 +1504,11 @@ def parse_survey_response(response_text):
 
 
 
-            if current_question.get("type") == "multiple_choice" and not current_question.get("options"):
+            if current_question.get(
+
+                "type"
+
+            ) == "multiple_choice" and not current_question.get("options"):
 
 
 
@@ -1495,10 +1517,6 @@ def parse_survey_response(response_text):
 
 
             questions.append(current_question)
-
-
-
-
 
 
 
@@ -1522,10 +1540,6 @@ def parse_survey_response(response_text):
 
 
 
-
-
-
-
             # Validate question length
 
 
@@ -1539,10 +1553,6 @@ def parse_survey_response(response_text):
 
 
                 q["id"] = f"q{i + 1}"
-
-
-
-
 
 
 
@@ -1590,15 +1600,7 @@ def parse_survey_response(response_text):
 
 
 
-
-
-
-
                 valid_questions.append(q)
-
-
-
-
 
 
 
@@ -1610,10 +1612,6 @@ def parse_survey_response(response_text):
 
 
 
-
-
-
-
         print(f"Successfully parsed {len(valid_questions)} questions")
 
 
@@ -1622,19 +1620,15 @@ def parse_survey_response(response_text):
 
 
 
-            print(f"Q{i + 1}: {q['question'][:50]}... Type: {q['type']}, Options: {len(q.get('options', []))}")
+            print(
 
+                f"Q{i + 1}: {q['question'][:50]}... Type: {q['type']}, Options: {len(q.get('options', []))}"
 
-
-
+            )
 
 
 
         return valid_questions
-
-
-
-
 
 
 
@@ -1656,11 +1650,7 @@ def parse_survey_response(response_text):
 
 
 
-
-
 def send_webhook_notification(data):
-
-
 
     """Send webhook notification to Make.com with proper datetime serialization"""
 
@@ -1670,17 +1660,11 @@ def send_webhook_notification(data):
 
 
 
-    headers = {'Content-Type': 'application/json'}
-
-
-
-    
+    headers = {"Content-Type": "application/json"}
 
 
 
     def serialize_datetime(obj):
-
-
 
         """Convert datetime objects to ISO format strings for JSON serialization"""
 
@@ -1718,10 +1702,6 @@ def send_webhook_notification(data):
 
 
 
-    
-
-
-
     try:
 
 
@@ -1731,10 +1711,6 @@ def send_webhook_notification(data):
 
 
         serialized_data = serialize_datetime(data)
-
-
-
-        
 
 
 
@@ -1754,7 +1730,11 @@ def send_webhook_notification(data):
 
 
 
-            print(f"Failed to send webhook to Make.com. Status code: {response.status_code}")
+            print(
+
+                f"Failed to send webhook to Make.com. Status code: {response.status_code}"
+
+            )
 
 
 
@@ -1786,9 +1766,9 @@ def send_webhook_notification(data):
 
 
 
+
+
 def validate_color(color):
-
-
 
     """Validate and normalize hex color code"""
 
@@ -1802,10 +1782,6 @@ def validate_color(color):
 
 
 
-    
-
-
-
     if not isinstance(color, str):
 
 
@@ -1814,19 +1790,11 @@ def validate_color(color):
 
 
 
-        
-
-
-
     # Remove # if present
 
 
 
-    color = color.lstrip('#')
-
-
-
-    
+    color = color.lstrip("#")
 
 
 
@@ -1838,11 +1806,7 @@ def validate_color(color):
 
 
 
-        color = ''.join(c + c for c in color)
-
-
-
-    
+        color = "".join(c + c for c in color)
 
 
 
@@ -1850,7 +1814,7 @@ def validate_color(color):
 
 
 
-    if not re.match(r'^[0-9a-fA-F]{6}$', color):
+    if not re.match(r"^[0-9a-fA-F]{6}$", color):
 
 
 
@@ -1858,27 +1822,25 @@ def validate_color(color):
 
 
 
-        
 
 
-
-@app.route('/parse-image', methods=['POST', 'OPTIONS'])
+@app.route("/parse-image", methods=["POST", "OPTIONS"])
 
 @cross_origin(supports_credentials=True, origins="*")
 
 def parse_image():
 
+
+
     # ... (rest of the code remains the same)
 
-    if request.method == 'OPTIONS':
+
+
+    if request.method == "OPTIONS":
 
 
 
-        return '', 200
-
-
-
-    
+        return "", 200
 
 
 
@@ -1890,7 +1852,7 @@ def parse_image():
 
 
 
-    auth_header = request.headers.get('Authorization')
+    auth_header = request.headers.get("Authorization")
 
 
 
@@ -1902,10 +1864,6 @@ def parse_image():
 
 
 
-    
-
-
-
     try:
 
 
@@ -1914,7 +1872,7 @@ def parse_image():
 
 
 
-        image_data = data.get('image', '')  # base64 image data
+        image_data = data.get("image", "")  # base64 image data
 
 
 
@@ -1926,25 +1884,15 @@ def parse_image():
 
 
 
-        
-
-
-
         # Use OpenAI with vision model to extract text from image
 
 
 
         headers = {
 
-
-
             "Authorization": f"Bearer {OPENAI_API_KEY}",
 
-
-
             "Content-Type": "application/json",
-
-
 
         }
 
@@ -1952,49 +1900,49 @@ def parse_image():
 
         payload = {
 
-
-
             "model": "gpt-4o-mini",
 
+            "messages": [
 
+                {
 
-            "messages": [{
+                    "role": "user",
 
+                    "content": [
 
+                        {
 
-                "role": "user",
+                            "type": "text",
 
+                            "text": "Extract all text, questions, and survey content from this image. List each question or piece of text on a new line. If there are answer options, include them. Be thorough and accurate.",
 
+                        },
 
-                "content": [
+                        {"type": "image_url", "image_url": {"url": image_data}},
 
+                    ],
 
+                }
 
-                    {"type": "text", "text": "Extract all text, questions, and survey content from this image. List each question or piece of text on a new line. If there are answer options, include them. Be thorough and accurate."},
-
-
-
-                    {"type": "image_url", "image_url": {"url": image_data}}
-
-
-
-                ]
-
-
-
-            }],
-
-
+            ],
 
             "max_tokens": 2048,
-
-
 
         }
 
 
 
-        resp = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=60)
+        resp = requests.post(
+
+            "https://api.openai.com/v1/chat/completions",
+
+            headers=headers,
+
+            json=payload,
+
+            timeout=60,
+
+        )
 
 
 
@@ -2007,10 +1955,6 @@ def parse_image():
 
 
         extracted_text = result["choices"][0]["message"]["content"]
-
-
-
-        
 
 
 
@@ -2032,23 +1976,19 @@ def parse_image():
 
 
 
+@app.route("/generate", methods=["POST", "OPTIONS"])
 
-
-@app.route('/generate', methods=['POST', 'OPTIONS'])
 @cross_origin(supports_credentials=True, origins="*")
+
 def generate_survey():
 
 
 
-    if request.method == 'OPTIONS':
+    if request.method == "OPTIONS":
 
 
 
-        return '', 200
-
-
-
-        
+        return "", 200
 
 
 
@@ -2064,10 +2004,6 @@ def generate_survey():
 
 
 
-
-
-
-
     try:
 
 
@@ -2080,19 +2016,7 @@ def generate_survey():
 
 
 
-            return jsonify({
-
-
-
-                "error": "Content-Type must be application/json"
-
-
-
-            }), 400
-
-
-
-
+            return jsonify({"error": "Content-Type must be application/json"}), 400
 
 
 
@@ -2112,19 +2036,11 @@ def generate_survey():
 
 
 
-            
-
-
-
         print(f"\n=== SURVEY GENERATION REQUEST ===")
 
 
 
         print(f"Raw request data: {data}")
-
-
-
-
 
 
 
@@ -2144,19 +2060,11 @@ def generate_survey():
 
 
 
-
-
-
-
         # Handle image content (base64 encoded image with text extracted by frontend or sent as description)
 
 
 
         image_context = data.get("image_context", "").strip()
-
-
-
-        
 
 
 
@@ -2173,10 +2081,6 @@ def generate_survey():
 
 
         theme = data.get("theme") or {}
-
-
-
-        
 
 
 
@@ -2200,10 +2104,6 @@ def generate_survey():
 
 
 
-
-
-
-
         # Build enhanced prompt that respects user-specified questions
 
 
@@ -2220,19 +2120,39 @@ def generate_survey():
 
 
 
-        
-
-
-
         # Detect if user specified specific questions in their prompt
 
 
 
-        specific_q_markers = ["include", "add this", "I want", "I need", "make sure", "must have", "should have", "these questions", "this question"]
+        specific_q_markers = [
+
+            "include",
+
+            "add this",
+
+            "I want",
+
+            "I need",
+
+            "make sure",
+
+            "must have",
+
+            "should have",
+
+            "these questions",
+
+            "this question",
+
+        ]
 
 
 
-        has_specific_questions = any(marker in prompt.lower() for marker in specific_q_markers)
+        has_specific_questions = any(
+
+            marker in prompt.lower() for marker in specific_q_markers
+
+        )
 
 
 
@@ -2241,10 +2161,6 @@ def generate_survey():
 
 
             user_questions_hint += f"\n\nIMPORTANT: The user has specified particular questions they want included. Extract any specific questions from their prompt and include them EXACTLY as stated. Generate additional questions to reach the total count.\n"
-
-
-
-
 
 
 
@@ -2268,7 +2184,13 @@ def generate_survey():
 
 
 
-                return jsonify({"error": "Question count must be between 5 and 100"}), 400
+                return (
+
+                    jsonify({"error": "Question count must be between 5 and 100"}),
+
+                    400,
+
+                )
 
 
 
@@ -2280,19 +2202,17 @@ def generate_survey():
 
 
 
-
-
-
-
         # Define prompt templates with the current question_count and prompt
 
 
 
         prompt_templates = {
 
-
-
             "custom": f"""
+
+
+
+
 
 
 
@@ -2300,7 +2220,15 @@ def generate_survey():
 
 
 
+
+
+
+
             {user_questions_hint}
+
+
+
+
 
 
 
@@ -2308,7 +2236,15 @@ def generate_survey():
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -2316,7 +2252,15 @@ def generate_survey():
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -2324,7 +2268,15 @@ def generate_survey():
 
 
 
+
+
+
+
             A) Option 1
+
+
+
+
 
 
 
@@ -2332,7 +2284,15 @@ def generate_survey():
 
 
 
+
+
+
+
             C) Option 3
+
+
+
+
 
 
 
@@ -2340,7 +2300,15 @@ def generate_survey():
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -2348,7 +2316,15 @@ def generate_survey():
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -2356,7 +2332,15 @@ def generate_survey():
 
 
 
+
+
+
+
             A) Yes
+
+
+
+
 
 
 
@@ -2364,7 +2348,15 @@ def generate_survey():
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -2372,7 +2364,15 @@ def generate_survey():
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -2380,7 +2380,15 @@ def generate_survey():
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -2388,7 +2396,15 @@ def generate_survey():
 
 
 
+
+
+
+
             - Start each question with a number and period (1. 2. 3. etc)
+
+
+
+
 
 
 
@@ -2396,7 +2412,15 @@ def generate_survey():
 
 
 
+
+
+
+
             - Multiple Choice = 4 options (A-D)
+
+
+
+
 
 
 
@@ -2404,7 +2428,15 @@ def generate_survey():
 
 
 
+
+
+
+
             - Rating, Short Answer, and Opinion Scale = No options needed
+
+
+
+
 
 
 
@@ -2412,11 +2444,23 @@ def generate_survey():
 
 
 
+
+
+
+
             - Cover different angles: satisfaction, recommendations, improvements, future needs, etc.
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -2424,15 +2468,17 @@ def generate_survey():
 
 
 
+
+
+
+
             """,
 
-
-
-            
-
-
-
             "customer_feedback": f"""
+
+
+
+
 
 
 
@@ -2440,7 +2486,19 @@ def generate_survey():
 
 
 
+
+
+
+
             {user_questions_hint}
+
+
+
+
+
+
+
+
 
 
 
@@ -2456,7 +2514,19 @@ def generate_survey():
 
 
 
+
+
+
+
+
+
+
+
             1. Question text here (Multiple Choice)  
+
+
+
+
 
 
 
@@ -2464,7 +2534,15 @@ def generate_survey():
 
 
 
+
+
+
+
             B) Option 2  
+
+
+
+
 
 
 
@@ -2472,7 +2550,19 @@ def generate_survey():
 
 
 
+
+
+
+
             D) Option 4  
+
+
+
+
+
+
+
+
 
 
 
@@ -2488,7 +2578,19 @@ def generate_survey():
 
 
 
+
+
+
+
+
+
+
+
             3. Question text here (Yes/No)  
+
+
+
+
 
 
 
@@ -2496,7 +2598,19 @@ def generate_survey():
 
 
 
+
+
+
+
             B) No  
+
+
+
+
+
+
+
+
 
 
 
@@ -2512,7 +2626,23 @@ def generate_survey():
 
 
 
+
+
+
+
+
+
+
+
             5. Question text here (Opinion Scale 1-10)
+
+
+
+
+
+
+
+
 
 
 
@@ -2524,7 +2654,15 @@ def generate_survey():
 
 
 
+
+
+
+
             - Start each question with a number and period (1. 2. 3. etc)
+
+
+
+
 
 
 
@@ -2532,11 +2670,23 @@ def generate_survey():
 
 
 
+
+
+
+
             - Multiple Choice = 4 options (A-D)
 
 
 
+
+
+
+
             - Yes/No = Only two options: A) Yes, B) No
+
+
+
+
 
 
 
@@ -2548,7 +2698,19 @@ def generate_survey():
 
 
 
+
+
+
+
+
+
+
+
             Create a good distribution of question types across all {question_count} questions:
+
+
+
+
 
 
 
@@ -2556,7 +2718,15 @@ def generate_survey():
 
 
 
+
+
+
+
             - Rating questions (about 20%) 
+
+
+
+
 
 
 
@@ -2564,7 +2734,15 @@ def generate_survey():
 
 
 
+
+
+
+
             - Short Answer questions (about 20%)
+
+
+
+
 
 
 
@@ -2576,19 +2754,29 @@ def generate_survey():
 
 
 
+
+
+
+
+
+
+
+
             Do not include any explanation — only return the {question_count} formatted questions in order.
+
+
+
+
 
 
 
             """,
 
-
-
-
-
-
-
             "employee_checkin": f"""
+
+
+
+
 
 
 
@@ -2596,7 +2784,19 @@ def generate_survey():
 
 
 
+
+
+
+
             {user_questions_hint}
+
+
+
+
+
+
+
+
 
 
 
@@ -2612,7 +2812,19 @@ def generate_survey():
 
 
 
+
+
+
+
+
+
+
+
             1. Question text here (Multiple Choice)  
+
+
+
+
 
 
 
@@ -2620,7 +2832,15 @@ def generate_survey():
 
 
 
+
+
+
+
             B) Option 2  
+
+
+
+
 
 
 
@@ -2628,7 +2848,19 @@ def generate_survey():
 
 
 
+
+
+
+
             D) Option 4  
+
+
+
+
+
+
+
+
 
 
 
@@ -2644,7 +2876,19 @@ def generate_survey():
 
 
 
+
+
+
+
+
+
+
+
             3. Question text here (Yes/No)  
+
+
+
+
 
 
 
@@ -2652,7 +2896,19 @@ def generate_survey():
 
 
 
+
+
+
+
             B) No  
+
+
+
+
+
+
+
+
 
 
 
@@ -2668,7 +2924,23 @@ def generate_survey():
 
 
 
+
+
+
+
+
+
+
+
             5. Question text here (Opinion Scale 1-10)
+
+
+
+
+
+
+
+
 
 
 
@@ -2680,7 +2952,15 @@ def generate_survey():
 
 
 
+
+
+
+
             - Start each question with a number and period (1. 2. 3. etc)
+
+
+
+
 
 
 
@@ -2688,11 +2968,23 @@ def generate_survey():
 
 
 
+
+
+
+
             - Multiple Choice = 4 options (A-D)
 
 
 
+
+
+
+
             - Yes/No = Only two options: A) Yes, B) No
+
+
+
+
 
 
 
@@ -2704,7 +2996,19 @@ def generate_survey():
 
 
 
+
+
+
+
+
+
+
+
             Create a good distribution of question types across all {question_count} questions:
+
+
+
+
 
 
 
@@ -2712,7 +3016,15 @@ def generate_survey():
 
 
 
+
+
+
+
             - Rating questions (about 20%) 
+
+
+
+
 
 
 
@@ -2720,7 +3032,15 @@ def generate_survey():
 
 
 
+
+
+
+
             - Short Answer questions (about 20%)
+
+
+
+
 
 
 
@@ -2732,19 +3052,29 @@ def generate_survey():
 
 
 
+
+
+
+
+
+
+
+
             Do not include any explanation — only return the {question_count} formatted questions in order.
+
+
+
+
 
 
 
             """,
 
-
-
-
-
-
-
             "default": f"""
+
+
+
+
 
 
 
@@ -2752,7 +3082,19 @@ def generate_survey():
 
 
 
+
+
+
+
                                  {user_questions_hint}
+
+
+
+
+
+
+
+
 
 
 
@@ -2768,7 +3110,19 @@ def generate_survey():
 
 
 
+
+
+
+
+
+
+
+
                                  1. Question text here (Multiple Choice)  
+
+
+
+
 
 
 
@@ -2776,7 +3130,15 @@ def generate_survey():
 
 
 
+
+
+
+
                                  B) Option 2  
+
+
+
+
 
 
 
@@ -2784,7 +3146,19 @@ def generate_survey():
 
 
 
+
+
+
+
                                  D) Option 4  
+
+
+
+
+
+
+
+
 
 
 
@@ -2800,7 +3174,19 @@ def generate_survey():
 
 
 
+
+
+
+
+
+
+
+
                                  3. Question text here (Yes/No)  
+
+
+
+
 
 
 
@@ -2808,7 +3194,19 @@ def generate_survey():
 
 
 
+
+
+
+
                                  B) No  
+
+
+
+
+
+
+
+
 
 
 
@@ -2824,7 +3222,23 @@ def generate_survey():
 
 
 
+
+
+
+
+
+
+
+
                                  5. Question text here (Opinion Scale 1-10)
+
+
+
+
+
+
+
+
 
 
 
@@ -2836,7 +3250,15 @@ def generate_survey():
 
 
 
+
+
+
+
                                  - Start each question with a number and period (1. 2. 3. etc)
+
+
+
+
 
 
 
@@ -2844,11 +3266,23 @@ def generate_survey():
 
 
 
+
+
+
+
                                  - Multiple Choice = 4 options (A-D)
 
 
 
+
+
+
+
                                  - Yes/No = Only two options: A) Yes, B) No
+
+
+
+
 
 
 
@@ -2860,19 +3294,25 @@ def generate_survey():
 
 
 
+
+
+
+
+
+
+
+
                                  Do not include any explanation — only return the formatted questions.
 
 
 
-                                 """
 
 
+
+
+                                 """,
 
         }
-
-
-
-
 
 
 
@@ -2888,15 +3328,7 @@ def generate_survey():
 
 
 
-
-
-
-
         print("Theme from frontend:", theme)
-
-
-
-
 
 
 
@@ -2910,35 +3342,31 @@ def generate_survey():
 
             complete_theme = {
 
-
-
                 "font": theme.get("font", "Poppins, sans-serif"),
-
-
 
                 "intent": theme.get("intent", "professional"),
 
-
-
                 "colors": {
 
+                    "primary": validate_color(
 
+                        theme.get("colors", {}).get("primary", "#d90429")
 
-                    "primary": validate_color(theme.get("colors", {}).get("primary", "#d90429")),
+                    ),
 
+                    "background": validate_color(
 
+                        theme.get("colors", {}).get("background", "#ffffff")
 
-                    "background": validate_color(theme.get("colors", {}).get("background", "#ffffff")),
+                    ),
 
+                    "text": validate_color(
 
+                        theme.get("colors", {}).get("text", "#333333")
 
-                    "text": validate_color(theme.get("colors", {}).get("text", "#333333"))
+                    ),
 
-
-
-                }
-
-
+                },
 
             }
 
@@ -2952,10 +3380,6 @@ def generate_survey():
 
 
 
-
-
-
-
         # Validate template type
 
 
@@ -2964,19 +3388,21 @@ def generate_survey():
 
 
 
-            return jsonify({
+            return (
 
+                jsonify(
 
+                    {
 
-                "error": f"Invalid template type. Available templates: {', '.join(prompt_templates.keys())}"
+                        "error": f"Invalid template type. Available templates: {', '.join(prompt_templates.keys())}"
 
+                    }
 
+                ),
 
-            }), 400
+                400,
 
-
-
-
+            )
 
 
 
@@ -2985,10 +3411,6 @@ def generate_survey():
 
 
         ai_prompt = prompt_templates.get(template_type, prompt_templates["default"])
-
-
-
-
 
 
 
@@ -3008,10 +3430,6 @@ def generate_survey():
 
 
 
-
-
-
-
         for attempt in range(max_retries):
 
 
@@ -3024,19 +3442,15 @@ def generate_survey():
 
 
 
-                
-
-
-
                 # Generate content via OpenAI
 
 
 
-                raw_response = generate_ai_content(ai_prompt, temperature=0.7, max_tokens=1024)
+                raw_response = generate_ai_content(
 
+                    ai_prompt, temperature=0.7, max_tokens=1024
 
-
-
+                )
 
 
 
@@ -3048,19 +3462,11 @@ def generate_survey():
 
 
 
-
-
-
-
                 raw_response = raw_response.strip()
 
 
 
                 print("AI Response:\n", raw_response)
-
-
-
-
 
 
 
@@ -3072,19 +3478,11 @@ def generate_survey():
 
 
 
-                
-
-
-
                 if not questions:
 
 
 
                     raise ValueError("Failed to parse any valid questions")
-
-
-
-
 
 
 
@@ -3100,11 +3498,11 @@ def generate_survey():
 
 
 
-                    raise ValueError(f"Only got {len(questions)} valid questions, needed at least {max(3, question_count // 2)}")
+                    raise ValueError(
 
+                        f"Only got {len(questions)} valid questions, needed at least {max(3, question_count // 2)}"
 
-
-
+                    )
 
 
 
@@ -3120,10 +3518,6 @@ def generate_survey():
 
 
 
-                
-
-
-
                 # Check for auth errors - don't retry, bail immediately
 
 
@@ -3136,23 +3530,23 @@ def generate_survey():
 
 
 
-                    return jsonify({
+                    return (
 
+                        jsonify(
 
+                            {
 
-                        "error": "AI API key is invalid or expired. Please contact the administrator to update the OpenAI API key.",
+                                "error": "AI API key is invalid or expired. Please contact the administrator to update the OpenAI API key.",
 
+                                "error_type": "auth_error",
 
+                            }
 
-                        "error_type": "auth_error"
+                        ),
 
+                        503,
 
-
-                    }), 503
-
-
-
-                
+                    )
 
 
 
@@ -3160,23 +3554,23 @@ def generate_survey():
 
 
 
-                    return jsonify({
+                    return (
 
+                        jsonify(
 
+                            {
 
-                        "error": "AI API credits exhausted. Please contact the administrator to add credits.",
+                                "error": "AI API credits exhausted. Please contact the administrator to add credits.",
 
+                                "error_type": "credits_exhausted",
 
+                            }
 
-                        "error_type": "credits_exhausted"
+                        ),
 
+                        503,
 
-
-                    }), 503
-
-
-
-                
+                    )
 
 
 
@@ -3184,31 +3578,37 @@ def generate_survey():
 
 
 
-                if "429" in str(retry_error) or "rate_limit" in error_str or "quota" in error_str:
+                if (
+
+                    "429" in str(retry_error)
+
+                    or "rate_limit" in error_str
+
+                    or "quota" in error_str
+
+                ):
 
 
 
-                    return jsonify({
+                    return (
 
+                        jsonify(
 
+                            {
 
-                        "error": "API quota exceeded. Please try again later or upgrade your API plan.",
+                                "error": "API quota exceeded. Please try again later or upgrade your API plan.",
 
+                                "error_type": "quota_exceeded",
 
+                                "message": "The AI API has reached its rate limit. Please wait a few minutes before trying again.",
 
-                        "error_type": "quota_exceeded",
+                            }
 
+                        ),
 
+                        429,
 
-                        "message": "The AI API has reached its rate limit. Please wait a few minutes before trying again."
-
-
-
-                    }), 429
-
-
-
-                
+                    )
 
 
 
@@ -3216,11 +3616,15 @@ def generate_survey():
 
 
 
-                    raise ValueError(f"Failed after {max_retries} attempts: {str(last_error)}")
+                    raise ValueError(
+
+                        f"Failed after {max_retries} attempts: {str(last_error)}"
+
+                    )
 
 
 
-         # your backend
+        # your backend
 
 
 
@@ -3236,11 +3640,7 @@ def generate_survey():
 
 
 
-        #     return "https://pepperadsresponses.web.app" 
-
-
-
-     
+        #     return "https://pepperadsresponses.web.app"
 
 
 
@@ -3286,99 +3686,115 @@ def generate_survey():
 
                 short_id = generate_short_id(5)
 
+                
+
 
 
                 # Check if this ID already exists
 
 
 
-                if not db.surveys.find_one({"$or": [{"_id": short_id}, {"id": short_id}]}):
+                if not db.surveys.find_one(
+
+                    {"$or": [{"_id": short_id}, {"id": short_id}]}
+
+                ):
 
 
 
                     break
 
-
-
-                    
-
-
-
-            # Get authenticated user if available, otherwise create temporary user
-            current_user = getattr(g, 'current_user', None)
             
-            if current_user:
-                # Authenticated user flow
-                print(f"DEBUG: Current user data: {current_user}")
-                print(f"DEBUG: simpleUserId: {current_user.get('simpleUserId', 'MISSING')}")
-                
-                simple_user_id = current_user.get('simpleUserId', 0)
-                
-                # Ensure we have a valid simpleUserId
-                if simple_user_id == 0 or simple_user_id is None:
-                    print("WARNING: simpleUserId is 0 or None, fetching from database")
-                    user_from_db = db.users.find_one({'_id': current_user['_id']})
-                    if user_from_db:
-                        simple_user_id = user_from_db.get('simpleUserId', 0)
-                        print(f"DEBUG: Retrieved simpleUserId from DB: {simple_user_id}")
-                
-                # Get username for aff_sub parameter
-                username = current_user.get('name', current_user.get('email', '').split('@')[0])
-                if not username:
-                    username = f"user_{simple_user_id}"
-                
-                user_id_str = str(current_user['_id'])
-                creator_email = current_user.get('email', '')
-                creator_name = current_user.get('name', '')
-            else:
-                # Unauthenticated user flow - create temporary user
-                import uuid
-                temp_user_id = str(uuid.uuid4())
-                simple_user_id = 0  # No simple user ID for temporary users
-                username = f"temp_{survey_id[:5]}"  # Use part of survey ID as username
-                user_id_str = temp_user_id
-                creator_email = ''
-                creator_name = 'Temporary User'
-                
-                print(f"DEBUG: Creating survey for unauthenticated user with temp ID: {temp_user_id}")
 
             survey_id = short_id
 
 
 
+            # Get authenticated user if available, otherwise create temporary user
+
+            current_user = getattr(g, "current_user", None)
+
+
+
+            if current_user:
+
+                # Authenticated user flow
+
+                print(f"DEBUG: Current user data: {current_user}")
+
+                print(
+
+                    f"DEBUG: simpleUserId: {current_user.get('simpleUserId', 'MISSING')}"
+
+                )
+
+
+
+                simple_user_id = current_user.get("simpleUserId", 0)
+
+
+
+                # Ensure we have a valid simpleUserId
+
+                if current_user and (simple_user_id == 0 or simple_user_id is None):
+
+                    print("WARNING: simpleUserId is 0 or None, fetching from database")
+
+                    user_id = current_user.get("_id")
+
+                    user_from_db = db.users.find_one({"_id": user_id}) if user_id else None
+
+                    if user_from_db:
+
+                        simple_user_id = user_from_db.get("simpleUserId", 0)
+
+                        print(
+
+                            f"DEBUG: Retrieved simpleUserId from DB: {simple_user_id}"
+
+                        )
+
+
+
+                # Get username for aff_sub parameter
+
+                if current_user:
+
+                    username = current_user.get(
+
+        "name", current_user.get("email", "").split("@")[0]
+
+    )
+
+                user_id_str = str(current_user.get("_id", ""))
+
+                creator_email = current_user.get("email", "")
+
+                creator_name = current_user.get("name", "") if current_user else "Temporary User"
+
+                simple_user_id = current_user.get("simpleUserId", 0)
+
+
+
+            else:
+
+                import uuid
+
+                temp_user_id = str(uuid.uuid4())
+
+                simple_user_id = 0
+
+                username = f"temp_{short_id[:5]}"
+
+                user_id_str = temp_user_id
+
+                creator_email = ""
+
+                creator_name = "Temporary User"
+
+
+
             
-
-
-
-            # Ensure we have a valid simpleUserId
-
-
-
-            if simple_user_id == 0 or simple_user_id is None:
-
-
-
-                print("WARNING: simpleUserId is 0 or None, fetching from database")
-
-
-
-                # Fallback: get from database directly
-
-
-
-                user_from_db = db.users.find_one({'_id': current_user['_id']})
-
-
-
-                if user_from_db:
-
-
-
-                    simple_user_id = user_from_db.get('simpleUserId', 0)
-
-
-
-                    print(f"DEBUG: Retrieved simpleUserId from DB: {simple_user_id}")
 
 
 
@@ -3390,7 +3806,7 @@ def generate_survey():
 
 
 
-            username = current_user.get('name', current_user.get('email', '').split('@')[0])
+            
 
 
 
@@ -3402,75 +3818,43 @@ def generate_survey():
 
 
 
-            
-
-
-
             survey_data = {
-
-
 
                 "_id": survey_id,
 
-
-
                 "id": survey_id,
-
-
 
                 "title": prompt[:100],
 
-
-
                 "subtitle": "",
-
-
 
                 "prompt": prompt,
 
-
-
                 "response_type": response_type,
-
-
 
                 "template_type": template_type,
 
-
-
                 "questions": questions,
-
-
 
                 "theme": complete_theme,
 
-
-
                 "created_at": datetime.utcnow(),
-
-
 
                 "shareable_link": f"{FRONTEND_URL}/survey?offer_id={survey_id}&user_id={simple_user_id}&sub1={username}",
 
-
-
                 "public_link": f"{FRONTEND_URL}/survey?offer_id={survey_id}&user_id={simple_user_id}&sub1={username}",
 
-
-
-                "is_short_id": True  # Mark that this survey uses a short ID
-
-
+                "is_short_id": True,  # Mark that this survey uses a short ID
 
             }
 
 
 
-            
+            print(
 
+                f"DEBUG: Generated links with user_id={simple_user_id} and sub1={username}"
 
-
-            print(f"DEBUG: Generated links with user_id={simple_user_id} and sub1={username}")
+            )
 
 
 
@@ -3478,66 +3862,90 @@ def generate_survey():
 
 
 
-            
-
-
-
             # Link survey to user (authenticated or temporary)
+
             survey_data["ownerUserId"] = user_id_str
+
             survey_data["user_id"] = user_id_str
+
             survey_data["creator_email"] = creator_email
+
             survey_data["creator_name"] = creator_name
+
             survey_data["simple_user_id"] = simple_user_id
-            survey_data["is_temporary"] = current_user is None  # Mark if this is a temporary user survey
-            
+
+            survey_data["is_temporary"] = (
+
+                current_user is None
+
+            )  # Mark if this is a temporary user survey
+
+
+
             if current_user:
+
                 survey_data["created_by"] = {
+
                     "user_id": user_id_str,
-                    "email": current_user.get('email', ''),
-                    "name": current_user.get('name', ''),
-                    "simple_id": current_user.get('simpleUserId', 0)
+
+                    "email": current_user.get("email", ""),
+
+                    "name": current_user.get("name", "") if current_user else "Temporary User",
+
+                    "simple_id": current_user.get("simpleUserId", 0),
+
                 }
-                print(f"✅ Survey linked to user: {current_user.get('email', 'Unknown')} (ID: {user_id_str}, SimpleID: {current_user.get('simpleUserId', 'None')})")
+
+                print(
+
+                     f"✅ Survey linked to user: {current_user.get('email', 'Unknown') if current_user else 'Temporary'} (ID: {user_id_str})"
+
+                )
+
             else:
+
                 survey_data["created_by"] = {
+
                     "user_id": user_id_str,
-                    "email": '',
-                    "name": 'Temporary User',
-                    "simple_id": 0
+
+                    "email": "",
+
+                    "name": "Temporary User",
+
+                    "simple_id": 0,
+
                 }
+
                 print(f"✅ Survey created for temporary user (ID: {user_id_str})")
 
 
 
-            
+            print(
+
+                f"✅ Survey linked to user: {current_user.get('email', 'Unknown') if current_user else 'Temporary'} (ID: {user_id_str})"
+
+            )
 
 
 
-            print(f"✅ Survey linked to user: {current_user.get('email', 'Unknown')} (ID: {user_id_str}, SimpleID: {current_user.get('simpleUserId', 'None')})")
+            print(
+
+                f"📋 Survey data includes: ownerUserId, user_id, creator_email, creator_name, simple_user_id, created_by"
+
+            )
 
 
 
-            print(f"📋 Survey data includes: ownerUserId, user_id, creator_email, creator_name, simple_user_id, created_by")
-
-
-
-            print(f"🔗 Generated links:")
-
-
+            print( 
+            f"🔗 Generated links:")
 
             print(f"   - Shareable: {survey_data['shareable_link']}")
 
-
-
             print(f"   - Public: {survey_data['public_link']}")
 
-
-
-            print(f"👤 User simpleUserId: {current_user.get('simpleUserId', 'NOT SET')}")
-
-
-
-
+            print(
+                 f"✅ Survey linked to user: {current_user.get('email', 'Unknown') if current_user else 'TEMP USER'} (ID: {user_id_str}, SimpleID: {current_user.get('simpleUserId', 'None') if current_user else 0})"
+            )
 
 
 
@@ -3546,10 +3954,6 @@ def generate_survey():
 
 
             db["surveys"].insert_one(survey_data)
-
-
-
-            
 
 
 
@@ -3569,39 +3973,25 @@ def generate_survey():
 
 
 
-            print(f"Questions: {[q.get('question', 'No question text') for q in questions[:3]]}...")
+            print(
 
+                f"Questions: {[q.get('question', 'No question text') for q in questions[:3]]}..."
 
-
-
+            )
 
 
 
             response_data = {
 
-
-
                 "survey_id": survey_id,
-
-
 
                 "questions": questions,
 
-
-
                 "template_type": template_type,
 
-
-
-                "theme": complete_theme
-
-
+                "theme": complete_theme,
 
             }
-
-
-
-            
 
 
 
@@ -3613,10 +4003,6 @@ def generate_survey():
 
 
 
-
-
-
-
         except Exception as db_error:
 
 
@@ -3625,27 +4011,13 @@ def generate_survey():
 
 
 
-            return jsonify({
+            return (
 
+                jsonify({"error": "Failed to save survey", "details": str(db_error)}),
 
+                500,
 
-                "error": "Failed to save survey",
-
-
-
-                "details": str(db_error)
-
-
-
-            }), 500
-
-
-
-
-
-
-
-
+            )
 
 
 
@@ -3657,43 +4029,31 @@ def generate_survey():
 
 
 
-        return jsonify({
+        return (
 
+            jsonify(
 
+                {
 
-            "error": str(e),
+                    "error": str(e),
 
+                    "suggestion": "Try changing the template or using simpler prompt text.",
 
+                    "debug_info": {"template_type": template_type},
 
-            "suggestion": "Try changing the template or using simpler prompt text.",
+                }
 
+            ),
 
+            500,
 
-            "debug_info": {
-
-
-
-                "template_type": template_type
-
-
-
-            }
-
-
-
-        }), 500
+        )
 
 
 
 
 
-
-
-
-
-
-
-@app.route('/survey/<survey_id>/respond', methods=['POST', 'OPTIONS'])
+@app.route("/survey/<survey_id>/respond", methods=["POST", "OPTIONS"])
 
 @cross_origin(supports_credentials=True, origins="*")
 
@@ -3701,15 +4061,11 @@ def submit_public_response(survey_id):
 
 
 
-    if request.method == 'OPTIONS':
+    if request.method == "OPTIONS":
 
 
 
-        return '', 200
-
-
-
-        
+        return "", 200
 
 
 
@@ -3726,10 +4082,6 @@ def submit_public_response(survey_id):
 
 
             return jsonify({"error": "No data provided"}), 400
-
-
-
-            
 
 
 
@@ -3753,10 +4105,6 @@ def submit_public_response(survey_id):
 
 
 
-
-
-
-
         print(f"Parsed responses: {responses}")
 
 
@@ -3773,10 +4121,6 @@ def submit_public_response(survey_id):
 
 
 
-
-
-
-
         if not responses:
 
 
@@ -3789,10 +4133,6 @@ def submit_public_response(survey_id):
 
 
 
-
-
-
-
         # Check if the survey_id is a valid short ID (5 alphanumeric characters)
 
 
@@ -3801,19 +4141,11 @@ def submit_public_response(survey_id):
 
 
 
-        
-
-
-
         # Build query to find survey by ID
 
 
 
         query = {"$or": [{"_id": survey_id}, {"id": survey_id}]}
-
-
-
-        
 
 
 
@@ -3841,19 +4173,11 @@ def submit_public_response(survey_id):
 
 
 
-        
-
-
-
         print(f"Looking for survey with query: {query}")
 
 
 
         survey = db["surveys"].find_one(query)
-
-
-
-
 
 
 
@@ -3881,15 +4205,7 @@ def submit_public_response(survey_id):
 
 
 
-
-
-
-
         print(f"Found survey: {survey.get('_id')} / {survey.get('id')}")
-
-
-
-
 
 
 
@@ -3899,41 +4215,21 @@ def submit_public_response(survey_id):
 
         response_data = {
 
-
-
             "_id": response_id,
-
-
 
             "id": response_id,
 
-
-
             "survey_id": survey_id,
-
-
 
             "responses": responses,
 
-
-
             "submitted_at": datetime.utcnow(),
-
-
 
             "is_public": True,
 
-
-
-            "status": "submitted"
-
-
+            "status": "submitted",
 
         }
-
-
-
-
 
 
 
@@ -3961,15 +4257,7 @@ def submit_public_response(survey_id):
 
 
 
-
-
-
-
         print(f"Attempting to save response data: {response_data}")
-
-
-
-
 
 
 
@@ -3985,15 +4273,7 @@ def submit_public_response(survey_id):
 
 
 
-
-
-
-
             print(f"SUCCESS: Database insert result: {result.inserted_id}")
-
-
-
-
 
 
 
@@ -4025,10 +4305,6 @@ def submit_public_response(survey_id):
 
 
 
-
-
-
-
         except Exception as db_error:
 
 
@@ -4038,10 +4314,6 @@ def submit_public_response(survey_id):
 
 
             return jsonify({"error": f"Database error: {str(db_error)}"}), 500
-
-
-
-
 
 
 
@@ -4061,119 +4333,67 @@ def submit_public_response(survey_id):
 
 
 
-            
-
-
-
             # Create comprehensive postback data with all available fields
 
 
 
             postback_data = {
 
-
-
                 "response_id": response_id,
-
-
 
                 "transaction_id": response_id,  # Use response ID as transaction ID
 
-
-
                 "survey_id": survey_id,
-
-
 
                 "email": response_data.get("email", ""),
 
-
-
                 "username": response_data.get("username", "anonymous"),
-
-
 
                 "responses": responses,
 
-
-
                 "status": "completed",
-
-
 
                 "reward": "0.1",  # Default reward amount
 
-
-
                 "currency": "USD",
-
-
 
                 "session_id": response_id,
 
-
-
                 "complete_id": response_id,
-
-
 
                 "submitted_at": response_data["submitted_at"],
 
-
-
                 "user_id": response_data.get("user_id", ""),
-
-
 
                 "simple_user_id": response_data.get("simple_user_id", ""),
 
-
-
                 "click_id": response_data.get("click_id", ""),
-
-
 
                 "ip_address": response_data.get("ip_address", ""),
 
-
-
                 "user_agent": response_data.get("user_agent", ""),
-
-
 
                 "aff_sub": response_data.get("aff_sub", ""),
 
-
-
                 "sub1": response_data.get("sub1", ""),
-
-
 
                 "sub2": response_data.get("sub2", ""),
 
-
-
                 "referrer": response_data.get("referrer", ""),
-
-
 
                 "started_at": response_data.get("started_at", ""),
 
-
-
-                "completion_time": "0"  # Could calculate this if needed
-
-
+                "completion_time": "0",  # Could calculate this if needed
 
             }
 
 
 
-            
+            print(
 
+                f"🎯 USER-BASED POSTBACK: Sending to survey creator for survey {survey_id}"
 
-
-            print(f"🎯 USER-BASED POSTBACK: Sending to survey creator for survey {survey_id}")
+            )
 
 
 
@@ -4181,27 +4401,23 @@ def submit_public_response(survey_id):
 
 
 
-            
-
-
-
             # Send postback to the survey creator
 
 
 
-            creator_postback_result = send_postback_to_survey_creator(survey_id, postback_data)
+            creator_postback_result = send_postback_to_survey_creator(
+
+                survey_id, postback_data
+
+            )
 
 
 
-            
+            if creator_postback_result["success"]:
 
 
 
-            if creator_postback_result['success']:
-
-
-
-                creator_name = creator_postback_result.get('creator_name', 'Unknown')
+                creator_name = creator_postback_result.get("creator_name", "Unknown")
 
 
 
@@ -4213,15 +4429,15 @@ def submit_public_response(survey_id):
 
 
 
-                error_msg = creator_postback_result.get('error', 'Unknown error')
+                error_msg = creator_postback_result.get("error", "Unknown error")
 
 
 
-                print(f"⚠️ WARNING: Failed to send postback to survey creator: {error_msg}")
+                print(
 
+                    f"⚠️ WARNING: Failed to send postback to survey creator: {error_msg}"
 
-
-                
+                )
 
 
 
@@ -4230,10 +4446,6 @@ def submit_public_response(survey_id):
 
 
             print(f"❌ ERROR: Creator postback error: {creator_postback_error}")
-
-
-
-
 
 
 
@@ -4253,35 +4465,35 @@ def submit_public_response(survey_id):
 
 
 
-            
-
-
-
             # Send postbacks to mapped partners (if any exist)
 
 
 
-            partner_postback_result = send_postbacks_to_mapped_partners(survey_id, postback_data)
+            partner_postback_result = send_postbacks_to_mapped_partners(
+
+                survey_id, postback_data
+
+            )
 
 
 
-            
+            if partner_postback_result["total_mappings"] > 0:
 
 
 
-            if partner_postback_result['total_mappings'] > 0:
+                successful = partner_postback_result["successful_postbacks"]
 
 
 
-                successful = partner_postback_result['successful_postbacks']
+                total = partner_postback_result["total_mappings"]
 
 
 
-                total = partner_postback_result['total_mappings']
+                print(
 
+                    f"📤 LEGACY: Partner postback completed ({successful}/{total} successful)"
 
-
-                print(f"📤 LEGACY: Partner postback completed ({successful}/{total} successful)")
+                )
 
 
 
@@ -4293,19 +4505,11 @@ def submit_public_response(survey_id):
 
 
 
-                
-
-
-
         except Exception as partner_error:
 
 
 
             print(f"❌ ERROR: Partner postback error: {partner_error}")
-
-
-
-
 
 
 
@@ -4331,39 +4535,21 @@ def submit_public_response(survey_id):
 
                     db["survey_tracking"].update_one(
 
-
-
                         {"_id": tracking_id},
-
-
 
                         {
 
-
-
                             "$set": {
-
-
 
                                 "submitted": True,
 
-
-
                                 "submitted_at": datetime.utcnow(),
 
-
-
-                                "response_id": response_id
-
-
+                                "response_id": response_id,
 
                             }
 
-
-
-                        }
-
-
+                        },
 
                     )
 
@@ -4381,10 +4567,6 @@ def submit_public_response(survey_id):
 
 
 
-
-
-
-
         # Send webhook notification to Make.com
 
 
@@ -4393,35 +4575,23 @@ def submit_public_response(survey_id):
 
 
 
-        
-
-
-
         print(f"SUCCESS: Response {response_id} processed successfully")
 
 
 
-        return jsonify({
+        return jsonify(
 
+            {
 
+                "message": "Response submitted successfully",
 
-            "message": "Response submitted successfully",
+                "response_id": response_id,
 
+                "survey_id": survey_id,
 
+            }
 
-            "response_id": response_id,
-
-
-
-            "survey_id": survey_id
-
-
-
-        })
-
-
-
-
+        )
 
 
 
@@ -4447,15 +4617,7 @@ def submit_public_response(survey_id):
 
 
 
-
-
-
-
-
-
-@app.route('/insights', methods=['POST'])
-
-
+@app.route("/insights", methods=["POST"])
 
 def generate_insights():
 
@@ -4469,19 +4631,11 @@ def generate_insights():
 
 
 
-
-
-
-
     if not survey_id:
 
 
 
         return jsonify({"error": "Survey ID is required"}), 400
-
-
-
-
 
 
 
@@ -4494,10 +4648,6 @@ def generate_insights():
 
 
         responses_cursor = db["responses"].find({"survey_id": survey_id})
-
-
-
-        
 
 
 
@@ -4521,10 +4671,6 @@ def generate_insights():
 
 
 
-
-
-
-
         if not all_responses:
 
 
@@ -4533,35 +4679,17 @@ def generate_insights():
 
 
 
-
-
-
-
         full_text = "\n".join(all_responses)
-
-
-
-
 
 
 
         prompt = (
 
-
-
             "Based on the following customer survey responses, suggest business strategies, improvements, or new market segments.\n"
-
-
 
             f"Responses:\n{full_text}\n\nBusiness Ideas:"
 
-
-
         )
-
-
-
-
 
 
 
@@ -4573,15 +4701,7 @@ def generate_insights():
 
 
 
-
-
-
-
         return jsonify({"insights": insights})
-
-
-
-
 
 
 
@@ -4595,15 +4715,7 @@ def generate_insights():
 
 
 
-
-
-
-
-
-
-@app.route('/check-logic', methods=['POST'])
-
-
+@app.route("/check-logic", methods=["POST"])
 
 def check_logic():
 
@@ -4617,10 +4729,6 @@ def check_logic():
 
 
 
-
-
-
-
     q1 = responses.get("Do you want to start a business?")
 
 
@@ -4629,15 +4737,19 @@ def check_logic():
 
 
 
-
-
-
-
     if q1 == "Yes" and q2 == "Yes":
 
 
 
-        return jsonify({"next_page": "https://jobfinder-efe0e.web.app/public_survey.html?id=abc123"})
+        return jsonify(
+
+            {
+
+                "next_page": "https://jobfinder-efe0e.web.app/public_survey.html?id=abc123"
+
+            }
+
+        )
 
 
 
@@ -4651,19 +4763,9 @@ def check_logic():
 
 
 
-
-
-
-
-
-
-@app.route('/survey/<survey_id>/branching', methods=['POST'])
-
-
+@app.route("/survey/<survey_id>/branching", methods=["POST"])
 
 def get_branching_logic(survey_id):
-
-
 
     """Handle branching logic for surveys - progressive question display"""
 
@@ -4689,11 +4791,11 @@ def get_branching_logic(survey_id):
 
 
 
-        
+        print(
 
+            f"Branching logic - Survey: {survey_id}, Question: {question_id}, Answer: {answer}"
 
-
-        print(f"Branching logic - Survey: {survey_id}, Question: {question_id}, Answer: {answer}")
+        )
 
 
 
@@ -4701,15 +4803,15 @@ def get_branching_logic(survey_id):
 
 
 
-        
-
-
-
         # Find the survey to get questions structure
 
 
 
-        survey = db["surveys"].find_one({"$or": [{"_id": survey_id}, {"id": survey_id}]})
+        survey = db["surveys"].find_one(
+
+            {"$or": [{"_id": survey_id}, {"id": survey_id}]}
+
+        )
 
 
 
@@ -4721,19 +4823,11 @@ def get_branching_logic(survey_id):
 
 
 
-        
-
-
-
         questions = survey.get("questions", [])
 
 
 
         all_question_ids = [q.get("id") for q in questions if q.get("id")]
-
-
-
-        
 
 
 
@@ -4761,19 +4855,11 @@ def get_branching_logic(survey_id):
 
 
 
-        
-
-
-
         if current_question_index == -1:
 
 
 
             return jsonify({"error": "Question not found"}), 404
-
-
-
-        
 
 
 
@@ -4793,19 +4879,11 @@ def get_branching_logic(survey_id):
 
 
 
-        
-
-
-
         print(f"Question text: {question_text}")
 
 
 
         print(f"Answer: {answer_str}")
-
-
-
-        
 
 
 
@@ -4817,19 +4895,11 @@ def get_branching_logic(survey_id):
 
 
 
-        
-
-
-
         # Determine how many questions to show next based on the answer
 
 
 
         questions_to_add = 1  # Default: show next question
-
-
-
-        
 
 
 
@@ -4841,7 +4911,21 @@ def get_branching_logic(survey_id):
 
 
 
-            if answer_str in ["no", "very dissatisfied", "dissatisfied", "poor", "1", "2"]:
+            if answer_str in [
+
+                "no",
+
+                "very dissatisfied",
+
+                "dissatisfied",
+
+                "poor",
+
+                "1",
+
+                "2",
+
+            ]:
 
 
 
@@ -4862,10 +4946,6 @@ def get_branching_logic(survey_id):
 
 
                 questions_to_add = 1
-
-
-
-                
 
 
 
@@ -4894,10 +4974,6 @@ def get_branching_logic(survey_id):
 
 
                 questions_to_add = 1
-
-
-
-                
 
 
 
@@ -4945,10 +5021,6 @@ def get_branching_logic(survey_id):
 
 
 
-                
-
-
-
         elif "product" in question_text or "service" in question_text:
 
 
@@ -4970,10 +5042,6 @@ def get_branching_logic(survey_id):
 
 
                 questions_to_add = 1
-
-
-
-        
 
 
 
@@ -5005,10 +5073,6 @@ def get_branching_logic(survey_id):
 
 
 
-        
-
-
-
         # Ensure we don't exceed total questions
 
 
@@ -5017,43 +5081,25 @@ def get_branching_logic(survey_id):
 
 
 
-        
-
-
-
         print(f"Next questions to show: {next_questions}")
 
 
 
-        
+        return jsonify(
 
+            {
 
+                "next_questions": next_questions,
 
-        return jsonify({
+                "message": f"Based on your answer '{answer}', showing {len(next_questions)} questions",
 
+                "total_questions": len(all_question_ids),
 
+                "current_progress": len(next_questions),
 
-            "next_questions": next_questions,
+            }
 
-
-
-            "message": f"Based on your answer '{answer}', showing {len(next_questions)} questions",
-
-
-
-            "total_questions": len(all_question_ids),
-
-
-
-            "current_progress": len(next_questions)
-
-
-
-        })
-
-
-
-        
+        )
 
 
 
@@ -5071,19 +5117,9 @@ def get_branching_logic(survey_id):
 
 
 
-
-
-
-
-
-
-@app.route('/survey/<survey_id>/track', methods=['POST'])
-
-
+@app.route("/survey/<survey_id>/track", methods=["POST"])
 
 def track_survey_view(survey_id):
-
-
 
     """Track when a user views a survey"""
 
@@ -5105,47 +5141,25 @@ def track_survey_view(survey_id):
 
 
 
-        
-
-
-
         tracking_id = str(uuid.uuid4())
 
 
 
         tracking_data = {
 
-
-
             "_id": tracking_id,
-
-
 
             "survey_id": survey_id,
 
-
-
             "username": username,
-
-
 
             "email": email,
 
-
-
             "viewed_at": datetime.utcnow(),
 
-
-
-            "submitted": False
-
-
+            "submitted": False,
 
         }
-
-
-
-        
 
 
 
@@ -5153,27 +5167,7 @@ def track_survey_view(survey_id):
 
 
 
-        
-
-
-
-        return jsonify({
-
-
-
-            "tracking_id": tracking_id,
-
-
-
-            "message": "Tracking started"
-
-
-
-        })
-
-
-
-        
+        return jsonify({"tracking_id": tracking_id, "message": "Tracking started"})
 
 
 
@@ -5191,15 +5185,7 @@ def track_survey_view(survey_id):
 
 
 
-
-
-
-
-
-
-@app.route('/survey/<survey_id>/tracking', methods=['GET'])
-
-
+@app.route("/survey/<survey_id>/tracking", methods=["GET"])
 
 def get_survey_tracking(survey_id):
 
@@ -5217,10 +5203,6 @@ def get_survey_tracking(survey_id):
 
 
 
-
-
-
-
         total_views = 0
 
 
@@ -5230,10 +5212,6 @@ def get_survey_tracking(survey_id):
 
 
         view_data = []
-
-
-
-
 
 
 
@@ -5253,19 +5231,11 @@ def get_survey_tracking(survey_id):
 
 
 
-
-
-
-
             if data.get("submitted", False):
 
 
 
                 total_submissions += 1
-
-
-
-
 
 
 
@@ -5281,39 +5251,23 @@ def get_survey_tracking(survey_id):
 
 
 
+        return jsonify(
 
+            {
 
+                "survey_id": survey_id,
 
+                "total_views": total_views,
 
-        return jsonify({
+                "total_submissions": total_submissions,
 
+                "completion_rate": completion_rate,
 
+                "view_data": view_data,
 
-            "survey_id": survey_id,
+            }
 
-
-
-            "total_views": total_views,
-
-
-
-            "total_submissions": total_submissions,
-
-
-
-            "completion_rate": completion_rate,
-
-
-
-            "view_data": view_data
-
-
-
-        })
-
-
-
-
+        )
 
 
 
@@ -5331,15 +5285,7 @@ def get_survey_tracking(survey_id):
 
 
 
-
-
-
-
-
-
-@app.route('/survey/<survey_id>/view', methods=['GET'])
-
-
+@app.route("/survey/<survey_id>/view", methods=["GET"])
 
 def view_survey(survey_id):
 
@@ -5357,19 +5303,11 @@ def view_survey(survey_id):
 
 
 
-        
-
-
-
         # Build query to find survey by ID
 
 
 
         query = {"$or": [{"_id": survey_id}, {"id": survey_id}]}
-
-
-
-        
 
 
 
@@ -5397,19 +5335,11 @@ def view_survey(survey_id):
 
 
 
-        
-
-
-
         print(f"Looking for survey with query: {query}")
 
 
 
         survey = db["surveys"].find_one(query)
-
-
-
-
 
 
 
@@ -5437,15 +5367,7 @@ def view_survey(survey_id):
 
 
 
-
-
-
-
         print(f"Found survey: {survey.get('_id')} / {survey.get('id')}")
-
-
-
-
 
 
 
@@ -5457,19 +5379,11 @@ def view_survey(survey_id):
 
 
 
-        
-
-
-
         # Return survey data only (this is a view endpoint, not a submission endpoint)
 
 
 
         return jsonify(survey_data)
-
-
-
-
 
 
 
@@ -5487,51 +5401,63 @@ def view_survey(survey_id):
 
 
 
-
-
-
-
-
-
-@app.route('/surveys', methods=['GET'])
-
-
+@app.route("/surveys", methods=["GET"])
 
 def list_surveys():
 
+
+
     try:
+
+
 
         # Find all surveys, sorted by created_at in descending order
 
+
+
         surveys_cursor = db["surveys"].find().sort("created_at", -1)
 
-        
+
 
         surveys = []
 
-        
+
 
         for doc in surveys_cursor:
 
+
+
             data = convert_objectid_to_string(doc)
+
+
 
             # Ensure id field is present (some documents might use _id)
 
-            if 'id' not in data and '_id' in data:
 
-                data['id'] = data['_id']
+
+            if "id" not in data and "_id" in data:
+
+
+
+                data["id"] = data["_id"]
+
+
 
             surveys.append(data)
 
-        
+
 
         return jsonify({"surveys": surveys})
 
-    
+
 
     except Exception as e:
 
+
+
         print("Error fetching surveys:", e)
+
+
 
         return jsonify({"error": str(e)}), 500
 
@@ -5539,7 +5465,7 @@ def list_surveys():
 
 
 
-@app.route('/api/surveys/<survey_id>/check-email-triggers', methods=['POST'])
+@app.route("/api/surveys/<survey_id>/check-email-triggers", methods=["POST"])
 
 @cross_origin(supports_credentials=True, origins="*")
 
@@ -5547,103 +5473,141 @@ def check_email_triggers(survey_id):
 
     """Check if any email triggers are met based on current answers"""
 
+
+
     try:
+
+
 
         data = request.get_json()
 
-        current_answers = data.get('answers', {})
 
-        
 
-        print(f"DEBUG: Checking email triggers for survey {survey_id} with answers: {current_answers}")
+        current_answers = data.get("answers", {})
 
-        
+
+
+        print(
+
+            f"DEBUG: Checking email triggers for survey {survey_id} with answers: {current_answers}"
+
+        )
+
+
 
         # Use the survey_id directly since triggers are stored with short ID
 
-        triggers_query = {
 
-            "survey_id": survey_id,
 
-            "is_active": True
+        triggers_query = {"survey_id": survey_id, "is_active": True}
 
-        }
 
-        
 
         print(f"DEBUG: Querying triggers with: {triggers_query}")
 
-        
+
 
         triggers = list(db.email_triggers.find(triggers_query))
 
-        
+
 
         print(f"DEBUG: Found {len(triggers)} triggers for survey")
 
-        
+
 
         met_triggers = []
 
-        
+
 
         for trigger in triggers:
 
-            question_id = trigger.get('question_id')
 
-            condition = trigger.get('condition', 'equals')
 
-            required_answer = trigger.get('answer_value')
+            question_id = trigger.get("question_id")
 
-            
 
-            print(f"DEBUG: Checking trigger - Question: {question_id}, User Answer: {current_answers.get(question_id)}, Required: {required_answer}")
 
-            
+            condition = trigger.get("condition", "equals")
+
+
+
+            required_answer = trigger.get("answer_value")
+
+
+
+            print(
+
+                f"DEBUG: Checking trigger - Question: {question_id}, User Answer: {current_answers.get(question_id)}, Required: {required_answer}"
+
+            )
+
+
 
             # Check if the trigger condition is met
 
+
+
             user_answer = current_answers.get(question_id)
 
-            
+
 
             if user_answer and str(user_answer).lower() == str(required_answer).lower():
 
-                met_triggers.append({
 
-                    "trigger_id": str(trigger['_id']),
 
-                    "question_id": question_id,
+                met_triggers.append(
 
-                    "answer_value": required_answer,
+                    {
 
-                    "email_template_id": trigger.get('email_template_id')
+                        "trigger_id": str(trigger["_id"]),
 
-                })
+                        "question_id": question_id,
+
+                        "answer_value": required_answer,
+
+                        "email_template_id": trigger.get("email_template_id"),
+
+                    }
+
+                )
+
+
 
                 print(f"DEBUG: Trigger met! Question {question_id} = {required_answer}")
 
-        
 
-        return jsonify({
 
-            "success": True,
+        return jsonify(
 
-            "triggers_met": met_triggers,
+            {
 
-            "should_collect_email": len(met_triggers) > 0
+                "success": True,
 
-        })
+                "triggers_met": met_triggers,
 
-        
+                "should_collect_email": len(met_triggers) > 0,
+
+            }
+
+        )
+
+
 
     except Exception as e:
 
+
+
         print(f"Error checking email triggers: {e}")
+
+
 
         import traceback
 
+
+
         traceback.print_exc()
+
+
 
         return jsonify({"error": str(e)}), 500
 
@@ -5651,7 +5615,7 @@ def check_email_triggers(survey_id):
 
 
 
-@app.route('/api/test-email', methods=['POST'])
+@app.route("/api/test-email", methods=["POST"])
 
 @cross_origin(supports_credentials=True, origins="*")
 
@@ -5659,25 +5623,35 @@ def test_email():
 
     """Test email sending directly"""
 
+
+
     try:
+
+
 
         data = request.get_json()
 
-        to_email = data.get('email', 'test@example.com')
 
-        
+
+        to_email = data.get("email", "test@example.com")
+
+
 
         print(f"📧 Testing email sending to: {to_email}")
 
-        
+
 
         # Test email service directly
 
+
+
         from email_trigger_service import email_trigger_service
 
-        
+
 
         # Create a test email template
+
+
 
         test_result = email_trigger_service.send_email(
 
@@ -5687,41 +5661,49 @@ def test_email():
 
             body="This is a test email to verify SMTP is working correctly.",
 
-            is_html=False
+            is_html=False,
 
         )
 
-        
+
 
         if test_result:
 
-            return jsonify({
 
-                "success": True,
 
-                "message": "Test email sent successfully"
+            return jsonify({"success": True, "message": "Test email sent successfully"})
 
-            })
+
 
         else:
 
-            return jsonify({
 
-                "success": False,
 
-                "message": "Failed to send test email"
+            return (
 
-            }), 500
+                jsonify({"success": False, "message": "Failed to send test email"}),
 
-            
+                500,
+
+            )
+
+
 
     except Exception as e:
 
+
+
         print(f"❌ Test email error: {e}")
+
+
 
         import traceback
 
+
+
         traceback.print_exc()
+
+
 
         return jsonify({"error": str(e)}), 500
 
@@ -5729,7 +5711,7 @@ def test_email():
 
 
 
-@app.route('/api/process-scheduled-emails', methods=['POST'])
+@app.route("/api/process-scheduled-emails", methods=["POST"])
 
 @cross_origin(supports_credentials=True, origins="*")
 
@@ -5737,33 +5719,39 @@ def process_scheduled_emails():
 
     """Process scheduled emails that are due to be sent"""
 
+
+
     try:
+
+
 
         from email_trigger_service import email_trigger_service
 
-        
+
 
         results = email_trigger_service.process_scheduled_emails()
 
-        
 
-        return jsonify({
 
-            "success": True,
+        return jsonify({"success": True, "results": results})
 
-            "results": results
 
-        })
-
-        
 
     except Exception as e:
 
+
+
         print(f"❌ Error processing scheduled emails: {e}")
+
+
 
         import traceback
 
+
+
         traceback.print_exc()
+
+
 
         return jsonify({"error": str(e)}), 500
 
@@ -5771,9 +5759,11 @@ def process_scheduled_emails():
 
 
 
-@app.route('/api/test-endpoint', methods=['GET'])
+@app.route("/api/test-endpoint", methods=["GET"])
 
 def test_endpoint():
+
+
 
     return jsonify({"message": "Test endpoint working"})
 
@@ -5793,19 +5783,11 @@ def get_survey_responses(survey_id):
 
 
 
-
-
-
-
         # Find all responses for this survey
 
 
 
         responses_cursor = db["responses"].find({"survey_id": survey_id})
-
-
-
-
 
 
 
@@ -5825,39 +5807,23 @@ def get_survey_responses(survey_id):
 
 
 
-
-
-
-
         print(f"Found {len(responses)} responses")
 
 
 
+        return jsonify(
 
+            {
 
+                "survey_id": survey_id,
 
+                "total_responses": len(responses),
 
-        return jsonify({
+                "responses": responses,
 
+            }
 
-
-            "survey_id": survey_id,
-
-
-
-            "total_responses": len(responses),
-
-
-
-            "responses": responses
-
-
-
-        })
-
-
-
-
+        )
 
 
 
@@ -5875,19 +5841,9 @@ def get_survey_responses(survey_id):
 
 
 
-
-
-
-
-
-
-@app.route('/debug/all-responses', methods=['GET'])
-
-
+@app.route("/debug/all-responses", methods=["GET"])
 
 def get_all_responses():
-
-
 
     """Debug endpoint to see all responses in the database"""
 
@@ -5898,10 +5854,6 @@ def get_all_responses():
 
 
         responses_cursor = db["responses"].find()
-
-
-
-
 
 
 
@@ -5921,27 +5873,7 @@ def get_all_responses():
 
 
 
-
-
-
-
-        return jsonify({
-
-
-
-            "total_responses": len(responses),
-
-
-
-            "responses": responses
-
-
-
-        })
-
-
-
-
+        return jsonify({"total_responses": len(responses), "responses": responses})
 
 
 
@@ -5959,15 +5891,13 @@ def get_all_responses():
 
 
 
-
-
 # edit survey
 
 
 
-@app.route('/survey/<survey_id>/edit', methods=['PUT'])
 
 
+@app.route("/survey/<survey_id>/edit", methods=["PUT"])
 
 def edit_survey(survey_id):
 
@@ -5985,19 +5915,11 @@ def edit_survey(survey_id):
 
 
 
-
-
-
-
     if not data:
 
 
 
         return jsonify({"error": "No data provided"}), 400
-
-
-
-
 
 
 
@@ -6009,11 +5931,15 @@ def edit_survey(survey_id):
 
 
 
-        update_data = {k: v for k, v in data.items() if k not in ['_id', 'created_at', 'is_short_id']}
+        update_data = {
 
+            k: v
 
+            for k, v in data.items()
 
-        
+            if k not in ["_id", "created_at", "is_short_id"]
+
+        }
 
 
 
@@ -6025,19 +5951,11 @@ def edit_survey(survey_id):
 
 
 
-        
-
-
-
         # Build query to find survey by ID
 
 
 
         query = {"$or": [{"_id": survey_id}, {"id": survey_id}]}
-
-
-
-        
 
 
 
@@ -6065,10 +5983,6 @@ def edit_survey(survey_id):
 
 
 
-        
-
-
-
         print(f"Update query: {query}")
 
 
@@ -6077,35 +5991,15 @@ def edit_survey(survey_id):
 
 
 
-        
+        result = db["surveys"].update_one(query, {"$set": update_data})
 
 
 
-        result = db["surveys"].update_one(
+        print(
 
-
-
-            query,
-
-
-
-            { "$set": update_data }
-
-
+            f"Update result: matched={result.matched_count}, modified={result.modified_count}"
 
         )
-
-
-
-        
-
-
-
-        print(f"Update result: matched={result.matched_count}, modified={result.modified_count}")
-
-
-
-
 
 
 
@@ -6121,23 +6015,7 @@ def edit_survey(survey_id):
 
 
 
-            result = db["surveys"].update_one(
-
-
-
-                alt_query,
-
-
-
-                { "$set": update_data }
-
-
-
-            )
-
-
-
-            
+            result = db["surveys"].update_one(alt_query, {"$set": update_data})
 
 
 
@@ -6145,35 +6023,23 @@ def edit_survey(survey_id):
 
 
 
-                return jsonify({ "error": "Survey not found" }), 404
+                return jsonify({"error": "Survey not found"}), 404
 
 
 
+        return jsonify(
 
+            {
 
+                "message": "Survey updated successfully",
 
+                "survey_id": survey_id,
 
-        return jsonify({ 
+                "is_short_id": is_short_id,
 
+            }
 
-
-            "message": "Survey updated successfully",
-
-
-
-            "survey_id": survey_id,
-
-
-
-            "is_short_id": is_short_id
-
-
-
-        })
-
-
-
-
+        )
 
 
 
@@ -6185,13 +6051,7 @@ def edit_survey(survey_id):
 
 
 
-        return jsonify({ "error": str(e) }), 500
-
-
-
-
-
-
+        return jsonify({"error": str(e)}), 500
 
 
 
@@ -6201,15 +6061,15 @@ def edit_survey(survey_id):
 
 
 
-@app.route('/postback/outbound', methods=['POST', 'GET'])
 
 
+@app.route("/postback/outbound", methods=["POST", "GET"])
 
 def manage_outbound_postback():
 
 
 
-    if request.method == 'POST':
+    if request.method == "POST":
 
 
 
@@ -6221,11 +6081,7 @@ def manage_outbound_postback():
 
 
 
-            postback_url = data.get('url', '').strip()
-
-
-
-            
+            postback_url = data.get("url", "").strip()
 
 
 
@@ -6237,23 +6093,21 @@ def manage_outbound_postback():
 
 
 
-                
-
-
-
             # Basic URL validation
 
 
 
-            if not postback_url.startswith(('http://', 'https://')):
+            if not postback_url.startswith(("http://", "https://")):
 
 
 
-                return jsonify({"error": "URL must start with http:// or https://"}), 400
+                return (
 
+                    jsonify({"error": "URL must start with http:// or https://"}),
 
+                    400,
 
-            
+                )
 
 
 
@@ -6263,33 +6117,21 @@ def manage_outbound_postback():
 
             db["postback_config"].update_one(
 
-
-
                 {"_id": "outbound_url"},
-
-
 
                 {"$set": {"url": postback_url, "updated_at": datetime.utcnow()}},
 
-
-
-                upsert=True
-
-
+                upsert=True,
 
             )
 
 
 
-            
+            return jsonify(
 
+                {"message": "Postback URL saved successfully", "url": postback_url}
 
-
-            return jsonify({"message": "Postback URL saved successfully", "url": postback_url})
-
-
-
-            
+            )
 
 
 
@@ -6313,10 +6155,6 @@ def manage_outbound_postback():
 
 
 
-    
-
-
-
     else:  # GET request
 
 
@@ -6333,19 +6171,17 @@ def manage_outbound_postback():
 
 
 
-                return jsonify({
+                return jsonify(
 
+                    {
 
+                        "url": postback_config.get("url", ""),
 
-                    "url": postback_config.get("url", ""),
+                        "updated_at": postback_config.get("updated_at"),
 
+                    }
 
-
-                    "updated_at": postback_config.get("updated_at")
-
-
-
-                })
+                )
 
 
 
@@ -6354,10 +6190,6 @@ def manage_outbound_postback():
 
 
                 return jsonify({"url": "", "updated_at": None})
-
-
-
-                
 
 
 
@@ -6375,13 +6207,9 @@ def manage_outbound_postback():
 
 
 
-
-
-
-
-
-
 # Add enhanced survey submission endpoint
+
+
 
 
 
@@ -6389,19 +6217,11 @@ if ENHANCED_HANDLER_AVAILABLE:
 
 
 
-    @app.route('/survey/<survey_id>/submit-enhanced', methods=['POST'])
-
-
+    @app.route("/survey/<survey_id>/submit-enhanced", methods=["POST"])
 
     def submit_enhanced_survey_response(survey_id):
 
-
-
         """Enhanced survey submission with pass/fail logic, tracking, and conditional redirects"""
-
-
-
-        
 
 
 
@@ -6417,10 +6237,6 @@ if ENHANCED_HANDLER_AVAILABLE:
 
 
 
-        
-
-
-
         request_data = request.json
 
 
@@ -6433,10 +6249,6 @@ if ENHANCED_HANDLER_AVAILABLE:
 
 
 
-        
-
-
-
         # Process submission using enhanced handler
 
 
@@ -6446,10 +6258,6 @@ if ENHANCED_HANDLER_AVAILABLE:
 
 
         result = handler.handle_survey_submission(survey_id, request_data)
-
-
-
-        
 
 
 
@@ -6477,11 +6285,13 @@ if ENHANCED_HANDLER_AVAILABLE:
 
 
 
-    
+    print(
+
+        "✅ Enhanced survey submission endpoint added: /survey/<survey_id>/submit-enhanced"
+
+    )
 
 
-
-    print("✅ Enhanced survey submission endpoint added: /survey/<survey_id>/submit-enhanced")
 
 
 
@@ -6495,9 +6305,9 @@ else:
 
 
 
-
-
 # Import link masking system
+
+
 
 
 
@@ -6517,6 +6327,8 @@ try:
 
 
 
+
+
 except ImportError as e:
 
 
@@ -6529,15 +6341,11 @@ except ImportError as e:
 
 
 
+    # Link masking endpoints
 
 
 
-
-# Link masking endpoints
-
-
-
-    @app.route('/api/masked-links', methods=['POST'])
+    @app.route("/api/masked-links", methods=["POST"])
 
     @cross_origin(supports_credentials=True, origins="*")
 
@@ -6545,11 +6353,19 @@ except ImportError as e:
 
         """Create a new masked link"""
 
+
+
         try:
+
+
 
             data = request.get_json()
 
-            if not data or not data.get('original_url'):
+
+
+            if not data or not data.get("original_url"):
+
+
 
                 return jsonify({"error": "Original URL is required"}), 400
 
@@ -6557,23 +6373,27 @@ except ImportError as e:
 
             # Get user ID from session or token (simplified for now)
 
-            user_id = request.headers.get('X-User-ID', 'anonymous')
+
+
+            user_id = request.headers.get("X-User-ID", "anonymous")
 
 
 
             result = link_handler.create_masked_link(
 
-                original_url=data['original_url'],
+                original_url=data["original_url"],
 
-                custom_alias=data.get('custom_alias'),
+                custom_alias=data.get("custom_alias"),
 
-                user_id=user_id
+                user_id=user_id,
 
             )
 
 
 
-            if 'error' in result:
+            if "error" in result:
+
+
 
                 return jsonify(result), 400
 
@@ -6585,11 +6405,13 @@ except ImportError as e:
 
         except Exception as e:
 
+
+
             return jsonify({"error": str(e)}), 500
 
 
 
-    @app.route('/l/<short_id>', methods=['GET'])
+    @app.route("/l/<short_id>", methods=["GET"])
 
     @cross_origin(supports_credentials=True, origins="*")
 
@@ -6597,11 +6419,19 @@ except ImportError as e:
 
         """Redirect to original URL and track analytics"""
 
+
+
         try:
+
+
 
             original_url = link_handler.get_original_url(short_id, request)
 
+
+
             if not original_url:
+
+
 
                 return jsonify({"error": "Link not found"}), 404
 
@@ -6613,11 +6443,13 @@ except ImportError as e:
 
         except Exception as e:
 
+
+
             return jsonify({"error": str(e)}), 500
 
 
 
-    @app.route('/api/masked-links/<short_id>/analytics', methods=['GET'])
+    @app.route("/api/masked-links/<short_id>/analytics", methods=["GET"])
 
     @cross_origin(supports_credentials=True, origins="*")
 
@@ -6625,13 +6457,19 @@ except ImportError as e:
 
         """Get analytics for a masked link"""
 
+
+
         try:
+
+
 
             result = link_handler.get_link_analytics(short_id)
 
 
 
-            if 'error' in result:
+            if "error" in result:
+
+
 
                 return jsonify(result), 404
 
@@ -6643,11 +6481,13 @@ except ImportError as e:
 
         except Exception as e:
 
+
+
             return jsonify({"error": str(e)}), 500
 
 
 
-    @app.route('/api/masked-links', methods=['GET'])
+    @app.route("/api/masked-links", methods=["GET"])
 
     @cross_origin(supports_credentials=True, origins="*")
 
@@ -6655,13 +6495,21 @@ except ImportError as e:
 
         """Get all masked links for a user"""
 
+
+
         try:
 
-            user_id = request.headers.get('X-User-ID', 'anonymous')
 
-            limit = int(request.args.get('limit', 50))
 
-            offset = int(request.args.get('offset', 0))
+            user_id = request.headers.get("X-User-ID", "anonymous")
+
+
+
+            limit = int(request.args.get("limit", 50))
+
+
+
+            offset = int(request.args.get("offset", 0))
 
 
 
@@ -6669,7 +6517,9 @@ except ImportError as e:
 
 
 
-            if 'error' in result:
+            if "error" in result:
+
+
 
                 return jsonify(result), 400
 
@@ -6681,11 +6531,13 @@ except ImportError as e:
 
         except Exception as e:
 
+
+
             return jsonify({"error": str(e)}), 500
 
 
 
-    @app.route('/api/masked-links/<short_id>', methods=['PUT'])
+    @app.route("/api/masked-links/<short_id>", methods=["PUT"])
 
     @cross_origin(supports_credentials=True, origins="*")
 
@@ -6693,23 +6545,35 @@ except ImportError as e:
 
         """Update a masked link"""
 
+
+
         try:
+
+
 
             data = request.get_json()
 
+
+
             if not data:
+
+
 
                 return jsonify({"error": "No update data provided"}), 400
 
 
 
-            user_id = request.headers.get('X-User-ID', 'anonymous')
+            user_id = request.headers.get("X-User-ID", "anonymous")
+
+
 
             result = link_handler.update_link(short_id, user_id, data)
 
 
 
-            if 'error' in result:
+            if "error" in result:
+
+
 
                 return jsonify(result), 400
 
@@ -6721,11 +6585,13 @@ except ImportError as e:
 
         except Exception as e:
 
+
+
             return jsonify({"error": str(e)}), 500
 
 
 
-    @app.route('/api/masked-links/<short_id>', methods=['DELETE'])
+    @app.route("/api/masked-links/<short_id>", methods=["DELETE"])
 
     @cross_origin(supports_credentials=True, origins="*")
 
@@ -6733,9 +6599,13 @@ except ImportError as e:
 
         """Delete a masked link"""
 
+
+
         try:
 
-            user_id = request.headers.get('X-User-ID', 'anonymous')
+
+
+            user_id = request.headers.get("X-User-ID", "anonymous")
 
 
 
@@ -6743,11 +6613,7 @@ except ImportError as e:
 
 
 
-            
-
-
-
-            if 'error' in result:
+            if "error" in result:
 
 
 
@@ -6755,15 +6621,7 @@ except ImportError as e:
 
 
 
-            
-
-
-
             return jsonify(result)
-
-
-
-            
 
 
 
@@ -6772,10 +6630,6 @@ except ImportError as e:
 
 
             return jsonify({"error": str(e)}), 500
-
-
-
-    
 
 
 
@@ -6807,6 +6661,8 @@ except ImportError as e:
 
 
 
+
+
 else:
 
 
@@ -6817,29 +6673,21 @@ else:
 
 
 
-
-
 # Admin configuration endpoints for pass/fail system
 
 
 
-@app.route('/admin/survey/<survey_id>/config', methods=['GET', 'POST', 'PUT'])
 
 
+@app.route("/admin/survey/<survey_id>/config", methods=["GET", "POST", "PUT"])
 
 def manage_survey_config(survey_id):
-
-
 
     """Manage survey pass/fail configuration"""
 
 
 
-    
-
-
-
-    if request.method == 'GET':
+    if request.method == "GET":
 
 
 
@@ -6875,7 +6723,11 @@ def manage_survey_config(survey_id):
 
 
 
-                return jsonify({"message": "No configuration found", "survey_id": survey_id})
+                return jsonify(
+
+                    {"message": "No configuration found", "survey_id": survey_id}
+
+                )
 
 
 
@@ -6887,11 +6739,7 @@ def manage_survey_config(survey_id):
 
 
 
-    
-
-
-
-    elif request.method in ['POST', 'PUT']:
+    elif request.method in ["POST", "PUT"]:
 
 
 
@@ -6915,67 +6763,45 @@ def manage_survey_config(survey_id):
 
 
 
-            
-
-
-
             # Prepare configuration data
 
 
 
             config_data = {
 
-
-
                 "survey_id": survey_id,
-
-
 
                 "pass_fail_enabled": data.get("pass_fail_enabled", False),
 
+                "pepperads_redirect_enabled": data.get(
 
+                    "pepperads_redirect_enabled", False
 
-                "pepperads_redirect_enabled": data.get("pepperads_redirect_enabled", False),
-
-
+                ),
 
                 "criteria_set_id": data.get("criteria_set_id"),
 
-
-
                 "pepperads_offer_id": data.get("pepperads_offer_id"),
 
+                "fail_page_config": data.get(
 
+                    "fail_page_config",
 
-                "fail_page_config": data.get("fail_page_config", {
+                    {
 
+                        "fail_page_url": "/survey-thankyou",
 
+                        "custom_message": "Thank you for your time!",
 
-                    "fail_page_url": "/survey-thankyou",
+                        "show_retry_option": False,
 
+                    },
 
+                ),
 
-                    "custom_message": "Thank you for your time!",
-
-
-
-                    "show_retry_option": False
-
-
-
-                }),
-
-
-
-                "updated_at": datetime.utcnow()
-
-
+                "updated_at": datetime.utcnow(),
 
             }
-
-
-
-            
 
 
 
@@ -6985,25 +6811,9 @@ def manage_survey_config(survey_id):
 
             result = db.survey_configurations.update_one(
 
-
-
-                {"survey_id": survey_id},
-
-
-
-                {"$set": config_data},
-
-
-
-                upsert=True
-
-
+                {"survey_id": survey_id}, {"$set": config_data}, upsert=True
 
             )
-
-
-
-            
 
 
 
@@ -7011,7 +6821,11 @@ def manage_survey_config(survey_id):
 
 
 
-                return jsonify({"message": "Configuration created", "survey_id": survey_id})
+                return jsonify(
+
+                    {"message": "Configuration created", "survey_id": survey_id}
+
+                )
 
 
 
@@ -7019,11 +6833,11 @@ def manage_survey_config(survey_id):
 
 
 
-                return jsonify({"message": "Configuration updated", "survey_id": survey_id})
+                return jsonify(
 
+                    {"message": "Configuration updated", "survey_id": survey_id}
 
-
-                
+                )
 
 
 
@@ -7037,25 +6851,15 @@ def manage_survey_config(survey_id):
 
 
 
-
-
-@app.route('/admin/criteria', methods=['GET', 'POST'])
-
-
+@app.route("/admin/criteria", methods=["GET", "POST"])
 
 def manage_criteria():
-
-
 
     """Manage pass/fail criteria sets"""
 
 
 
-    
-
-
-
-    if request.method == 'GET':
+    if request.method == "GET":
 
 
 
@@ -7071,10 +6875,6 @@ def manage_criteria():
 
 
 
-            
-
-
-
             # Convert ObjectIds to strings
 
 
@@ -7084,10 +6884,6 @@ def manage_criteria():
 
 
                 criteria["_id"] = str(criteria["_id"])
-
-
-
-            
 
 
 
@@ -7103,11 +6899,7 @@ def manage_criteria():
 
 
 
-    
-
-
-
-    elif request.method == 'POST':
+    elif request.method == "POST":
 
 
 
@@ -7127,59 +6919,31 @@ def manage_criteria():
 
 
 
-            
-
-
-
             # Create new criteria set
 
 
 
             criteria_data = {
 
-
-
                 "_id": str(uuid.uuid4()),
-
-
 
                 "name": data.get("name", "New Criteria Set"),
 
-
-
                 "description": data.get("description", ""),
-
-
 
                 "criteria": data.get("criteria", []),
 
-
-
                 "logic_type": data.get("logic_type", "all_required"),
-
-
 
                 "passing_threshold": data.get("passing_threshold", 50.0),
 
-
-
                 "is_active": True,
-
-
 
                 "created_at": datetime.utcnow(),
 
-
-
-                "updated_at": datetime.utcnow()
-
-
+                "updated_at": datetime.utcnow(),
 
             }
-
-
-
-            
 
 
 
@@ -7187,11 +6951,11 @@ def manage_criteria():
 
 
 
-            return jsonify({"message": "Criteria set created", "criteria_id": criteria_data["_id"]})
+            return jsonify(
 
+                {"message": "Criteria set created", "criteria_id": criteria_data["_id"]}
 
-
-            
+            )
 
 
 
@@ -7205,25 +6969,15 @@ def manage_criteria():
 
 
 
-
-
-@app.route('/admin/criteria/<criteria_id>', methods=['GET', 'PUT', 'DELETE'])
-
-
+@app.route("/admin/criteria/<criteria_id>", methods=["GET", "PUT", "DELETE"])
 
 def manage_specific_criteria(criteria_id):
-
-
 
     """Manage specific criteria set"""
 
 
 
-    
-
-
-
-    if request.method == 'GET':
+    if request.method == "GET":
 
 
 
@@ -7263,11 +7017,7 @@ def manage_specific_criteria(criteria_id):
 
 
 
-    
-
-
-
-    elif request.method == 'PUT':
+    elif request.method == "PUT":
 
 
 
@@ -7287,43 +7037,21 @@ def manage_specific_criteria(criteria_id):
 
 
 
-            
-
-
-
             update_data = {
-
-
 
                 "name": data.get("name"),
 
-
-
                 "description": data.get("description"),
-
-
 
                 "criteria": data.get("criteria"),
 
-
-
                 "logic_type": data.get("logic_type"),
-
-
 
                 "passing_threshold": data.get("passing_threshold"),
 
-
-
-                "updated_at": datetime.utcnow()
-
-
+                "updated_at": datetime.utcnow(),
 
             }
-
-
-
-            
 
 
 
@@ -7335,27 +7063,11 @@ def manage_specific_criteria(criteria_id):
 
 
 
-            
-
-
-
             result = db.pass_fail_criteria.update_one(
 
-
-
-                {"_id": criteria_id},
-
-
-
-                {"$set": update_data}
-
-
+                {"_id": criteria_id}, {"$set": update_data}
 
             )
-
-
-
-            
 
 
 
@@ -7367,15 +7079,7 @@ def manage_specific_criteria(criteria_id):
 
 
 
-            
-
-
-
             return jsonify({"message": "Criteria updated"})
-
-
-
-            
 
 
 
@@ -7387,11 +7091,7 @@ def manage_specific_criteria(criteria_id):
 
 
 
-    
-
-
-
-    elif request.method == 'DELETE':
+    elif request.method == "DELETE":
 
 
 
@@ -7405,21 +7105,11 @@ def manage_specific_criteria(criteria_id):
 
             result = db.pass_fail_criteria.update_one(
 
-
-
                 {"_id": criteria_id},
 
-
-
-                {"$set": {"is_active": False, "updated_at": datetime.utcnow()}}
-
-
+                {"$set": {"is_active": False, "updated_at": datetime.utcnow()}},
 
             )
-
-
-
-            
 
 
 
@@ -7431,15 +7121,7 @@ def manage_specific_criteria(criteria_id):
 
 
 
-            
-
-
-
             return jsonify({"message": "Criteria deleted"})
-
-
-
-            
 
 
 
@@ -7453,15 +7135,9 @@ def manage_specific_criteria(criteria_id):
 
 
 
-
-
-@app.route('/admin/survey/<survey_id>/questions', methods=['GET'])
-
-
+@app.route("/admin/survey/<survey_id>/questions", methods=["GET"])
 
 def get_survey_questions_for_admin(survey_id):
-
-
 
     """Get survey questions for admin criteria configuration"""
 
@@ -7475,19 +7151,7 @@ def get_survey_questions_for_admin(survey_id):
 
 
 
-        survey = db.surveys.find_one({
-
-
-
-            "$or": [{"_id": survey_id}, {"id": survey_id}]
-
-
-
-        })
-
-
-
-        
+        survey = db.surveys.find_one({"$or": [{"_id": survey_id}, {"id": survey_id}]})
 
 
 
@@ -7496,10 +7160,6 @@ def get_survey_questions_for_admin(survey_id):
 
 
             return jsonify({"error": "Survey not found"}), 404
-
-
-
-        
 
 
 
@@ -7515,37 +7175,21 @@ def get_survey_questions_for_admin(survey_id):
 
 
 
-        
-
-
-
         for i, question in enumerate(questions):
 
 
 
             formatted_question = {
 
-
-
                 "id": question.get("id", f"q{i+1}"),
-
-
 
                 "question_text": question.get("question", ""),
 
-
-
                 "type": question.get("type", "multiple_choice"),
-
-
 
                 "options": question.get("options", []),
 
-
-
-                "question_number": i + 1
-
-
+                "question_number": i + 1,
 
             }
 
@@ -7555,35 +7199,21 @@ def get_survey_questions_for_admin(survey_id):
 
 
 
-        
+        return jsonify(
 
+            {
 
+                "survey_id": survey_id,
 
-        return jsonify({
+                "survey_name": survey.get("prompt", "Untitled Survey"),
 
+                "questions": formatted_questions,
 
+                "total_questions": len(formatted_questions),
 
-            "survey_id": survey_id,
+            }
 
-
-
-            "survey_name": survey.get("prompt", "Untitled Survey"),
-
-
-
-            "questions": formatted_questions,
-
-
-
-            "total_questions": len(formatted_questions)
-
-
-
-        })
-
-
-
-        
+        )
 
 
 
@@ -7597,15 +7227,9 @@ def get_survey_questions_for_admin(survey_id):
 
 
 
-
-
-@app.route('/admin/surveys-with-config', methods=['GET'])
-
-
+@app.route("/admin/surveys-with-config", methods=["GET"])
 
 def get_surveys_with_config():
-
-
 
     """Get all surveys with their pass/fail configuration"""
 
@@ -7623,10 +7247,6 @@ def get_surveys_with_config():
 
 
 
-        
-
-
-
         # Get all configurations
 
 
@@ -7639,10 +7259,6 @@ def get_surveys_with_config():
 
 
 
-        
-
-
-
         # Get all criteria sets
 
 
@@ -7652,10 +7268,6 @@ def get_surveys_with_config():
 
 
         criteria_map = {criteria["_id"]: criteria for criteria in criteria_sets}
-
-
-
-        
 
 
 
@@ -7703,10 +7315,6 @@ def get_surveys_with_config():
 
 
 
-            
-
-
-
             config = config_map.get(survey_id, {})
 
 
@@ -7715,19 +7323,11 @@ def get_surveys_with_config():
 
 
 
-            
-
-
-
             if config.get("criteria_set_id"):
 
 
 
                 criteria_set = criteria_map.get(config["criteria_set_id"])
-
-
-
-            
 
 
 
@@ -7751,33 +7351,17 @@ def get_surveys_with_config():
 
 
 
-
-
-
-
             survey_data = {
-
-
 
                 "survey_id": survey_id,
 
-
-
                 "survey_name": survey.get("prompt", "Untitled Survey"),
-
-
 
                 "created_at": survey.get("created_at"),
 
-
-
                 "config": config,
 
-
-
-                "criteria_set": criteria_set
-
-
+                "criteria_set": criteria_set,
 
             }
 
@@ -7787,15 +7371,7 @@ def get_surveys_with_config():
 
 
 
-        
-
-
-
         return jsonify({"surveys": result})
-
-
-
-        
 
 
 
@@ -7809,25 +7385,15 @@ def get_surveys_with_config():
 
 
 
-
-
-@app.route('/admin/global-config', methods=['GET', 'POST'])
-
-
+@app.route("/admin/global-config", methods=["GET", "POST"])
 
 def manage_global_config():
-
-
 
     """Manage global system configuration"""
 
 
 
-    
-
-
-
-    if request.method == 'GET':
+    if request.method == "GET":
 
 
 
@@ -7855,11 +7421,7 @@ def manage_global_config():
 
 
 
-    
-
-
-
-    elif request.method == 'POST':
+    elif request.method == "POST":
 
 
 
@@ -7883,10 +7445,6 @@ def manage_global_config():
 
 
 
-            
-
-
-
             success = update_system_config(data)
 
 
@@ -7907,10 +7465,6 @@ def manage_global_config():
 
 
 
-                
-
-
-
         except Exception as e:
 
 
@@ -7921,15 +7475,11 @@ def manage_global_config():
 
 
 
-
-
-@app.route('/admin/pepperads/offers', methods=['GET', 'POST'])
+@app.route("/admin/pepperads/offers", methods=["GET", "POST"])
 
 @cross_origin(supports_credentials=True, origins="*")
 
 def manage_pepperads_offers():
-
-
 
     """List or create PepperAds offers (used for PASS redirects)"""
 
@@ -7939,7 +7489,7 @@ def manage_pepperads_offers():
 
 
 
-        if request.method == 'GET':
+        if request.method == "GET":
 
 
 
@@ -7959,35 +7509,25 @@ def manage_pepperads_offers():
 
 
 
-                offers.append({
+                offers.append(
 
+                    {
 
+                        "_id": offer.get("_id"),
 
-                    "_id": offer.get("_id"),
+                        "offer_name": offer.get("offer_name"),
 
+                        "base_url": offer.get("base_url"),
 
+                        "is_active": offer.get("is_active", False),
 
-                    "offer_name": offer.get("offer_name"),
+                    }
 
-
-
-                    "base_url": offer.get("base_url"),
-
-
-
-                    "is_active": offer.get("is_active", False)
-
-
-
-                })
+                )
 
 
 
             return jsonify({"offers": offers})
-
-
-
-
 
 
 
@@ -8007,105 +7547,59 @@ def manage_pepperads_offers():
 
 
 
-            
-
-
-
         offer_id = str(uuid.uuid4())
 
 
 
         offer_doc = {
 
-
-
             "_id": offer_id,
-
-
 
             "offer_name": data.get("offer_name"),
 
-
-
             "description": data.get("description", ""),
-
-
 
             "base_url": data.get("base_url"),
 
+            "parameters": data.get(
 
+                "parameters",
 
-            "parameters": data.get("parameters", {
+                {
 
+                    "required_params": ["click_id", "user_id"],
 
+                    "optional_params": ["email", "survey_id", "username"],
 
-                "required_params": ["click_id", "user_id"],
+                    "parameter_mapping": {
 
+                        "click_id": "click_id",
 
+                        "user_id": "username",
 
-                "optional_params": ["email", "survey_id", "username"],
+                        "email": "email",
 
+                        "survey_id": "survey_id",
 
+                    },
 
-                "parameter_mapping": {
+                },
 
+            ),
 
+            "tracking": data.get(
 
-                    "click_id": "click_id",
+                "tracking",
 
+                {"track_conversions": True, "conversion_value": 1.0, "currency": "USD"},
 
-
-                    "user_id": "username",
-
-
-
-                    "email": "email",
-
-
-
-                    "survey_id": "survey_id"
-
-
-
-                }
-
-
-
-            }),
-
-
-
-            "tracking": data.get("tracking", {
-
-
-
-                "track_conversions": True,
-
-
-
-                "conversion_value": 1.0,
-
-
-
-                "currency": "USD"
-
-
-
-            }),
-
-
+            ),
 
             "is_active": data.get("is_active", True),
 
-
-
             "created_at": datetime.utcnow(),
 
-
-
-            "updated_at": datetime.utcnow()
-
-
+            "updated_at": datetime.utcnow(),
 
         }
 
@@ -8129,15 +7623,11 @@ def manage_pepperads_offers():
 
 
 
-
-
-@app.route('/admin/pepperads/offers/<offer_id>', methods=['PUT', 'DELETE'])
+@app.route("/admin/pepperads/offers/<offer_id>", methods=["PUT", "DELETE"])
 
 @cross_origin(supports_credentials=True, origins="*")
 
 def update_delete_pepperads_offer(offer_id):
-
-
 
     """Update or delete a specific PepperAds offer"""
 
@@ -8147,7 +7637,7 @@ def update_delete_pepperads_offer(offer_id):
 
 
 
-        if request.method == 'PUT':
+        if request.method == "PUT":
 
 
 
@@ -8167,10 +7657,6 @@ def update_delete_pepperads_offer(offer_id):
 
 
 
-            
-
-
-
             # Check if offer exists
 
 
@@ -8187,39 +7673,19 @@ def update_delete_pepperads_offer(offer_id):
 
 
 
-            
-
-
-
             update_doc = {
-
-
 
                 "offer_name": data.get("offer_name"),
 
-
-
                 "description": data.get("description", ""),
-
-
 
                 "base_url": data.get("base_url"),
 
-
-
                 "is_active": data.get("is_active", True),
 
-
-
-                "updated_at": datetime.utcnow()
-
-
+                "updated_at": datetime.utcnow(),
 
             }
-
-
-
-            
 
 
 
@@ -8243,10 +7709,6 @@ def update_delete_pepperads_offer(offer_id):
 
 
 
-            
-
-
-
             db.pepperads_offers.update_one({"_id": offer_id}, {"$set": update_doc})
 
 
@@ -8255,11 +7717,7 @@ def update_delete_pepperads_offer(offer_id):
 
 
 
-            
-
-
-
-        elif request.method == 'DELETE':
+        elif request.method == "DELETE":
 
 
 
@@ -8279,39 +7737,27 @@ def update_delete_pepperads_offer(offer_id):
 
 
 
-            
-
-
-
             # Also remove this offer from any survey configurations
 
 
 
             db.survey_configs.update_many(
 
-
-
                 {"config.pepperads_offer_id": offer_id},
 
+                {
 
+                    "$unset": {"config.pepperads_offer_id": ""},
 
-                {"$unset": {"config.pepperads_offer_id": ""}, "$set": {"config.pepperads_redirect_enabled": False}}
+                    "$set": {"config.pepperads_redirect_enabled": False},
 
-
+                },
 
             )
 
 
 
-            
-
-
-
             return jsonify({"message": "Offer deleted"})
-
-
-
-            
 
 
 
@@ -8325,15 +7771,9 @@ def update_delete_pepperads_offer(offer_id):
 
 
 
-
-
-@app.route('/admin/survey/<survey_id>/generate-criteria', methods=['POST'])
-
-
+@app.route("/admin/survey/<survey_id>/generate-criteria", methods=["POST"])
 
 def generate_dynamic_criteria(survey_id):
-
-
 
     """Generate dynamic criteria based on survey questions"""
 
@@ -8347,27 +7787,11 @@ def generate_dynamic_criteria(survey_id):
 
 
 
-        
-
-
-
         # Find the survey
 
 
 
-        survey = db.surveys.find_one({
-
-
-
-            "$or": [{"_id": survey_id}, {"id": survey_id}]
-
-
-
-        })
-
-
-
-        
+        survey = db.surveys.find_one({"$or": [{"_id": survey_id}, {"id": survey_id}]})
 
 
 
@@ -8376,10 +7800,6 @@ def generate_dynamic_criteria(survey_id):
 
 
             return jsonify({"error": "Survey not found"}), 404
-
-
-
-        
 
 
 
@@ -8395,39 +7815,31 @@ def generate_dynamic_criteria(survey_id):
 
 
 
-        
-
-
-
         if not dynamic_criteria:
 
 
 
-            return jsonify({"error": "Could not generate criteria for this survey"}), 400
+            return (
+
+                jsonify({"error": "Could not generate criteria for this survey"}),
+
+                400,
+
+            )
 
 
 
-        
+        return jsonify(
 
+            {
 
+                "message": "Dynamic criteria generated successfully",
 
-        return jsonify({
+                "criteria": dynamic_criteria,
 
+            }
 
-
-            "message": "Dynamic criteria generated successfully",
-
-
-
-            "criteria": dynamic_criteria
-
-
-
-        })
-
-
-
-        
+        )
 
 
 
@@ -8441,15 +7853,9 @@ def generate_dynamic_criteria(survey_id):
 
 
 
-
-
-@app.route('/admin/criteria/test', methods=['POST'])
-
-
+@app.route("/admin/criteria/test", methods=["POST"])
 
 def test_criteria():
-
-
 
     """Test criteria against sample responses"""
 
@@ -8471,10 +7877,6 @@ def test_criteria():
 
 
 
-        
-
-
-
         criteria_set = data.get("criteria_set")
 
 
@@ -8483,27 +7885,21 @@ def test_criteria():
 
 
 
-        
-
-
-
         if not criteria_set or not test_responses:
 
 
 
-            return jsonify({"error": "Both criteria_set and responses are required"}), 400
+            return (
 
+                jsonify({"error": "Both criteria_set and responses are required"}),
 
+                400,
 
-        
+            )
 
 
 
         from evaluation_engine import SurveyEvaluationEngine
-
-
-
-        
 
 
 
@@ -8512,10 +7908,6 @@ def test_criteria():
 
 
         engine = SurveyEvaluationEngine()
-
-
-
-        
 
 
 
@@ -8543,10 +7935,6 @@ def test_criteria():
 
 
 
-        
-
-
-
         for criterion in criteria_set["criteria"]:
 
 
@@ -8559,19 +7947,11 @@ def test_criteria():
 
 
 
-            
-
-
-
             weight = criterion.get("weight", 1.0)
 
 
 
             total_weight += weight
-
-
-
-            
 
 
 
@@ -8595,10 +7975,6 @@ def test_criteria():
 
 
 
-        
-
-
-
         # Determine overall result
 
 
@@ -8609,33 +7985,9 @@ def test_criteria():
 
         overall_result = engine._determine_overall_result(
 
-
-
-            logic_type, 
-
-
-
-            criteria_results, 
-
-
-
-            criteria_set, 
-
-
-
-            achieved_weight, 
-
-
-
-            total_weight
-
-
+            logic_type, criteria_results, criteria_set, achieved_weight, total_weight
 
         )
-
-
-
-        
 
 
 
@@ -8647,79 +7999,39 @@ def test_criteria():
 
 
 
-        
-
-
-
         test_result = {
-
-
 
             "status": "pass" if overall_result else "fail",
 
-
-
             "score": round(final_score, 2),
-
-
 
             "criteria_met": criteria_met,
 
-
-
             "criteria_failed": criteria_failed,
-
-
 
             "details": {
 
-
-
                 "criteria_results": criteria_results,
-
-
 
                 "logic_type": logic_type,
 
-
-
                 "total_criteria": len(criteria_set["criteria"]),
-
-
 
                 "criteria_passed": len(criteria_met),
 
-
-
                 "achieved_weight": achieved_weight,
 
-
-
-                "total_weight": total_weight
-
-
+                "total_weight": total_weight,
 
             },
 
-
-
-            "message": f"Test {'passed' if overall_result else 'failed'} based on {logic_type} logic"
-
-
+            "message": f"Test {'passed' if overall_result else 'failed'} based on {logic_type} logic",
 
         }
 
 
 
-        
-
-
-
         return jsonify(test_result)
-
-
-
-        
 
 
 
@@ -8733,15 +8045,9 @@ def test_criteria():
 
 
 
-
-
-@app.route('/admin/surveys/bulk-assign-criteria', methods=['POST'])
-
-
+@app.route("/admin/surveys/bulk-assign-criteria", methods=["POST"])
 
 def bulk_assign_criteria():
-
-
 
     """Bulk assign criteria to multiple surveys"""
 
@@ -8763,10 +8069,6 @@ def bulk_assign_criteria():
 
 
 
-        
-
-
-
         survey_ids = data.get("survey_ids", [])
 
 
@@ -8779,19 +8081,17 @@ def bulk_assign_criteria():
 
 
 
-        
-
-
-
         if not survey_ids or not criteria_set_id:
 
 
 
-            return jsonify({"error": "survey_ids and criteria_set_id are required"}), 400
+            return (
 
+                jsonify({"error": "survey_ids and criteria_set_id are required"}),
 
+                400,
 
-        
+            )
 
 
 
@@ -8799,23 +8099,11 @@ def bulk_assign_criteria():
 
 
 
-        criteria_set = db.pass_fail_criteria.find_one({
+        criteria_set = db.pass_fail_criteria.find_one(
 
+            {"_id": criteria_set_id, "is_active": True}
 
-
-            "_id": criteria_set_id,
-
-
-
-            "is_active": True
-
-
-
-        })
-
-
-
-        
+        )
 
 
 
@@ -8827,19 +8115,11 @@ def bulk_assign_criteria():
 
 
 
-        
-
-
-
         updated_surveys = []
 
 
 
         failed_surveys = []
-
-
-
-        
 
 
 
@@ -8857,33 +8137,21 @@ def bulk_assign_criteria():
 
                 config_data = {
 
-
-
                     "survey_id": survey_id,
-
-
 
                     "criteria_set_id": criteria_set_id,
 
-
-
                     "pass_fail_enabled": config_updates.get("pass_fail_enabled", True),
 
+                    "pepperads_redirect_enabled": config_updates.get(
 
+                        "pepperads_redirect_enabled", True
 
-                    "pepperads_redirect_enabled": config_updates.get("pepperads_redirect_enabled", True),
+                    ),
 
-
-
-                    "updated_at": datetime.utcnow()
-
-
+                    "updated_at": datetime.utcnow(),
 
                 }
-
-
-
-                
 
 
 
@@ -8895,11 +8163,11 @@ def bulk_assign_criteria():
 
 
 
-                    config_data["pepperads_offer_id"] = config_updates["pepperads_offer_id"]
+                    config_data["pepperads_offer_id"] = config_updates[
 
+                        "pepperads_offer_id"
 
-
-                
+                    ]
 
 
 
@@ -8911,43 +8179,19 @@ def bulk_assign_criteria():
 
 
 
-                
-
-
-
                 # Upsert configuration
 
 
 
                 result = db.survey_configurations.update_one(
 
-
-
-                    {"survey_id": survey_id},
-
-
-
-                    {"$set": config_data},
-
-
-
-                    upsert=True
-
-
+                    {"survey_id": survey_id}, {"$set": config_data}, upsert=True
 
                 )
 
 
 
-                
-
-
-
                 updated_surveys.append(survey_id)
-
-
-
-                
 
 
 
@@ -8959,47 +8203,21 @@ def bulk_assign_criteria():
 
 
 
-        
+        return jsonify(
 
+            {
 
+                "message": f"Bulk assignment completed",
 
-        return jsonify({
+                "updated_surveys": len(updated_surveys),
 
+                "failed_surveys": len(failed_surveys),
 
-
-            "message": f"Bulk assignment completed",
-
-
-
-            "updated_surveys": len(updated_surveys),
-
-
-
-            "failed_surveys": len(failed_surveys),
-
-
-
-            "details": {
-
-
-
-                "updated": updated_surveys,
-
-
-
-                "failed": failed_surveys
-
-
+                "details": {"updated": updated_surveys, "failed": failed_surveys},
 
             }
 
-
-
-        })
-
-
-
-        
+        )
 
 
 
@@ -9013,15 +8231,9 @@ def bulk_assign_criteria():
 
 
 
-
-
-@app.route('/admin/survey/<survey_id>/preview-evaluation', methods=['POST'])
-
-
+@app.route("/admin/survey/<survey_id>/preview-evaluation", methods=["POST"])
 
 def preview_evaluation(survey_id):
-
-
 
     """Preview how evaluation would work with sample responses"""
 
@@ -9039,11 +8251,11 @@ def preview_evaluation(survey_id):
 
 
 
-        criteria_set_id = data.get("criteria_set_id")  # Optional, will use survey's configured criteria if not provided
+        criteria_set_id = data.get(
 
+            "criteria_set_id"
 
-
-        
+        )  # Optional, will use survey's configured criteria if not provided
 
 
 
@@ -9055,15 +8267,7 @@ def preview_evaluation(survey_id):
 
 
 
-        
-
-
-
         from evaluation_engine import evaluate_responses
-
-
-
-        
 
 
 
@@ -9071,39 +8275,29 @@ def preview_evaluation(survey_id):
 
 
 
-        evaluation_result = evaluate_responses(survey_id, sample_responses, criteria_set_id)
+        evaluation_result = evaluate_responses(
+
+            survey_id, sample_responses, criteria_set_id
+
+        )
 
 
 
-        
+        return jsonify(
 
+            {
 
+                "message": "Evaluation preview completed",
 
-        return jsonify({
+                "evaluation": evaluation_result,
 
+                "sample_responses": sample_responses,
 
+                "survey_id": survey_id,
 
-            "message": "Evaluation preview completed",
+            }
 
-
-
-            "evaluation": evaluation_result,
-
-
-
-            "sample_responses": sample_responses,
-
-
-
-            "survey_id": survey_id
-
-
-
-        })
-
-
-
-        
+        )
 
 
 
@@ -9117,15 +8311,9 @@ def preview_evaluation(survey_id):
 
 
 
-
-
-@app.route('/admin/analytics/criteria-performance', methods=['GET'])
-
-
+@app.route("/admin/analytics/criteria-performance", methods=["GET"])
 
 def get_criteria_performance():
-
-
 
     """Get analytics on criteria performance across surveys"""
 
@@ -9143,19 +8331,15 @@ def get_criteria_performance():
 
 
 
-        
-
-
-
         # Get all responses with evaluations
 
 
 
-        responses_with_eval = list(db.responses.find({"evaluation_result": {"$exists": True}}))
+        responses_with_eval = list(
 
+            db.responses.find({"evaluation_result": {"$exists": True}})
 
-
-        
+        )
 
 
 
@@ -9173,29 +8357,15 @@ def get_criteria_performance():
 
         overall_stats = {
 
-
-
             "total_surveys_with_criteria": len(configs),
-
-
 
             "total_evaluated_responses": len(responses_with_eval),
 
-
-
             "pass_rate": 0,
 
-
-
-            "fail_rate": 0
-
-
+            "fail_rate": 0,
 
         }
-
-
-
-        
 
 
 
@@ -9204,10 +8374,6 @@ def get_criteria_performance():
 
 
         fail_count = 0
-
-
-
-        
 
 
 
@@ -9227,10 +8393,6 @@ def get_criteria_performance():
 
 
 
-            
-
-
-
             if status == "pass":
 
 
@@ -9247,10 +8409,6 @@ def get_criteria_performance():
 
 
 
-            
-
-
-
             # Track per-survey stats
 
 
@@ -9261,29 +8419,15 @@ def get_criteria_performance():
 
                 survey_stats[survey_id] = {
 
-
-
                     "total": 0,
-
-
 
                     "pass": 0,
 
-
-
                     "fail": 0,
 
-
-
-                    "avg_score": 0
-
-
+                    "avg_score": 0,
 
                 }
-
-
-
-            
 
 
 
@@ -9292,10 +8436,6 @@ def get_criteria_performance():
 
 
             survey_stats[survey_id][status] += 1
-
-
-
-            
 
 
 
@@ -9309,21 +8449,13 @@ def get_criteria_performance():
 
             survey_stats[survey_id]["avg_score"] = (
 
+                survey_stats[survey_id]["avg_score"]
 
+                * (survey_stats[survey_id]["total"] - 1)
 
-                (survey_stats[survey_id]["avg_score"] * (survey_stats[survey_id]["total"] - 1) + score) 
+                + score
 
-
-
-                / survey_stats[survey_id]["total"]
-
-
-
-            )
-
-
-
-        
+            ) / survey_stats[survey_id]["total"]
 
 
 
@@ -9340,10 +8472,6 @@ def get_criteria_performance():
 
 
             overall_stats["fail_rate"] = round((fail_count / total_evaluated) * 100, 2)
-
-
-
-        
 
 
 
@@ -9371,31 +8499,19 @@ def get_criteria_performance():
 
 
 
-        
+        return jsonify(
 
+            {
 
+                "overall_stats": overall_stats,
 
-        return jsonify({
+                "survey_stats": survey_stats,
 
+                "criteria_stats": criteria_stats,
 
+            }
 
-            "overall_stats": overall_stats,
-
-
-
-            "survey_stats": survey_stats,
-
-
-
-            "criteria_stats": criteria_stats
-
-
-
-        })
-
-
-
-        
+        )
 
 
 
@@ -9409,25 +8525,23 @@ def get_criteria_performance():
 
 
 
-
-
 # Suggestion Filters Management Endpoints
 
 
 
-@app.route('/admin/suggestion-filters', methods=['GET', 'POST'])
+
+
+@app.route("/admin/suggestion-filters", methods=["GET", "POST"])
 
 @cross_origin()
 
 def manage_suggestion_filters():
 
-
-
     """Get all suggestion filters or create a new one"""
 
 
 
-    if request.method == 'GET':
+    if request.method == "GET":
 
 
 
@@ -9467,11 +8581,7 @@ def manage_suggestion_filters():
 
 
 
-    
-
-
-
-    elif request.method == 'POST':
+    elif request.method == "POST":
 
 
 
@@ -9488,10 +8598,6 @@ def manage_suggestion_filters():
 
 
                 return jsonify({"error": "No data provided"}), 400
-
-
-
-            
 
 
 
@@ -9515,63 +8621,33 @@ def manage_suggestion_filters():
 
 
 
-            
-
-
-
             filter_id = str(uuid.uuid4())
 
 
 
             filter_doc = {
 
-
-
                 "_id": filter_id,
-
-
 
                 "name": data.get("name"),
 
-
-
                 "description": data.get("description"),
-
-
 
                 "category": data.get("category"),
 
-
-
                 "logic": data.get("logic", {}),
-
-
 
                 "rules": data.get("rules", ""),
 
-
-
                 "isEnabled": data.get("isEnabled", True),
-
-
 
                 "priority": data.get("priority", 1),
 
-
-
                 "created_at": datetime.utcnow(),
 
-
-
-                "updated_at": datetime.utcnow()
-
-
+                "updated_at": datetime.utcnow(),
 
             }
-
-
-
-            
 
 
 
@@ -9579,23 +8655,23 @@ def manage_suggestion_filters():
 
 
 
-            return jsonify({
+            return (
 
+                jsonify(
 
+                    {
 
-                "message": "Suggestion filter created successfully",
+                        "message": "Suggestion filter created successfully",
 
+                        "filter_id": filter_id,
 
+                    }
 
-                "filter_id": filter_id
+                ),
 
+                201,
 
-
-            }), 201
-
-
-
-            
+            )
 
 
 
@@ -9609,15 +8685,11 @@ def manage_suggestion_filters():
 
 
 
-
-
-@app.route('/admin/suggestion-filters/<filter_id>', methods=['GET', 'PUT', 'DELETE'])
+@app.route("/admin/suggestion-filters/<filter_id>", methods=["GET", "PUT", "DELETE"])
 
 @cross_origin()
 
 def manage_suggestion_filter(filter_id):
-
-
 
     """Get, update, or delete a specific suggestion filter"""
 
@@ -9627,7 +8699,7 @@ def manage_suggestion_filter(filter_id):
 
 
 
-        if request.method == 'GET':
+        if request.method == "GET":
 
 
 
@@ -9643,10 +8715,6 @@ def manage_suggestion_filter(filter_id):
 
 
 
-            
-
-
-
             filter_doc = convert_objectid_to_string(dict(filter_doc))
 
 
@@ -9655,11 +8723,7 @@ def manage_suggestion_filter(filter_id):
 
 
 
-        
-
-
-
-        elif request.method == 'PUT':
+        elif request.method == "PUT":
 
 
 
@@ -9672,10 +8736,6 @@ def manage_suggestion_filter(filter_id):
 
 
                 return jsonify({"error": "No data provided"}), 400
-
-
-
-            
 
 
 
@@ -9695,75 +8755,41 @@ def manage_suggestion_filter(filter_id):
 
 
 
-            
-
-
-
             # Prepare update data
 
 
 
             update_data = {
 
-
-
                 "name": data.get("name", existing_filter["name"]),
-
-
 
                 "description": data.get("description", existing_filter["description"]),
 
-
-
                 "category": data.get("category", existing_filter["category"]),
-
-
 
                 "logic": data.get("logic", existing_filter.get("logic", {})),
 
-
-
                 "rules": data.get("rules", existing_filter.get("rules", "")),
 
+                "isEnabled": data.get(
 
+                    "isEnabled", existing_filter.get("isEnabled", True)
 
-                "isEnabled": data.get("isEnabled", existing_filter.get("isEnabled", True)),
-
-
+                ),
 
                 "priority": data.get("priority", existing_filter.get("priority", 1)),
 
-
-
-                "updated_at": datetime.utcnow()
-
-
+                "updated_at": datetime.utcnow(),
 
             }
 
 
 
-            
-
-
-
             result = db.suggestion_filters.update_one(
 
-
-
-                {"_id": filter_id},
-
-
-
-                {"$set": update_data}
-
-
+                {"_id": filter_id}, {"$set": update_data}
 
             )
-
-
-
-            
 
 
 
@@ -9775,19 +8801,11 @@ def manage_suggestion_filter(filter_id):
 
 
 
-            
-
-
-
             return jsonify({"message": "Filter updated successfully"})
 
 
 
-        
-
-
-
-        elif request.method == 'DELETE':
+        elif request.method == "DELETE":
 
 
 
@@ -9803,15 +8821,7 @@ def manage_suggestion_filter(filter_id):
 
 
 
-            
-
-
-
             return jsonify({"message": "Filter deleted successfully"})
-
-
-
-            
 
 
 
@@ -9825,15 +8835,11 @@ def manage_suggestion_filter(filter_id):
 
 
 
-
-
-@app.route('/admin/suggestion-filters/<filter_id>/toggle', methods=['POST'])
+@app.route("/admin/suggestion-filters/<filter_id>/toggle", methods=["POST"])
 
 @cross_origin()
 
 def toggle_suggestion_filter(filter_id):
-
-
 
     """Enable or disable a suggestion filter"""
 
@@ -9855,35 +8861,17 @@ def toggle_suggestion_filter(filter_id):
 
 
 
-        
-
-
-
         new_status = not filter_doc.get("isEnabled", True)
-
-
-
-        
 
 
 
         result = db.suggestion_filters.update_one(
 
-
-
             {"_id": filter_id},
 
-
-
-            {"$set": {"isEnabled": new_status, "updated_at": datetime.utcnow()}}
-
-
+            {"$set": {"isEnabled": new_status, "updated_at": datetime.utcnow()}},
 
         )
-
-
-
-        
 
 
 
@@ -9895,27 +8883,17 @@ def toggle_suggestion_filter(filter_id):
 
 
 
-        
+        return jsonify(
 
+            {
 
+                "message": f"Filter {'enabled' if new_status else 'disabled'} successfully",
 
-        return jsonify({
+                "isEnabled": new_status,
 
+            }
 
-
-            "message": f"Filter {'enabled' if new_status else 'disabled'} successfully",
-
-
-
-            "isEnabled": new_status
-
-
-
-        })
-
-
-
-        
+        )
 
 
 
@@ -9929,15 +8907,11 @@ def toggle_suggestion_filter(filter_id):
 
 
 
-
-
-@app.route('/admin/suggestion-filters/initialize', methods=['POST'])
+@app.route("/admin/suggestion-filters/initialize", methods=["POST"])
 
 @cross_origin()
 
 def initialize_default_suggestion_filters():
-
-
 
     """Initialize default suggestion filters if they don't exist"""
 
@@ -9959,23 +8933,11 @@ def initialize_default_suggestion_filters():
 
 
 
-            return jsonify({
+            return jsonify(
 
+                {"message": "Suggestion filters already exist", "count": existing_count}
 
-
-                "message": "Suggestion filters already exist",
-
-
-
-                "count": existing_count
-
-
-
-            })
-
-
-
-        
+            )
 
 
 
@@ -9985,581 +8947,387 @@ def initialize_default_suggestion_filters():
 
         default_filters = [
 
-
-
             {
-
-
 
                 "name": "Business Interest Filter",
 
-
-
                 "description": "Filters respondents based on their interest in starting or running a business",
-
-
 
                 "category": "Business",
 
-
-
                 "logic": {
-
-
 
                     "conditions": [
 
+                        {
 
+                            "field": "business_interest",
 
-                        {"field": "business_interest", "operator": "equals", "value": "Yes"},
+                            "operator": "equals",
 
+                            "value": "Yes",
 
+                        },
 
-                        {"field": "entrepreneurial_intent", "operator": "greater_than", "value": 5}
+                        {
 
+                            "field": "entrepreneurial_intent",
 
+                            "operator": "greater_than",
+
+                            "value": 5,
+
+                        },
 
                     ],
 
-
-
-                    "logic_type": "any"
-
-
+                    "logic_type": "any",
 
                 },
-
-
 
                 "rules": "User must show interest in business activities or have high entrepreneurial intent",
 
-
-
                 "isEnabled": True,
 
-
-
-                "priority": 1
-
-
+                "priority": 1,
 
             },
 
-
-
             {
-
-
 
                 "name": "Age Verification Filter",
 
-
-
                 "description": "Ensures respondents meet minimum age requirements",
-
-
 
                 "category": "Demographic",
 
-
-
                 "logic": {
-
-
 
                     "conditions": [
 
+                        {
 
+                            "field": "age",
 
-                        {"field": "age", "operator": "greater_than_or_equal", "value": 18}
+                            "operator": "greater_than_or_equal",
 
+                            "value": 18,
 
+                        }
 
                     ],
 
-
-
-                    "logic_type": "all"
-
-
+                    "logic_type": "all",
 
                 },
-
-
 
                 "rules": "User must be 18 years or older",
 
-
-
                 "isEnabled": True,
 
-
-
-                "priority": 2
-
-
+                "priority": 2,
 
             },
 
-
-
             {
-
-
 
                 "name": "Income Level Filter",
 
-
-
                 "description": "Filters based on income or purchasing power",
-
-
 
                 "category": "Financial",
 
-
-
                 "logic": {
-
-
 
                     "conditions": [
 
+                        {
 
+                            "field": "annual_income",
 
-                        {"field": "annual_income", "operator": "greater_than", "value": 25000}
+                            "operator": "greater_than",
 
+                            "value": 25000,
 
+                        }
 
                     ],
 
-
-
-                    "logic_type": "all"
-
-
+                    "logic_type": "all",
 
                 },
-
-
 
                 "rules": "User must have minimum annual income of $25,000",
 
-
-
                 "isEnabled": True,
 
-
-
-                "priority": 3
-
-
+                "priority": 3,
 
             },
 
-
-
             {
-
-
 
                 "name": "Experience Level Filter",
 
-
-
                 "description": "Filters based on professional experience or expertise",
-
-
 
                 "category": "Professional",
 
-
-
                 "logic": {
-
-
 
                     "conditions": [
 
+                        {
 
+                            "field": "years_experience",
 
-                        {"field": "years_experience", "operator": "greater_than_or_equal", "value": 1}
+                            "operator": "greater_than_or_equal",
 
+                            "value": 1,
 
+                        }
 
                     ],
 
-
-
-                    "logic_type": "all"
-
-
+                    "logic_type": "all",
 
                 },
-
-
 
                 "rules": "User must have at least 1 year of relevant experience",
 
-
-
                 "isEnabled": True,
 
-
-
-                "priority": 4
-
-
+                "priority": 4,
 
             },
 
-
-
             {
-
-
 
                 "name": "Recommendation Score Filter",
 
-
-
                 "description": "Filters based on likelihood to recommend products/services",
-
-
 
                 "category": "Satisfaction",
 
-
-
                 "logic": {
-
-
 
                     "conditions": [
 
+                        {
 
+                            "field": "recommendation_score",
 
-                        {"field": "recommendation_score", "operator": "greater_than_or_equal", "value": 7}
+                            "operator": "greater_than_or_equal",
 
+                            "value": 7,
 
+                        }
 
                     ],
 
-
-
-                    "logic_type": "all"
-
-
+                    "logic_type": "all",
 
                 },
-
-
 
                 "rules": "User must have recommendation score of 7 or higher",
 
-
-
                 "isEnabled": True,
 
-
-
-                "priority": 5
-
-
+                "priority": 5,
 
             },
 
-
-
             {
-
-
 
                 "name": "Geographic Location Filter",
 
-
-
                 "description": "Filters respondents based on geographic eligibility",
-
-
 
                 "category": "Location",
 
-
-
                 "logic": {
-
-
 
                     "conditions": [
 
+                        {
 
+                            "field": "country",
 
-                        {"field": "country", "operator": "in_list", "value": ["US", "CA", "UK", "AU"]}
+                            "operator": "in_list",
 
+                            "value": ["US", "CA", "UK", "AU"],
 
+                        }
 
                     ],
 
-
-
-                    "logic_type": "all"
-
-
+                    "logic_type": "all",
 
                 },
-
-
 
                 "rules": "User must be from eligible countries",
 
-
-
                 "isEnabled": True,
 
-
-
-                "priority": 6
-
-
+                "priority": 6,
 
             },
 
-
-
             {
-
-
 
                 "name": "Engagement Level Filter",
 
-
-
                 "description": "Filters based on user engagement and activity level",
-
-
 
                 "category": "Behavioral",
 
-
-
                 "logic": {
-
-
 
                     "conditions": [
 
+                        {
 
+                            "field": "time_spent",
 
-                        {"field": "time_spent", "operator": "greater_than", "value": 60},
+                            "operator": "greater_than",
 
+                            "value": 60,
 
+                        },
 
-                        {"field": "questions_answered", "operator": "greater_than_or_equal", "value": 5}
+                        {
 
+                            "field": "questions_answered",
 
+                            "operator": "greater_than_or_equal",
+
+                            "value": 5,
+
+                        },
 
                     ],
 
-
-
-                    "logic_type": "all"
-
-
+                    "logic_type": "all",
 
                 },
-
-
 
                 "rules": "User must spend at least 60 seconds and answer at least 5 questions",
 
-
-
                 "isEnabled": True,
 
-
-
-                "priority": 7
-
-
+                "priority": 7,
 
             },
 
-
-
             {
-
-
 
                 "name": "Quality Score Filter",
 
-
-
                 "description": "Filters based on response quality and consistency",
-
-
 
                 "category": "Quality",
 
-
-
                 "logic": {
-
-
 
                     "conditions": [
 
+                        {
 
+                            "field": "quality_score",
 
-                        {"field": "quality_score", "operator": "greater_than_or_equal", "value": 0.7}
+                            "operator": "greater_than_or_equal",
 
+                            "value": 0.7,
 
+                        }
 
                     ],
 
-
-
-                    "logic_type": "all"
-
-
+                    "logic_type": "all",
 
                 },
-
-
 
                 "rules": "User must have quality score of 70% or higher",
 
-
-
                 "isEnabled": True,
 
-
-
-                "priority": 8
-
-
+                "priority": 8,
 
             },
 
-
-
             {
-
-
 
                 "name": "Device Compatibility Filter",
 
-
-
                 "description": "Filters based on device type and compatibility",
-
-
 
                 "category": "Technical",
 
-
-
                 "logic": {
-
-
 
                     "conditions": [
 
+                        {
 
+                            "field": "device_type",
 
-                        {"field": "device_type", "operator": "not_in_list", "value": ["bot", "crawler"]}
+                            "operator": "not_in_list",
 
+                            "value": ["bot", "crawler"],
 
+                        }
 
                     ],
 
-
-
-                    "logic_type": "all"
-
-
+                    "logic_type": "all",
 
                 },
-
-
 
                 "rules": "User must use a valid device (not bot or crawler)",
 
-
-
                 "isEnabled": True,
 
-
-
-                "priority": 9
-
-
+                "priority": 9,
 
             },
 
-
-
             {
-
-
 
                 "name": "Time Sensitivity Filter",
 
-
-
                 "description": "Filters based on response time and availability",
-
-
 
                 "category": "Temporal",
 
-
-
                 "logic": {
-
-
 
                     "conditions": [
 
+                        {
 
+                            "field": "response_time",
 
-                        {"field": "response_time", "operator": "less_than", "value": 300}
+                            "operator": "less_than",
 
+                            "value": 300,
 
+                        }
 
                     ],
 
-
-
-                    "logic_type": "all"
-
-
+                    "logic_type": "all",
 
                 },
 
-
-
                 "rules": "User must complete survey within 5 minutes (300 seconds)",
-
-
 
                 "isEnabled": True,
 
+                "priority": 10,
 
-
-                "priority": 10
-
-
-
-            }
-
-
+            },
 
         ]
-
-
-
-        
 
 
 
@@ -10581,23 +9349,13 @@ def initialize_default_suggestion_filters():
 
             filter_doc = {
 
-
-
                 "_id": filter_id,
-
-
 
                 **filter_data,
 
-
-
                 "created_at": datetime.utcnow(),
 
-
-
-                "updated_at": datetime.utcnow()
-
-
+                "updated_at": datetime.utcnow(),
 
             }
 
@@ -10611,27 +9369,17 @@ def initialize_default_suggestion_filters():
 
 
 
-        
+        return jsonify(
 
+            {
 
+                "message": f"Initialized {len(inserted_filters)} default suggestion filters",
 
-        return jsonify({
+                "filter_ids": inserted_filters,
 
+            }
 
-
-            "message": f"Initialized {len(inserted_filters)} default suggestion filters",
-
-
-
-            "filter_ids": inserted_filters
-
-
-
-        })
-
-
-
-        
+        )
 
 
 
@@ -10645,9 +9393,7 @@ def initialize_default_suggestion_filters():
 
 
 
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
 
 
 
@@ -10655,7 +9401,7 @@ if __name__ == '__main__':
 
 
 
-        app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+        app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
 
 
 
@@ -10683,23 +9429,15 @@ if __name__ == '__main__':
 
 
 
+
+
 @app.route("/l/<short_id>")
-
-
 
 def redirect_masked_link(short_id):
 
 
 
-
-
-
-
     original_url = link_handler.get_original_url(short_id, request)
-
-
-
-
 
 
 
@@ -10711,11 +9449,5 @@ def redirect_masked_link(short_id):
 
 
 
-
-
-
-
     return redirect(original_url)
-
-
 
