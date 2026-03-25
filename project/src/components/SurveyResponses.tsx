@@ -41,11 +41,11 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
       }
       
       const response = await fetch(`${baseUrl}/survey/${surveyId}/responses`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+  headers: {
+    ...(token && { Authorization: `Bearer ${token}` }),
+    'Content-Type': 'application/json'
+  }
+});
 
       if (response.status === 401) {
         setNeedsAuth(true);
