@@ -28,6 +28,9 @@ import os
 import json
 
 
+
+
+
 import re
 
 
@@ -1104,15 +1107,7 @@ def generate_survey():
 
 
 
-
-
-
-
             Generate a comprehensive survey about "{prompt}" with exactly {question_count} questions that thoroughly explore this topic.
-
-
-
-
 
 
 
@@ -1120,23 +1115,11 @@ def generate_survey():
 
 
 
-
-
-
-
             Create exactly {question_count} questions that cover all important aspects. Be creative and thorough.
 
 
 
-
-
-
-
             
-
-
-
-
 
 
 
@@ -1144,15 +1127,7 @@ def generate_survey():
 
 
 
-
-
-
-
             
-
-
-
-
 
 
 
@@ -1160,15 +1135,7 @@ def generate_survey():
 
 
 
-
-
-
-
             A) Option 1
-
-
-
-
 
 
 
@@ -1176,15 +1143,7 @@ def generate_survey():
 
 
 
-
-
-
-
             C) Option 3
-
-
-
-
 
 
 
@@ -1192,15 +1151,7 @@ def generate_survey():
 
 
 
-
-
-
-
             
-
-
-
-
 
 
 
@@ -1208,15 +1159,7 @@ def generate_survey():
 
 
 
-
-
-
-
             
-
-
-
-
 
 
 
@@ -1224,15 +1167,7 @@ def generate_survey():
 
 
 
-
-
-
-
             A) Yes
-
-
-
-
 
 
 
@@ -1240,15 +1175,7 @@ def generate_survey():
 
 
 
-
-
-
-
             
-
-
-
-
 
 
 
@@ -1256,15 +1183,7 @@ def generate_survey():
 
 
 
-
-
-
-
             
-
-
-
-
 
 
 
@@ -1272,15 +1191,7 @@ def generate_survey():
 
 
 
-
-
-
-
             
-
-
-
-
 
 
 
@@ -1288,15 +1199,7 @@ def generate_survey():
 
 
 
-
-
-
-
             - Start each question with a number and period (1. 2. 3. etc)
-
-
-
-
 
 
 
@@ -1304,15 +1207,7 @@ def generate_survey():
 
 
 
-
-
-
-
             - Multiple Choice = 4 options (A-D)
-
-
-
-
 
 
 
@@ -1320,15 +1215,7 @@ def generate_survey():
 
 
 
-
-
-
-
             - Rating, Short Answer, and Opinion Scale = No options needed
-
-
-
-
 
 
 
@@ -1336,15 +1223,7 @@ def generate_survey():
 
 
 
-
-
-
-
             - Cover different angles: satisfaction, recommendations, improvements, future needs, etc.
-
-
-
-
 
 
 
@@ -1352,15 +1231,7 @@ def generate_survey():
 
 
 
-
-
-
-
             Generate a thorough, comprehensive survey - don't limit yourself to just 10 questions!
-
-
-
-
 
 
 
@@ -1369,27 +1240,11 @@ def generate_survey():
 
 
 
-
-
-
-
             Generate exactly {question_count} survey questions for customer feedback about "{prompt}".
 
 
 
-
-
-
-
             {user_questions_hint}
-
-
-
-
-
-
-
-
 
 
 
@@ -1405,19 +1260,7 @@ def generate_survey():
 
 
 
-
-
-
-
-
-
-
-
             1. Question text here (Multiple Choice)  
-
-
-
-
 
 
 
@@ -1425,15 +1268,7 @@ def generate_survey():
 
 
 
-
-
-
-
             B) Option 2  
-
-
-
-
 
 
 
@@ -1441,19 +1276,7 @@ def generate_survey():
 
 
 
-
-
-
-
             D) Option 4  
-
-
-
-
-
-
-
-
 
 
 
@@ -1469,19 +1292,7 @@ def generate_survey():
 
 
 
-
-
-
-
-
-
-
-
             3. Question text here (Yes/No)  
-
-
-
-
 
 
 
@@ -1489,19 +1300,7 @@ def generate_survey():
 
 
 
-
-
-
-
             B) No  
-
-
-
-
-
-
-
-
 
 
 
@@ -1517,23 +1316,7 @@ def generate_survey():
 
 
 
-
-
-
-
-
-
-
-
             5. Question text here (Opinion Scale 1-10)
-
-
-
-
-
-
-
-
 
 
 
@@ -1545,15 +1328,7 @@ def generate_survey():
 
 
 
-
-
-
-
             - Start each question with a number and period (1. 2. 3. etc)
-
-
-
-
 
 
 
@@ -1561,23 +1336,11 @@ def generate_survey():
 
 
 
-
-
-
-
             - Multiple Choice = 4 options (A-D)
 
 
 
-
-
-
-
             - Yes/No = Only two options: A) Yes, B) No
-
-
-
-
 
 
 
@@ -1589,19 +1352,7 @@ def generate_survey():
 
 
 
-
-
-
-
-
-
-
-
             Create a good distribution of question types across all {question_count} questions:
-
-
-
-
 
 
 
@@ -1609,15 +1360,7 @@ def generate_survey():
 
 
 
-
-
-
-
             - Rating questions (about 20%) 
-
-
-
-
 
 
 
@@ -1625,15 +1368,7 @@ def generate_survey():
 
 
 
-
-
-
-
             - Short Answer questions (about 20%)
-
-
-
-
 
 
 
@@ -1645,19 +1380,7 @@ def generate_survey():
 
 
 
-
-
-
-
-
-
-
-
             Do not include any explanation — only return the {question_count} formatted questions in order.
-
-
-
-
 
 
 
@@ -1666,27 +1389,11 @@ def generate_survey():
 
 
 
-
-
-
-
             Generate exactly {question_count} employee check-in survey questions about "{prompt}".
 
 
 
-
-
-
-
             {user_questions_hint}
-
-
-
-
-
-
-
-
 
 
 
@@ -1702,19 +1409,7 @@ def generate_survey():
 
 
 
-
-
-
-
-
-
-
-
             1. Question text here (Multiple Choice)  
-
-
-
-
 
 
 
@@ -1722,15 +1417,7 @@ def generate_survey():
 
 
 
-
-
-
-
             B) Option 2  
-
-
-
-
 
 
 
@@ -1738,19 +1425,7 @@ def generate_survey():
 
 
 
-
-
-
-
             D) Option 4  
-
-
-
-
-
-
-
-
 
 
 
@@ -1766,19 +1441,7 @@ def generate_survey():
 
 
 
-
-
-
-
-
-
-
-
             3. Question text here (Yes/No)  
-
-
-
-
 
 
 
@@ -1786,19 +1449,7 @@ def generate_survey():
 
 
 
-
-
-
-
             B) No  
-
-
-
-
-
-
-
-
 
 
 
@@ -1814,23 +1465,7 @@ def generate_survey():
 
 
 
-
-
-
-
-
-
-
-
             5. Question text here (Opinion Scale 1-10)
-
-
-
-
-
-
-
-
 
 
 
@@ -1842,15 +1477,7 @@ def generate_survey():
 
 
 
-
-
-
-
             - Start each question with a number and period (1. 2. 3. etc)
-
-
-
-
 
 
 
@@ -1858,23 +1485,11 @@ def generate_survey():
 
 
 
-
-
-
-
             - Multiple Choice = 4 options (A-D)
 
 
 
-
-
-
-
             - Yes/No = Only two options: A) Yes, B) No
-
-
-
-
 
 
 
@@ -1886,19 +1501,7 @@ def generate_survey():
 
 
 
-
-
-
-
-
-
-
-
             Create a good distribution of question types across all {question_count} questions:
-
-
-
-
 
 
 
@@ -1906,15 +1509,7 @@ def generate_survey():
 
 
 
-
-
-
-
             - Rating questions (about 20%) 
-
-
-
-
 
 
 
@@ -1922,15 +1517,7 @@ def generate_survey():
 
 
 
-
-
-
-
             - Short Answer questions (about 20%)
-
-
-
-
 
 
 
@@ -1942,19 +1529,7 @@ def generate_survey():
 
 
 
-
-
-
-
-
-
-
-
             Do not include any explanation — only return the {question_count} formatted questions in order.
-
-
-
-
 
 
 
@@ -1963,27 +1538,11 @@ def generate_survey():
 
 
 
-
-
-
-
                                  Generate exactly {question_count} survey questions about "{prompt}".
 
 
 
-
-
-
-
                                  {user_questions_hint}
-
-
-
-
-
-
-
-
 
 
 
@@ -1999,19 +1558,7 @@ def generate_survey():
 
 
 
-
-
-
-
-
-
-
-
                                  1. Question text here (Multiple Choice)  
-
-
-
-
 
 
 
@@ -2019,15 +1566,7 @@ def generate_survey():
 
 
 
-
-
-
-
                                  B) Option 2  
-
-
-
-
 
 
 
@@ -2035,19 +1574,7 @@ def generate_survey():
 
 
 
-
-
-
-
                                  D) Option 4  
-
-
-
-
-
-
-
-
 
 
 
@@ -2063,19 +1590,7 @@ def generate_survey():
 
 
 
-
-
-
-
-
-
-
-
                                  3. Question text here (Yes/No)  
-
-
-
-
 
 
 
@@ -2083,19 +1598,7 @@ def generate_survey():
 
 
 
-
-
-
-
                                  B) No  
-
-
-
-
-
-
-
-
 
 
 
@@ -2111,23 +1614,7 @@ def generate_survey():
 
 
 
-
-
-
-
-
-
-
-
                                  5. Question text here (Opinion Scale 1-10)
-
-
-
-
-
-
-
-
 
 
 
@@ -2139,15 +1626,7 @@ def generate_survey():
 
 
 
-
-
-
-
                                  - Start each question with a number and period (1. 2. 3. etc)
-
-
-
-
 
 
 
@@ -2155,23 +1634,11 @@ def generate_survey():
 
 
 
-
-
-
-
                                  - Multiple Choice = 4 options (A-D)
 
 
 
-
-
-
-
                                  - Yes/No = Only two options: A) Yes, B) No
-
-
-
-
 
 
 
@@ -2183,19 +1650,7 @@ def generate_survey():
 
 
 
-
-
-
-
-
-
-
-
                                  Do not include any explanation — only return the formatted questions.
-
-
-
-
 
 
 
@@ -2387,6 +1842,7 @@ def generate_survey():
             while True:
 
                 short_id = generate_short_id(5)
+                
 
                 # Check if this ID already exists
 
@@ -2395,19 +1851,15 @@ def generate_survey():
                 ):
 
                     break
-
+            
             survey_id = short_id
 
             # Get authenticated user if available, otherwise create temporary user
-
             current_user = getattr(g, "current_user", None)
 
             if current_user:
-
                 # Authenticated user flow
-
                 print(f"DEBUG: Current user data: {current_user}")
-
                 print(
                     f"DEBUG: simpleUserId: {current_user.get('simpleUserId', 'MISSING')}"
                 )
@@ -2415,60 +1867,42 @@ def generate_survey():
                 simple_user_id = current_user.get("simpleUserId", 0)
 
                 # Ensure we have a valid simpleUserId
-
-                if current_user and (simple_user_id == 0 or simple_user_id is None):
-
+                if simple_user_id == 0 or simple_user_id is None:
                     print("WARNING: simpleUserId is 0 or None, fetching from database")
-
                     user_id = current_user.get("_id")
-
-                    user_from_db = (
-                        db.users.find_one({"_id": user_id}) if user_id else None
-                    )
-
+                    user_from_db = db.users.find_one({"_id": user_id}) if user_id else None
                     if user_from_db:
-
                         simple_user_id = user_from_db.get("simpleUserId", 0)
-
                         print(
                             f"DEBUG: Retrieved simpleUserId from DB: {simple_user_id}"
                         )
 
                 # Get username for aff_sub parameter
-
                 if current_user:
-
                     username = current_user.get(
-                        "name", current_user.get("email", "").split("@")[0]
-                    )
-
+        "name", current_user.get("email", "").split("@")[0]
+    )
                 user_id_str = str(current_user.get("_id", ""))
-
                 creator_email = current_user.get("email", "")
-
-                creator_name = (
-                    current_user.get("name", "") if current_user else "Temporary User"
-                )
-
+                creator_name = current_user.get("name", "")
                 simple_user_id = current_user.get("simpleUserId", 0)
 
             else:
-
                 import uuid
-
                 temp_user_id = str(uuid.uuid4())
-
                 simple_user_id = 0
-
                 username = f"temp_{short_id[:5]}"
-
                 user_id_str = temp_user_id
-
                 creator_email = ""
-
                 creator_name = "Temporary User"
 
+            
+
+            
+
             # Get username for aff_sub parameter
+
+            
 
             if not username:
 
@@ -2497,66 +1931,34 @@ def generate_survey():
             print(f"DEBUG: Shareable link: {survey_data['shareable_link']}")
 
             # Link survey to user (authenticated or temporary)
-
             survey_data["ownerUserId"] = user_id_str
-
             survey_data["user_id"] = user_id_str
-
             survey_data["creator_email"] = creator_email
-
             survey_data["creator_name"] = creator_name
-
             survey_data["simple_user_id"] = simple_user_id
-
             survey_data["is_temporary"] = (
                 current_user is None
             )  # Mark if this is a temporary user survey
 
             if current_user:
-
                 survey_data["created_by"] = {
                     "user_id": user_id_str,
                     "email": current_user.get("email", ""),
-                    "name": (
-                        current_user.get("name", "")
-                        if current_user
-                        else "Temporary User"
-                    ),
+                    "name": current_user.get("name", ""),
                     "simple_id": current_user.get("simpleUserId", 0),
                 }
-
-                print(
-                    f"✅ Survey linked to user: {current_user.get('email', 'Unknown') if current_user else 'Temporary'} (ID: {user_id_str})"
-                )
-
+                print(f"Survey linked to user: {current_user.get('email', 'Unknown')} (ID: {user_id_str})")
             else:
-
                 survey_data["created_by"] = {
                     "user_id": user_id_str,
                     "email": "",
                     "name": "Temporary User",
                     "simple_id": 0,
                 }
+                print(f"Survey created for temporary user (ID: {user_id_str})")
 
-                print(f"✅ Survey created for temporary user (ID: {user_id_str})")
-
-            print(
-                f"✅ Survey linked to user: {current_user.get('email', 'Unknown') if current_user else 'Temporary'} (ID: {user_id_str})"
-            )
-
-            print(
-                f"📋 Survey data includes: ownerUserId, user_id, creator_email, creator_name, simple_user_id, created_by"
-            )
-
-            print(f"🔗 Generated links:")
-
-            print(f"   - Shareable: {survey_data['shareable_link']}")
-
-            print(f"   - Public: {survey_data['public_link']}")
-
-            print(
-                f"✅ Survey linked to user: {current_user.get('email', 'Unknown') if current_user else 'TEMP USER'} (ID: {user_id_str}, SimpleID: {current_user.get('simpleUserId', 'None') if current_user else 0})"
-            )
+            print(f"Shareable: {survey_data['shareable_link']}")
+            print(f"Public: {survey_data['public_link']}")
 
             # Save to database without timeout parameter
 
@@ -3285,6 +2687,7 @@ def view_survey(survey_id):
 
 
 @app.route("/surveys", methods=["GET"])
+@app.route("/api/surveys", methods=["GET"])
 def list_surveys():
 
     try:
@@ -3471,41 +2874,86 @@ def test_endpoint():
 
 @app.route("/survey/<survey_id>/responses", methods=["GET", "OPTIONS"])
 @cross_origin(supports_credentials=True, origins="*")
-def get_survey_responses(survey_id):
-
+def get_survey_responses_route(survey_id):
+    """Get all responses for a specific survey"""
     if request.method == "OPTIONS":
         return "", 200
-
-    # 🔐 LOGIN CHECK (ADD THIS)
-    auth_header = request.headers.get("Authorization")
-
-    if not auth_header:
-        return jsonify({
-            "error": "AUTH_REQUIRED",
-            "message": "Sign up to see your responses"
-        }), 401
-
     try:
-        print(f"Fetching responses for survey: {survey_id}")
-
         responses_cursor = db["responses"].find({"survey_id": survey_id})
-
         responses = []
         for doc in responses_cursor:
             response_data = convert_objectid_to_string(doc)
             responses.append(response_data)
-
-        print(f"Found {len(responses)} responses")
-
         return jsonify({
             "survey_id": survey_id,
             "total_responses": len(responses),
-            "responses": responses,
+            "responses": responses
         })
-
     except Exception as e:
         print(f"Error fetching responses: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+def get_survey_responses(survey_id):
+
+    try:
+
+        print(f"Fetching responses for survey: {survey_id}")
+
+        # Find all responses for this survey
+
+        responses_cursor = db["responses"].find({"survey_id": survey_id})
+
+        responses = []
+
+        for doc in responses_cursor:
+
+            response_data = convert_objectid_to_string(doc)
+
+            responses.append(response_data)
+
+        print(f"Found {len(responses)} responses")
+
+        return jsonify(
+            {
+                "survey_id": survey_id,
+                "total_responses": len(responses),
+                "responses": responses,
+            }
+        )
+
+    except Exception as e:
+
+        print(f"Error fetching responses: {e}")
+
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/debug/all-responses", methods=["GET"])
+def get_all_responses():
+    """Debug endpoint to see all responses in the database"""
+
+    try:
+
+        responses_cursor = db["responses"].find()
+
+        responses = []
+
+        for doc in responses_cursor:
+
+            response_data = convert_objectid_to_string(doc)
+
+            responses.append(response_data)
+
+        return jsonify({"total_responses": len(responses), "responses": responses})
+
+    except Exception as e:
+
+        print(f"Error fetching all responses: {e}")
+
+        return jsonify({"error": str(e)}), 500
+
+
 # edit survey
 
 
@@ -3731,170 +3179,269 @@ except ImportError as e:
 
     LINK_MASKING_AVAILABLE = False
 
-    # Link masking endpoints
 
-    @app.route("/api/masked-links", methods=["POST"])
-    @cross_origin(supports_credentials=True, origins="*")
-    def create_masked_link():
-        """Create a new masked link"""
+# Link masking endpoints — registered regardless of import path
 
+@app.route("/api/masked-links", methods=["POST"])
+@cross_origin(supports_credentials=True, origins="*")
+def create_masked_link():
+    """Create a new masked link"""
+
+    try:
+
+        data = request.get_json()
+
+        if not data or not data.get("original_url"):
+
+            return jsonify({"error": "Original URL is required"}), 400
+
+        user_id = request.headers.get("X-User-ID", "anonymous")
+
+        result = link_handler.create_masked_link(
+            original_url=data["original_url"],
+            custom_alias=data.get("custom_alias"),
+            user_id=user_id,
+        )
+
+        if "error" in result:
+
+            return jsonify(result), 400
+
+        return jsonify(result), 201
+
+    except Exception as e:
+
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/l/<short_id>", methods=["GET"])
+@cross_origin(supports_credentials=True, origins="*")
+def redirect_masked_link(short_id):
+    """True backend proxy - fetches destination server-side, strips blocking headers"""
+
+    try:
+        link = link_handler.db.masked_links.find_one({"short_id": short_id, "is_active": True})
+
+        if not link:
+            return "<h2 style='font-family:sans-serif;text-align:center;margin-top:20%'>Link not found or inactive</h2>", 404
+
+        original_url = link["original_url"]
+
+        # Track click silently
         try:
+            link_handler._track_click(link, request)
+        except Exception:
+            pass
 
-            data = request.get_json()
+        # Fetch the destination page server-side with real browser headers
+        fetch_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "identity",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Cache-Control": "max-age=0",
+        }
 
-            if not data or not data.get("original_url"):
+        session = requests.Session()
+        resp = session.get(
+            original_url,
+            headers=fetch_headers,
+            timeout=15,
+            allow_redirects=True,
+            verify=True
+        )
 
-                return jsonify({"error": "Original URL is required"}), 400
+        content_type = resp.headers.get("Content-Type", "text/html")
+        final_url = resp.url  # after redirects
 
-            # Get user ID from session or token (simplified for now)
+        # Non-HTML assets — pass through directly
+        if "text/html" not in content_type:
+            from flask import Response
+            return Response(resp.content, status=resp.status_code, content_type=content_type)
 
-            user_id = request.headers.get("X-User-ID", "anonymous")
+        html = resp.text
 
-            result = link_handler.create_masked_link(
-                original_url=data["original_url"],
-                custom_alias=data.get("custom_alias"),
-                user_id=user_id,
-            )
+        # Inject <base> tag so all relative URLs (CSS, JS, images) resolve correctly
+        base_tag = f'<base href="{final_url}">'
+        lower = html.lower()
+        head_pos = lower.find("<head>")
+        if head_pos != -1:
+            insert_at = head_pos + 6
+            html = html[:insert_at] + base_tag + html[insert_at:]
+        else:
+            html = base_tag + html
 
-            if "error" in result:
+        from flask import Response
+        response = Response(html, status=200, content_type="text/html; charset=utf-8")
 
-                return jsonify(result), 400
+        # Strip ALL headers that block display or framing
+        for h in ["X-Frame-Options", "Content-Security-Policy",
+                  "X-Content-Type-Options", "Strict-Transport-Security",
+                  "Permissions-Policy", "Cross-Origin-Opener-Policy",
+                  "Cross-Origin-Embedder-Policy", "Cross-Origin-Resource-Policy"]:
+            response.headers.remove(h)
 
-            return jsonify(result), 201
+        return response
 
-        except Exception as e:
-
-            return jsonify({"error": str(e)}), 500
-
-    @app.route("/l/<short_id>", methods=["GET"])
-    @cross_origin(supports_credentials=True, origins="*")
-    def redirect_masked_link(short_id):
-        """Redirect to original URL and track analytics"""
-
+    except requests.exceptions.SSLError:
+        # Retry without SSL verification
         try:
+            resp = requests.get(original_url, headers=fetch_headers, timeout=15,
+                                allow_redirects=True, verify=False)
+            html = resp.text
+            base_tag = f'<base href="{resp.url}">'
+            lower = html.lower()
+            head_pos = lower.find("<head>")
+            if head_pos != -1:
+                html = html[:head_pos+6] + base_tag + html[head_pos+6:]
+            else:
+                html = base_tag + html
+            from flask import Response
+            response = Response(html, status=200, content_type="text/html; charset=utf-8")
+            for h in ["X-Frame-Options", "Content-Security-Policy", "X-Content-Type-Options"]:
+                response.headers.remove(h)
+            return response
+        except Exception as e2:
+            return f"<h2 style='font-family:sans-serif;text-align:center;margin-top:20%'>SSL Error: {str(e2)}</h2>", 502
 
-            original_url = link_handler.get_original_url(short_id, request)
+    except requests.exceptions.ConnectionError as e:
+        return f"<h2 style='font-family:sans-serif;text-align:center;margin-top:20%'>Cannot reach destination: {str(e)}</h2>", 502
 
-            if not original_url:
+    except requests.exceptions.Timeout:
+        return "<h2 style='font-family:sans-serif;text-align:center;margin-top:20%'>Destination timed out</h2>", 504
 
-                return jsonify({"error": "Link not found"}), 404
-
-            return redirect(original_url)
-
-        except Exception as e:
-
-            return jsonify({"error": str(e)}), 500
-
-    @app.route("/api/masked-links/<short_id>/analytics", methods=["GET"])
-    @cross_origin(supports_credentials=True, origins="*")
-    def get_link_analytics(short_id):
-        """Get analytics for a masked link"""
-
-        try:
-
-            result = link_handler.get_link_analytics(short_id)
-
-            if "error" in result:
-
-                return jsonify(result), 404
-
-            return jsonify(result)
-
-        except Exception as e:
-
-            return jsonify({"error": str(e)}), 500
-
-    @app.route("/api/masked-links", methods=["GET"])
-    @cross_origin(supports_credentials=True, origins="*")
-    def get_user_masked_links():
-        """Get all masked links for a user"""
-
-        try:
-
-            user_id = request.headers.get("X-User-ID", "anonymous")
-
-            limit = int(request.args.get("limit", 50))
-
-            offset = int(request.args.get("offset", 0))
-
-            result = link_handler.get_user_links(user_id, limit, offset)
-
-            if "error" in result:
-
-                return jsonify(result), 400
-
-            return jsonify(result)
-
-        except Exception as e:
-
-            return jsonify({"error": str(e)}), 500
-
-    @app.route("/api/masked-links/<short_id>", methods=["PUT"])
-    @cross_origin(supports_credentials=True, origins="*")
-    def update_masked_link(short_id):
-        """Update a masked link"""
-
-        try:
-
-            data = request.get_json()
-
-            if not data:
-
-                return jsonify({"error": "No update data provided"}), 400
-
-            user_id = request.headers.get("X-User-ID", "anonymous")
-
-            result = link_handler.update_link(short_id, user_id, data)
-
-            if "error" in result:
-
-                return jsonify(result), 400
-
-            return jsonify(result)
-
-        except Exception as e:
-
-            return jsonify({"error": str(e)}), 500
-
-    @app.route("/api/masked-links/<short_id>", methods=["DELETE"])
-    @cross_origin(supports_credentials=True, origins="*")
-    def delete_masked_link(short_id):
-        """Delete a masked link"""
-
-        try:
-
-            user_id = request.headers.get("X-User-ID", "anonymous")
-
-            result = link_handler.delete_link(short_id, user_id)
-
-            if "error" in result:
-
-                return jsonify(result), 400
-
-            return jsonify(result)
-
-        except Exception as e:
-
-            return jsonify({"error": str(e)}), 500
-
-    print("✅ Link masking endpoints added:")
-
-    print("  - POST /api/masked-links (create)")
-
-    print("  - GET  /l/<short_id> (redirect)")
-
-    print("  - GET  /api/masked-links/<short_id>/analytics")
-
-    print("  - GET  /api/masked-links (list)")
-
-    print("  - PUT  /api/masked-links/<short_id> (update)")
-
-    print("  - DELETE /api/masked-links/<short_id> (delete)")
+    except Exception as e:
+        return f"<h2 style='font-family:sans-serif;text-align:center;margin-top:20%'>Error: {str(e)}</h2>", 500
 
 
-else:
+@app.route("/api/masked-links/<short_id>/resolve", methods=["GET"])
+@cross_origin(supports_credentials=True, origins="*")
+def resolve_masked_link(short_id):
+    """Return original URL for the frontend proxy iframe — also tracks the click"""
 
-    print("⚠️ Link masking endpoints not available")
+    try:
+
+        original_url = link_handler.get_original_url(short_id, request)
+
+        if not original_url:
+
+            return jsonify({"error": "Link not found or inactive"}), 404
+
+        return jsonify({"original_url": original_url})
+
+    except Exception as e:
+
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/masked-links/<short_id>/analytics", methods=["GET"])
+@cross_origin(supports_credentials=True, origins="*")
+def get_link_analytics(short_id):
+    """Get analytics for a masked link"""
+
+    try:
+
+        result = link_handler.get_link_analytics(short_id)
+
+        if "error" in result:
+
+            return jsonify(result), 404
+
+        return jsonify(result)
+
+    except Exception as e:
+
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/masked-links", methods=["GET"])
+@cross_origin(supports_credentials=True, origins="*")
+def get_user_masked_links():
+    """Get all masked links for a user"""
+
+    try:
+
+        user_id = request.headers.get("X-User-ID", "anonymous")
+
+        limit = int(request.args.get("limit", 50))
+
+        offset = int(request.args.get("offset", 0))
+
+        result = link_handler.get_user_links(user_id, limit, offset)
+
+        if "error" in result:
+
+            return jsonify(result), 400
+
+        return jsonify(result)
+
+    except Exception as e:
+
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/masked-links/<short_id>", methods=["PUT"])
+@cross_origin(supports_credentials=True, origins="*")
+def update_masked_link(short_id):
+    """Update a masked link"""
+
+    try:
+
+        data = request.get_json()
+
+        if not data:
+
+            return jsonify({"error": "No update data provided"}), 400
+
+        user_id = request.headers.get("X-User-ID", "anonymous")
+
+        result = link_handler.update_link(short_id, user_id, data)
+
+        if "error" in result:
+
+            return jsonify(result), 400
+
+        return jsonify(result)
+
+    except Exception as e:
+
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/masked-links/<short_id>", methods=["DELETE"])
+@cross_origin(supports_credentials=True, origins="*")
+def delete_masked_link(short_id):
+    """Delete a masked link"""
+
+    try:
+
+        user_id = request.headers.get("X-User-ID", "anonymous")
+
+        result = link_handler.delete_link(short_id, user_id)
+
+        if "error" in result:
+
+            return jsonify(result), 400
+
+        return jsonify(result)
+
+    except Exception as e:
+
+        return jsonify({"error": str(e)}), 500
+
+
+print("✅ Link masking endpoints registered:")  
+print("  - POST   /api/masked-links")
+print("  - GET    /l/<short_id>")
+print("  - GET    /api/masked-links/<short_id>/analytics")
+print("  - GET    /api/masked-links")
+print("  - PUT    /api/masked-links/<short_id>")
+print("  - DELETE /api/masked-links/<short_id>")
 
 
 # Admin configuration endpoints for pass/fail system
@@ -5276,13 +4823,4 @@ if __name__ == "__main__":
         print("Cleaning up...")
 
 
-@app.route("/l/<short_id>")
-def redirect_masked_link(short_id):
 
-    original_url = link_handler.get_original_url(short_id, request)
-
-    if not original_url:
-
-        return "Masked link not found", 404
-
-    return redirect(original_url)

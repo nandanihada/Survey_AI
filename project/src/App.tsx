@@ -72,6 +72,7 @@ const LoginPage = lazyRetry(() => import('./pages/LoginPage'));
 const SignupPage = lazyRetry(() => import('./pages/SignupPage'));
 const ProfilePage = lazyRetry(() => import('./pages/ProfilePage'));
 const LinkMaskingDashboard = lazyRetry(() => import('./pages/LinkMaskingDashboard'));
+const MaskedLinkViewer = lazyRetry(() => import('./pages/MaskedLinkViewer'));
 const NotFound = lazyRetry(() => import('./pages/NotFound'));
 const Unauthorized = lazyRetry(() => import('./pages/Unauthorized'));
 
@@ -92,6 +93,7 @@ import { useAuth } from './contexts/AuthContext';
 import { FloatingWidgetProvider } from './components/FloatingWidgetProvider';
 import type { WidgetCustomizerSettings } from './components/WidgetCustomizer';
 
+const PublicSurveyCreation = lazyRetry(() => import('./components/PublicSurveyCreation'));
 const SurveyForm = lazyRetry(() => import('./components/SurveyForm'));
 const SurveyList = lazyRetry(() => import('./components/SurveyList'));
 const PostbackManager = lazyRetry(() => import('./components/PostbackManager'));
@@ -608,6 +610,9 @@ export default function App() {
           {/* Landing page - redirects based on auth */}
           <Route path="/" element={<LandingRedirect />} />
           
+          {/* Public survey creation - allows 1 survey without login */}
+          <Route path="/create-survey" element={<PublicSurveyCreation />} />
+          
           {/* Public routes */}
           <Route path="/login" element={
             <PublicRoute>
@@ -703,6 +708,9 @@ export default function App() {
               <LinkMaskingDashboard />
             </ProtectedRoute>
           } />
+
+          {/* Masked link proxy - keeps masked URL in address bar */}
+          <Route path="/go/:shortId" element={<MaskedLinkViewer />} />
           
           {/* Widget routes */}
           <Route path="/widget-test" element={<WidgetTestPage />} />

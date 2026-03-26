@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { generateSurvey, parseImage } from '../utils/api';
-import { Loader2, Hash, X, Edit3, ChevronRight, ImagePlus, Sparkles, Check, ArrowRight, Lightbulb, ChevronDown, ExternalLink, FolderOpen } from 'lucide-react';
+import { Loader2, Hash, X, Edit3, ChevronRight, ImagePlus, Sparkles, Check, ArrowRight, Lightbulb, ChevronDown, ExternalLink, FolderOpen, Share2, Eye, LogIn } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { generateSurveyLink } from '../utils/surveyLinkUtils';
 
@@ -41,6 +41,11 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false, onNavigateT
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showAllSuggestions, setShowAllSuggestions] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<{ label: string; prompt: string } | null>(null);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [shareLinkCopied, setShareLinkCopied] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoginMode, setIsLoginMode] = useState(false);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
   const SUGGESTION_PROMPTS = [
@@ -131,6 +136,42 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false, onNavigateT
   }, [surveyTopic, questionCount, imageContext, selectedSuggestion]);
 
   const getQuestionText = (q: Question) => q.question || q.text || 'Untitled Question';
+  
+  const handleShareLink = () => {
+    if (generatedSurvey) {
+      const link = generateSurveyLink(generatedSurvey.survey_id);
+      navigator.clipboard.writeText(link);
+      setShareLinkCopied(true);
+      setTimeout(() => setShareLinkCopied(false), 3000);
+    }
+  };
+  
+  const handleViewResponses = () => {
+    setShowLoginPrompt(true);
+    setIsLoginMode(false); // Start with signup mode
+  };
+  
+  const handleLogin = () => {
+    setIsLoginMode(true); // Switch to login mode
+  };
+  
+  const handleSignup = () => {
+    setIsLoginMode(false); // Switch to signup mode
+  };
+  
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    // Here you would normally call your API to login/signup
+    // For now, we'll simulate success and redirect to responses
+    if (email && password) {
+      // Simulate API call
+      console.log(isLoginMode ? 'Logging in...' : 'Signing up...', { email, password });
+      
+      // After successful login/signup, redirect to survey responses page
+      navigate(`/dashboard/responses/${generatedSurvey?.survey_id}`);
+      setShowLoginPrompt(false);
+    }
+  };
   const normalizeType = (type: string): string => {
     switch (type) {
       case 'multiple_choice': case 'yes_no': case 'radio': return 'choice';
@@ -456,10 +497,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false, onNavigateT
               </button>
               <div className="flex gap-2.5">
                 <button
-                  onClick={() => {
-                    const link = generateSurveyLink(generatedSurvey.survey_id);
-                    window.open(link, '_blank', 'noopener,noreferrer');
-                  }}
+                  onClick={handleShareLink}
                   className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-3 rounded-2xl text-[11px] sm:text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 ${
                     isDarkMode
                       ? 'bg-white/[0.06] text-white border border-white/10 hover:bg-white/10'
@@ -467,10 +505,10 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false, onNavigateT
                   }`}
                   style={{ fontFamily: "'Outfit', sans-serif" }}
                 >
-                  <ExternalLink size={13} /> Preview Live
+                  <Share2 size={13} /> {shareLinkCopied ? 'Copied!' : 'Share Link'}
                 </button>
                 <button
-                  onClick={() => { setShowResultModal(false); if (onNavigateToSurveys) onNavigateToSurveys(); else navigate('/dashboard/create?tab=surveys'); }}
+                  onClick={handleViewResponses}
                   className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-3 rounded-2xl text-[11px] sm:text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 ${
                     isDarkMode
                       ? 'bg-white/[0.06] text-white border border-white/10 hover:bg-white/10'
@@ -478,7 +516,96 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false, onNavigateT
                   }`}
                   style={{ fontFamily: "'Outfit', sans-serif" }}
                 >
-                  <FolderOpen size={13} /> All Surveys
+                  <Eye size={13} /> Responses
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Login Prompt Modal */}
+      {showLoginPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'sfOverlayIn 0.35s ease-out' }}>
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-xl" />
+          <div
+            className="relative w-full max-w-md mx-4 rounded-3xl overflow-hidden p-6"
+            style={{
+              animation: 'sfModalIn 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+              background: isDarkMode ? 'linear-gradient(135deg, rgba(30,41,59,0.92) 0%, rgba(15,23,42,0.95) 100%)' : 'linear-gradient(135deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.92) 100%)',
+              backdropFilter: 'blur(40px) saturate(1.8)',
+              WebkitBackdropFilter: 'blur(40px) saturate(1.8)',
+              border: isDarkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.6)',
+              boxShadow: isDarkMode ? '0 32px 64px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)' : '0 32px 64px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.03), inset 0 1px 0 rgba(255,255,255,0.8)',
+            }}
+          >
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-red-500 to-orange-400 flex items-center justify-center"
+                style={{ boxShadow: '0 8px 24px rgba(239,68,68,0.3)' }}>
+                <LogIn size={24} className="text-white" />
+              </div>
+              
+              <h3 className={`text-xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-stone-800'}`} style={{ fontFamily: "'Outfit', sans-serif" }}>
+                {isLoginMode ? 'Welcome back' : 'Create your account'}
+              </h3>
+              
+              <p className={`text-sm mb-6 ${isDarkMode ? 'text-slate-300' : 'text-stone-600'}`}>
+                {isLoginMode ? 'Sign in to view and analyze your survey responses' : 'Sign up to view and analyze survey responses, track analytics, and manage multiple surveys'}
+              </p>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <input
+                    type="email"
+                    placeholder="Email address"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className={`w-full px-4 py-3 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                      isDarkMode 
+                        ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' 
+                        : 'bg-white border-stone-200 text-stone-800 placeholder-stone-400'
+                    }`}
+                    style={{ fontFamily: "'Outfit', sans-serif" }}
+                  />
+                </div>
+                
+                <div>
+                  <input
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className={`w-full px-4 py-3 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                      isDarkMode 
+                        ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' 
+                        : 'bg-white border-stone-200 text-stone-800 placeholder-stone-400'
+                    }`}
+                    style={{ fontFamily: "'Outfit', sans-serif" }}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-white text-sm font-semibold transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0"
+                  style={{
+                    background: 'linear-gradient(135deg, #ef4444, #f97316)',
+                    boxShadow: '0 8px 32px rgba(239,68,68,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
+                    fontFamily: "'Outfit', sans-serif",
+                  }}
+                >
+                  {isLoginMode ? 'Sign In' : 'Sign Up Free'}
+                </button>
+              </form>
+
+              <div className="mt-6 text-center">
+                <button
+                  onClick={isLoginMode ? handleSignup : handleLogin}
+                  className={`text-sm ${isDarkMode ? 'text-slate-300 hover:text-white' : 'text-stone-600 hover:text-stone-800'} transition-colors`}
+                  style={{ fontFamily: "'Outfit', sans-serif" }}
+                >
+                  {isLoginMode ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
                 </button>
               </div>
             </div>

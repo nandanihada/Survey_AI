@@ -32,10 +32,22 @@ class LinkMaskingHandler:
     def create_masked_link(self, original_url, custom_alias=None, user_id=None):
         """Create a new masked link"""
         try:
-            # Validate URL
+            # Validate URL format
             parsed = urlparse(original_url)
             if not parsed.scheme or not parsed.netloc:
                 return {"error": "Invalid URL format"}
+
+            # Ensure scheme is http or https
+            if parsed.scheme not in ("http", "https"):
+                return {"error": "URL must start with http:// or https://"}
+
+            # Check the domain actually resolves
+            import socket
+            try:
+                socket.setdefaulttimeout(5)
+                socket.getaddrinfo(parsed.netloc.split(":")[0], None)
+            except socket.gaierror:
+                return {"error": f"Domain '{parsed.netloc}' could not be found. Please check the URL and try again."}
             
             # Generate or use custom alias
             if custom_alias:
@@ -114,46 +126,43 @@ class LinkMaskingHandler:
         try:
             short_id = link["short_id"]
             today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-            
-            # Get request info safely
+
             user_agent = ''
-            referrer = ''
+            referrer = 'direct'
             ip_address = 'unknown'
-            
+
             if request:
                 user_agent = request.headers.get('User-Agent', '')
-                referrer = request.headers.get('Referer', '')
+                raw_ref = request.headers.get('Referer', '') or ''
+                referrer = raw_ref.replace('.', '_').replace('/', '_').replace(':', '_')[:50] if raw_ref else 'direct'
                 ip_address = request.remote_addr or 'unknown'
-            
-            # Parse user agent for device/browser info
+
             device = self._parse_device(user_agent)
             browser = self._parse_browser(user_agent)
             country = self._get_country_from_ip(ip_address)
-            
-            # Prepare update data
-            update_data = {
-                "$inc": {"clicks": 1},
-                "$set": {"last_clicked": datetime.now(timezone.utc)},
-                "$inc": {f"analytics.daily_clicks.{today}": 1},
-                "$inc": {f"analytics.referrers.{referrer}": 1},
-                "$inc": {f"analytics.countries.{country}": 1},
-                "$inc": {f"analytics.devices.{device}": 1},
-                "$inc": {f"analytics.browsers.{browser}": 1}
+
+            inc_fields = {
+                "clicks": 1,
+                f"analytics.daily_clicks.{today}": 1,
+                f"analytics.referrers.{referrer}": 1,
+                f"analytics.countries.{country}": 1,
+                f"analytics.devices.{device}": 1,
+                f"analytics.browsers.{browser}": 1,
             }
-            
-            # Only set unique_clicks on first click
+
             if link.get("clicks", 0) == 0:
-                update_data["$setOnInsert"] = {"unique_clicks": 1}
-            
-            # Update click counts
+                inc_fields["unique_clicks"] = 1
+
             self.db.masked_links.update_one(
                 {"short_id": short_id},
-                update_data
+                {
+                    "$inc": inc_fields,
+                    "$set": {"last_clicked": datetime.now(timezone.utc)},
+                }
             )
-            
+
         except Exception as e:
             print(f"Error tracking click: {e}")
-            # Don't fail the redirect if analytics tracking fails
     
     def _parse_device(self, user_agent):
         """Parse device type from user agent"""

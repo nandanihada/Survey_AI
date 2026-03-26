@@ -9,7 +9,7 @@ export default function LandingRedirect() {
   
   useEffect(() => {
     if (!loading) {
-      navigate(user ? '/dashboard' : '/login', { replace: true });
+      navigate(user ? '/dashboard' : '/create-survey', { replace: true });
     }
   }, [user, loading, navigate]);
   

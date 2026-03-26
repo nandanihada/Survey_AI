@@ -31,7 +31,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
 
-  const isLocalhost = window.location.hostname === 'localhost';
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   const apiBaseUrl = isLocalhost
     ? 'http://localhost:5000'
     : 'https://hostslice.onrender.com';
