@@ -17,7 +17,7 @@
   border-bottom: 1px solid rgba(255,255,255,0.06);
 }
 .sc-top-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; color: #a5b4fc; }
-.sc-top-logo { width: 32px; height: 32px; background-image: url('https://i.postimg.cc/439WS89h/chilllllllli.png'); background-size: contain; background-repeat: no-repeat; background-position: center; filter: brightness(2); }
+.sc-top-logo { width: 32px; height: 32px; background-image: url('https://i.postimg.cc/qq8tgkpd/Screenshot-(2313).png'); background-size: contain; background-repeat: no-repeat; background-position: center; filter: brightness(2); }
 .sc-top-counter { font-size: 13px; font-weight: 600; color: #6366f1; background: rgba(99, 102, 241, 0.1); padding: 6px 14px; border-radius: 20px; }
 
 .sc-center { flex: 1; display: flex; align-items: center; justify-content: center; padding: 32px 20px; }

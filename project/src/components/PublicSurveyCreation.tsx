@@ -202,8 +202,8 @@ const PublicSurveyCreation: React.FC = () => {
           {/* Header */}
           <div className="text-center mb-6 sm:mb-8">
             <div className="inline-flex items-center gap-2 mb-3">
-              <img src="https://i.postimg.cc/439WS89h/chilllllllli.png" alt="" className="w-7 h-7 sm:w-8 sm:h-8 object-contain" />
-              <span className={`text-[10px] sm:text-xs font-semibold tracking-wider uppercase ${isDarkMode ? 'text-slate-400' : 'text-stone-400'}`}>PepperAds</span>
+              <img src="https://i.postimg.cc/qq8tgkpd/Screenshot-(2313).png" alt="" className="w-7 h-7 sm:w-8 sm:h-8 object-contain" />
+              <span className={`text-[10px] sm:text-xs font-semibold tracking-wider uppercase ${isDarkMode ? 'text-slate-400' : 'text-stone-400'}`}></span>
             </div>
             <h1 className={`text-xl sm:text-2xl font-bold mb-1.5 sm:mb-2 ${isDarkMode ? 'text-white' : 'text-stone-800'}`} style={{ fontFamily: "'Outfit', sans-serif" }}>
               Create Your Free Survey

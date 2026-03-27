@@ -1908,10 +1908,18 @@ def generate_survey():
 
                 username = f"user_{simple_user_id}"
 
+            # Generate short AI title
+            title_prompt = f"Summarize this survey topic into a short title of maximum 5-7 words. Only return the title, nothing else: {prompt}"
+            try:
+                survey_title = generate_ai_content(title_prompt, temperature=0.3, max_tokens=20)
+                survey_title = survey_title.strip().strip('"').strip("'")
+            except:
+                survey_title = " ".join(prompt.split()[:6])  # fallback if AI fails
+
             survey_data = {
                 "_id": survey_id,
                 "id": survey_id,
-                "title": prompt[:100],
+                "title": survey_title,
                 "subtitle": "",
                 "prompt": prompt,
                 "response_type": response_type,
@@ -1929,7 +1937,6 @@ def generate_survey():
             )
 
             print(f"DEBUG: Shareable link: {survey_data['shareable_link']}")
-
             # Link survey to user (authenticated or temporary)
             survey_data["ownerUserId"] = user_id_str
             survey_data["user_id"] = user_id_str

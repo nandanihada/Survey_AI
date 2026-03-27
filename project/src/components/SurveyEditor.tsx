@@ -440,7 +440,7 @@ const SurveyEditor: React.FC = () => {
                 {/* Chilli icon pulse */}
                 <div style={{ animation: 'sharePulse 0.6s ease-out' }}>
                   <img
-                    src="https://i.postimg.cc/439WS89h/chilllllllli.png"
+                    src="https://i.postimg.cc/qq8tgkpd/Screenshot-(2313).png"
                     alt=""
                     style={{ width: 48, height: 48, margin: '0 auto 16px', objectFit: 'contain' }}
                   />
@@ -755,7 +755,7 @@ const SurveyEditor: React.FC = () => {
                 {/* Chilli logo + question counter */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, position: 'relative', zIndex: 1 }}>
                   <img
-                    src="https://i.postimg.cc/439WS89h/chilllllllli.png"
+                    src="https://i.postimg.cc/qq8tgkpd/Screenshot-(2313).png"
                     alt="PepperAds"
                     style={{ width: 36, height: 36, objectFit: 'contain', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))' }}
                   />
