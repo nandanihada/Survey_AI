@@ -76,6 +76,42 @@ class AuthService {
   }
 
   /**
+   * Send confirmation email
+   */
+  /**
+ * Send confirmation email
+ */
+private async sendConfirmationEmail(email: string, name: string): Promise<void> {
+  try {
+    console.log('📧 Sending confirmation email to:', email);
+    // Make sure this URL is correct
+    const response = await fetch(`${this.baseUrl}/api/auth/send-confirmation`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        email: email,  // Only email and name
+        name: name     // NO PASSWORD!
+      }),
+    });
+    
+    console.log('📧 Confirmation email response status:', response.status);
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('✅ Confirmation email sent successfully:', data);
+    } else {
+      const error = await response.text();
+      console.log('⚠️ Failed to send confirmation email:', error);
+    }
+  } catch (error) {
+    // Don't block registration if email fails
+    console.warn('⚠️ Email notification failed (non-blocking):', error);
+  }
+}
+
+  /**
    * Login user
    */
   async login(credentials: LoginRequest): Promise<{ user: User; token: string }> {
@@ -107,6 +143,9 @@ class AuthService {
           const error = await response.json();
           throw new Error(error.error || 'Login failed');
         } catch (e) {
+          if (e instanceof Error) {
+            throw e;
+          }
           throw new Error(`Login failed with status ${response.status}`);
         }
       }
@@ -114,12 +153,8 @@ class AuthService {
       const data = await response.json();
       console.log('✅ Login successful');
       
-      // Store user data and token
-      if (data.user) {
-        localStorage.setItem('user_data', JSON.stringify(data.user));
-      }
+      // Store token
       if (data.token) {
-        localStorage.setItem('auth_token', data.token);
         this.setToken(data.token);
       }
       
@@ -133,7 +168,7 @@ class AuthService {
   /**
    * Register new user
    */
-  async register(userData: RegisterRequest): Promise<{ user: User; token: string }> {
+  async register(userData: RegisterRequest): Promise<{ user: User | null; token: string | null }> {
     const url = `${this.baseUrl}/api/auth/register`;
     console.log('📝 Attempting registration to:', url);
     console.log('📝 Registration data:', { email: userData.email, name: userData.name });
@@ -164,8 +199,18 @@ class AuthService {
         try {
           const error = await response.json();
           console.error('❌ Registration error:', error);
+          
+          // Handle specific error cases
+          if (error.error === 'User with this email already exists') {
+            throw new Error('An account with this email already exists. Please login instead.');
+          }
+          
           throw new Error(error.error || 'Registration failed');
         } catch (e) {
+          // If error is already an Error object, throw it
+          if (e instanceof Error) {
+            throw e;
+          }
           console.error('❌ Could not parse error response');
           throw new Error(`Registration failed with status ${response.status}`);
         }
@@ -174,18 +219,46 @@ class AuthService {
       const data = await response.json();
       console.log('✅ Registration successful');
       
-      // Store user data and token
-      if (data.user) {
-        localStorage.setItem('user_data', JSON.stringify(data.user));
-      }
+      // Send confirmation email (non-blocking)
+      await this.sendConfirmationEmail(userData.email, userData.name);
+      
+      console.log('📩 Registration successful. Please check your email to confirm your account.');
+      
+      // Store user data and token if provided
       if (data.token) {
-        localStorage.setItem('auth_token', data.token);
         this.setToken(data.token);
       }
       
-      return { user: data.user, token: data.token || 'mock-token' };
+      // Return user data (but note: user may not be active until email confirmed)
+      return { user: data.user, token: data.token || null };
     } catch (error) {
       console.error('❌ Registration failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Resend confirmation email
+   */
+  async resendConfirmationEmail(email: string): Promise<void> {
+    try {
+      console.log('📧 Resending confirmation email to:', email);
+      const response = await fetch(`${this.baseUrl}/api/auth/resend-confirmation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to resend confirmation email');
+      }
+      
+      console.log('✅ Confirmation email resent successfully');
+    } catch (error) {
+      console.error('❌ Failed to resend confirmation email:', error);
       throw error;
     }
   }

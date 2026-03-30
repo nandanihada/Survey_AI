@@ -66,7 +66,6 @@ class AppErrorBoundary extends React.Component<
 }
 
 // Lazy load pages and components with retry
-const Dashboard = lazyRetry(() => import('./pages/Dashboard'));
 const AdminDashboard = lazyRetry(() => import('./pages/AdminDashboard'));
 const LoginPage = lazyRetry(() => import('./pages/LoginPage'));
 const SignupPage = lazyRetry(() => import('./pages/SignupPage'));
@@ -75,6 +74,7 @@ const LinkMaskingDashboard = lazyRetry(() => import('./pages/LinkMaskingDashboar
 const MaskedLinkViewer = lazyRetry(() => import('./pages/MaskedLinkViewer'));
 const NotFound = lazyRetry(() => import('./pages/NotFound'));
 const Unauthorized = lazyRetry(() => import('./pages/Unauthorized'));
+const ConfirmPage = lazyRetry(() => import('./pages/ConfirmPage'));
 
 // Survey components
 const SurveyEditor = lazyRetry(() => import('./components/SurveyEditor'));
@@ -215,22 +215,6 @@ function LegacyDashboard() {
     console.log('Widget dismissed');
     setShowPreviewWidget(false);
   }, []);
-
-  const showWidgetPreview = useCallback(() => {
-    setShowPreviewWidget(true);
-  }, []);
-
-  const toggleAutoPreview = () => {
-    setAutoPreviewEnabled(!autoPreviewEnabled);
-    if (!autoPreviewEnabled) {
-      // Start auto preview after 5 seconds
-      setTimeout(() => {
-        if (autoPreviewEnabled) {
-          setShowPreviewWidget(true);
-        }
-      }, 5000);
-    }
-  };
 
   // Auto preview logic
   useEffect(() => {
@@ -418,19 +402,19 @@ function LegacyDashboard() {
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsContent value="create">
               <div className="space-y-4 sm:space-y-6">
-                <Suspense fallback={<OptimizedLoader type="component" message="Loading survey form..." />}>
+                <Suspense fallback={<OptimizedLoader type="page" message="Loading survey form..." />}>
                   <SurveyForm isDarkMode={isDarkMode} onNavigateToSurveys={() => setActiveTab('surveys')} />
                 </Suspense>
               </div>
             </TabsContent>
             <TabsContent value="surveys">
-              <Suspense fallback={<OptimizedLoader type="component" message="Loading surveys..." />}>
+              <Suspense fallback={<OptimizedLoader type="page" message="Loading surveys..." />}>
                 <SurveyList isDarkMode={isDarkMode} />
               </Suspense>
             </TabsContent>
             <TabsContent value="responses">
               <div className="space-y-6">
-                <Suspense fallback={<OptimizedLoader type="component" message="Loading analytics..." />}>
+                <Suspense fallback={<OptimizedLoader type="page" message="Loading analytics..." />}>
                   <ResponseAnalytics isDarkMode={isDarkMode} />
                   <WidgetResponsesView isDarkMode={isDarkMode} />
                 </Suspense>
@@ -438,7 +422,7 @@ function LegacyDashboard() {
             </TabsContent>
             <TabsContent value="postback">
               {hasFeature('postback') ? (
-                <Suspense fallback={<OptimizedLoader type="component" message="Loading postback manager..." />}>
+                <Suspense fallback={<OptimizedLoader type="page" message="Loading postback manager..." />}>
                   <PostbackManager isDarkMode={isDarkMode} />
                 </Suspense>
               ) : (
@@ -451,7 +435,7 @@ function LegacyDashboard() {
             </TabsContent>
             <TabsContent value="email">
               {hasFeature('email') ? (
-                <Suspense fallback={<OptimizedLoader type="component" message="Loading email system..." />}>
+                <Suspense fallback={<OptimizedLoader type="page" message="Loading email system..." />}>
                   <EmailDashboard />
                 </Suspense>
               ) : (
@@ -464,7 +448,7 @@ function LegacyDashboard() {
             </TabsContent>
             <TabsContent value="passfail">
               {hasFeature('pass_fail') ? (
-                <Suspense fallback={<OptimizedLoader type="component" message="Loading pass/fail admin..." />}>
+                <Suspense fallback={<OptimizedLoader type="page" message="Loading pass/fail admin..." />}>
                   <PassFailAdmin isDarkMode={isDarkMode} />
                 </Suspense>
               ) : (
@@ -526,76 +510,6 @@ function LegacyDashboard() {
   );
 }
 
-function WidgetCustomizerPage() {
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const [widgetSettings, setWidgetSettings] = useState<WidgetCustomizerSettings>({
-    color: 'red',
-    transparency: 95,
-    glassEffect: true,
-    animationSpeed: 50,
-    questionDelay: 2000,
-    questionAnimation: 'simple',
-    answerAnimation: 'simple',
-    smartDelay: true,
-    minDelay: 2000,
-    maxDelay: 50000,
-    questions: [
-      {
-        id: 'q1',
-        text: 'How are you feeling about your experience so far?',
-        type: 'emoji',
-        options: [
-          { id: 'opt1', label: 'Amazing', emoji: '🤩' },
-          { id: 'opt2', label: 'Good', emoji: '😊' },
-          { id: 'opt3', label: 'Okay', emoji: '😐' },
-          { id: 'opt4', label: 'Frustrated', emoji: '😤' }
-        ]
-      }
-    ]
-  });
-  const [isWidgetVisible, setIsWidgetVisible] = useState(false);
-
-  return (
-    <div className={`min-h-screen ${isDarkMode ? 'bg-slate-900 text-white' : 'bg-gray-50 text-gray-900'}`}>
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-2">Widget Customizer</h1>
-          <p className="text-gray-600">Customize your survey widget and see changes in real-time.</p>
-        </div>
-        
-        <Suspense fallback={<OptimizedLoader type="component" message="Loading customizer..." />}>
-          <WidgetCustomizer
-            isDarkMode={isDarkMode}
-            onSettingsChange={setWidgetSettings}
-            onShowWidget={() => setIsWidgetVisible(true)}
-            onHideWidget={() => setIsWidgetVisible(false)}
-            isWidgetVisible={isWidgetVisible}
-            initialSettings={widgetSettings}
-          />
-        </Suspense>
-        
-        {isWidgetVisible && (
-          <Suspense fallback={null}>
-            <FloatingWidget
-              isDarkMode={isDarkMode}
-              customColor={widgetSettings.color}
-              glassEffect={widgetSettings.glassEffect}
-              transparency={widgetSettings.transparency}
-              animationSpeed={widgetSettings.animationSpeed}
-              questionDelay={widgetSettings.questionDelay}
-              customQuestions={widgetSettings.questions}
-              onComplete={(responses) => {
-                console.log('Widget completed:', responses);
-                setIsWidgetVisible(false);
-              }}
-              onDismiss={() => setIsWidgetVisible(false)}
-            />
-          </Suspense>
-        )}
-      </div>
-    </div>
-  );
-}
 
 export default function App() {
   return (
@@ -606,7 +520,7 @@ export default function App() {
           <OptimizedLoader type="page" message="Loading..." />
         </div>
       }>
-        <Routes future={routerFutureConfig}>
+        <Routes>
           {/* Landing page - redirects based on auth */}
           <Route path="/" element={<LandingRedirect />} />
           
@@ -624,6 +538,7 @@ export default function App() {
               <SignupPage />
             </PublicRoute>
           } />
+          <Route path="/confirm" element={<ConfirmPage />} />
           
           {/* Public survey routes */}
           <Route path="/survey/:id" element={<PublicSurveyPage />} />

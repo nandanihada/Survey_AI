@@ -32,47 +32,46 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const refreshAuth = async () => {
     try {
       setLoading(true);
-      // Check if user data and token exist in localStorage
+
       const userData = localStorage.getItem('user_data');
       const token = localStorage.getItem('auth_token');
-      
+
       if (userData && token) {
-        // Verify the token with the backend before setting authenticated state
         try {
-          const user = JSON.parse(userData);
-          // Verify token is still valid
-          const response = await fetch(`${window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1' ? 'http://localhost:5000' : 'https://api.pepperwahl.com'}/api/auth/check`, {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
+          const response = await fetch(
+            `${window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1'
+              ? 'http://localhost:5000'
+              : 'https://api.pepperwahl.com'}/api/auth/check`,
+            {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              }
             }
-          });
-          
+          );
+
           if (response.ok) {
             const authData = await response.json();
+
             if (authData.authenticated && authData.user) {
               setAuthenticated(true);
               setUser(authData.user);
-              // Update stored user data with fresh data
               localStorage.setItem('user_data', JSON.stringify(authData.user));
             } else {
-              // Token is invalid, clear storage
               localStorage.removeItem('user_data');
               localStorage.removeItem('auth_token');
               setAuthenticated(false);
               setUser(null);
             }
           } else {
-            // Token verification failed, clear storage
             localStorage.removeItem('user_data');
             localStorage.removeItem('auth_token');
             setAuthenticated(false);
             setUser(null);
           }
-        } catch (verifyError) {
-          console.error('Token verification failed:', verifyError);
-          // Clear storage on verification error
+        } catch (err) {
+          console.error('Token verification failed:', err);
           localStorage.removeItem('user_data');
           localStorage.removeItem('auth_token');
           setAuthenticated(false);
@@ -86,7 +85,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.error('Failed to refresh auth:', error);
       setAuthenticated(false);
       setUser(null);
-      // Clear storage on any error
       localStorage.removeItem('user_data');
       localStorage.removeItem('auth_token');
     } finally {
@@ -94,19 +92,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  // ✅ LOGIN (unchanged)
   const login = async (credentials: LoginRequest) => {
     try {
       const response = await authService.login(credentials);
+
       setUser(response.user);
       setAuthenticated(true);
-      // Store user data and token
+
       localStorage.setItem('user_data', JSON.stringify(response.user));
       if (response.token) {
         localStorage.setItem('auth_token', response.token);
       }
+
     } catch (error) {
       console.error('Login failed:', error);
-      // Clear any existing data on login failure
       localStorage.removeItem('user_data');
       localStorage.removeItem('auth_token');
       setAuthenticated(false);
@@ -115,58 +115,65 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  // 🚨 FIXED REGISTER (NO AUTO LOGIN)
   const register = async (userData: RegisterRequest) => {
     try {
-      const response = await authService.register(userData);
-      setUser(response.user);
-      setAuthenticated(true);
-      // Store user data and token
-      localStorage.setItem('user_data', JSON.stringify(response.user));
-      if (response.token) {
-        localStorage.setItem('auth_token', response.token);
-      }
+      await authService.register(userData);
+
+      // ❌ DO NOT LOGIN USER
+      setUser(null);
+      setAuthenticated(false);
+
+      // Ensure nothing stored
+      localStorage.removeItem('user_data');
+      localStorage.removeItem('auth_token');
+
     } catch (error) {
       console.error('Registration failed:', error);
-      // Clear any existing data on registration failure
+
       localStorage.removeItem('user_data');
       localStorage.removeItem('auth_token');
       setAuthenticated(false);
       setUser(null);
+
       throw error;
     }
   };
 
   const logout = async () => {
     try {
-      // Clear localStorage
       localStorage.removeItem('user_data');
       localStorage.removeItem('auth_token');
       setUser(null);
       setAuthenticated(false);
     } catch (error) {
       console.error('Logout failed:', error);
-      // Still clear local state even if there's an error
       setUser(null);
       setAuthenticated(false);
     }
   };
 
   useEffect(() => {
-    // Check for existing user data on mount
     refreshAuth();
   }, []);
 
   const isAdmin = user?.role === 'admin';
+
   const hasFeature = (feature: string) => {
-    // Simple feature check based on role
     if (user?.role === 'admin') return true;
     if (user?.role === 'enterprise') return ['survey', 'analytics', 'postback', 'email', 'pass_fail', 'test_lab'].includes(feature);
     if (user?.role === 'premium') return ['survey', 'analytics', 'postback', 'email'].includes(feature);
-    // Temporarily enable email feature for testing
     return ['survey', 'email'].includes(feature);
   };
-  const hasPremiumAccess = user?.role === 'premium' || user?.role === 'enterprise' || user?.role === 'admin';
-  const hasEnterpriseAccess = user?.role === 'enterprise' || user?.role === 'admin';
+
+  const hasPremiumAccess =
+    user?.role === 'premium' ||
+    user?.role === 'enterprise' ||
+    user?.role === 'admin';
+
+  const hasEnterpriseAccess =
+    user?.role === 'enterprise' ||
+    user?.role === 'admin';
 
   const value: AuthContextType = {
     user,
@@ -187,7 +194,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;

@@ -192,7 +192,7 @@ const PublicSurveyCreation: React.FC = () => {
   };
 
   const handleSignup = () => {
-    navigate('/signup');
+    navigate('/login');
   };
 
   return (
