@@ -589,8 +589,12 @@ const PublicSurveyCreation: React.FC = () => {
 
               <div className="max-w-[360px] mx-auto w-full">
                 <div className="text-center sm:text-left mb-10">
-                  <div className="w-14 h-14 mb-8 rounded-[1.25rem] bg-gradient-to-br from-red-500 to-orange-400 flex items-center justify-center shadow-[0_8px_32px_rgba(239,68,68,0.25)] mx-auto sm:mx-0">
-                    <Sparkles size={24} className="text-white" />
+                  <div className="w-16 h-16 mb-8 rounded-[1.25rem] flex items-center justify-center mx-auto sm:mx-0">
+                    <img 
+                      src="https://i.postimg.cc/qq8tgkpd/Screenshot-(2313).png" 
+                      alt="PepperAds Logo" 
+                      className="w-full h-full object-contain"
+                    />
                   </div>
 
                   <h3 className={`text-[2rem] font-extrabold mb-3 leading-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`} style={{ fontFamily: "'Outfit', sans-serif" }}>
