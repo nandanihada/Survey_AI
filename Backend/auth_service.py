@@ -26,12 +26,16 @@ class AuthService:
         self.jwt_expiration_hours = 24 * 7  # 7 days
         
         # Email configuration
-        self.smtp_server = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
-        self.smtp_port = int(os.getenv('SMTP_PORT', '587'))
-        # Using fallbacks so that if live deployment misses env variables, it still sends the email
-        self.smtp_username = os.getenv('SMTP_USERNAME', 'rupavathivoosa2003@gmail.com')
-        self.smtp_password = os.getenv('SMTP_PASSWORD', 'sult wcyr zbsz wvtr')
-        self.from_email = os.getenv('FROM_EMAIL', 'rupavathivoosa2003@gmail.com')
+        self.smtp_server = os.getenv('SMTP_SERVER') or 'smtp.gmail.com'
+        
+        # Handle port safely
+        port_env = os.getenv('SMTP_PORT')
+        self.smtp_port = int(port_env) if port_env else 587
+        
+        # Use defaults if env vars are empty strings or None
+        self.smtp_username = os.getenv('SMTP_USERNAME') or 'rupavathivoosa2003@gmail.com'
+        self.smtp_password = os.getenv('SMTP_PASSWORD') or 'sult wcyr zbsz wvtr'
+        self.from_email = os.getenv('FROM_EMAIL') or 'rupavathivoosa2003@gmail.com'
         
         print("✅ JWT Auth Service initialized")
         print(f"📧 Email service configured: {bool(self.smtp_username and self.smtp_password)}")
