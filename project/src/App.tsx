@@ -6,6 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import PublicRoute from './components/PublicRoute';
 import LandingRedirect from './components/LandingRedirect';
 import NotificationBanner from './components/NotificationBanner';
+import EmailConfirmation from './components/EmailConfirmation';
 import './styles/mobile-responsive.css';
 
 // Suppress React Router v7 deprecation warnings
@@ -19,9 +20,9 @@ function lazyRetry(importFn: () => Promise<{ default: React.ComponentType<any> }
   return lazy(() =>
     importFn().catch((err) => {
       console.error('[LazyRetry] Chunk load failed, retrying...', err);
-      return new Promise<{ default: React.ComponentType<any> }>((resolve) => {
+      return new Promise<{ default: React.ComponentType<any> }>((resolve, reject) => {
         setTimeout(() => {
-          importFn().then(resolve).catch(resolve);
+          importFn().then(resolve).catch(reject);
         }, 1500);
       });
     })
@@ -88,7 +89,7 @@ const WidgetTestPage = lazyRetry(() => import('./components/WidgetTestPage'));
 // Import legacy dashboard for backward compatibility
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/Tabs';
-import { PenSquare, FolderOpen, TrendingUp, Link, Mail, Sun, Moon, Settings, Lock, Menu, X } from 'lucide-react';
+import { PenSquare, FolderOpen, TrendingUp, Link, Mail, MapPin, Sun, Moon, Settings, Lock, Menu, X } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { FloatingWidgetProvider } from './components/FloatingWidgetProvider';
 import type { WidgetCustomizerSettings } from './components/WidgetCustomizer';
@@ -104,6 +105,7 @@ const EmailDashboard = lazyRetry(() => import('./pages/EmailDashboard'));
 const PassFailAdmin = lazyRetry(() => import('./components/PassFailAdmin'));
 const AnalyticsDashboard = lazyRetry(() => import('./pages/AnalyticsDashboard'));
 const ProfessionalAnalyticsDashboard = lazyRetry(() => import('./pages/ProfessionalAnalyticsDashboard'));
+const SessionAnalyticsView = lazyRetry(() => import('./pages/SessionAnalyticsView'));
 
 // Legacy dashboard component - will be removed after migration
 function LegacyDashboard() {
@@ -263,6 +265,7 @@ function LegacyDashboard() {
                   { value: 'create', icon: PenSquare, label: 'Create', requiresFeature: 'create' },
                   { value: 'surveys', icon: FolderOpen, label: 'Surveys', requiresFeature: 'survey' },
                   { value: 'responses', icon: TrendingUp, label: 'Analytics', requiresFeature: 'analytics' },
+                  { value: 'sessions', icon: MapPin, label: 'Sessions', requiresFeature: 'analytics' },
                   { value: 'postback', icon: Link, label: 'Postback', requiresFeature: 'postback' },
                   { value: 'passfail', icon: Settings, label: 'Pass/Fail', requiresFeature: 'pass_fail' },
                   { value: 'testlab', icon: () => <span className="text-xs">🧪</span>, label: 'Test Lab', requiresFeature: 'test_lab' }
@@ -351,6 +354,7 @@ function LegacyDashboard() {
                 { value: 'create', icon: PenSquare, label: 'Create', desc: 'Generate AI surveys', requiresFeature: 'create' },
                 { value: 'surveys', icon: FolderOpen, label: 'Surveys', desc: 'Manage your surveys', requiresFeature: 'survey' },
                 { value: 'responses', icon: TrendingUp, label: 'Analytics', desc: 'View responses & data', requiresFeature: 'analytics' },
+                { value: 'sessions', icon: MapPin, label: 'Sessions', desc: 'Real-time session tracking', requiresFeature: 'analytics' },
                 { value: 'postback', icon: Link, label: 'Postback', desc: 'Configure postbacks', requiresFeature: 'postback' },
                 { value: 'email', icon: Mail, label: 'Email', desc: 'Email triggers & templates', requiresFeature: 'email' },
                 { value: 'passfail', icon: Settings, label: 'Pass/Fail', desc: 'Set evaluation rules', requiresFeature: 'pass_fail' },
@@ -417,6 +421,13 @@ function LegacyDashboard() {
                 <Suspense fallback={<OptimizedLoader type="page" message="Loading analytics..." />}>
                   <ResponseAnalytics isDarkMode={isDarkMode} />
                   <WidgetResponsesView isDarkMode={isDarkMode} />
+                </Suspense>
+              </div>
+            </TabsContent>
+            <TabsContent value="sessions">
+              <div className="space-y-6">
+                <Suspense fallback={<OptimizedLoader type="page" message="Loading session intelligence..." />}>
+                  <SessionAnalyticsView />
                 </Suspense>
               </div>
             </TabsContent>
@@ -538,6 +549,7 @@ export default function App() {
               <SignupPage />
             </PublicRoute>
           } />
+          <Route path="/confirm-email" element={<EmailConfirmation />} />
           <Route path="/confirm" element={<ConfirmPage />} />
           
           {/* Public survey routes */}
@@ -614,6 +626,12 @@ export default function App() {
           <Route path="/analytics-pro" element={
             <ProtectedRoute>
               <ProfessionalAnalyticsDashboard />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/session-analytics" element={
+            <ProtectedRoute>
+              <SessionAnalyticsView />
             </ProtectedRoute>
           } />
           

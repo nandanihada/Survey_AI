@@ -19,7 +19,7 @@ export default function SignupPage() {
     try {
       // Use real signup API
       console.log('Signup data:', formData);
-      const response = await fetch('/api/auth/signup', {
+      const response = await fetch('/api/auth/send-confirmation', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

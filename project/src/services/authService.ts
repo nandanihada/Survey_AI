@@ -7,7 +7,7 @@ export interface User {
   name: string;
   role: 'basic' | 'premium' | 'enterprise' | 'admin';
   features?: string[];
-  status?: 'approved' | 'disapproved' | 'locked';
+  status?: 'approved' | 'disapproved' | 'locked' | 'pending_confirmation';
   createdAt?: string;
   simpleUserId?: number;
 }
@@ -168,7 +168,7 @@ private async sendConfirmationEmail(email: string, name: string): Promise<void> 
   /**
    * Register new user
    */
-  async register(userData: RegisterRequest): Promise<{ user: User | null; token: string | null }> {
+  async register(userData: RegisterRequest): Promise<{ user: User | null }> {
     const url = `${this.baseUrl}/api/auth/register`;
     console.log('📝 Attempting registration to:', url);
     console.log('📝 Registration data:', { email: userData.email, name: userData.name });
@@ -219,20 +219,47 @@ private async sendConfirmationEmail(email: string, name: string): Promise<void> 
       const data = await response.json();
       console.log('✅ Registration successful');
       
-      // Send confirmation email (non-blocking)
-      await this.sendConfirmationEmail(userData.email, userData.name);
-      
       console.log('📩 Registration successful. Please check your email to confirm your account.');
       
-      // Store user data and token if provided
-      if (data.token) {
-        this.setToken(data.token);
-      }
-      
-      // Return user data (but note: user may not be active until email confirmed)
-      return { user: data.user, token: data.token || null };
+      // Return user data (user will need to confirm email before login)
+      return { user: data.user };
     } catch (error) {
       console.error('❌ Registration failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Confirm user email with token
+   */
+  async confirmEmail(token: string): Promise<{ user: User }> {
+    const url = `${this.baseUrl}/api/auth/confirm-email`;
+    console.log('📧 Confirming email with token');
+    
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token }),
+      });
+
+      if (!response.ok) {
+        try {
+          const error = await response.json();
+          throw new Error(error.error || 'Email confirmation failed');
+        } catch (e) {
+          throw new Error(`Email confirmation failed with status ${response.status}`);
+        }
+      }
+
+      const data = await response.json();
+      console.log('✅ Email confirmed successfully');
+      
+      return { user: data.user };
+    } catch (error) {
+      console.error('❌ Email confirmation failed:', error);
       throw error;
     }
   }

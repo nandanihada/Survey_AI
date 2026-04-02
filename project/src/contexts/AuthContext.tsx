@@ -10,6 +10,7 @@ interface AuthContextType {
   authenticated: boolean;
   login: (credentials: LoginRequest) => Promise<void>;
   register: (userData: RegisterRequest) => Promise<void>;
+  confirmEmail: (token: string) => Promise<void>;
   logout: () => Promise<void>;
   isAdmin: boolean;
   hasFeature: (feature: string) => boolean;
@@ -148,8 +149,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setAuthenticated(false);
     } catch (error) {
       console.error('Logout failed:', error);
+    }
+  };
+
+  const confirmEmail = async (token: string) => {
+    try {
+      const response = await authService.confirmEmail(token);
+      
+      // User should now login manually
       setUser(null);
       setAuthenticated(false);
+      localStorage.removeItem('user_data');
+      localStorage.removeItem('auth_token');
+      
+      console.log('✅ Email confirmed successfully');
+    } catch (error) {
+      console.error('Email confirmation failed:', error);
+      throw error;
     }
   };
 
@@ -181,6 +197,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     authenticated,
     login,
     register,
+    confirmEmail,
     logout,
     isAdmin,
     hasFeature,

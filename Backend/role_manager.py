@@ -17,6 +17,7 @@ class UserStatus(Enum):
     APPROVED = "approved"
     DISAPPROVED = "disapproved"
     LOCKED = "locked"
+    PENDING_CONFIRMATION = "pending_confirmation"
 
 class Feature(Enum):
     """Available features in the system"""
@@ -81,6 +82,10 @@ class RoleManager:
         UserStatus.LOCKED: StatusMessage(
             title="Account Under Review", 
             message="Your account is under review. Please contact your manager."
+        ),
+        UserStatus.PENDING_CONFIRMATION: StatusMessage(
+            title="Email Confirmation Required",
+            message="Please check your email and click the confirmation link to activate your account."
         )
     }
     

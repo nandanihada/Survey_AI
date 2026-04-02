@@ -13,6 +13,8 @@ export default function ConfirmPage() {
 
   const token = searchParams.get('token');
 
+  const hasAttemptedRef = React.useRef(false);
+
   useEffect(() => {
     if (!token) {
       setStatus('error');
@@ -21,6 +23,8 @@ export default function ConfirmPage() {
     }
 
     const confirmAccount = async () => {
+      if (hasAttemptedRef.current) return;
+      hasAttemptedRef.current = true;
       try {
         // ✅ Call your backend
         const isLocal = window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1';

@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { generateSurvey, parseImage } from '../utils/api';
-import { Loader2, Hash, X, Edit3, ChevronRight, ImagePlus, Sparkles, Check, ArrowRight, Lightbulb, ChevronDown, ExternalLink, FolderOpen, Share2, Eye, LogIn } from 'lucide-react';
+import { Loader2, Hash, X, Edit3, ChevronRight, ImagePlus, Sparkles, Check, ArrowRight, Lightbulb, ChevronDown, ExternalLink, FolderOpen, Share2, Eye, LogIn, Lock, Mail, BarChart2, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { generateSurveyLink } from '../utils/surveyLinkUtils';
 
@@ -152,22 +152,16 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false, onNavigateT
   };
   
   const handleLogin = () => {
-    setIsLoginMode(true); // Switch to login mode
+    setIsLoginMode(true);
   };
   
   const handleSignup = () => {
-    setIsLoginMode(false); // Switch to signup mode
+    setIsLoginMode(false);
   };
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Here you would normally call your API to login/signup
-    // For now, we'll simulate success and redirect to responses
     if (email && password) {
-      // Simulate API call
-      console.log(isLoginMode ? 'Logging in...' : 'Signing up...', { email, password });
-      
-      // After successful login/signup, redirect to survey responses page
       navigate(`/dashboard/responses/${generatedSurvey?.survey_id}`);
       setShowLoginPrompt(false);
     }
@@ -408,10 +402,10 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false, onNavigateT
                   </div>
                   <div style={{ animation: 'sfFadeUp 0.4s 0.2s ease-out both' }}>
                     <h2 className={`text-base sm:text-lg font-bold leading-tight ${isDarkMode ? 'text-white' : 'text-stone-800'}`} style={{ fontFamily: "'Outfit', sans-serif" }}>
-                      Survey Ready
+                      Your Survey is Live
                     </h2>
-                    <p className={`text-[10px] sm:text-xs ${isDarkMode ? 'text-slate-400' : 'text-stone-500'}`}>
-                      {generatedSurvey.questions?.length || 0} questions · AI generated
+                    <p className={`text-[10px] sm:text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-stone-500'}`}>
+                      Successfully generated {generatedSurvey.questions?.length || 0} tailored questions
                     </p>
                   </div>
                 </div>
@@ -524,89 +518,157 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false, onNavigateT
         </div>
       )}
 
-      {/* Login Prompt Modal */}
+
+
+      {/* ── Premium Login Prompt Modal ── */}
       {showLoginPrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'sfOverlayIn 0.35s ease-out' }}>
-          <div className="absolute inset-0 bg-black/30 backdrop-blur-xl" />
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-0" style={{ animation: 'sfOverlayIn 0.35s ease-out' }}>
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setShowLoginPrompt(false)} />
+          
           <div
-            className="relative w-full max-w-md mx-4 rounded-3xl overflow-hidden p-6"
+            className="relative w-full max-w-[900px] rounded-[2.5rem] overflow-hidden flex flex-col sm:flex-row shadow-[0_0_80px_rgba(0,0,0,0.2)]"
             style={{
-              animation: 'sfModalIn 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
-              background: isDarkMode ? 'linear-gradient(135deg, rgba(30,41,59,0.92) 0%, rgba(15,23,42,0.95) 100%)' : 'linear-gradient(135deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.92) 100%)',
-              backdropFilter: 'blur(40px) saturate(1.8)',
-              WebkitBackdropFilter: 'blur(40px) saturate(1.8)',
-              border: isDarkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.6)',
-              boxShadow: isDarkMode ? '0 32px 64px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)' : '0 32px 64px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.03), inset 0 1px 0 rgba(255,255,255,0.8)',
+              animation: 'sfModalIn 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
+              background: isDarkMode ? '#0f172a' : '#ffffff',
             }}
           >
-            <div className="text-center">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-red-500 to-orange-400 flex items-center justify-center"
-                style={{ boxShadow: '0 8px 24px rgba(239,68,68,0.3)' }}>
-                <LogIn size={24} className="text-white" />
-              </div>
+            {/* Left Side: Abstract Luxury Design */}
+            <div className="hidden sm:flex flex-col justify-between w-5/12 p-12 text-white relative overflow-hidden" 
+                 style={{ background: '#0B0F19' }}>
+              {/* Abstract glowing orbs */}
+              <div className="absolute top-0 right-0 -mt-24 -mr-24 w-96 h-96 bg-red-500 opacity-20 rounded-full blur-[80px] pointer-events-none" />
+              <div className="absolute bottom-0 left-0 -mb-24 -ml-24 w-96 h-96 bg-orange-500 opacity-20 rounded-full blur-[80px] pointer-events-none" />
               
-              <h3 className={`text-xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-stone-800'}`} style={{ fontFamily: "'Outfit', sans-serif" }}>
-                {isLoginMode ? 'Welcome back' : 'Create your account'}
-              </h3>
-              
-              <p className={`text-sm mb-6 ${isDarkMode ? 'text-slate-300' : 'text-stone-600'}`}>
-                {isLoginMode ? 'Sign in to view and analyze your survey responses' : 'Sign up to view and analyze survey responses, track analytics, and manage multiple surveys'}
-              </p>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="relative z-10 flex flex-col h-full">
                 <div>
-                  <input
-                    type="email"
-                    placeholder="Email address"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className={`w-full px-4 py-3 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${
-                      isDarkMode 
-                        ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' 
-                        : 'bg-white border-stone-200 text-stone-800 placeholder-stone-400'
-                    }`}
-                    style={{ fontFamily: "'Outfit', sans-serif" }}
-                  />
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 mb-10 backdrop-blur-md shadow-xl">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                    <span className="text-[11px] font-bold tracking-[0.2em] text-slate-300 uppercase">Premium Access</span>
+                  </div>
+                  
+                  <h3 className="text-[2.5rem] font-extrabold mb-6 leading-[1.15] text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                    Unlock your survey's true potential.
+                  </h3>
+                  <p className="text-slate-400 text-[15px] leading-relaxed mb-12 font-medium">
+                    Create a free account to access our powerful analytics dashboard, track real-time responses, and manage campaigns seamlessly.
+                  </p>
                 </div>
                 
-                <div>
-                  <input
-                    type="password"
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    className={`w-full px-4 py-3 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${
-                      isDarkMode 
-                        ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' 
-                        : 'bg-white border-stone-200 text-stone-800 placeholder-stone-400'
-                    }`}
-                    style={{ fontFamily: "'Outfit', sans-serif" }}
-                  />
+                <div className="space-y-5 mt-auto">
+                  <div className="flex items-center gap-4 group">
+                    <div className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center backdrop-blur-md group-hover:bg-white/10 transition-colors">
+                      <BarChart2 size={18} className="text-red-400" />
+                    </div>
+                    <span className="text-[15px] font-semibold text-slate-200 group-hover:text-white transition-colors">Real-time Analytics</span>
+                  </div>
+                  <div className="flex items-center gap-4 group">
+                    <div className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center backdrop-blur-md group-hover:bg-white/10 transition-colors">
+                      <Zap size={18} className="text-orange-400" />
+                    </div>
+                    <span className="text-[15px] font-semibold text-slate-200 group-hover:text-white transition-colors">AI-Powered Insights</span>
+                  </div>
+                  <div className="flex items-center gap-4 group">
+                    <div className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center backdrop-blur-md group-hover:bg-white/10 transition-colors">
+                      <Lock size={18} className="text-emerald-400" />
+                    </div>
+                    <span className="text-[15px] font-semibold text-slate-200 group-hover:text-white transition-colors">Secure Data Storage</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Side: Form */}
+            <div className={`w-full sm:w-7/12 p-8 sm:p-14 flex flex-col justify-center relative ${isDarkMode ? 'bg-slate-900 border-l border-slate-800' : 'bg-white'}`}>
+              <button onClick={() => setShowLoginPrompt(false)} className={`absolute top-6 right-6 p-2.5 rounded-full transition-all duration-300 hover:rotate-90 ${isDarkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-600'}`}>
+                <X size={20} className="stroke-[2.5]" />
+              </button>
+
+              <div className="max-w-[360px] mx-auto w-full">
+                <div className="text-center sm:text-left mb-10">
+                  <h3 className={`text-[2rem] font-extrabold mb-3 leading-tight tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`} style={{ fontFamily: "'Outfit', sans-serif" }}>
+                    {isLoginMode ? 'Welcome back' : 'Join PepperAds'}
+                  </h3>
+                  <p className={`text-[15px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                    {isLoginMode ? 'Sign in to access your analytics dashboard' : 'Join thousands of creators building better surveys'}
+                  </p>
                 </div>
 
-                <button
-                  type="submit"
-                  className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-white text-sm font-semibold transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0"
-                  style={{
-                    background: 'linear-gradient(135deg, #ef4444, #f97316)',
-                    boxShadow: '0 8px 32px rgba(239,68,68,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
-                    fontFamily: "'Outfit', sans-serif",
-                  }}
-                >
-                  {isLoginMode ? 'Sign In' : 'Sign Up Free'}
-                </button>
-              </form>
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  <div className="space-y-1.5">
+                    <label className={`text-[13px] font-bold tracking-wide ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>EMAIL ADDRESS</label>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-red-500">
+                        <Mail size={18} className={isDarkMode ? 'text-slate-500' : 'text-slate-400'} />
+                      </div>
+                      <input
+                        type="email"
+                        placeholder="you@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                        className={`w-full pl-11 pr-4 py-3.5 rounded-2xl border text-[15px] transition-all duration-300 focus:outline-none focus:ring-[3px] focus:ring-red-500/20 ${
+                          isDarkMode 
+                            ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500 focus:border-red-500' 
+                            : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-red-500 focus:bg-white'
+                        }`}
+                        style={{ fontFamily: "'Outfit', sans-serif" }}
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className={`text-[13px] font-bold tracking-wide ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>PASSWORD</label>
+                      {isLoginMode && (
+                        <a href="#" className="text-[13px] text-red-500 hover:text-red-600 font-bold transition-colors">Forgot password?</a>
+                      )}
+                    </div>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-red-500">
+                        <Lock size={18} className={isDarkMode ? 'text-slate-500' : 'text-slate-400'} />
+                      </div>
+                      <input
+                        type="password"
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        className={`w-full pl-11 pr-4 py-3.5 rounded-2xl border text-[15px] transition-all duration-300 focus:outline-none focus:ring-[3px] focus:ring-red-500/20 ${
+                          isDarkMode 
+                            ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500 focus:border-red-500' 
+                            : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-red-500 focus:bg-white'
+                        }`}
+                        style={{ fontFamily: "'Outfit', sans-serif" }}
+                      />
+                    </div>
+                  </div>
 
-              <div className="mt-6 text-center">
-                <button
-                  onClick={isLoginMode ? handleSignup : handleLogin}
-                  className={`text-sm ${isDarkMode ? 'text-slate-300 hover:text-white' : 'text-stone-600 hover:text-stone-800'} transition-colors`}
-                  style={{ fontFamily: "'Outfit', sans-serif" }}
-                >
-                  {isLoginMode ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
-                </button>
+                  <button
+                    type="submit"
+                    className="group relative w-full mt-2 flex items-center justify-center gap-3 px-6 py-4 rounded-2xl text-white text-[15px] font-bold overflow-hidden transition-all duration-300 hover:shadow-[0_8px_32px_rgba(239,68,68,0.3)] active:scale-[0.98]"
+                    style={{
+                      background: 'linear-gradient(135deg, #ef4444, #f97316)',
+                      fontFamily: "'Outfit', sans-serif",
+                    }}
+                  >
+                    <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
+                    <span className="relative z-10">{isLoginMode ? 'Sign In Securely' : 'Create Account'}</span>
+                    <ArrowRight size={18} className="relative z-10 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                </form>
+
+                <div className="mt-8 pt-8 border-t border-slate-200 dark:border-slate-800 text-center">
+                  <p className={`text-[15px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                    {isLoginMode ? "Don't have an account?" : "Already have an account?"}
+                    <button
+                      type="button"
+                      onClick={isLoginMode ? handleSignup : handleLogin}
+                      className="ml-2 font-bold text-red-500 hover:text-red-600 transition-colors"
+                    >
+                      {isLoginMode ? 'Sign up' : 'Sign in'}
+                    </button>
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -615,10 +677,10 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false, onNavigateT
 
       {/* Keyframes */}
       <style>{`
-        @keyframes sfOverlayIn { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes sfOverlayIn { from { opacity: 0; backdrop-filter: blur(0px); } to { opacity: 1; backdrop-filter: blur(8px); } }
         @keyframes sfModalIn {
-          from { opacity: 0; transform: translateY(40px) scale(0.96); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
+          from { opacity: 0; transform: translateY(40px) scale(0.96); filter: blur(4px); }
+          to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
         }
         @keyframes sfIconPop {
           from { opacity: 0; transform: scale(0.4) rotate(-15deg); }
@@ -642,3 +704,4 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false, onNavigateT
 };
 
 export default SurveyForm;
+

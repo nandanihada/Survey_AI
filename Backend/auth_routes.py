@@ -17,36 +17,94 @@ def register():
         return '', 200
         
     try:
+        print(f"\n{'='*80}")
+        print(f"🔐 === REGISTRATION ENDPOINT CALLED ===")
+        
         data = request.json
         if not data:
+            print(f"❌ No data provided in request")
             return jsonify({'error': 'No data provided'}), 400
             
         email = data.get('email', '').strip().lower()
         password = data.get('password', '')
         name = data.get('name', '').strip()
         
+        print(f"🔐 Email from request: {email}")
+        print(f"🔐 Name from request: {name}")
+        print(f"🔐 Password length: {len(password)} characters")
+        
         if not email or not password:
+            print(f"❌ Email or password missing")
             return jsonify({'error': 'Email and password are required'}), 400
         
+        print(f"🔐 Calling auth_service.register_user()...")
         user = auth_service.register_user(email, password, name)
-        token = auth_service.generate_jwt_token(user)
+        
+        print(f"✅ User registered successfully")
+        print(f"✅ User ID: {user['_id']}")
+        print(f"✅ User status: {user['status']}")
+        print(f"✅ Returning response to client")
+        print(f"🔐 === REGISTRATION ENDPOINT SUCCESS ===")
+        print(f"{'='*80}\n")
         
         return jsonify({
-            'message': 'Registration successful',
-            'token': token,
+            'message': 'Registration successful. Please check your email to confirm your account.',
             'user': {
                 'id': str(user['_id']),
                 'email': user['email'],
                 'name': user['name'],
                 'simpleUserId': user.get('simpleUserId', 0),
-                'role': user['role']
+                'role': user['role'],
+                'status': user['status']
+            }
+        })
+        
+    except ValueError as e:
+        print(f"❌ ValueError: {str(e)}")
+        print(f"🔐 === REGISTRATION ENDPOINT ERROR ===\n")
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        print(f"❌ Exception: {str(e)}")
+        import traceback
+        print(f"❌ Traceback: {traceback.format_exc()}")
+        print(f"🔐 === REGISTRATION ENDPOINT ERROR ===\n")
+        return jsonify({'error': f'Registration failed: {str(e)}'}), 500
+
+
+@auth_bp.route('/confirm-email', methods=['POST', 'OPTIONS'])
+def confirm_email():
+    """Confirm user email with token"""
+    if request.method == 'OPTIONS':
+        return '', 200
+        
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
+        token = data.get('token', '').strip()
+        
+        if not token:
+            return jsonify({'error': 'Confirmation token is required'}), 400
+        
+        user = auth_service.confirm_email(token)
+        
+        return jsonify({
+            'message': 'Email confirmed successfully. You can now login.',
+            'user': {
+                'id': str(user['_id']),
+                'email': user['email'],
+                'name': user['name'],
+                'simpleUserId': user.get('simpleUserId', 0),
+                'role': user['role'],
+                'status': user['status']
             }
         })
         
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
     except Exception as e:
-        return jsonify({'error': f'Registration failed: {str(e)}'}), 500
+        return jsonify({'error': f'Email confirmation failed: {str(e)}'}), 500
 
 @auth_bp.route('/login', methods=['POST', 'OPTIONS'])
 def login():

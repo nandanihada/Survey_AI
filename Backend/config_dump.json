@@ -1,0 +1,14 @@
+{
+  "_id": "68a56573b250de06dc12d7d6",
+  "survey_id": "12d34130-97c1-4d54-8a94-dc968a2bbec9",
+  "criteria_set_id": "acd371e0-d6e3-4fa6-bec1-c69a8af2a9d7",
+  "fail_page_config": {
+    "custom_message": "Thank you for your time!",
+    "fail_page_url": "/survey-thankyou",
+    "show_retry_option": false
+  },
+  "pass_fail_enabled": true,
+  "pepperads_offer_id": "636fb83d-db4b-4fea-aeba-211abbd7d2bf",
+  "pepperads_redirect_enabled": true,
+  "updated_at": "2025-09-02T05:10:02.932000"
+}

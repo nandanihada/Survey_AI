@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { generateSurvey, parseImage } from '../utils/api';
 import { generateSurveyLink } from '../utils/surveyLinkUtils';
-import { Loader2, Hash, X, ChevronRight, ImagePlus, Sparkles, Check, ArrowRight, Lightbulb, ChevronDown, ExternalLink, Share2, Eye, LogIn } from 'lucide-react';
+import { Loader2, Hash, X, ChevronRight, ImagePlus, Sparkles, Check, ArrowRight, Lightbulb, ChevronDown, ExternalLink, Share2, Eye, LogIn, Lock, Mail, BarChart2, Zap } from 'lucide-react';
 
 interface Question {
   id: string;
@@ -413,10 +413,10 @@ const PublicSurveyCreation: React.FC = () => {
                   </div>
                   <div style={{ animation: 'sfFadeUp 0.4s 0.2s ease-out both' }}>
                     <h2 className={`text-base sm:text-lg font-bold leading-tight ${isDarkMode ? 'text-white' : 'text-stone-800'}`} style={{ fontFamily: "'Outfit', sans-serif" }}>
-                      Survey Ready
+                      Your Survey is Live
                     </h2>
-                    <p className={`text-[10px] sm:text-xs ${isDarkMode ? 'text-slate-400' : 'text-stone-500'}`}>
-                      {generatedSurvey.questions?.length || 0} questions · AI generated
+                    <p className={`text-[10px] sm:text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-stone-500'}`}>
+                      Successfully generated {generatedSurvey.questions?.length || 0} tailored questions
                     </p>
                   </div>
                 </div>
@@ -528,66 +528,108 @@ const PublicSurveyCreation: React.FC = () => {
         </div>
       )}
 
-      {/* Login Prompt Modal */}
+
+
+      {/* ── Premium Login Prompt Modal ── */}
       {showLoginPrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ animation: 'sfOverlayIn 0.35s ease-out' }}>
-          <div className="absolute inset-0 bg-black/30 backdrop-blur-xl" onClick={() => setShowLoginPrompt(false)} />
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-0" style={{ animation: 'sfOverlayIn 0.35s ease-out' }}>
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setShowLoginPrompt(false)} />
           
           <div
-            className="relative w-full max-w-md mx-4 rounded-3xl overflow-hidden p-6"
+            className="relative w-full max-w-[900px] rounded-[2.5rem] overflow-hidden flex flex-col sm:flex-row shadow-[0_0_80px_rgba(0,0,0,0.2)]"
             style={{
-              animation: 'sfModalIn 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
-              background: isDarkMode ? 'linear-gradient(135deg, rgba(30,41,59,0.92) 0%, rgba(15,23,42,0.95) 100%)' : 'linear-gradient(135deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.92) 100%)',
-              backdropFilter: 'blur(40px) saturate(1.8)',
-              WebkitBackdropFilter: 'blur(40px) saturate(1.8)',
-              border: isDarkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.6)',
-              boxShadow: isDarkMode ? '0 32px 64px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)' : '0 32px 64px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.03), inset 0 1px 0 rgba(255,255,255,0.8)',
+              animation: 'sfModalIn 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
+              background: isDarkMode ? '#0f172a' : '#ffffff',
             }}
           >
-            <div className="text-center">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-red-500 to-orange-400 flex items-center justify-center"
-                style={{ boxShadow: '0 8px 24px rgba(239,68,68,0.3)' }}>
-                <LogIn size={24} className="text-white" />
-              </div>
+            {/* Left Side: Abstract Luxury Design */}
+            <div className="hidden sm:flex flex-col justify-between w-5/12 p-12 text-white relative overflow-hidden" 
+                 style={{ background: '#0B0F19' }}>
+              {/* Abstract glowing orbs */}
+              <div className="absolute top-0 right-0 -mt-24 -mr-24 w-96 h-96 bg-red-500 opacity-20 rounded-full blur-[80px] pointer-events-none" />
+              <div className="absolute bottom-0 left-0 -mb-24 -ml-24 w-96 h-96 bg-orange-500 opacity-20 rounded-full blur-[80px] pointer-events-none" />
               
-              <h3 className={`text-xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-stone-800'}`} style={{ fontFamily: "'Outfit', sans-serif" }}>
-                Sign up to see your responses
-              </h3>
-              
-              <p className={`text-sm mb-6 ${isDarkMode ? 'text-slate-300' : 'text-stone-600'}`}>
-                Create an account to view and analyze survey responses, track analytics, and manage multiple surveys.
-              </p>
-
-              <div className="space-y-3">
-                <button
-                  onClick={handleSignup}
-                  className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-white text-sm font-semibold transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0"
-                  style={{
-                    background: 'linear-gradient(135deg, #ef4444, #f97316)',
-                    boxShadow: '0 8px 32px rgba(239,68,68,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
-                    fontFamily: "'Outfit', sans-serif",
-                  }}
-                >
-                  Sign Up Free
-                </button>
-
-                <button
-                  onClick={handleLogin}
-                  className={`w-full px-5 py-3 rounded-2xl text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 ${
-                    isDarkMode ? 'bg-white/[0.06] text-white border border-white/10 hover:bg-white/10' : 'bg-stone-50 text-stone-700 border border-stone-200 hover:bg-stone-100'
-                  }`}
-                  style={{ fontFamily: "'Outfit', sans-serif" }}
-                >
-                  I already have an account
-                </button>
+              <div className="relative z-10 flex flex-col h-full">
+                <div>
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 mb-10 backdrop-blur-md shadow-xl">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                    <span className="text-[11px] font-bold tracking-[0.2em] text-slate-300 uppercase">Premium Access</span>
+                  </div>
+                  
+                  <h3 className="text-[2.5rem] font-extrabold mb-6 leading-[1.15] text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                    Unlock your survey's true potential.
+                  </h3>
+                  <p className="text-slate-400 text-[15px] leading-relaxed mb-12 font-medium">
+                    Create a free account to access our powerful analytics dashboard, track real-time responses, and manage campaigns seamlessly.
+                  </p>
+                </div>
+                
+                <div className="space-y-5 mt-auto">
+                  <div className="flex items-center gap-4 group">
+                    <div className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center backdrop-blur-md group-hover:bg-white/10 transition-colors">
+                      <BarChart2 size={18} className="text-red-400" />
+                    </div>
+                    <span className="text-[15px] font-semibold text-slate-200 group-hover:text-white transition-colors">Real-time Analytics</span>
+                  </div>
+                  <div className="flex items-center gap-4 group">
+                    <div className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center backdrop-blur-md group-hover:bg-white/10 transition-colors">
+                      <Zap size={18} className="text-orange-400" />
+                    </div>
+                    <span className="text-[15px] font-semibold text-slate-200 group-hover:text-white transition-colors">AI-Powered Insights</span>
+                  </div>
+                </div>
               </div>
+            </div>
 
-              <button
-                onClick={() => setShowLoginPrompt(false)}
-                className={`mt-4 text-xs ${isDarkMode ? 'text-slate-400 hover:text-slate-300' : 'text-stone-500 hover:text-stone-600'}`}
-              >
-                Maybe later
+            {/* Right Side */}
+            <div className={`w-full sm:w-7/12 p-8 sm:p-14 flex flex-col justify-center relative ${isDarkMode ? 'bg-slate-900 border-l border-slate-800' : 'bg-white'}`}>
+              <button onClick={() => setShowLoginPrompt(false)} className={`absolute top-6 right-6 p-2.5 rounded-full transition-all duration-300 hover:rotate-90 ${isDarkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-600'}`}>
+                <X size={20} className="stroke-[2.5]" />
               </button>
+
+              <div className="max-w-[360px] mx-auto w-full">
+                <div className="text-center sm:text-left mb-10">
+                  <div className="w-14 h-14 mb-8 rounded-[1.25rem] bg-gradient-to-br from-red-500 to-orange-400 flex items-center justify-center shadow-[0_8px_32px_rgba(239,68,68,0.25)] mx-auto sm:mx-0">
+                    <Sparkles size={24} className="text-white" />
+                  </div>
+
+                  <h3 className={`text-[2rem] font-extrabold mb-3 leading-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`} style={{ fontFamily: "'Outfit', sans-serif" }}>
+                    Join PepperAds
+                  </h3>
+                  <p className={`text-[15px] leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                    You've successfully created your survey! Secure your data and unlock full analytics capabilities now.
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <button
+                    onClick={handleSignup}
+                    className="group relative w-full flex items-center justify-center gap-3 px-6 py-4 rounded-2xl text-white text-[15px] font-bold overflow-hidden transition-all duration-300 hover:shadow-[0_8px_32px_rgba(239,68,68,0.3)] active:scale-[0.98]"
+                    style={{ background: 'linear-gradient(135deg, #ef4444, #f97316)', fontFamily: "'Outfit', sans-serif" }}
+                  >
+                    <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
+                    <span className="relative z-10">Create Free Account</span>
+                    <ArrowRight size={18} className="relative z-10 group-hover:translate-x-1 transition-transform" />
+                  </button>
+
+                  <div className="relative flex items-center py-4">
+                    <div className={`flex-grow border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}></div>
+                    <span className={`flex-shrink-0 mx-4 text-[11px] font-bold uppercase tracking-widest ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>or</span>
+                    <div className={`flex-grow border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}></div>
+                  </div>
+
+                  <button
+                    onClick={handleLogin}
+                    className={`group w-full flex items-center justify-center gap-2 px-6 py-4 rounded-2xl text-[15px] font-bold transition-all duration-300 border-2 ${
+                      isDarkMode 
+                        ? 'border-slate-800 hover:bg-slate-800 text-white' 
+                        : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    Sign in to existing account
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

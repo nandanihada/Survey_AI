@@ -2,6 +2,10 @@
 import os
 import jwt
 import bcrypt
+import uuid
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from pymongo import MongoClient
@@ -21,7 +25,15 @@ class AuthService:
         self.jwt_algorithm = 'HS256'
         self.jwt_expiration_hours = 24 * 7  # 7 days
         
+        # Email configuration
+        self.smtp_server = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
+        self.smtp_port = int(os.getenv('SMTP_PORT', '587'))
+        self.smtp_username = os.getenv('SMTP_USERNAME')
+        self.smtp_password = os.getenv('SMTP_PASSWORD')
+        self.from_email = os.getenv('FROM_EMAIL')
+        
         print("✅ JWT Auth Service initialized")
+        print(f"📧 Email service configured: {bool(self.smtp_username and self.smtp_password)}")
     
     def get_db_connection(self):
         """Get MongoDB connection"""
@@ -95,6 +107,13 @@ class AuthService:
             if not users_collection.find_one({'simpleUserId': simple_user_id}):
                 break
         
+        # Generate confirmation token
+        confirmation_token = str(uuid.uuid4())
+        
+        print(f"\n🔐 === USER REGISTRATION PROCESS ===")
+        print(f"🔐 Email: {email}")
+        print(f"🔐 Generated confirmation token: {confirmation_token}")
+        
         # Create user
         user_data = {
             'email': email,
@@ -102,7 +121,8 @@ class AuthService:
             'name': name or email.split('@')[0],
             'simpleUserId': simple_user_id,  # Add simple numeric user ID
             'role': UserRole.BASIC.value,  # Default role is basic
-            'status': UserStatus.APPROVED.value,  # Default status is approved
+            'status': UserStatus.PENDING_CONFIRMATION.value,  # Default status is pending confirmation
+            'confirmationToken': confirmation_token,
             'createdAt': datetime.utcnow(),
             'lastLogin': None
         }
@@ -110,7 +130,168 @@ class AuthService:
         result = users_collection.insert_one(user_data)
         user_data['_id'] = result.inserted_id
         
+        print(f"🔐 User created in database with ID: {user_data['_id']}")
+        print(f"🔐 User status: {user_data['status']}")
+        
+        # Send confirmation email
+        print(f"🔐 Attempting to send confirmation email...")
+        self.send_confirmation_email(email, confirmation_token)
+        
+        print(f"🔐 === REGISTRATION COMPLETE ===\n")
+        
         return user_data
+    
+    def send_confirmation_email(self, email: str, token: str) -> None:
+        """Send email confirmation link"""
+        print(f"\n📧 === CONFIRMATION EMAIL PROCESS ===")
+        print(f"📧 Email recipient: {email}")
+        print(f"📧 Token: {token[:20]}...")
+        print(f"📧 SMTP Username configured: {bool(self.smtp_username)}")
+        print(f"📧 SMTP Password configured: {bool(self.smtp_password)}")
+        
+        if not self.smtp_username or not self.smtp_password:
+            print("❌ Email service not configured, skipping confirmation email")
+            return
+            
+        try:
+            # Create message
+            msg = MIMEMultipart()
+            msg['From'] = self.from_email
+            msg['To'] = email
+            msg['Subject'] = "Confirm your account – PepperWahl (by PepperAds)"
+            
+            print(f"📧 Message created - From: {self.from_email}, To: {email}")
+            
+            # Get frontend URL for confirmation link
+            is_local = os.getenv("FLASK_ENV", "development").lower() == "development"
+            default_frontend = "http://localhost:5173" if is_local else "https://dashboard-pepperads.onrender.com"
+            frontend_url = os.getenv('FRONTEND_URL')
+            
+            # Use default if not set or pointing to the root marketing site which doesn't have the route
+            if not frontend_url or frontend_url == "https://pepper-ads.com":
+                frontend_url = default_frontend
+                
+            confirmation_link = f"{frontend_url}/confirm-email?token={token}"
+            
+            print(f"📧 Confirmation link: {confirmation_link}")
+            
+            # Email body - Simple Professional Template
+            body = f"""
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9; }}
+                    .header {{ background-color: #ffffff; padding: 30px; text-align: center; border-bottom: 3px solid #E8503A; }}
+                    .header h1 {{ color: #2D3142; margin: 0 0 5px 0; font-size: 28px; }}
+                    .header p {{ color: #666; margin: 5px 0 0 0; font-size: 13px; }}
+                    .content {{ background-color: #ffffff; padding: 30px; }}
+                    .content p {{ margin: 15px 0; }}
+                    .button-container {{ text-align: center; margin: 30px 0; }}
+                    .button {{ display: inline-block; background-color: #E8503A; color: white; padding: 14px 35px; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 16px; }}
+                    .button:hover {{ background-color: #d43a28; }}
+                    .link-section {{ background-color: #f5f5f5; padding: 15px; border-radius: 4px; margin: 20px 0; }}
+                    .link-section p {{ margin: 5px 0; font-size: 12px; word-break: break-all; }}
+                    .footer {{ background-color: #f9f9f9; padding: 20px; text-align: center; border-top: 1px solid #eee; color: #666; font-size: 12px; }}
+                    .footer p {{ margin: 5px 0; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>PepperWahl</h1>
+                        <p>by PepperAds</p>
+                    </div>
+                    
+                    <div class="content">
+                        <p>Hi,</p>
+                        
+                        <p>You signed up on <strong>PepperWahl</strong>, a survey platform powered by PepperAds.</p>
+                        
+                        <p>Please confirm your email by clicking the button below:</p>
+                        
+                        <div class="button-container">
+                            <a href="{confirmation_link}" class="button">Confirm Email</a>
+                        </div>
+                        
+                        <div class="link-section">
+                            <p><strong>If the button doesn't work:</strong></p>
+                            <p>{confirmation_link}</p>
+                        </div>
+                        
+                        <p>If you did not request this, you can ignore this email.</p>
+                    </div>
+                    
+                    <div class="footer">
+                        <p>— Team PepperAds</p>
+                        <p>© 2026 PepperAds. All rights reserved.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+            
+            msg.attach(MIMEText(body, 'html'))
+            print(f"📧 Email body created")
+            
+            # Send email
+            print(f"📧 Connecting to SMTP server: {self.smtp_server}:{self.smtp_port}")
+            server = smtplib.SMTP(self.smtp_server, self.smtp_port)
+            print(f"✅ SMTP connection established")
+            
+            print(f"📧 Starting TLS...")
+            server.starttls()
+            print(f"✅ TLS started successfully")
+            
+            print(f"📧 Logging in with username: {self.smtp_username}")
+            server.login(self.smtp_username, self.smtp_password)
+            print(f"✅ Login successful")
+            
+            text = msg.as_string()
+            print(f"📧 Sending email...")
+            server.sendmail(self.from_email, email, text)
+            print(f"✅ Email sent successfully via SMTP")
+            
+            server.quit()
+            print(f"✅ SMTP connection closed")
+            
+            print(f"✅ Confirmation email sent to {email}")
+            print(f"📧 === EMAIL SUCCESS ===\n")
+            
+        except Exception as e:
+            print(f"❌ Failed to send confirmation email: {str(e)}")
+            print(f"❌ Error type: {type(e).__name__}")
+            import traceback
+            print(f"❌ Traceback: {traceback.format_exc()}")
+            print(f"📧 === EMAIL FAILED ===\n")
+
+    
+    def confirm_email(self, token: str) -> Dict[str, Any]:
+        """Confirm user email using token"""
+        db = self.get_db_connection()
+        users_collection = db.users
+        
+        # Find user by confirmation token
+        user = users_collection.find_one({'confirmationToken': token})
+        if not user:
+            raise ValueError("Invalid or expired confirmation token")
+        
+        # Check if already confirmed
+        if user.get('status') == UserStatus.APPROVED.value:
+            raise ValueError("Email already confirmed")
+        
+        # Update user status to approved and remove token
+        users_collection.update_one(
+            {'_id': user['_id']},
+            {
+                '$set': {'status': UserStatus.APPROVED.value},
+                '$unset': {'confirmationToken': ""}
+            }
+        )
+        
+        # Return updated user
+        user['status'] = UserStatus.APPROVED.value
+        return user
     
     def authenticate_user(self, email: str, password: str) -> Dict[str, Any]:
         """Authenticate user with email and password"""

@@ -49,16 +49,97 @@ class SurveySessionTracker:
             
             request_data = request_data or {}
             
-            # Create session document
+            import requests
+            
+            # Get Geo Location softly
+            geo_data = {
+                "country": None,
+                "state": None,
+                "city": None,
+                "latitude": None,
+                "longitude": None,
+                "timezone": None
+            }
+            client_ip = request_data.get("ip_address", "unknown")
+            if client_ip in ["127.0.0.1", "::1", "localhost"]:
+                # Use actual external IP for localhost testing so their real location is marked
+                client_ip = "103.121.151.161"
+                
+            if client_ip and client_ip != "unknown":
+                try:
+                    # Non-blocking rapid geo lookup (can be delayed, 150 requests / min limit for free)
+                    geo_resp = requests.get(f"http://ip-api.com/json/{client_ip}?fields=status,country,regionName,city,lat,lon,timezone", timeout=1.5)
+                    if geo_resp.status_code == 200:
+                        geo_json = geo_resp.json()
+                        if geo_json.get("status") == "success":
+                            geo_data["country"] = geo_json.get("country")
+                            geo_data["state"] = geo_json.get("regionName")
+                            geo_data["city"] = geo_json.get("city")
+                            geo_data["latitude"] = geo_json.get("lat")
+                            geo_data["longitude"] = geo_json.get("lon")
+                            geo_data["timezone"] = geo_json.get("timezone")
+                except Exception as e:
+                    print(f"Geo lookup failed for {client_ip}: {e}")
+
+            user_agent = request_data.get("user_agent", "unknown")
+            device_type = self._detect_device_type(user_agent)
+            browser = self._detect_browser(user_agent)
+            os_name = self._detect_os(user_agent)
+            
+            screen_res = request_data.get("screen_resolution", "1920x1080")
+            
+            lang_header = request.headers.get("Accept-Language", "en-US") if request else "en-US"
+            lang = request_data.get("language", lang_header.split(",")[0])
+
+            # Identification
+            completion_time = None
+            user_id = user_data.get("user_id", None)
+            
+            # User Details
+            name = user_data.get("username", None)
+            email = user_data.get("email", None)
+            account_status = "logged_in" if (user_id or name or email) else "guest"
+            source_account = user_data.get("source_account", "random")
+
+            # Create session document with STRICT STRUCTURE requirements + extending existing ones
             session_doc = {
                 "_id": session_id,
                 "session_id": session_id,
+                "user_id": user_id,
                 "survey_id": survey_id,
+                "completion_time": completion_time,
+                
+                "name": name,
+                "email": email,
+                "account_status": account_status,
+                "source_account": source_account,
+                
+                "location_info": {
+                    "ip_address": client_ip,
+                    **geo_data
+                },
+                
+                "device_info": {
+                    "device_type": device_type,
+                    "os": os_name,
+                    "browser": browser,
+                    "screen_resolution": screen_res,
+                    "language": lang
+                },
+                
+                "behavior_tracking": {
+                    "total_clicks": 1,
+                    "time_spent_on_survey": 0,
+                    "pages_visited": 1,
+                    "last_active_time": datetime.now(timezone.utc)
+                },
+                
+                # Compatibility properties
                 "user_info": {
-                    "username": user_data.get("username", ""),
-                    "email": user_data.get("email", ""),
-                    "ip_address": request_data.get("ip_address", "unknown"),
-                    "user_agent": request_data.get("user_agent", "unknown"),
+                    "username": name or "",
+                    "email": email or "",
+                    "ip_address": client_ip,
+                    "user_agent": user_agent,
                     "click_id": request_data.get("click_id", ""),
                     "referrer": request_data.get("referrer", "")
                 },
@@ -75,7 +156,7 @@ class SurveySessionTracker:
                         "timestamp": datetime.now(timezone.utc),
                         "data": {
                             "survey_id": survey_id,
-                            "user_agent": request_data.get("user_agent", "unknown")
+                            "user_agent": user_agent
                         }
                     }
                 ],
@@ -100,8 +181,9 @@ class SurveySessionTracker:
                 },
                 "postback_results": [],
                 "metadata": {
-                    "device_type": self._detect_device_type(request_data.get("user_agent", "")),
-                    "browser": self._detect_browser(request_data.get("user_agent", "")),
+                    "device_type": device_type,
+                    "browser": browser,
+                    "os": os_name,
                     "utm_source": request.args.get('utm_source', '') if request else '',
                     "utm_campaign": request.args.get('utm_campaign', '') if request else '',
                     "utm_medium": request.args.get('utm_medium', '') if request else ''
@@ -137,8 +219,10 @@ class SurveySessionTracker:
                     "$push": {"step_tracking": step_data},
                     "$set": {
                         "timestamps.last_activity": datetime.now(timezone.utc),
-                        "timestamps.survey_started": datetime.now(timezone.utc)
-                    }
+                        "timestamps.survey_started": datetime.now(timezone.utc),
+                        "behavior_tracking.last_active_time": datetime.now(timezone.utc)
+                    },
+                    "$inc": { "behavior_tracking.pages_visited": 1 }
                 }
             )
             
@@ -171,8 +255,10 @@ class SurveySessionTracker:
                 "$push": {"step_tracking": step_data},
                 "$set": {
                     f"responses.{question_id}": answer,
-                    "timestamps.last_activity": datetime.now(timezone.utc)
+                    "timestamps.last_activity": datetime.now(timezone.utc),
+                    "behavior_tracking.last_active_time": datetime.now(timezone.utc)
                 },
+                "$inc": { "behavior_tracking.total_clicks": 1 },
                 "$addToSet": {"progress_tracking.questions_answered": question_id}
             }
             
@@ -213,7 +299,9 @@ class SurveySessionTracker:
                         "responses": all_responses,
                         "timestamps.survey_completed": datetime.now(timezone.utc),
                         "timestamps.last_activity": datetime.now(timezone.utc),
-                        "progress_tracking.completion_percentage": 100.0
+                        "progress_tracking.completion_percentage": 100.0,
+                        "behavior_tracking.last_active_time": datetime.now(timezone.utc),
+                        "completion_time": datetime.now(timezone.utc)
                     }
                 }
             )
@@ -450,12 +538,23 @@ class SurveySessionTracker:
             return 'chrome'
         elif 'firefox' in user_agent:
             return 'firefox'
-        elif 'safari' in user_agent:
+        if 'safari' in user_agent and 'chrome' not in user_agent:
             return 'safari'
         elif 'edge' in user_agent:
             return 'edge'
         else:
             return 'unknown'
+            
+    def _detect_os(self, user_agent: str) -> str:
+        """Detect OS from user agent"""
+        user_agent = user_agent.lower()
+        if 'windows nt 10.0' in user_agent: return 'Windows 10/11'
+        elif 'windows nt' in user_agent: return 'Windows'
+        elif 'mac os x' in user_agent: return 'macOS'
+        elif 'android' in user_agent: return 'Android'
+        elif 'iphone' in user_agent or 'ipad' in user_agent: return 'iOS'
+        elif 'linux' in user_agent: return 'Linux'
+        else: return 'Unknown OS'
 
 # Convenience functions for external use
 def start_survey_session(survey_id: str, user_info: Dict = None, request_data: Dict = None) -> str:
