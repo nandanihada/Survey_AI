@@ -28,9 +28,10 @@ class AuthService:
         # Email configuration
         self.smtp_server = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
         self.smtp_port = int(os.getenv('SMTP_PORT', '587'))
-        self.smtp_username = os.getenv('SMTP_USERNAME')
-        self.smtp_password = os.getenv('SMTP_PASSWORD')
-        self.from_email = os.getenv('FROM_EMAIL')
+        # Using fallbacks so that if live deployment misses env variables, it still sends the email
+        self.smtp_username = os.getenv('SMTP_USERNAME', 'rupavathivoosa2003@gmail.com')
+        self.smtp_password = os.getenv('SMTP_PASSWORD', 'sult wcyr zbsz wvtr')
+        self.from_email = os.getenv('FROM_EMAIL', 'rupavathivoosa2003@gmail.com')
         
         print("✅ JWT Auth Service initialized")
         print(f"📧 Email service configured: {bool(self.smtp_username and self.smtp_password)}")
@@ -164,11 +165,11 @@ class AuthService:
             
             # Get frontend URL for confirmation link
             is_local = os.getenv("FLASK_ENV", "development").lower() == "development"
-            default_frontend = "http://localhost:5173" if is_local else "https://dashboard-pepperads.onrender.com"
+            default_frontend = "http://localhost:5173" if is_local else "https://pepperwahl.com"
             frontend_url = os.getenv('FRONTEND_URL')
             
             # Use default if not set or pointing to the root marketing site which doesn't have the route
-            if not frontend_url or frontend_url == "https://pepper-ads.com":
+            if not frontend_url or frontend_url == "https://pepper-ads.com" or frontend_url == "https://dashboard-pepperads.onrender.com":
                 frontend_url = default_frontend
                 
             confirmation_link = f"{frontend_url}/confirm-email?token={token}"
