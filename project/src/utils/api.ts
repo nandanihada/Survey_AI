@@ -17,6 +17,12 @@ export interface SurveyRequest {
       text: string;
     };
   };
+  topic?: string;
+  wizard_answers?: {
+    type?: string;
+    collection?: string;
+    audience?: string;
+  };
 }
 
 export const generateSurvey = async (data: SurveyRequest) => {
@@ -58,6 +64,20 @@ export const generateSurvey = async (data: SurveyRequest) => {
   } catch (error) {
     console.error('Survey generation failed:', error);
     throw new Error(handleApiError(error, 'Survey generation'));
+  }
+};
+
+export const getWizardSuggestions = async (topic: string) => {
+  if (!topic) return null;
+  try {
+    const response = await makeApiRequest(`/wizard-suggestions?topic=${encodeURIComponent(topic)}`, {
+      method: 'GET'
+    }, true);
+    if (!response.ok) return null;
+    return await response.json();
+  } catch (err) {
+    console.error('Failed to get suggestions', err);
+    return null;
   }
 };
 

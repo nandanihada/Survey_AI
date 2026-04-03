@@ -986,6 +986,79 @@ def parse_image():
         return jsonify({"error": f"Failed to parse image: {str(e)}"}), 500
 
 
+@app.route("/wizard-suggestions", methods=["GET", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins="*")
+def get_wizard_suggestions():
+    if request.method == "OPTIONS":
+        return "", 200
+        
+    topic = request.args.get("topic", "").lower().strip()
+    if not topic:
+        return jsonify({})
+        
+    stop_words = {"create", "generate", "make", "survey", "about", "for", "the", "and", "with", "this", "need", "want", "local", "my", "your", "our", "internal", "team", "questionnaire", "form", "app", "web"}
+    words = [w for w in topic.split() if len(w) > 2 and w not in stop_words]
+    if not words:
+        return jsonify({})
+        
+    query = {"$or": [{"topic": {"$regex": w, "$options": "i"}} for w in words]}
+    
+    # Calculate total documents matched for transparency
+    total_matched = db.survey_learning_logs.count_documents(query)
+    
+    recent_records = list(db.survey_learning_logs.find(query).sort("created_at", -1).limit(50))
+    
+    if not recent_records:
+        return jsonify({})
+        
+    type_counts = {}
+    collect_counts = {}
+    
+    for r in recent_records:
+        t = r.get("wizard_type")
+        c = r.get("wizard_collection")
+        if t and t != "Skip" and t != "Skipped":
+            type_counts[t] = type_counts.get(t, 0) + 1
+        if c and c != "Skip" and c != "Skipped":
+            collect_counts[c] = collect_counts.get(c, 0) + 1
+            
+    best_type = max(type_counts.items(), key=lambda x: x[1])[0] if type_counts else None
+    best_collect = max(collect_counts.items(), key=lambda x: x[1])[0] if collect_counts else None
+    
+    return jsonify({
+        "suggested_type": best_type if type_counts.get(best_type, 0) >= 2 else None,
+        "suggested_collect": best_collect if collect_counts.get(best_collect, 0) >= 2 else None,
+        "total_matched": total_matched if total_matched > 0 else 0
+    })
+
+@app.route("/api/ml-insights", methods=["GET"])
+@cross_origin(supports_credentials=True, origins="*")
+def get_ml_insights():
+    """Returns the ML behavior logs so admins can view how the system is learning."""
+    try:
+        logs = list(db.survey_learning_logs.find().sort("created_at", -1))
+        # Safely convert _id to string using json_util or custom iteration
+        for log in logs:
+            log["_id"] = str(log["_id"])
+            if "created_at" in log:
+                # Append 'Z' to denote UTC, so JS natively converts it to local time!
+                log["created_at"] = log["created_at"].isoformat() + "Z"
+                
+        # Optional: Aggegrate trends
+        pipeline = [
+            {"$group": {"_id": "$topic", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+            {"$limit": 10}
+        ]
+        top_topics = list(db.survey_learning_logs.aggregate(pipeline))
+        
+        return jsonify({
+            "logs": logs,
+            "top_topics": top_topics
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/generate", methods=["POST", "OPTIONS"])
 @cross_origin(supports_credentials=True, origins="*")
 def generate_survey():
@@ -1027,6 +1100,18 @@ def generate_survey():
         if not prompt:
 
             return jsonify({"error": "Prompt is required and cannot be empty"}), 400
+
+        # Learning loop logic: log user ML inputs for wizard suggestion endpoint
+        ml_topic = data.get("topic", "").strip()
+        ml_wiz = data.get("wizard_answers", {})
+        if ml_topic and ml_wiz:
+            db.survey_learning_logs.insert_one({
+                "topic": ml_topic,
+                "wizard_type": ml_wiz.get("type"),
+                "wizard_collection": ml_wiz.get("collection"),
+                "wizard_audience": ml_wiz.get("audience"),
+                "created_at": datetime.utcnow()
+            })
 
         # Handle image content (base64 encoded image with text extracted by frontend or sent as description)
 

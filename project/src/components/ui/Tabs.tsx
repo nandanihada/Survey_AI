@@ -16,6 +16,7 @@ interface TabsTriggerProps {
   value: string;
   className?: string;
   children: React.ReactNode;
+  onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
 interface TabsContentProps {
@@ -43,7 +44,7 @@ export const TabsList: React.FC<TabsListProps> = ({ className, children }) => (
   <div className={className}>{children}</div>
 );
 
-export const TabsTrigger: React.FC<TabsTriggerProps> = ({ value, className = '', children }) => {
+export const TabsTrigger: React.FC<TabsTriggerProps> = ({ value, className = '', children, onClick }) => {
   const context = useContext(TabsContext);
 
   if (!context) {
@@ -55,7 +56,14 @@ export const TabsTrigger: React.FC<TabsTriggerProps> = ({ value, className = '',
 
   return (
     <button
-      onClick={() => context.onValueChange(value)}
+      onClick={(e) => {
+        if (onClick) {
+          onClick(e);
+        }
+        if (!e.defaultPrevented) {
+          context.onValueChange(value);
+        }
+      }}
       className={`${className} ${isActive ? 'data-[state=active]' : ''}`}
       data-state={isActive ? 'active' : 'inactive'}
     >

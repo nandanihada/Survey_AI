@@ -34,8 +34,8 @@ import {
 
   MoreHorizontal,
 
-  AlertCircle
-
+  AlertCircle,
+  Brain
 } from 'lucide-react';
 
 
@@ -394,19 +394,37 @@ const Dashboard: React.FC = () => {
 
             </div>
 
-            <button
+            <div className="flex items-center gap-3">
 
-              onClick={() => navigate('/dashboard/create')}
+              <button
 
-              className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+                onClick={() => navigate('/ml-insights')}
 
-            >
+                className="inline-flex items-center px-6 py-3 bg-indigo-100 text-indigo-700 font-bold rounded-xl hover:bg-indigo-200 transition-all duration-200 shadow shadow-indigo-100/50"
 
-              <Plus size={20} className="mr-2" />
+              >
 
-              Create New Survey
+                <Brain size={20} className="mr-2" />
 
-            </button>
+                ML Core Insights
+
+              </button>
+
+              <button
+
+                onClick={() => navigate('/dashboard/create')}
+
+                className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+
+              >
+
+                <Plus size={20} className="mr-2" />
+
+                Create New Survey
+
+              </button>
+
+            </div>
 
           </div>
 
