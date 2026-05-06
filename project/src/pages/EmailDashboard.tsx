@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Mail, FileText, Settings, BarChart3 } from 'lucide-react';
 import EmailTemplateManager from './EmailTemplateManager';
 import EmailTriggerManager from './EmailTriggerManager';
+import { getApiBaseUrl } from '../utils/deploymentFix';
 
 interface Question {
   id: string;
@@ -69,8 +70,7 @@ const EmailDashboard: React.FC<EmailDashboardProps> = ({
         headers['X-User-ID'] = userId;
       }
       
-      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://api.pepperwahl.com';
+      const apiBaseUrl = getApiBaseUrl();
       
       const response = await fetch(`${apiBaseUrl}/api/surveys/${id}`, {
         headers

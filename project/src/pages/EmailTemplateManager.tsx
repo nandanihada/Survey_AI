@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, Edit2, Plus, Send } from 'lucide-react';
+import { getApiBaseUrl } from '../utils/deploymentFix';
 
 interface EmailTemplate {
   _id: string;
@@ -30,9 +31,7 @@ const EmailTemplateManager: React.FC = () => {
   const [testVariables, setTestVariables] = useState('{\n  "name": "John Doe",\n  "email": "john@example.com",\n  "survey_name": "Test Survey",\n  "answer": "Yes"\n}');
   
   // API URL configuration
-  const apiBaseUrl = window.location.hostname === 'localhost' 
-    ? 'http://localhost:5000' 
-    : 'https://api.pepperwahl.com';
+  const apiBaseUrl = getApiBaseUrl();
   
   const [formData, setFormData] = useState({
     name: '',

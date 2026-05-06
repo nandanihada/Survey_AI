@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, Edit2, Plus, Mail, Settings } from 'lucide-react';
+import { getApiBaseUrl } from '../utils/deploymentFix';
 
 interface Question {
   id: string;
@@ -53,9 +54,7 @@ const EmailTriggerManager: React.FC<EmailTriggerManagerProps> = ({ surveyId, que
   const [showModal, setShowModal] = useState(false);
   
   // API URL configuration
-  const apiBaseUrl = window.location.hostname === 'localhost' 
-    ? 'http://localhost:5000' 
-    : 'https://api.pepperwahl.com';
+  const apiBaseUrl = getApiBaseUrl();
   const [editingTrigger, setEditingTrigger] = useState<EmailTrigger | null>(null);
   
   const [formData, setFormData] = useState({

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import OptimizedLoader from '../components/OptimizedLoader';
+import { getApiBaseUrl } from '../utils/deploymentFix';
 import { CheckCircle, XCircle, Mail } from 'lucide-react';
 
 export default function ConfirmPage() {
@@ -27,8 +28,7 @@ export default function ConfirmPage() {
       hasAttemptedRef.current = true;
       try {
         // ✅ Call your backend
-        const isLocal = window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1';
-        const baseUrl = isLocal ? 'http://localhost:5000' : 'https://api.pepperwahl.com';
+        const baseUrl = getApiBaseUrl();
         const response = await fetch(`${baseUrl}/api/auth/confirm?token=${token}`);
         const result = await response.json();
 
