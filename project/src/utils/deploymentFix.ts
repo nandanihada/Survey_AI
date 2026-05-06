@@ -38,7 +38,7 @@ export const getApiBaseUrl = (): string => {
 
   // Production API URL
 
-  return 'https://api.pepperwahl.com';
+  return 'https://hostslice.onrender.com';
 
 };
 
