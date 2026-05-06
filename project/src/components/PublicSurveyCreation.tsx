@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { generateSurvey, parseImage, getWizardSuggestions } from '../utils/api';
 import { generateSurveyLink } from '../utils/surveyLinkUtils';
-import { Loader2, Hash, X, ChevronRight, ImagePlus, Sparkles, Check, ArrowRight, Lightbulb, ChevronDown, ExternalLink, Share2, Eye, LogIn, Lock, Mail, BarChart2, Zap } from 'lucide-react';
+import { Loader2, Hash, X, ChevronRight, ImagePlus, Sparkles, Check, ArrowRight, Lightbulb, ChevronDown, ExternalLink, Share2, Eye, BarChart2, Zap } from 'lucide-react';
 
 interface Question {
   id: string;

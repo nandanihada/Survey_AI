@@ -120,7 +120,7 @@ const EmailDashboard: React.FC<EmailDashboardProps> = ({
       case 'templates':
         return <EmailTemplateManager />;
       case 'triggers':
-        return <EmailTriggerManager />;
+        return <EmailTriggerManager surveyId={surveyId} questions={questions} />;
       case 'logs':
         return (
           <div className="text-center py-12">
@@ -193,7 +193,13 @@ const EmailDashboard: React.FC<EmailDashboardProps> = ({
 
         {/* Content */}
         <div className="bg-white rounded-lg shadow-sm border p-6">
-          {renderContent()}
+          {loadingSurvey ? (
+            <div className="text-center py-12">
+              <div className="text-gray-500 font-medium animate-pulse">Loading survey details...</div>
+            </div>
+          ) : (
+            renderContent()
+          )}
         </div>
 
         {/* Quick Actions */}
