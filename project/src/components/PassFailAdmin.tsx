@@ -539,12 +539,12 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                   <input
                     type="text"
                     readOnly
-                    value={`${window.location.hostname === 'localhost' ? 'http://localhost:5173' : 'https://pepperwahl.com'}/survey/${selectedSurvey.survey_id}`}
+                    value={`${window.location.hostname === 'localhost' ? 'http://localhost:5173' : 'https://survey.pepperwahl.com'}/survey/${selectedSurvey.survey_id}`}
                     className={`flex-1 p-1.5 rounded border text-xs font-mono ${isDarkMode ? 'bg-slate-800 border-slate-600 text-slate-200' : 'bg-white border-indigo-200 text-gray-800'}`}
                   />
                   <button
                     onClick={() => {
-                      const url = `${window.location.hostname === 'localhost' ? 'http://localhost:5173' : 'https://pepperwahl.com'}/survey/${selectedSurvey.survey_id}`;
+                      const url = `${window.location.hostname === 'localhost' ? 'http://localhost:5173' : 'https://survey.pepperwahl.com'}/survey/${selectedSurvey.survey_id}`;
                       navigator.clipboard.writeText(url);
                       setMessage({ type: 'success', text: 'Survey URL copied!' });
                     }}
@@ -571,10 +571,10 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                 <details className="mt-2">
                   <summary className={`text-xs cursor-pointer ${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>🧪 Test URL</summary>
                   <div className={`mt-1 p-2 rounded text-xs font-mono break-all ${isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-gray-100 text-gray-700'}`}>
-                    {`${window.location.hostname === 'localhost' ? 'http://localhost:5173' : 'https://pepperwahl.com'}/survey/${selectedSurvey.survey_id}?session_id=TEST_001&postback_url=https://httpbin.org/get&success_url=https://example.com/success&fail_url=https://example.com/fail`}
+                    {`${window.location.hostname === 'localhost' ? 'http://localhost:5173' : 'https://survey.pepperwahl.com'}/survey/${selectedSurvey.survey_id}?session_id=TEST_001&postback_url=https://httpbin.org/get&success_url=https://example.com/success&fail_url=https://example.com/fail`}
                   </div>
                   <button
-                    onClick={() => window.open(`${window.location.hostname === 'localhost' ? 'http://localhost:5173' : 'https://pepperwahl.com'}/survey/${selectedSurvey.survey_id}?session_id=TEST_001&postback_url=https://httpbin.org/get&success_url=https://example.com/success&fail_url=https://example.com/fail`, '_blank')}
+                    onClick={() => window.open(`${window.location.hostname === 'localhost' ? 'http://localhost:5173' : 'https://survey.pepperwahl.com'}/survey/${selectedSurvey.survey_id}?session_id=TEST_001&postback_url=https://httpbin.org/get&success_url=https://example.com/success&fail_url=https://example.com/fail`, '_blank')}
                     className={`mt-1 px-2 py-1 rounded text-xs ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}
                   >
                     <ExternalLink size={10} className="inline mr-1" />Open Test
