@@ -287,8 +287,8 @@ class EnhancedSurveyHandler:
                           redirect_type="dynamic",
                           redirect_url=dynamic_redirect_url)
                           
-            elif redirect_decision["should_redirect"]:
-                # Build PepperAds URL
+            elif redirect_decision["should_redirect"] and redirect_info is None:
+                # Build PepperAds URL (only if no other redirect already set)
                 redirect_info = build_pepperads_url(
                     survey_id, 
                     user_info, 
