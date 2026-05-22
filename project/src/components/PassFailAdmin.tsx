@@ -813,7 +813,7 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                         >
                           <option value="">— Pick a question —</option>
                           {surveyQuestions.map((question) => (
-                            <option key={question.id} value={question.question_text}>
+                            <option key={question.id} value={question.id}>
                               Q{question.question_number}: {question.question_text.substring(0, 80)}
                             </option>
                           ))}
@@ -839,7 +839,7 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                             </select>
                             {criteria.condition !== 'any' && (() => {
                               // Find the selected question's options
-                              const selectedQ = surveyQuestions.find(q => q.question_text === criteria.question_id);
+                              const selectedQ = surveyQuestions.find(q => q.id === criteria.question_id);
                               const hasOptions = selectedQ && selectedQ.options && selectedQ.options.length > 0;
                               
                               if (hasOptions) {
