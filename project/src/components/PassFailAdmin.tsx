@@ -837,15 +837,36 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
                               <option value="contains">Contains</option>
                               <option value="any">Any answer</option>
                             </select>
-                            {criteria.condition !== 'any' && (
-                              <input
-                                type="text"
-                                value={criteria.expected_value}
-                                onChange={(e) => updateCriteria(index, 'expected_value', e.target.value)}
-                                placeholder={criteria.condition === 'equals' ? 'e.g., Yes' : criteria.condition === 'contains' ? 'e.g., USA' : 'value'}
-                                className={`flex-1 p-2 rounded-lg border text-sm ${isDarkMode ? 'bg-slate-600 border-slate-500 text-white' : 'bg-white border-gray-300 text-stone-800'}`}
-                              />
-                            )}
+                            {criteria.condition !== 'any' && (() => {
+                              // Find the selected question's options
+                              const selectedQ = surveyQuestions.find(q => q.question_text === criteria.question_id);
+                              const hasOptions = selectedQ && selectedQ.options && selectedQ.options.length > 0;
+                              
+                              if (hasOptions) {
+                                return (
+                                  <select
+                                    value={criteria.expected_value}
+                                    onChange={(e) => updateCriteria(index, 'expected_value', e.target.value)}
+                                    className={`flex-1 p-2 rounded-lg border text-sm ${isDarkMode ? 'bg-slate-600 border-slate-500 text-white' : 'bg-white border-gray-300 text-stone-800'}`}
+                                  >
+                                    <option value="">— Pick the correct answer —</option>
+                                    {selectedQ.options.map((opt: string, i: number) => (
+                                      <option key={i} value={opt}>{opt}</option>
+                                    ))}
+                                  </select>
+                                );
+                              } else {
+                                return (
+                                  <input
+                                    type="text"
+                                    value={criteria.expected_value}
+                                    onChange={(e) => updateCriteria(index, 'expected_value', e.target.value)}
+                                    placeholder="Type the correct answer"
+                                    className={`flex-1 p-2 rounded-lg border text-sm ${isDarkMode ? 'bg-slate-600 border-slate-500 text-white' : 'bg-white border-gray-300 text-stone-800'}`}
+                                  />
+                                );
+                              }
+                            })()}
                           </div>
                           {criteria.condition === 'any' && (
                             <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
