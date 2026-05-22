@@ -244,8 +244,7 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
           finalRedirectUrl = buildRedirectUrl(redirect.redirect_url, sessionContext);
         }
         setSubmitted(true);
-        const delay = redirect.delay_seconds || 3;
-        setTimeout(() => { window.location.href = finalRedirectUrl; }, delay * 1000);
+        setTimeout(() => { window.location.href = finalRedirectUrl; }, 7000);
         return;
       }
       setSubmitted(true);

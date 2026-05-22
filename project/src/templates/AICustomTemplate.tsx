@@ -292,13 +292,11 @@ const AICustomTemplate: React.FC<Props> = ({
         // Show success message briefly before redirect
         setSubmitted(true);
         
-        // Get delay from redirect config or default to 3 seconds
-        const delay = redirect?.delay_seconds || 3;
-        
+        // Show spinner for 7 seconds then redirect
         setTimeout(() => {
           console.log('🔄 Executing redirect now...');
           window.location.href = finalRedirectUrl;
-        }, delay * 1000);
+        }, 7000);
         
         return;
       }

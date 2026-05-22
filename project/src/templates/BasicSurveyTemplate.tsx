@@ -85,6 +85,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [submitted, setSubmitted] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
 
   const isLocalhost = window.location.hostname === 'localhost';
   const apiBaseUrl = isLocalhost
@@ -263,11 +264,11 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           );
         }
 
-        setSubmitted(true);
-        const delay = redirect?.delay_seconds || 3;
+        // Show spinner for 7 seconds then redirect
+        setRedirecting(true);
         setTimeout(() => {
           window.location.href = finalRedirectUrl;
-        }, delay * 1000);
+        }, 7000);
         return;
       }
 
@@ -488,6 +489,30 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       <div className="pepper-powered">
         Powered by <a href="#">PepperAds</a>
       </div>
+
+      {/* Redirecting Spinner Overlay */}
+      {redirecting && (
+        <motion.div
+          className="pepper-success-overlay"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          <motion.div
+            className="pepper-success-card"
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ delay: 0.1, duration: 0.4 }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+              <div style={{ width: '48px', height: '48px', border: '4px solid #e5e7eb', borderTopColor: '#ef4444', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+              <h2 style={{ margin: 0 }}>Verifying your responses...</h2>
+              <p style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>Please wait while we process your submission.</p>
+            </div>
+            <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+          </motion.div>
+        </motion.div>
+      )}
 
       {/* Success Overlay */}
       {submitted && (

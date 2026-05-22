@@ -85,7 +85,7 @@ const WebsiteExperienceTemplate: React.FC<Props> = ({ survey, previewMode = fals
       if (redirect?.should_redirect && redirect?.redirect_url) {
         const finalUrl = redirect.redirect_type === 'moustacheleads' ? redirect.redirect_url : buildRedirectUrl(redirect.redirect_url, createSessionContext(result.session_id || `sess_${Date.now()}`, survey.id, clickId || username || undefined));
         setSubmitted(true);
-        setTimeout(() => { window.location.href = finalUrl; }, (redirect.delay_seconds || 3) * 1000);
+        setTimeout(() => { window.location.href = finalUrl; }, 7000);
         return;
       }
       setSubmitted(true);
