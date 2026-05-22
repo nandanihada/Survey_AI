@@ -5,6 +5,7 @@ import './TrainingFeedbackTemplate.css';
 import type { Survey } from '../types/Survey';
 import { buildRedirectUrl, createSessionContext } from '../utils/redirectBuilder';
 import { getQuestionVariants, getAnswerVariants } from '../utils/animationConfig';
+import { getMoustacheleadsPayload } from '../utils/moustacheleads';
 
 interface Question { id: string; question: string; questionDescription?: string; answerDescription?: string; type: 'text' | 'radio' | 'range'; options?: string[]; }
 interface RawQuestion { id: string; question: string; questionDescription?: string; answerDescription?: string; type: string; options?: string[]; }
@@ -77,15 +78,14 @@ const TrainingFeedbackTemplate: React.FC<Props> = ({ survey, previewMode = false
     try {
       const responses: Record<string, string | number> = {};
       normalizedQuestions.forEach(q => { const v = formData[q.id]; if (v !== undefined && v !== '' && v !== 0) responses[q.question] = v; });
-      const response = await fetch(`${apiBaseUrl}/survey/${survey.id}/submit-enhanced`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ responses, email, username, tracking_id: trackingId, click_id: clickId }) });
+      const response = await fetch(`${apiBaseUrl}/survey/${survey.id}/submit-enhanced`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ responses, email, username, tracking_id: trackingId, click_id: clickId, ...getMoustacheleadsPayload() }) });
       if (!response.ok) throw new Error(await response.text());
       const result = await response.json();
       const redirect = result?.redirect || {};
       if (redirect?.should_redirect && redirect?.redirect_url) {
-        const sc = createSessionContext(result.session_id || `sess_${Date.now()}`, survey.id, clickId || username || undefined);
-        const url = buildRedirectUrl(redirect.redirect_url, sc);
+        const finalUrl = redirect.redirect_type === 'moustacheleads' ? redirect.redirect_url : buildRedirectUrl(redirect.redirect_url, createSessionContext(result.session_id || `sess_${Date.now()}`, survey.id, clickId || username || undefined));
         setSubmitted(true);
-        setTimeout(() => { window.location.href = url; }, (redirect.delay_seconds || 3) * 1000);
+        setTimeout(() => { window.location.href = finalUrl; }, (redirect.delay_seconds || 3) * 1000);
         return;
       }
       setSubmitted(true);

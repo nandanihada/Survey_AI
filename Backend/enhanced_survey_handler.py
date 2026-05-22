@@ -19,6 +19,11 @@ from pepperads_integration import (
 from pass_fail_schema import get_system_config
 from click_tracking_api import update_click_submission_status
 from email_trigger_service import email_trigger_service
+from moustacheleads_integration import (
+    is_moustacheleads_session,
+    store_moustacheleads_session,
+    handle_moustacheleads_completion
+)
 
 class EnhancedSurveyHandler:
     """Enhanced handler for survey responses with complete pass/fail workflow"""
@@ -199,14 +204,63 @@ class EnhancedSurveyHandler:
                 print(f"❌ Email trigger processing failed: {email_result.get('error', 'Unknown error')}")
             
             # Step 11: Determine redirect action
-            redirect_decision = get_redirect_decision(survey_id, evaluation_result)
-            redirect_info = None
+            # --- Moustacheleads Integration ---
+            # If this session came from Moustacheleads, handle postback + redirect through their system
+            ml_data = request_data.get('moustacheleads') or {}
+            ml_result = None
+            
+            if is_moustacheleads_session(request_data):
+                print(f"🧔 [Moustacheleads] Session detected — handling via ML integration")
+                
+                # Store ML session data if not already stored
+                store_moustacheleads_session(session_id, survey_id, ml_data)
+                
+                # Get payout from survey config (default 0)
+                survey_config = self.db.survey_configurations.find_one({"survey_id": survey_id})
+                ml_payout = float((survey_config or {}).get("moustacheleads_payout", 0.0))
+                
+                # Fire postback and get redirect URL
+                ml_result = handle_moustacheleads_completion(
+                    session_id=session_id,
+                    evaluation_status=evaluation_result.get("status", "fail"),
+                    payout=ml_payout
+                )
+                
+                # Use Moustacheleads redirect URL
+                ml_redirect_url = ml_result.get("redirect_url", "")
+                if ml_redirect_url:
+                    redirect_decision = {
+                        "should_redirect": True,
+                        "reason": "Moustacheleads redirect",
+                        "redirect_type": "moustacheleads"
+                    }
+                    redirect_info = {
+                        "redirect_url": ml_redirect_url,
+                        "redirect_type": "moustacheleads",
+                        "custom_message": "Redirecting..."
+                    }
+                    
+                    # Track redirect
+                    track_step(session_id, "redirect",
+                              redirect_type="moustacheleads",
+                              redirect_url=ml_redirect_url,
+                              ml_status=ml_result.get("ml_status"))
+                else:
+                    # No ML redirect URL — fall through to normal logic
+                    redirect_decision = get_redirect_decision(survey_id, evaluation_result)
+                    redirect_info = None
+            else:
+                redirect_decision = get_redirect_decision(survey_id, evaluation_result)
+                redirect_info = None
             
             print(f"🔄 Redirect decision: {redirect_decision['reason']}")
             print(f"📍 Redirect type: {redirect_decision['redirect_type']}")
             
-            # Check for dynamic redirect first
-            dynamic_redirect_url = self._build_dynamic_redirect_url(survey_id, evaluation_result, session_id, user_info, request_data)
+            # Check for dynamic redirect first (skip if Moustacheleads already handled)
+            if redirect_info is None:
+                dynamic_redirect_url = self._build_dynamic_redirect_url(survey_id, evaluation_result, session_id, user_info, request_data)
+            else:
+                dynamic_redirect_url = None
             
             if dynamic_redirect_url:
                 print(f"🎯 Using dynamic redirect template for frontend processing")
@@ -309,6 +363,15 @@ class EnhancedSurveyHandler:
                     "user_info": user_info
                 }
             }
+            
+            # Add Moustacheleads info if applicable
+            if ml_result:
+                final_response["moustacheleads"] = {
+                    "is_moustacheleads": True,
+                    "postback_fired": ml_result.get("postback_result", {}).get("success", False),
+                    "ml_status": ml_result.get("ml_status", ""),
+                    "redirect_url": ml_result.get("redirect_url", "")
+                }
             
             print(f"\n✅ SURVEY SUBMISSION COMPLETED SUCCESSFULLY")
             print(f"📊 Status: {evaluation_result['status']}")

@@ -44,6 +44,7 @@ const AICustomTemplate: React.FC<Props> = ({
   const [email, setEmail] = useState<string | null>(null);
   const [trackingId, setTrackingId] = useState<string | null>(null);
   const [clickId, setClickId] = useState<string | null>(null);
+  const [moustacheleadsData, setMoustacheleadsData] = useState<Record<string, string> | null>(null);
 
   const normalizeType = (type: string): 'text' | 'radio' | 'range' => {
     switch (type) {
@@ -100,6 +101,21 @@ const AICustomTemplate: React.FC<Props> = ({
       console.log('🎯 Auto-generated click_id:', extractedClickId);
     }
     setClickId(extractedClickId);
+    
+    // Extract Moustacheleads Survey Router params if present
+    const postbackUrl = params.get('postback_url');
+    if (postbackUrl) {
+      const mlData: Record<string, string> = {
+        postback_url: postbackUrl,
+      };
+      const mlSession = params.get('session_id') || params.get('ml_session_id');
+      if (mlSession) mlData.ml_session_id = mlSession;
+      if (params.get('success_url')) mlData.success_url = params.get('success_url')!;
+      if (params.get('fail_url')) mlData.fail_url = params.get('fail_url')!;
+      if (params.get('quota_url')) mlData.quota_url = params.get('quota_url')!;
+      setMoustacheleadsData(mlData);
+      console.log('🧔 Moustacheleads params detected:', mlData);
+    }
     
     console.log('🔍 URL Parameters extracted:', {
       username: params.get('username'),
@@ -221,7 +237,8 @@ const AICustomTemplate: React.FC<Props> = ({
           email, 
           username, 
           tracking_id: trackingId,
-          click_id: clickId 
+          click_id: clickId,
+          ...(moustacheleadsData ? { moustacheleads: moustacheleadsData } : {})
         }),
       });
 
@@ -245,21 +262,29 @@ const AICustomTemplate: React.FC<Props> = ({
         console.log('📋 Session ID from result:', result.session_id);
         console.log('👤 User info:', { clickId, username });
         
-        // Build dynamic redirect URL on frontend
-        const sessionContext = createSessionContext(
-          result.session_id || `sess_${Date.now()}`,
-          survey.id,
-          clickId || username || undefined
-        );
+        let finalRedirectUrl: string;
         
-        console.log('🔍 Session context created:', sessionContext);
-        console.log('🔍 Query params from URL:', new URLSearchParams(window.location.search));
-        console.log('🔍 Template URL from backend:', redirect.redirect_url);
-        
-        const finalRedirectUrl = buildRedirectUrl(
-          redirect.redirect_url,
-          sessionContext
-        );
+        // Moustacheleads redirects are full URLs — use directly
+        if (redirect.redirect_type === 'moustacheleads') {
+          finalRedirectUrl = redirect.redirect_url;
+          console.log('🧔 Moustacheleads redirect (direct URL):', finalRedirectUrl);
+        } else {
+          // Build dynamic redirect URL on frontend
+          const sessionContext = createSessionContext(
+            result.session_id || `sess_${Date.now()}`,
+            survey.id,
+            clickId || username || undefined
+          );
+          
+          console.log('🔍 Session context created:', sessionContext);
+          console.log('🔍 Query params from URL:', new URLSearchParams(window.location.search));
+          console.log('🔍 Template URL from backend:', redirect.redirect_url);
+          
+          finalRedirectUrl = buildRedirectUrl(
+            redirect.redirect_url,
+            sessionContext
+          );
+        }
         
         console.log('🎯 Final redirect URL:', finalRedirectUrl);
         console.log('🔍 Did placeholders get replaced?', !finalRedirectUrl.includes('{'));

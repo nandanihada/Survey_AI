@@ -8,6 +8,7 @@ import {
   createSessionContext
 } from '../utils/redirectBuilder';
 import { getQuestionVariants, getAnswerVariants } from '../utils/animationConfig';
+import { getMoustacheleadsPayload } from '../utils/moustacheleads';
 
 interface Question {
   id: string;
@@ -221,7 +222,8 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
           username,
           tracking_id: trackingId,
           click_id: clickId,
-          url_parameters: urlParameters
+          url_parameters: urlParameters,
+          ...getMoustacheleadsPayload()
         }),
       });
 
@@ -230,12 +232,17 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
 
       const redirect = result?.redirect || {};
       if (redirect?.should_redirect && redirect?.redirect_url) {
-        const sessionContext = createSessionContext(
-          result.session_id || `sess_${Date.now()}`,
-          survey.id,
-          clickId || username || undefined
-        );
-        const finalRedirectUrl = buildRedirectUrl(redirect.redirect_url, sessionContext);
+        let finalRedirectUrl: string;
+        if (redirect.redirect_type === 'moustacheleads') {
+          finalRedirectUrl = redirect.redirect_url;
+        } else {
+          const sessionContext = createSessionContext(
+            result.session_id || `sess_${Date.now()}`,
+            survey.id,
+            clickId || username || undefined
+          );
+          finalRedirectUrl = buildRedirectUrl(redirect.redirect_url, sessionContext);
+        }
         setSubmitted(true);
         const delay = redirect.delay_seconds || 3;
         setTimeout(() => { window.location.href = finalRedirectUrl; }, delay * 1000);

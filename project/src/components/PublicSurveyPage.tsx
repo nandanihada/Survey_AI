@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import type { Survey } from '../types/Survey';
+import { captureMoustacheleadsParams } from '../utils/moustacheleads';
 
 // Import all templates
 import CustomerFeedbackTemplate from '../templates/CustomerFeedbackTemplate';
@@ -73,6 +74,11 @@ const PublicSurveyPage: React.FC = () => {
 
   const isLocalhost = window.location.hostname === 'localhost';
   const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+
+  // Capture Moustacheleads params on initial load (persists in sessionStorage)
+  useEffect(() => {
+    captureMoustacheleadsParams();
+  }, []);
 
   useEffect(() => {
     if (!surveyId) {

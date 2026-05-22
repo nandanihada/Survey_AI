@@ -3590,6 +3590,7 @@ def manage_survey_config(survey_id):
                 ),
                 "criteria_set_id": data.get("criteria_set_id"),
                 "pepperads_offer_id": data.get("pepperads_offer_id"),
+                "moustacheleads_payout": data.get("moustacheleads_payout", 0.0),
                 "fail_page_config": data.get(
                     "fail_page_config",
                     {

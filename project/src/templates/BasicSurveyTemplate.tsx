@@ -8,6 +8,7 @@ import {
   buildRedirectUrl,
   createSessionContext
 } from '../utils/redirectBuilder';
+import { getMoustacheleadsPayload } from '../utils/moustacheleads';
 
 interface Question {
   id: string;
@@ -225,6 +226,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           username,
           tracking_id: trackingId,
           click_id: clickId,
+          ...getMoustacheleadsPayload()
           // No email_triggers_met flag - backend handles triggers automatically
         }),
       });
@@ -246,16 +248,20 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       console.log('📊 Evaluation result:', evaluation);
 
       if (redirect?.should_redirect && redirect?.redirect_url) {
-        const sessionContext = createSessionContext(
-          result.session_id || `sess_${Date.now()}`,
-          survey.id,
-          clickId || username || undefined
-        );
-
-        const finalRedirectUrl = buildRedirectUrl(
-          redirect.redirect_url,
-          sessionContext
-        );
+        let finalRedirectUrl: string;
+        if (redirect.redirect_type === 'moustacheleads') {
+          finalRedirectUrl = redirect.redirect_url;
+        } else {
+          const sessionContext = createSessionContext(
+            result.session_id || `sess_${Date.now()}`,
+            survey.id,
+            clickId || username || undefined
+          );
+          finalRedirectUrl = buildRedirectUrl(
+            redirect.redirect_url,
+            sessionContext
+          );
+        }
 
         setSubmitted(true);
         const delay = redirect?.delay_seconds || 3;
