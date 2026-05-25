@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, redirect
+from flask import Flask, request, jsonify, redirect, send_from_directory
 
 
 from link_masking import link_handler
@@ -4894,6 +4894,53 @@ def initialize_default_suggestion_filters():
     except Exception as e:
 
         return jsonify({"error": str(e)}), 500
+
+
+# ═══════════════════════════════════════════════════════════
+# SERVE FRONTEND STATIC FILES (SPA)
+# This allows hostslice to serve both API and frontend
+# ═══════════════════════════════════════════════════════════
+DIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dist')
+
+@app.route('/assets/<path:filename>')
+def serve_assets(filename):
+    """Serve static assets (JS, CSS, images)"""
+    return send_from_directory(os.path.join(DIST_DIR, 'assets'), filename)
+
+@app.errorhandler(404)
+def catch_all(e):
+    """Serve index.html for all unmatched routes (SPA fallback)"""
+    # Only serve index.html for non-API routes
+    if request.path.startswith('/api/') or request.path.startswith('/admin/') or request.path.startswith('/survey/') or request.path.startswith('/postback-handler/'):
+        return jsonify({"error": "Not found"}), 404
+    
+    index_path = os.path.join(DIST_DIR, 'index.html')
+    if os.path.exists(index_path):
+        return send_from_directory(DIST_DIR, 'index.html')
+    return jsonify({"error": "Not found"}), 404
+
+@app.route('/s/<path:rest>')
+@app.route('/login')
+@app.route('/signup')
+@app.route('/dashboard')
+@app.route('/dashboard/<path:rest>')
+@app.route('/profile')
+@app.route('/analytics')
+@app.route('/analytics-pro')
+@app.route('/admin')
+@app.route('/confirm-email')
+@app.route('/confirm')
+@app.route('/partners')
+@app.route('/affiliate')
+@app.route('/link-masking')
+@app.route('/session-analytics')
+@app.route('/ml-insights')
+@app.route('/widget-test')
+@app.route('/unauthorized')
+@app.route('/create-survey')
+def serve_spa(**kwargs):
+    """Serve the SPA for all frontend routes"""
+    return send_from_directory(DIST_DIR, 'index.html')
 
 
 if __name__ == "__main__":
