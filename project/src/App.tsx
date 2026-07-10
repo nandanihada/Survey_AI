@@ -635,7 +635,7 @@ export default function App() {
             <Route path="/partners" element={<AffiliateProgram />} />
             <Route path="/affiliate" element={<AffiliateProgram />} />
 
-            <Route path="/confirm-email" element={<EmailConfirmation />} />
+            <Route path="/confirm-email" element={<ConfirmPage />} />
             <Route path="/confirm" element={<ConfirmPage />} />
 
             {/* Public survey routes */}
