@@ -656,6 +656,21 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
               </button>
               <div className="flex gap-2.5">
                 <button
+                  onClick={() => {
+                    if (generatedSurvey) {
+                      const link = generateSurveyLink(generatedSurvey.survey_id);
+                      window.open(link, '_blank');
+                    }
+                  }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-3 rounded-2xl text-[11px] sm:text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 ${isDarkMode
+                      ? 'bg-white/[0.06] text-white border border-white/10 hover:bg-white/10'
+                      : 'bg-stone-50 text-stone-700 border border-stone-200 hover:bg-stone-100'
+                    }`}
+                  style={{ fontFamily: "'Outfit', sans-serif" }}
+                >
+                  <Eye size={13} /> Open in New Tab
+                </button>
+                <button
                   onClick={handleShareLink}
                   className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-3 rounded-2xl text-[11px] sm:text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 ${isDarkMode
                       ? 'bg-white/[0.06] text-white border border-white/10 hover:bg-white/10'
@@ -673,7 +688,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
                     }`}
                   style={{ fontFamily: "'Outfit', sans-serif" }}
                 >
-                  <Eye size={13} /> Responses
+                  <BarChart2 size={13} /> Responses
                 </button>
               </div>
             </div>

@@ -26,7 +26,11 @@ export default function ConfirmPage() {
       hasAttemptedRef.current = true;
       try {
         const baseUrl = getApiBaseUrl();
-        const response = await fetch(`${baseUrl}/api/auth/confirm?token=${token}`);
+        const response = await fetch(`${baseUrl}/api/auth/confirm-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token })
+        });
         const result = await response.json();
 
         if (response.ok) {
