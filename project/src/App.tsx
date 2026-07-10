@@ -92,7 +92,7 @@ const WidgetTestPage = lazyRetry(() => import('./components/WidgetTestPage'));
 // Import legacy dashboard for backward compatibility
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/Tabs';
-import { PenSquare, FolderOpen, TrendingUp, Link, Mail, MapPin, Sun, Moon, Settings, Lock, Menu, X } from 'lucide-react';
+import { PenSquare, FolderOpen, TrendingUp, Link, Mail, MapPin, Sun, Moon, Settings, Lock, Menu, X, User } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { FloatingWidgetProvider } from './components/FloatingWidgetProvider';
 import type { WidgetCustomizerSettings } from './components/WidgetCustomizer';
@@ -112,7 +112,7 @@ const SessionAnalyticsView = lazyRetry(() => import('./pages/SessionAnalyticsVie
 
 // Legacy dashboard component - will be removed after migration
 function LegacyDashboard() {
-  const { hasFeature } = useAuth();
+  const { hasFeature, user, authenticated } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'create');
@@ -247,9 +247,9 @@ function LegacyDashboard() {
             <div className="flex items-center gap-2 sm:gap-3">
               <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded flex items-center justify-center text-xs`}>
                 <img
-                  src="https://i.postimg.cc/qq8tgkpd/Screenshot-(2313).png"
+                  src="/logo.png"
                   alt="Pepperwahl Logo"
-                  className={`w-6 h-6 sm:w-8 sm:h-8 ${isDarkMode ? 'brightness-200 contrast-125 mix-blend-screen' : 'mix-blend-multiply'}`}
+                  className={`w-6 h-6 sm:w-8 sm:h-8 logo-animated ${isDarkMode ? 'brightness-200 contrast-125 mix-blend-screen' : 'mix-blend-multiply'}`}
                 />
               </div>
               <span className="text-sm sm:text-base font-bold bg-clip-text text-transparent bg-gradient-to-r from-red-600 to-orange-500">Pepperwahl</span>
@@ -343,6 +343,18 @@ function LegacyDashboard() {
                 <span className="w-1 h-1 rounded-full bg-slate-400"></span>
                 <span className={isDarkMode ? 'text-white' : 'text-stone-900'}>Upgrade</span>
               </button>
+              {authenticated && user && (
+                <button
+                  onClick={() => navigate('/profile')}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${isDarkMode
+                      ? 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30'
+                      : 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100'
+                    }`}
+                  title="Profile"
+                >
+                  {user.name ? user.name.charAt(0).toUpperCase() : <User size={16} />}
+                </button>
+              )}
               <button
                 onClick={toggleTheme}
                 className={`p-2 rounded-md transition-colors ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-yellow-400' : 'bg-stone-100 hover:bg-stone-200 text-stone-600'
@@ -423,8 +435,22 @@ function LegacyDashboard() {
                   );
                 })}
               </div>
-              <div className={`px-5 py-4 border-t text-center ${isDarkMode ? 'border-slate-700' : 'border-stone-200'}`}>
-                <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-stone-400'}`}>PepperAds AI Survey</p>
+              <div className={`px-5 py-4 border-t ${isDarkMode ? 'border-slate-700' : 'border-stone-200'}`}>
+                {authenticated && user && (
+                  <button
+                    onClick={() => { navigate('/profile'); setMobileMenuOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-3 transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-300' : 'hover:bg-stone-50 text-stone-700'}`}
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${isDarkMode ? 'bg-red-500/20 text-red-400' : 'bg-red-50 text-red-600'}`}>
+                      {user.name ? user.name.charAt(0).toUpperCase() : <User size={14} />}
+                    </div>
+                    <div className="text-left">
+                      <p className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>{user.name || 'Profile'}</p>
+                      <p className={`text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-stone-400'}`}>{user.email || 'View profile'}</p>
+                    </div>
+                  </button>
+                )}
+                <p className={`text-[10px] text-center ${isDarkMode ? 'text-slate-500' : 'text-stone-400'}`}>PepperAds AI Survey</p>
               </div>
             </div>
             <style>{`@keyframes slideInRight { from { transform: translateX(100%) } to { transform: translateX(0) } }`}</style>

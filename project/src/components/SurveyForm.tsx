@@ -275,7 +275,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
         <div className="text-center mb-8 sm:mb-10">
           <div className="inline-flex justify-center items-center p-3 mb-5 rounded-[2rem] bg-gradient-to-br from-red-500/10 to-orange-500/10 border border-red-500/10 shadow-[0_0_40px_rgba(239,68,68,0.15)] relative">
             <div className="absolute inset-0 bg-red-400/20 blur-2xl rounded-full -z-10" />
-            <img src="https://i.postimg.cc/qq8tgkpd/Screenshot-(2313).png" alt="Mascot" className="w-10 h-10 sm:w-12 sm:h-12 object-contain relative z-10 hover:scale-110 hover:-rotate-6 transition-transform duration-300" />
+            <img src="/logo.png" alt="Mascot" className="w-10 h-10 sm:w-12 sm:h-12 object-contain relative z-10 logo-animated hover:scale-110 hover:-rotate-6 transition-transform duration-300" />
           </div>
           <h1 className={`text-[2rem] sm:text-[2.5rem] font-extrabold mb-4 tracking-tight leading-tight ${isDarkMode ? 'text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400' : 'text-transparent bg-clip-text bg-gradient-to-br from-slate-900 to-slate-600'}`} style={{ fontFamily: "'Outfit', sans-serif" }}>
             Design your ideal survey
@@ -440,7 +440,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
                     <div className="relative mb-8">
                        <div className="absolute inset-0 bg-red-500 blur-2xl opacity-20 rounded-full animate-pulse" />
                        <div className={`w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center relative z-10 bg-transparent`}>
-                          <img src="https://i.postimg.cc/qq8tgkpd/Screenshot-(2313).png" alt="AI" className={`w-full h-full object-contain animate-bounce drop-shadow-md ${isDarkMode ? 'brightness-200 contrast-125 mix-blend-screen' : 'mix-blend-multiply'}`} style={{ animationDuration: '2s' }} />
+                          <img src="/logo.png" alt="AI" className={`w-full h-full object-contain animate-bounce drop-shadow-md ${isDarkMode ? 'brightness-200 contrast-125 mix-blend-screen' : 'mix-blend-multiply'}`} style={{ animationDuration: '2s' }} />
                        </div>
                     </div>
                     <div className="flex items-center gap-3">
@@ -567,7 +567,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
                       animation: 'sfIconPop 0.6s 0.15s cubic-bezier(0.34, 1.56, 0.64, 1) both',
                     }}
                   >
-                    <img src="https://i.postimg.cc/qq8tgkpd/Screenshot-(2313).png" alt="Logo" className={`w-full h-full object-contain ${isDarkMode ? 'brightness-200 contrast-125 mix-blend-screen' : 'mix-blend-multiply'}`} />
+                    <img src="/logo.png" alt="Logo" className={`w-full h-full object-contain ${isDarkMode ? 'brightness-200 contrast-125 mix-blend-screen' : 'mix-blend-multiply'}`} />
                   </div>
                   <div style={{ animation: 'sfFadeUp 0.4s 0.2s ease-out both' }}>
                     <h2 className={`text-base sm:text-lg font-bold leading-tight ${isDarkMode ? 'text-white' : 'text-stone-800'}`} style={{ fontFamily: "'Outfit', sans-serif" }}>

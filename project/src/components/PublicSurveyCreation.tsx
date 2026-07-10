@@ -332,7 +332,7 @@ const PublicSurveyCreation: React.FC = () => {
           {/* Header */}
           <div className="text-center mb-6 sm:mb-8">
             <div className="inline-flex items-center gap-2 mb-3">
-              <img src="https://i.postimg.cc/qq8tgkpd/Screenshot-(2313).png" alt="" className="w-7 h-7 sm:w-8 sm:h-8 object-contain" />
+              <img src="/logo.png" alt="" className="w-7 h-7 sm:w-8 sm:h-8 object-contain" />
               <span className={`text-[10px] sm:text-xs font-semibold tracking-wider uppercase ${isDarkMode ? 'text-slate-400' : 'text-stone-400'}`}></span>
             </div>
             <h1 className={`text-xl sm:text-2xl font-bold mb-1.5 sm:mb-2 ${isDarkMode ? 'text-white' : 'text-stone-800'}`} style={{ fontFamily: "'Outfit', sans-serif" }}>
@@ -485,7 +485,7 @@ const PublicSurveyCreation: React.FC = () => {
                      <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                         {msg.role === 'ai' && (
                            <div className={`w-8 h-8 rounded-[0.8rem] flex items-center justify-center shadow-sm flex-shrink-0 mr-3 mt-1 border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-1.5`}>
-                              <img src="https://i.postimg.cc/qq8tgkpd/Screenshot-(2313).png" alt="AI" className="w-full h-full object-contain drop-shadow-sm" />
+                              <img src="/logo.png" alt="AI" className="w-full h-full object-contain drop-shadow-sm" />
                            </div>
                         )}
                         <div className={`max-w-[85%] rounded-[1.25rem] px-4 py-3 ${
@@ -503,7 +503,7 @@ const PublicSurveyCreation: React.FC = () => {
                   {wizardStep === 99 && isLoading && (
                      <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-500">
                         <div className={`w-8 h-8 rounded-[0.8rem] flex items-center justify-center shadow-sm flex-shrink-0 mr-3 mt-1 border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-1.5`}>
-                           <img src="https://i.postimg.cc/qq8tgkpd/Screenshot-(2313).png" alt="AI" className="w-full h-full object-contain drop-shadow-sm animate-pulse" />
+                           <img src="/logo.png" alt="AI" className="w-full h-full object-contain drop-shadow-sm animate-pulse" />
                         </div>
                         <div className={`rounded-[1.25rem] px-4 py-3.5 rounded-tl-sm flex items-center gap-3 shadow-md border ${isDarkMode ? 'bg-slate-800 text-slate-200 border-slate-700/50' : 'bg-white text-stone-800 border-red-500/20'}`}>
                            <Loader2 className="animate-spin text-red-500" size={16} />
@@ -779,7 +779,7 @@ const PublicSurveyCreation: React.FC = () => {
                 <div className="text-center sm:text-left mb-10">
                   <div className="w-16 h-16 mb-8 rounded-[1.25rem] flex items-center justify-center mx-auto sm:mx-0">
                     <img
-                      src="https://i.postimg.cc/qq8tgkpd/Screenshot-(2313).png"
+                      src="/logo.png"
                       alt="PepperAds Logo"
                       className="w-full h-full object-contain"
                     />

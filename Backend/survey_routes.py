@@ -26,6 +26,7 @@ def convert_objectid_to_string(doc):
     return doc
 
 @survey_bp.route('/', methods=['GET'])
+@survey_bp.route('', methods=['GET'])
 @requireAuth
 def get_user_surveys():
     """Get surveys for the current user (My Surveys)"""
@@ -39,15 +40,18 @@ def get_user_surveys():
             print(f"Admin {user.get('email')} viewing all surveys: {len(surveys)}")
         else:
             # Enhanced query to find user's surveys using multiple identification methods
-            query = {
-                '$or': [
-                    {'ownerUserId': user_id},
-                    {'user_id': user_id},
-                    {'creator_email': user.get('email', '')},
-                    {'created_by.user_id': user_id},
-                    {'created_by.email': user.get('email', '')}
-                ]
-            }
+            # Only match non-empty values to avoid false matches
+            or_conditions = [
+                {'ownerUserId': user_id},
+                {'user_id': user_id},
+                {'created_by.user_id': user_id},
+            ]
+            user_email = user.get('email', '')
+            if user_email:
+                or_conditions.append({'creator_email': user_email})
+                or_conditions.append({'created_by.email': user_email})
+            
+            query = {'$or': or_conditions}
             surveys = list(db.surveys.find(query).sort('created_at', -1))
             print(f"User {user.get('email')} ({user_id}) found {len(surveys)} surveys")
             
@@ -61,9 +65,30 @@ def get_user_surveys():
                 prompt = survey.get('prompt', 'No prompt')[:30] + '...'
                 print(f"  - Survey: {prompt} | Fields: {', '.join(fields)}")
         
-        # Convert ObjectIds to strings
+        # Convert ObjectIds to strings and include response counts
         for survey in surveys:
             convert_objectid_to_string(survey)
+            # Include actual response count from responses collection
+            # Check by all possible survey ID formats
+            possible_ids = set()
+            if survey.get('_id'):
+                possible_ids.add(str(survey['_id']))
+            if survey.get('id'):
+                possible_ids.add(str(survey['id']))
+            if survey.get('short_id'):
+                possible_ids.add(str(survey['short_id']))
+            
+            # Remove empty strings
+            possible_ids.discard('')
+            
+            if possible_ids:
+                if len(possible_ids) == 1:
+                    count = db.responses.count_documents({'survey_id': list(possible_ids)[0]})
+                else:
+                    count = db.responses.count_documents({'survey_id': {'$in': list(possible_ids)}})
+            else:
+                count = 0
+            survey['response_count'] = count
         
         return jsonify({
             'surveys': surveys,
@@ -272,10 +297,24 @@ def get_survey_responses(survey_id):
         if survey.get('ownerUserId') != user_id and user.get('role') != 'admin':
             return jsonify({'error': 'Access denied'}), 403
         
-        # Get responses
-        responses = list(db.responses.find({
-            'survey_id': str(survey['_id'])
-        }).sort('submitted_at', -1))
+        # Get responses - check by all possible survey ID formats
+        possible_ids = set()
+        if survey.get('_id'):
+            possible_ids.add(str(survey['_id']))
+        if survey.get('id'):
+            possible_ids.add(str(survey['id']))
+        if survey.get('short_id'):
+            possible_ids.add(str(survey['short_id']))
+        possible_ids.discard('')
+        
+        if len(possible_ids) == 1:
+            responses = list(db.responses.find({
+                'survey_id': list(possible_ids)[0]
+            }).sort('submitted_at', -1))
+        else:
+            responses = list(db.responses.find({
+                'survey_id': {'$in': list(possible_ids)}
+            }).sort('submitted_at', -1))
         
         # Convert ObjectIds to strings
         for response in responses:

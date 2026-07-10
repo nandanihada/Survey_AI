@@ -23,6 +23,7 @@ interface Survey {
   created_at?: string;
   questions?: unknown[];
   template_type?: string;
+  response_count?: number;
 }
 
 const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false }) => {
@@ -172,8 +173,8 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false }) => {
     return words[0] ? words[0].charAt(0).toUpperCase() + words[0].slice(1).toLowerCase() : 'Survey';
   };
 
-  const getResponseCount = () => {
-    return Math.floor(Math.random() * 100);
+  const getResponseCount = (survey: Survey) => {
+    return survey.response_count ?? 0;
   };
 
   const getStatus = (survey: Survey) => {
@@ -273,7 +274,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false }) => {
                       </span>
                       <span className="flex items-center gap-1">
                         <Users size={12} />
-                        {getResponseCount()} responses
+                        {getResponseCount(survey)} responses
                       </span>
                       <span className={`px-2 py-0.5 rounded-full text-[10px] sm:text-xs ${isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-stone-100 text-stone-600'}`}>
                         {survey.template_type || 'Unknown'}

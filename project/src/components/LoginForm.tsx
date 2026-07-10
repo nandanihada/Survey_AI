@@ -105,7 +105,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onSwitchToRegister }) 
               onClick={onSwitchToRegister}
               className="text-red-600 hover:text-red-500 font-medium"
             >
-              Create Account with Postback Setup
+              Create Account
             </button>
           </p>
         </div>

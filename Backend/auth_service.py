@@ -140,13 +140,13 @@ class AuthService:
         
         # Send confirmation email
         print(f"🔐 Attempting to send confirmation email...")
-        self.send_confirmation_email(email, confirmation_token)
+        self.send_confirmation_email(email, confirmation_token, user_data.get('name', ''))
         
         print(f"🔐 === REGISTRATION COMPLETE ===\n")
         
         return user_data
     
-    def send_confirmation_email(self, email: str, token: str) -> None:
+    def send_confirmation_email(self, email: str, token: str, name: str = '') -> None:
         """Send email confirmation link"""
         print(f"\n📧 === CONFIRMATION EMAIL PROCESS ===")
         print(f"📧 Email recipient: {email}")
@@ -163,7 +163,7 @@ class AuthService:
             msg = MIMEMultipart()
             msg['From'] = self.from_email
             msg['To'] = email
-            msg['Subject'] = "Confirm your account – PepperWahl (by PepperAds)"
+            msg['Subject'] = "Confirm your account – PepperWahl"
             
             print(f"📧 Message created - From: {self.from_email}, To: {email}")
             
@@ -205,13 +205,12 @@ class AuthService:
                 <div class="container">
                     <div class="header">
                         <h1>PepperWahl</h1>
-                        <p>by PepperAds</p>
                     </div>
                     
                     <div class="content">
-                        <p>Hi,</p>
+                        <p>Hey {name or email.split('@')[0]},</p>
                         
-                        <p>You signed up on <strong>PepperWahl</strong>, a survey platform powered by PepperAds.</p>
+                        <p>You signed up on <strong>PepperWahl</strong>, a survey platform.</p>
                         
                         <p>Please confirm your email by clicking the button below:</p>
                         
@@ -228,8 +227,8 @@ class AuthService:
                     </div>
                     
                     <div class="footer">
-                        <p>— Team PepperAds</p>
-                        <p>© 2026 PepperAds. All rights reserved.</p>
+                        <p>— Team PepperWahl</p>
+                        <p>© 2026 PepperWahl. All rights reserved.</p>
                     </div>
                 </div>
             </body>

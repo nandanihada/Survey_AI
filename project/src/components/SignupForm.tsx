@@ -134,10 +134,9 @@ export default function SignupForm({ isDarkMode = false, onSubmit }: SignupFormP
             <div className="flex items-center justify-center gap-3 mb-4">
               <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isDarkMode ? 'bg-red-500/20' : 'bg-red-50'}`}>
                 <img
-                  src="https://i.postimg.cc/9Mhc6NJ6/chilllllllli.png"
+                  src="/logo.png"
                   alt="Logo"
-                  className="w-8 h-8"
-                  style={{ filter: 'drop-shadow(0 0 4px red)' }}
+                  className="w-8 h-8 logo-animated"
                 />
               </div>
               <h1 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>

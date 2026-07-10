@@ -58,10 +58,9 @@ export default function Navigation({ isDarkMode = false }: NavigationProps) {
         <div className="flex items-center gap-3">
           <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isDarkMode ? 'bg-red-500/20' : 'bg-red-50'}`}>
             <img
-              src="https://i.postimg.cc/9Mhc6NJ6/chilllllllli.png"
+              src="/logo.png"
               alt="Logo"
-              className="w-6 h-6"
-              style={{ filter: 'drop-shadow(0 0 4px red)' }}
+              className="w-6 h-6 logo-animated"
             />
           </div>
           <div>

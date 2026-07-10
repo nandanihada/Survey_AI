@@ -2778,13 +2778,11 @@ def view_survey(survey_id):
 
 
 @app.route("/surveys", methods=["GET"])
-@app.route("/api/surveys", methods=["GET"])
-def list_surveys():
-
+def list_surveys_legacy():
+    """Legacy route - redirects to blueprint handler. The /api/surveys route is handled by survey_bp."""
     try:
-
-        # Find all surveys, sorted by created_at in descending order
-
+        # This only handles the /surveys route (without /api prefix)
+        # The /api/surveys route is handled by survey_bp with proper auth filtering
         surveys_cursor = db["surveys"].find().sort("created_at", -1)
 
         surveys = []
