@@ -168,12 +168,13 @@ class AuthService:
             print(f"📧 Message created - From: {self.from_email}, To: {email}")
             
             # Get frontend URL for confirmation link
-            is_local = os.getenv("FLASK_ENV", "development").lower() == "development"
-            default_frontend = "http://localhost:5173" if is_local else "https://pepperwahl.com"
+            # Check if running on Render or production (RENDER env var is set by Render automatically)
+            is_production = os.getenv("RENDER") or os.getenv("FLASK_ENV", "").lower() == "production"
+            default_frontend = "https://survey.pepperwahl.com" if is_production else "http://localhost:5173"
             frontend_url = os.getenv('FRONTEND_URL')
             
-            # Use default if not set or pointing to the root marketing site which doesn't have the route
-            if not frontend_url or frontend_url == "https://pepper-ads.com" or frontend_url == "https://dashboard-pepperads.onrender.com":
+            # Use default if not set or pointing to old/wrong URLs
+            if not frontend_url or frontend_url == "https://pepper-ads.com" or frontend_url == "https://dashboard-pepperads.onrender.com" or frontend_url == "http://localhost:3000":
                 frontend_url = default_frontend
                 
             confirmation_link = f"{frontend_url}/confirm-email?token={token}"
