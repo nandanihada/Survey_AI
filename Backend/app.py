@@ -4905,6 +4905,11 @@ def serve_assets(filename):
     """Serve static assets (JS, CSS, images)"""
     return send_from_directory(os.path.join(DIST_DIR, 'assets'), filename)
 
+@app.route('/logo.png')
+def serve_logo():
+    """Serve logo.png from dist root"""
+    return send_from_directory(DIST_DIR, 'logo.png')
+
 @app.errorhandler(404)
 def catch_all(e):
     """Serve index.html for all unmatched routes (SPA fallback)"""
