@@ -118,7 +118,10 @@ function LegacyDashboard() {
   const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'create');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showPreviewWidget, setShowPreviewWidget] = useState(false);
-  const [autoPreviewEnabled, setAutoPreviewEnabled] = useState(true);
+  const [autoPreviewEnabled, setAutoPreviewEnabled] = useState(() => {
+    const saved = localStorage.getItem('widgetEnabled');
+    return saved !== null ? saved === 'true' : true;
+  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Update activeTab when URL changes
@@ -539,6 +542,33 @@ function LegacyDashboard() {
                       <p className={`text-sm mb-4 ${isDarkMode ? 'text-slate-300' : 'text-stone-600'}`}>
                         Test the enhanced floating widget with centered positioning, glass effects, and typewriter animations.
                       </p>
+                      
+                      {/* Widget On/Off Toggle */}
+                      <div className={`flex items-center justify-between p-4 rounded-lg mb-4 ${isDarkMode ? 'bg-slate-700/50' : 'bg-stone-50'}`}>
+                        <div>
+                          <p className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
+                            Auto-show Widget
+                          </p>
+                          <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-stone-500'}`}>
+                            Widget will auto-appear after 8 seconds on the Create tab
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const newVal = !autoPreviewEnabled;
+                            setAutoPreviewEnabled(newVal);
+                            localStorage.setItem('widgetEnabled', String(newVal));
+                            if (!newVal) setShowPreviewWidget(false);
+                          }}
+                          className={`relative w-12 h-6 rounded-full transition-colors ${autoPreviewEnabled
+                              ? 'bg-green-500'
+                              : isDarkMode ? 'bg-slate-600' : 'bg-stone-300'
+                            }`}
+                        >
+                          <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${autoPreviewEnabled ? 'translate-x-6' : 'translate-x-0.5'}`} />
+                        </button>
+                      </div>
+
                       <button
                         onClick={() => window.open('/widget-test', '_blank')}
                         className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"

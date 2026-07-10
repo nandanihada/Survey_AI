@@ -50,10 +50,10 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchToLogin }) => {
 
       setMessage("✅ Account created! Please check your email to confirm.");
 
-      // Optional: switch to login after 2 sec
+      // Switch to login after 5 minutes (giving user time to check email)
       setTimeout(() => {
         onSwitchToLogin?.();
-      }, 2000);
+      }, 300000);
 
     } catch (err: any) {
       setError(err.message || 'Registration failed');

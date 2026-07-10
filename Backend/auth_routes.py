@@ -255,3 +255,104 @@ def get_permissions():
         
     except Exception as e:
         return jsonify({'error': f'Failed to get permissions: {str(e)}'}), 500
+
+
+@auth_bp.route('/firebase-login', methods=['POST', 'OPTIONS'])
+def firebase_login():
+    """Login/Register user via Firebase OAuth (Google/Microsoft)"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        email = data.get('email', '').strip().lower()
+        name = data.get('name', '').strip()
+        provider = data.get('provider', 'unknown')
+        
+        if not email:
+            return jsonify({'error': 'Email is required'}), 400
+        
+        print(f"\n🔥 Firebase OAuth Login - Provider: {provider}, Email: {email}")
+        
+        from mongodb_config import db
+        from role_manager import UserRole, UserStatus
+        from utils.short_id import generate_simple_user_id
+        
+        # Check if user already exists
+        users_collection = db.users
+        existing_user = users_collection.find_one({'email': email})
+        
+        if existing_user:
+            # User exists - log them in
+            print(f"✅ Existing user found: {email}")
+            
+            # Update last login
+            users_collection.update_one(
+                {'_id': existing_user['_id']},
+                {'$set': {'lastLogin': datetime.utcnow()}}
+            )
+            
+            # Generate JWT token
+            token = auth_service.generate_jwt_token(existing_user)
+            
+            return jsonify({
+                'token': token,
+                'user': {
+                    'id': str(existing_user['_id']),
+                    'email': existing_user['email'],
+                    'name': existing_user.get('name', name),
+                    'role': existing_user.get('role', 'basic'),
+                    'simpleUserId': existing_user.get('simpleUserId', 0),
+                    'status': existing_user.get('status', 'approved')
+                }
+            })
+        else:
+            # New user - create account (auto-confirmed since OAuth verified email)
+            print(f"🆕 Creating new user via {provider}: {email}")
+            
+            # Generate unique simple user ID
+            while True:
+                simple_user_id = generate_simple_user_id()
+                if not users_collection.find_one({'simpleUserId': simple_user_id}):
+                    break
+            
+            user_data = {
+                'email': email,
+                'passwordHash': '',  # No password for OAuth users
+                'name': name or email.split('@')[0],
+                'simpleUserId': simple_user_id,
+                'role': UserRole.BASIC.value,
+                'status': UserStatus.APPROVED.value,  # Auto-approve OAuth users
+                'authProvider': provider,
+                'createdAt': datetime.utcnow(),
+                'lastLogin': datetime.utcnow()
+            }
+            
+            result = users_collection.insert_one(user_data)
+            user_data['_id'] = result.inserted_id
+            
+            print(f"✅ New OAuth user created: {email} (ID: {user_data['_id']})")
+            
+            # Generate JWT token
+            token = auth_service.generate_jwt_token(user_data)
+            
+            return jsonify({
+                'token': token,
+                'user': {
+                    'id': str(user_data['_id']),
+                    'email': user_data['email'],
+                    'name': user_data['name'],
+                    'role': user_data['role'],
+                    'simpleUserId': user_data['simpleUserId'],
+                    'status': user_data['status']
+                }
+            })
+    
+    except Exception as e:
+        print(f"❌ Firebase login error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'OAuth login failed: {str(e)}'}), 500

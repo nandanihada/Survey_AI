@@ -273,8 +273,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
       <div className="w-full max-w-[85%] sm:max-w-4xl lg:w-[70%]">
         {/* Brand */}
         <div className="text-center mb-8 sm:mb-10">
-          <div className="inline-flex justify-center items-center p-3 mb-5 rounded-[2rem] bg-gradient-to-br from-red-500/10 to-orange-500/10 border border-red-500/10 shadow-[0_0_40px_rgba(239,68,68,0.15)] relative">
-            <div className="absolute inset-0 bg-red-400/20 blur-2xl rounded-full -z-10" />
+          <div className="inline-flex justify-center items-center p-3 mb-5 rounded-[2rem] relative">
             <img src="/logo.png" alt="Mascot" className="w-10 h-10 sm:w-12 sm:h-12 object-contain relative z-10 logo-animated hover:scale-110 hover:-rotate-6 transition-transform duration-300" />
           </div>
           <h1 className={`text-[2rem] sm:text-[2.5rem] font-extrabold mb-4 tracking-tight leading-tight ${isDarkMode ? 'text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400' : 'text-transparent bg-clip-text bg-gradient-to-br from-slate-900 to-slate-600'}`} style={{ fontFamily: "'Outfit', sans-serif" }}>
