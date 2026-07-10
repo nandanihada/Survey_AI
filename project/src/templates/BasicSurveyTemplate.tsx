@@ -383,6 +383,8 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           <p className="pepper-question-desc">{question.questionDescription}</p>
         )}
 
+        <div className="pepper-question-separator"></div>
+
         {question.answerDescription && (
           <div className="pepper-answer-hint">{question.answerDescription}</div>
         )}
@@ -487,7 +489,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
       {/* Powered by */}
       <div className="pepper-powered">
-        Powered by <a href="#">PepperAds</a>
+        Powered by <a href="#">Pepperwahl</a>
       </div>
 
       {/* Redirecting Spinner Overlay */}

@@ -401,7 +401,7 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
 
       {/* Powered by */}
       <div className="cf-powered">
-        Powered by <a href="#">PepperAds</a>
+        Powered by <a href="#">Pepperwahl</a>
       </div>
 
       {/* Success Overlay */}

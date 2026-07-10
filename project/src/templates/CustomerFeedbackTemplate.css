@@ -23,11 +23,11 @@
 /* ── Container ── */
 .cf-survey-container {
   min-height: 100vh;
-  background: #F0F7F7;
+  background: #FAF8F5;
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 40px 20px;
+  padding: 32px 20px;
   font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
   position: relative;
   overflow-x: hidden;
@@ -38,7 +38,7 @@
 /* ── Wrapper for card + pin ── */
 .cf-card-wrapper {
   position: relative;
-  max-width: 660px;
+  max-width: 780px;
   width: 100%;
 }
 
@@ -63,7 +63,7 @@
 /* ── Paper Card ── */
 .cf-card {
   background: var(--cf-paper);
-  max-width: 660px;
+  max-width: 780px;
   width: 100%;
   position: relative;
   overflow: visible;
@@ -585,9 +585,15 @@
 }
 
 /* ── Responsive ── */
+@media (max-width: 840px) {
+  .cf-card-wrapper { max-width: 100%; }
+  .cf-card { max-width: 100%; }
+}
+
 @media (max-width: 640px) {
   .cf-survey-container { padding: 16px 8px; }
   .cf-card-wrapper { max-width: 100%; }
+  .cf-card { border-radius: 12px; }
   .cf-header { padding: 28px 20px 20px; }
   .cf-brand-icon { width: 36px; height: 36px; }
   .cf-title { font-size: 20px; }
@@ -608,7 +614,7 @@
   .cf-scale-point { width: 34px; height: 34px; font-size: 12px; }
   .cf-scale-track { gap: 4px; }
   .cf-scale-labels { font-size: 10px; }
-  .cf-pin { width: 32px; height: 32px; top: -16px; left: 16px; }
+  .cf-pin { width: 28px; height: 28px; top: -14px; left: 16px; }
   .cf-success-card { padding: 32px 24px; margin: 0 12px; }
   .cf-success-card h2 { font-size: 20px; }
   .cf-success-card p { font-size: 13px; }
