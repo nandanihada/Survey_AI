@@ -30,7 +30,7 @@ export const generateSurvey = async (data: SurveyRequest) => {
   const requestData = {
     ...data,
     response_type: data.response_type || 'multiple_choice',
-    question_count: data.question_count || (data.template_type === 'custom' ? 20 : 10)
+    question_count: data.question_count || 10
   };
   
   console.log('Sending request to backend:', requestData);

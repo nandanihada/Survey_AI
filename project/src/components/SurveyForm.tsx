@@ -3,6 +3,9 @@ import { generateSurvey, parseImage } from '../utils/api';
 import { Loader2, Sparkles, ImagePlus, Check, X, ArrowRight, Lightbulb, ChevronDown, Eye, Share2, BarChart2, Zap, Lock, Mail, ChevronRight, Hash, Edit3 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { generateSurveyLink } from '../utils/surveyLinkUtils';
+import { parsePrompt as parsePromptFn, getClarificationNeeds as getClarificationNeedsFn, ClarificationNeeds as ClarificationNeedsType } from '../utils/promptParser';
+import SurveyClarification, { ClarificationAnswers as ClarificationAnswersType } from './SurveyClarification';
+import SearchLoader from './SearchLoader';
 
 interface Question {
   id: string;
@@ -49,6 +52,10 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
   const [password, setPassword] = useState('');
   const [isLoginMode, setIsLoginMode] = useState(false);
   const suggestionsRef = useRef<HTMLDivElement>(null);
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [showQsDropdown, setShowQsDropdown] = useState(false);
+  const [showClarification, setShowClarification] = useState(false);
+  const [clarificationNeeds, setClarificationNeeds] = useState<ClarificationNeedsType | null>(null);
 
   const [wizardStep, setWizardStep] = useState(-1);
   const [wizardAnswers, setWizardAnswers] = useState<Record<number, string>>({});
@@ -85,17 +92,90 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
 
 
   const SUGGESTION_PROMPTS = [
-    { emoji: '⭐', label: 'Customer Feedback', prompt: 'Customer satisfaction survey to understand how happy our customers are with our product quality, support experience, and overall service' },
-    { emoji: '👥', label: 'Employee Check-in', prompt: 'Employee engagement and well-being check-in covering job satisfaction, work-life balance, team collaboration, and career growth' },
-    { emoji: '🛒', label: 'Product Experience', prompt: 'Product feedback survey about usability, features, pricing satisfaction, and what improvements users would like to see' },
-    { emoji: '🎓', label: 'Training Feedback', prompt: 'Post-training feedback survey evaluating content quality, instructor effectiveness, practical applicability, and suggestions for improvement' },
-    { emoji: '🌐', label: 'Website Experience', prompt: 'Website user experience survey covering navigation ease, page load speed, content relevance, design appeal, and conversion barriers' },
-    { emoji: '🚀', label: 'Onboarding Review', prompt: 'New user onboarding experience survey about setup ease, documentation clarity, time to first value, and support quality' },
-    { emoji: '🎪', label: 'Event Feedback', prompt: 'Post-event feedback survey covering event organization, speaker quality, networking opportunities, venue satisfaction, and likelihood to attend again' },
-    { emoji: '🤝', label: 'Team Collaboration', prompt: 'Team collaboration and communication survey about meeting effectiveness, tool satisfaction, cross-team coordination, and remote work experience' },
-    { emoji: '📱', label: 'App Usability', prompt: 'Mobile app usability survey covering interface design, feature discoverability, performance, crash frequency, and feature requests' },
-    { emoji: '🏥', label: 'Service Cancellation', prompt: 'Service cancellation feedback survey to understand reasons for leaving, what could have been done differently, and likelihood of returning' },
+    { icon: '/icons/star.svg', gradient: 'linear-gradient(135deg, #ff7e5f, #feb47b)', label: 'Customer Feedback', prompt: 'Customer satisfaction survey to understand how happy our customers are with our product quality, support experience, and overall service' },
+    { icon: '/icons/users.svg', gradient: 'linear-gradient(135deg, #6a11cb, #2575fc)', label: 'Employee Check-in', prompt: 'Employee engagement and well-being check-in covering job satisfaction, work-life balance, team collaboration, and career growth' },
+    { icon: '/icons/cart.svg', gradient: 'linear-gradient(135deg, #00c6ff, #0072ff)', label: 'Product Experience', prompt: 'Product feedback survey about usability, features, pricing satisfaction, and what improvements users would like to see' },
+    { icon: '/icons/graduation.svg', gradient: 'linear-gradient(135deg, #f857a6, #ff5858)', label: 'Training Feedback', prompt: 'Post-training feedback survey evaluating content quality, instructor effectiveness, practical applicability, and suggestions for improvement' },
+    { icon: '/icons/globe.svg', gradient: 'linear-gradient(135deg, #11998e, #38ef7d)', label: 'Website Experience', prompt: 'Website user experience survey covering navigation ease, page load speed, content relevance, design appeal, and conversion barriers' },
+    { icon: '/icons/rocket.svg', gradient: 'linear-gradient(135deg, #fc5c7d, #6a82fb)', label: 'Onboarding Review', prompt: 'New user onboarding experience survey about setup ease, documentation clarity, time to first value, and support quality' },
+    { icon: '/icons/calendar.svg', gradient: 'linear-gradient(135deg, #f2994a, #f2c94c)', label: 'Event Feedback', prompt: 'Post-event feedback survey covering event organization, speaker quality, networking opportunities, venue satisfaction, and likelihood to attend again' },
+    { icon: '/icons/handshake.svg', gradient: 'linear-gradient(135deg, #a1c4fd, #c2e9fb)', label: 'Team Collaboration', prompt: 'Team collaboration and communication survey about meeting effectiveness, tool satisfaction, cross-team coordination, and remote work experience' },
+    { icon: '/icons/phone.svg', gradient: 'linear-gradient(135deg, #667eea, #764ba2)', label: 'App Usability', prompt: 'Mobile app usability survey covering interface design, feature discoverability, performance, crash frequency, and feature requests' },
+    { icon: '/icons/heart.svg', gradient: 'linear-gradient(135deg, #ff512f, #dd2476)', label: 'Service Cancellation', prompt: 'Service cancellation feedback survey to understand reasons for leaving, what could have been done differently, and likelihood of returning' },
   ];
+
+  const SUB_PROMPTS: Record<string, string[]> = {
+    'Customer Feedback': [
+      'Post-purchase satisfaction survey',
+      'Customer support experience rating',
+      'Product quality & value for money',
+      'Net Promoter Score (NPS) survey',
+      'Customer loyalty & retention feedback',
+    ],
+    'Employee Check-in': [
+      'Weekly mood & wellness pulse check',
+      'Manager effectiveness feedback',
+      'Work-life balance assessment',
+      'Career growth & development needs',
+      'Workplace culture & belonging survey',
+    ],
+    'Product Experience': [
+      'Feature usage & satisfaction survey',
+      'Pricing perception & willingness to pay',
+      'Competitor comparison feedback',
+      'New feature request prioritization',
+      'Onboarding & first-use experience',
+    ],
+    'Training Feedback': [
+      'Instructor & content quality rating',
+      'Knowledge retention assessment',
+      'Training format preference survey',
+      'Skill gap identification quiz',
+      'Post-workshop action plan check-in',
+    ],
+    'Website Experience': [
+      'Navigation & findability test',
+      'Checkout flow friction survey',
+      'Content relevance & clarity feedback',
+      'Mobile vs desktop experience comparison',
+      'Page speed & performance perception',
+    ],
+    'Onboarding Review': [
+      'First-week experience survey',
+      'Documentation clarity rating',
+      'Setup & integration ease check',
+      'Time-to-value measurement',
+      'Onboarding support satisfaction',
+    ],
+    'Event Feedback': [
+      'Speaker & session quality rating',
+      'Networking opportunity feedback',
+      'Venue & logistics satisfaction',
+      'Content relevance to my role',
+      'Future topic & format preferences',
+    ],
+    'Team Collaboration': [
+      'Meeting effectiveness & frequency review',
+      'Communication tools satisfaction',
+      'Cross-team coordination & blockers',
+      'Remote vs in-office collaboration',
+      'Knowledge sharing & documentation quality',
+    ],
+    'App Usability': [
+      'UI navigation & intuitiveness test',
+      'Feature discoverability survey',
+      'Performance & crash reporting',
+      'Accessibility & inclusive design audit',
+      'Push notification preference survey',
+    ],
+    'Service Cancellation': [
+      'Primary reason for leaving survey',
+      'Price sensitivity & competitor comparison',
+      'Feature gap that caused churn',
+      'Win-back offer effectiveness test',
+      'Last-chance retention feedback',
+    ],
+  };
 
   // Close suggestions popup on outside click
   useEffect(() => {
@@ -108,6 +188,19 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
     if (showSuggestions) document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showSuggestions]);
+
+  // Close Qs dropdown on outside click
+  const qsDropdownRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!showQsDropdown) return;
+    const handler = (e: MouseEvent) => {
+      if (qsDropdownRef.current && !qsDropdownRef.current.contains(e.target as Node)) {
+        setShowQsDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showQsDropdown]);
 
   const handleSelectSuggestion = (suggestion: typeof SUGGESTION_PROMPTS[0]) => {
     setSelectedSuggestion({ label: suggestion.label, prompt: suggestion.prompt });
@@ -152,7 +245,49 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
     }
     setError('');
     setShowMoreOptions(false);
-    setWizardStep(0);
+
+    // Parse prompt to see what's clear and what needs clarification
+    const promptText = selectedSuggestion
+      ? (surveyTopic.trim() ? `${selectedSuggestion.prompt}. Additionally: ${surveyTopic.trim()}` : selectedSuggestion.prompt)
+      : surveyTopic.trim();
+
+    const parsed = parsePromptFn(promptText, questionCount);
+    const needs = getClarificationNeedsFn(parsed, questionCount !== 10);
+
+    // Check if ANYTHING needs clarification
+    const needsAnything = needs.needsTopic || needs.needsQuestionCount || needs.needsAudience || needs.needsDataCollection;
+
+    if (!needsAnything) {
+      // Everything is clear from the prompt — go straight to generation
+      const directAnswers: Record<number, string> = {};
+      if (parsed.audience) directAnswers[1] = parsed.audience;
+      if (parsed.dataCollection) directAnswers[2] = parsed.dataCollection;
+      handleFinalGenerateSurvey(directAnswers, {
+        questionCount: parsed.questionCount || questionCount,
+        audience: parsed.audience || undefined,
+        dataCollection: parsed.dataCollection || 'anonymous',
+      });
+    } else {
+      // Show clarification for what's missing
+      setShowClarification(true);
+      setClarificationNeeds(needs);
+    }
+  };
+
+  const handleClarificationSubmit = (answers: ClarificationAnswersType) => {
+    setShowClarification(false);
+    // Merge answers and generate
+    const merged: Record<number, string> = {};
+    if (answers.audience) merged[1] = answers.audience;
+    if (answers.dataCollection) merged[2] = answers.dataCollection;
+    if (answers.questionCount) setQuestionCount(answers.questionCount);
+    // If user provided a custom topic, override whatever was there
+    if (answers.topic) setSurveyTopic(answers.topic);
+    handleFinalGenerateSurvey(merged, answers);
+  };
+
+  const handleClarificationCancel = () => {
+    setShowClarification(false);
   };
 
   const handleNextStep = (answer?: string) => {
@@ -176,32 +311,37 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
     }
   };
 
-  const handleFinalGenerateSurvey = useCallback(async (finalAnswers: Record<number, string>) => {
+  const handleFinalGenerateSurvey = useCallback(async (finalAnswers: Record<number, string>, clarificationAnswers?: ClarificationAnswersType) => {
     setIsLoading(true); setError(''); setLoadingPhase(0);
+    setWizardStep(99);
     const phaseInterval = setInterval(() => setLoadingPhase(p => p < 3 ? p + 1 : p), 2000);
     try {
       // Merge user prompt with hidden suggestion context
-      let finalPrompt = surveyTopic.trim();
+      // Use clarification topic if provided (overrides vague prompt)
+      let finalPrompt = (clarificationAnswers?.topic || surveyTopic).trim();
       if (selectedSuggestion) {
         finalPrompt = finalPrompt
           ? `${selectedSuggestion.prompt}. Additionally: ${finalPrompt}`
           : selectedSuggestion.prompt;
       }
       
-      // Append gathered context
-      if (finalAnswers[0] && finalAnswers[0] !== 'Skip') finalPrompt += `\nPurpose: ${finalAnswers[0]}`;
+      // Append gathered context from clarification
+      if (clarificationAnswers?.audience) finalPrompt += `\nAudience: ${clarificationAnswers.audience}`;
+      if (clarificationAnswers?.dataCollection) finalPrompt += `\nData Collection: ${clarificationAnswers.dataCollection}`;
       if (finalAnswers[1] && finalAnswers[1] !== 'Skip') finalPrompt += `\nAudience: ${finalAnswers[1]}`;
       if (finalAnswers[2] && finalAnswers[2] !== 'Skip') finalPrompt += `\nData Collection: ${finalAnswers[2]}`;
-      if (finalAnswers[3] && finalAnswers[3] !== 'Skip') finalPrompt += `\nSurvey Depth: ${finalAnswers[3]}`;
+
+      const finalCount = clarificationAnswers?.questionCount || questionCount;
 
       const result = await generateSurvey({
-        prompt: finalPrompt, template_type: 'custom', question_count: questionCount,
+        prompt: finalPrompt, template_type: 'custom', question_count: finalCount,
         image_context: imageContext || undefined,
         theme: { font: 'DM Sans, sans-serif', intent: 'professional', colors: { primary: '#E8503A', background: '#F7F7FB', text: '#2D3142' } },
-        topic: surveyTopic.trim() || selectedSuggestion?.label || '',
+        topic: (clarificationAnswers?.topic || surveyTopic).trim() || selectedSuggestion?.label || '',
         wizard_answers: { 
-          type: finalAnswers[0],
-          audience: finalAnswers[1]
+          type: clarificationAnswers?.audience || finalAnswers[0],
+          audience: clarificationAnswers?.audience || finalAnswers[1],
+          collection: clarificationAnswers?.dataCollection || finalAnswers[2],
         }
       });
       clearInterval(phaseInterval);
@@ -216,6 +356,23 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
   }, [surveyTopic, questionCount, imageContext, selectedSuggestion]);
 
   const getQuestionText = (q: Question) => q.question || q.text || 'Untitled Question';
+
+  const handleCloseResult = () => {
+    setShowResultModal(false);
+    // Reset all state to fresh
+    setSurveyTopic('');
+    setSelectedSuggestion(null);
+    setExpandedCategory(null);
+    setWizardStep(-1);
+    setWizardAnswers({});
+    setGeneratedSurvey(null);
+    setShowClarification(false);
+    setClarificationNeeds(null);
+    setQuestionCount(10);
+    setImagePreview(null);
+    setImageContext('');
+    setError('');
+  };
 
   const handleShareLink = async () => {
     if (generatedSurvey) {
@@ -269,187 +426,142 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] px-3 sm:px-4">
-      <div className="w-full max-w-[85%] sm:max-w-4xl lg:w-[70%]">
-        {/* Brand */}
-        <div className="text-center mb-8 sm:mb-10">
-          <div className="inline-flex justify-center items-center p-3 mb-5 rounded-[2rem] relative">
-            <img src="/logo.png" alt="Mascot" className="w-10 h-10 sm:w-12 sm:h-12 object-contain relative z-10 logo-animated hover:scale-110 hover:-rotate-6 transition-transform duration-300" />
-          </div>
-          <h1 className={`text-[2rem] sm:text-[2.5rem] font-extrabold mb-4 tracking-tight leading-tight ${isDarkMode ? 'text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400' : 'text-transparent bg-clip-text bg-gradient-to-br from-slate-900 to-slate-600'}`} style={{ fontFamily: "'Outfit', sans-serif" }}>
-            Design your ideal survey
-          </h1>
-          <p className={`text-[15px] sm:text-base font-medium max-w-sm mx-auto ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+    <>
+    {/* Full-page Gooey Loader */}
+    {isLoading && <SearchLoader message={loadingMessages[loadingPhase]} />}
 
-          </p>
+    <div className="flex flex-col items-center justify-center min-h-[70vh] px-3 sm:px-4 pt-6 sm:pt-10">
+      <div className="w-full max-w-[90%] sm:max-w-xl lg:max-w-2xl">
+        {/* Header */}
+        <div className="text-center mb-6 sm:mb-8">
+          <h1
+            className={`text-[1.4rem] sm:text-[1.7rem] lg:text-[2rem] font-semibold tracking-[-0.01em] leading-[1.3] ${isDarkMode ? 'text-white' : 'text-slate-800'}`}
+            style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+          >
+            What would you like to <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-orange-400">create</span> today?
+          </h1>
         </div>
 
-        {wizardStep === -1 ? (
-        <div className={`relative rounded-[2rem] p-2 sm:p-2.5 transition-all duration-500 overflow-hidden group ${isDarkMode
-            ? 'bg-gradient-to-b from-slate-800/90 to-slate-900/90 border border-slate-700/60 shadow-[0_16px_40px_rgba(0,0,0,0.4)] focus-within:shadow-[0_16px_60px_rgba(239,68,68,0.15)] focus-within:border-red-500/40'
-            : 'bg-white border border-stone-200 shadow-[0_16px_40px_rgba(0,0,0,0.06)] focus-within:shadow-[0_16px_60px_rgba(239,68,68,0.1)] focus-within:border-red-400/40 focus-within:ring-4 focus-within:ring-red-500/5'
+        {wizardStep === -1 && (
+        <>
+        {/* ── Clarification Panel (above prompt box) ── */}
+        {showClarification && clarificationNeeds && (
+          <div className="mb-4">
+            <SurveyClarification
+              needs={clarificationNeeds}
+              onSubmit={handleClarificationSubmit}
+              onCancel={handleClarificationCancel}
+              isDarkMode={isDarkMode}
+            />
+          </div>
+        )}
+
+        <div className={`relative rounded-2xl p-1.5 sm:p-2 transition-all duration-500 overflow-visible group ${showClarification ? 'clarification-prompt-down' : ''} ${isDarkMode
+            ? 'bg-gradient-to-b from-slate-800/90 to-slate-900/90 border border-slate-700/60 shadow-[0_8px_24px_rgba(0,0,0,0.3)] focus-within:shadow-[0_12px_40px_rgba(239,68,68,0.1)] focus-within:border-red-500/40'
+            : 'bg-white border border-stone-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.05)] focus-within:shadow-[0_12px_40px_rgba(239,68,68,0.06)] focus-within:border-red-400/40 focus-within:ring-2 focus-within:ring-red-500/[0.04]'
           }`}>
-          {/* Animated glow background */}
-          <div className="absolute inset-0 bg-gradient-to-br from-red-500/[0.03] to-orange-500/[0.03] opacity-0 group-focus-within:opacity-100 transition-opacity duration-700 pointer-events-none" />
 
           {imagePreview && (
-            <div className="relative mx-3 mt-3 mb-2">
-              <div className={`relative rounded-2xl overflow-hidden border ${isDarkMode ? 'border-slate-600' : 'border-stone-200'}`}>
-                <img src={imagePreview} alt="Uploaded" className="w-full max-h-24 sm:max-h-32 object-cover" />
-                <button onClick={removeImage} className="absolute top-2 right-2 p-1.5 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-black/80 transition-all"><X size={12} /></button>
+            <div className="relative mx-2 mt-2 mb-1">
+              <div className={`relative rounded-xl overflow-hidden border ${isDarkMode ? 'border-slate-600' : 'border-stone-200'}`}>
+                <img src={imagePreview} alt="Uploaded" className="w-full max-h-20 object-cover" />
+                <button onClick={removeImage} className="absolute top-1.5 right-1.5 p-1 bg-black/60 rounded-full text-white hover:bg-black/80"><X size={10} /></button>
                 {isParsingImage && (
-                  <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center">
-                    <div className="flex items-center gap-2 text-white text-xs bg-black/60 px-3 py-1.5 rounded-full"><Loader2 className="animate-spin" size={12} /> Extracting concepts...</div>
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                    <div className="flex items-center gap-1.5 text-white text-[10px] bg-black/60 px-2 py-1 rounded-full"><Loader2 className="animate-spin" size={10} /> Extracting...</div>
                   </div>
                 )}
                 {imageContext && !isParsingImage && (
-                  <div className="absolute bottom-2 left-2 flex items-center gap-1.5 text-[10px] bg-green-500 shadow-lg text-white px-2.5 py-1 rounded-full"><Check size={10} strokeWidth={3} /> Analyzed successfully</div>
+                  <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1 text-[9px] bg-green-500 text-white px-2 py-0.5 rounded-full"><Check size={9} /> Done</div>
                 )}
               </div>
             </div>
           )}
           {selectedSuggestion && (
-            <div className="mx-3 mt-3 mb-1">
-              <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] sm:text-xs font-semibold shadow-sm ${isDarkMode ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20' : 'bg-gradient-to-r from-amber-50 to-orange-50 text-amber-800 border border-amber-200'
+            <div className="mx-2.5 mt-2 mb-0.5">
+              <div className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] sm:text-[11px] font-semibold ${isDarkMode ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20' : 'bg-amber-50 text-amber-700 border border-amber-200'
                 }`}>
-                <Lightbulb size={13} className="text-amber-500" />
+                <Lightbulb size={11} className="text-amber-500" />
                 <span>{selectedSuggestion.label}</span>
-                <button onClick={() => setSelectedSuggestion(null)} className={`ml-1 p-1 rounded-md transition-colors ${isDarkMode ? 'hover:bg-amber-500/20' : 'hover:bg-amber-200'}`}>
-                  <X size={12} />
+                <button onClick={() => { setSelectedSuggestion(null); setExpandedCategory(null); setSurveyTopic(''); }} className={`ml-0.5 p-0.5 rounded transition-colors ${isDarkMode ? 'hover:bg-amber-500/20' : 'hover:bg-amber-200'}`}>
+                  <X size={10} />
                 </button>
               </div>
             </div>
           )}
           <textarea
             value={surveyTopic} onChange={(e) => setSurveyTopic(e.target.value)}
-            placeholder="Type your topic, ask a question, or paste in some notes..."
-            className={`relative w-full px-4 sm:px-5 py-4 sm:py-5 text-[15px] sm:text-base rounded-[1.5rem] resize-none border-0 focus:outline-none focus:ring-0 z-10 font-medium ${isDarkMode ? 'bg-transparent text-white placeholder-slate-500' : 'bg-transparent text-slate-800 placeholder-slate-400'
+            placeholder="Describe your survey topic..."
+            className={`relative w-full px-3.5 sm:px-4 py-3 text-[14px] sm:text-[15px] rounded-xl resize-none border-0 focus:outline-none focus:ring-0 z-10 font-medium ${isDarkMode ? 'bg-transparent text-white placeholder-slate-500' : 'bg-transparent text-slate-800 placeholder-slate-400'
               }`}
-            rows={3}
+            rows={2}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && (surveyTopic.trim() || selectedSuggestion)) { e.preventDefault(); handleStartWizard(); } }}
           />
-          <div className="relative z-10 flex items-center justify-between px-3 sm:px-4 pb-3 sm:pb-4 pt-1">
-            <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="relative z-10 flex items-center justify-between px-2.5 sm:px-3 pb-2.5 pt-0.5">
+            <div className="flex items-center gap-1.5">
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
               <button onClick={() => fileInputRef.current?.click()} disabled={isParsingImage}
-                className={`p-1.5 sm:p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-stone-100 text-stone-400'} disabled:opacity-40`}>
-                <ImagePlus size={15} />
+                className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-stone-100 text-stone-400'} disabled:opacity-40`}>
+                <ImagePlus size={14} />
               </button>
-              <div className="relative" ref={suggestionsRef}>
+              {/* Custom Question Count Dropdown */}
+              <div className="relative" ref={qsDropdownRef}>
                 <button
-                  onClick={() => { setShowSuggestions(!showSuggestions); setShowAllSuggestions(false); }}
-                  className={`flex items-center gap-1 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-medium transition-all ${showSuggestions
-                      ? 'bg-gradient-to-r from-amber-100 to-orange-100 text-amber-700 border border-amber-200 shadow-sm'
-                      : isDarkMode
-                        ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                        : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                    }`}
+                  onClick={() => setShowQsDropdown(!showQsDropdown)}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-semibold transition-all ${
+                    showQsDropdown
+                      ? isDarkMode ? 'bg-slate-600 text-white' : 'bg-stone-200 text-stone-800'
+                      : isDarkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-stone-100 text-stone-600 hover:bg-stone-150'
+                  }`}
                 >
-                  <Lightbulb size={12} />
-                  <span className="hidden sm:inline">Suggestions</span>
+                  <Hash size={10} />
+                  <span>{questionCount} Qs</span>
+                  <ChevronDown size={9} className={`transition-transform ${showQsDropdown ? 'rotate-180' : ''}`} />
                 </button>
-
-                {/* Suggestions Popup */}
-                {showSuggestions && (
+                {showQsDropdown && (
                   <div
-                    className={`absolute bottom-full left-0 mb-2 w-72 sm:w-80 rounded-2xl overflow-hidden z-50 ${isDarkMode
-                        ? 'bg-slate-800 border border-slate-600'
-                        : 'bg-white border border-stone-200'
-                      }`}
+                    className={`absolute top-full left-0 mt-1.5 rounded-xl overflow-hidden z-50 min-w-[90px] ${
+                      isDarkMode ? 'bg-slate-800 border border-slate-600' : 'bg-white border border-stone-200'
+                    }`}
                     style={{
-                      animation: 'sfSuggestIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-                      boxShadow: isDarkMode
-                        ? '0 16px 48px rgba(0,0,0,0.4)'
-                        : '0 16px 48px rgba(0,0,0,0.1), 0 0 0 1px rgba(0,0,0,0.03)',
+                      animation: 'sfSuggestIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                      boxShadow: isDarkMode ? '0 8px 24px rgba(0,0,0,0.4)' : '0 8px 24px rgba(0,0,0,0.1)',
                     }}
                   >
-                    <div className={`px-3.5 py-2.5 border-b ${isDarkMode ? 'border-slate-700' : 'border-stone-100'}`}>
-                      <p className={`text-[11px] sm:text-xs font-semibold ${isDarkMode ? 'text-white' : 'text-stone-700'}`}>
-                        💡 Quick suggestions
-                      </p>
-                      <p className={`text-[9px] sm:text-[10px] mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-stone-400'}`}>
-                        Pick one to get started instantly
-                      </p>
-                    </div>
-                    <div className="p-2 space-y-1 max-h-64 overflow-y-auto">
-                      {(showAllSuggestions ? SUGGESTION_PROMPTS : SUGGESTION_PROMPTS.slice(0, 4)).map((s, i) => (
-                        <button
-                          key={i}
-                          onClick={() => handleSelectSuggestion(s)}
-                          className={`w-full text-left px-3 py-2 rounded-xl flex items-center gap-2.5 transition-all group ${isDarkMode
-                              ? 'hover:bg-slate-700/70 active:bg-slate-600'
-                              : 'hover:bg-stone-50 active:bg-stone-100'
-                            }`}
-                          style={{ animation: `sfFadeUp 0.2s ${i * 0.04}s ease-out both` }}
-                        >
-                          <span className="text-base flex-shrink-0">{s.emoji}</span>
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-[11px] sm:text-xs font-medium ${isDarkMode ? 'text-white' : 'text-stone-700'}`}>
-                              {s.label}
-                            </p>
-                            <p className={`text-[9px] sm:text-[10px] truncate ${isDarkMode ? 'text-slate-400' : 'text-stone-400'}`}>
-                              {s.prompt.slice(0, 65)}...
-                            </p>
-                          </div>
-                          <ArrowRight size={12} className={`flex-shrink-0 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all ${isDarkMode ? 'text-slate-400' : 'text-stone-400'}`} />
-                        </button>
-                      ))}
-                    </div>
-                    {!showAllSuggestions && (
-                      <div className={`px-2 pb-2`}>
-                        <button
-                          onClick={() => setShowAllSuggestions(true)}
-                          className={`w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-[10px] sm:text-xs font-medium transition-all ${isDarkMode
-                              ? 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'
-                              : 'bg-stone-50 text-stone-500 hover:bg-stone-100'
-                            }`}
-                        >
-                          <span>Show more</span>
-                          <ChevronDown size={12} />
-                        </button>
-                      </div>
-                    )}
+                    {[5, 10, 15, 20, 25, 30, 50].map(n => (
+                      <button
+                        key={n}
+                        onClick={() => { setQuestionCount(n); setShowQsDropdown(false); }}
+                        className={`w-full text-left px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                          questionCount === n
+                            ? isDarkMode ? 'bg-red-500/20 text-red-300' : 'bg-red-50 text-red-600'
+                            : isDarkMode ? 'text-slate-300 hover:bg-slate-700' : 'text-stone-600 hover:bg-stone-50'
+                        }`}
+                      >
+                        {n} Qs
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
-              <div className={`flex items-center gap-1 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-medium ${isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-stone-100 text-stone-600'
-                }`}>
-                <Hash size={11} />
-                <select value={questionCount} onChange={(e) => setQuestionCount(parseInt(e.target.value))}
-                  className={`bg-transparent border-0 text-[10px] sm:text-xs font-medium focus:outline-none cursor-pointer ${isDarkMode ? 'text-slate-300' : 'text-stone-600'}`}>
-                  {[5, 10, 15, 20, 25, 30, 50].map(n => <option key={n} value={n}>{n} Qs</option>)}
-                </select>
-              </div>
             </div>
             <button onClick={handleStartWizard} disabled={(!surveyTopic.trim() && !imageContext && !selectedSuggestion)}
-              className="p-2 sm:p-2.5 rounded-xl bg-gradient-to-r from-red-500 to-orange-400 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-[0_4px_16px_rgba(239,68,68,0.3)] transition-all">
-              <ChevronRight size={15} />
+              className="p-2 rounded-xl bg-gradient-to-r from-red-500 to-orange-400 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-[0_4px_12px_rgba(239,68,68,0.3)] transition-all">
+              <ArrowRight size={14} />
             </button>
           </div>
         </div>
-        ) : (
+        </>
+        )}
+
+        {wizardStep !== -1 && (
           <div className={`relative rounded-[2rem] p-6 sm:p-8 md:p-10 transition-all duration-500 flex flex-col gap-6 ${
              isDarkMode 
               ? 'bg-slate-900 border border-slate-700/60 shadow-[0_16px_40px_rgba(0,0,0,0.4)]'
               : 'bg-white border border-stone-200 shadow-[0_16px_40px_rgba(0,0,0,0.06)] ring-1 ring-black/5'
           }`}>
               {/* Generation Loading State */}
-              {wizardStep === 99 && isLoading && (
-                 <div className="flex flex-col items-center justify-center py-10 animate-in fade-in zoom-in-95 duration-500">
-                    <div className="relative mb-8">
-                       <div className="absolute inset-0 bg-red-500 blur-2xl opacity-20 rounded-full animate-pulse" />
-                       <div className={`w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center relative z-10 bg-transparent`}>
-                          <img src="/logo.png" alt="AI" className={`w-full h-full object-contain animate-bounce drop-shadow-md ${isDarkMode ? 'brightness-200 contrast-125 mix-blend-screen' : 'mix-blend-multiply'}`} style={{ animationDuration: '2s' }} />
-                       </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                       <Loader2 className="animate-spin text-red-500" size={18} />
-                       <span className={`text-[15px] sm:text-base font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
-                          {loadingMessages[loadingPhase]}
-                       </span>
-                    </div>
-                 </div>
-              )}
+              {wizardStep === 99 && isLoading && null}
 
               {/* Guided Step Area */}
               {wizardStep < WIZARD_STEPS.length && wizardStep !== 99 && (
@@ -522,118 +634,176 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
         )}
 
         {error && <div className="mt-4 sm:mt-6 bg-red-100/50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-[13px] sm:text-[14px] font-medium text-center">{error}</div>}
+
+        {/* ── Auto-scrolling Prompt Suggestion Slider ── */}
+        {wizardStep === -1 && !expandedCategory && !showClarification && (
+          <div className="mt-8 sm:mt-10" style={{ animation: 'sfFadeUp 0.6s 0.2s ease-out both' }}>
+            <div
+              className="prompt-slider"
+              style={{ '--card-width': '220px', '--card-height': '120px', '--quantity': SUGGESTION_PROMPTS.length, '--duration': '25s' } as React.CSSProperties}
+            >
+              <div className="prompt-slider__track">
+                {SUGGESTION_PROMPTS.map((s, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      setExpandedCategory(s.label);
+                      setSelectedSuggestion({ label: s.label, prompt: s.prompt });
+                      setSurveyTopic(s.prompt);
+                    }}
+                    className="prompt-slider__item"
+                    style={{ '--position': i + 1, background: s.gradient } as React.CSSProperties}
+                  >
+                    <div className="prompt-slider__icon">
+                      <img src={s.icon} alt={s.label} />
+                    </div>
+                    <p className="prompt-slider__title">{s.label}</p>
+                    <p className="prompt-slider__desc">{s.prompt.slice(0, 50)}...</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Expanded Sub-Prompts for Selected Category ── */}
+        {wizardStep === -1 && expandedCategory && !showClarification && (
+          <div className="mt-6 sm:mt-8" style={{ animation: 'sfSubPromptsIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both' }}>
+            <div className="flex items-center justify-between mb-4 px-1">
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="w-8 h-8 rounded-xl flex items-center justify-center"
+                  style={{ background: SUGGESTION_PROMPTS.find(s => s.label === expandedCategory)?.gradient || '#666' }}
+                >
+                  <img
+                    src={SUGGESTION_PROMPTS.find(s => s.label === expandedCategory)?.icon || ''}
+                    alt=""
+                    className="w-4 h-4 object-contain"
+                    style={{ filter: 'brightness(0) invert(1)' }}
+                  />
+                </div>
+                <span className={`text-sm sm:text-base font-semibold ${isDarkMode ? 'text-white' : 'text-slate-800'}`} style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+                  {expandedCategory}
+                </span>
+                <span className={`text-[11px] ${isDarkMode ? 'text-slate-500' : 'text-stone-400'}`}>— or try a specific angle:</span>
+              </div>
+              <button
+                onClick={() => {
+                  setExpandedCategory(null);
+                  setSelectedSuggestion(null);
+                  setSurveyTopic('');
+                }}
+                className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-all ${isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-700' : 'text-stone-500 hover:text-stone-800 hover:bg-stone-100'}`}
+              >
+                ← Back
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(SUB_PROMPTS[expandedCategory] || []).map((subPrompt, i) => (
+                <button
+                  key={i}
+                  onClick={() => {
+                    const fullPrompt = `${expandedCategory}: ${subPrompt}`;
+                    setSelectedSuggestion({ label: expandedCategory, prompt: fullPrompt });
+                    setSurveyTopic(fullPrompt);
+                  }}
+                  className={`sub-prompt-card px-4 py-2.5 rounded-full border text-[12px] sm:text-[13px] font-medium transition-all duration-200 hover:scale-[1.03] active:scale-[0.97] ${
+                    isDarkMode
+                      ? 'bg-slate-800/70 border-slate-700/50 text-slate-300 hover:border-slate-500 hover:bg-slate-800 hover:text-white'
+                      : 'bg-white border-stone-200/80 text-slate-600 hover:border-red-300 hover:text-slate-900 hover:shadow-md hover:shadow-red-500/5'
+                  }`}
+                  style={{ animation: `sfSubCardIn 0.4s ${i * 0.07}s cubic-bezier(0.34, 1.56, 0.64, 1) both` }}
+                >
+                  {subPrompt}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!showClarification && (
         <div className="flex items-center justify-center mt-4 sm:mt-6">
           <button onClick={() => navigate('/dashboard/create?mode=scratch')}
             className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl border text-xs sm:text-sm font-medium transition-all ${isDarkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-stone-300 text-stone-600 hover:bg-stone-50'
               }`}>Start from scratch</button>
         </div>
+        )}
       </div>
 
-      {/* ── Glassmorphism Result Modal ── */}
+      {/* ── Survey Result Modal ── */}
       {showResultModal && generatedSurvey && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" style={{ animation: 'sfOverlayIn 0.35s ease-out' }}>
-          {/* Backdrop with blur */}
-          <div className="absolute inset-0 bg-black/30 backdrop-blur-xl" onClick={() => setShowResultModal(false)} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ animation: 'sfOverlayIn 0.3s ease-out' }}>
+          <div className="absolute inset-0 bg-slate-900/50" onClick={handleCloseResult} />
 
-          {/* Glass Modal */}
           <div
-            className="relative w-full sm:w-[92vw] sm:max-w-[70vw] lg:max-w-4xl max-h-[88vh] sm:max-h-[82vh] rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col"
-            style={{
-              animation: 'sfModalIn 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
-              background: isDarkMode
-                ? 'linear-gradient(135deg, rgba(30,41,59,0.92) 0%, rgba(15,23,42,0.95) 100%)'
-                : 'linear-gradient(135deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.92) 100%)',
-              backdropFilter: 'blur(40px) saturate(1.8)',
-              WebkitBackdropFilter: 'blur(40px) saturate(1.8)',
-              border: isDarkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.6)',
-              boxShadow: isDarkMode
-                ? '0 32px 64px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)'
-                : '0 32px 64px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.03), inset 0 1px 0 rgba(255,255,255,0.8)',
-            }}
+            className="relative w-full max-w-2xl max-h-[85vh] rounded-2xl overflow-hidden flex flex-col bg-white shadow-xl"
+            style={{ animation: 'sfModalIn 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}
           >
-            {/* Drag handle (mobile) */}
-            <div className="sm:hidden flex justify-center pt-3 pb-1">
-              <div className={`w-10 h-1 rounded-full ${isDarkMode ? 'bg-slate-600' : 'bg-stone-300'}`} />
-            </div>
-
             {/* Header */}
-            <div className="px-5 sm:px-6 pt-4 sm:pt-5 pb-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center"
-                    style={{
-                      animation: 'sfIconPop 0.6s 0.15s cubic-bezier(0.34, 1.56, 0.64, 1) both',
-                    }}
-                  >
-                    <img src="/logo.png" alt="Logo" className={`w-full h-full object-contain ${isDarkMode ? 'brightness-200 contrast-125 mix-blend-screen' : 'mix-blend-multiply'}`} />
-                  </div>
-                  <div style={{ animation: 'sfFadeUp 0.4s 0.2s ease-out both' }}>
-                    <h2 className={`text-base sm:text-lg font-bold leading-tight ${isDarkMode ? 'text-white' : 'text-stone-800'}`} style={{ fontFamily: "'Outfit', sans-serif" }}>
-                      Your Survey is Live
-                    </h2>
-                    <p className={`text-[10px] sm:text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-stone-500'}`}>
-                      Successfully generated {generatedSurvey?.questions?.length || 0} tailored questions
-                    </p>
-                  </div>
+            <div className="px-6 pt-5 pb-4 border-b border-stone-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+                    Your survey is ready
+                  </h2>
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    {generatedSurvey?.questions?.length || 0} questions generated
+                  </p>
                 </div>
-                <button onClick={() => setShowResultModal(false)}
-                  className={`p-1.5 sm:p-2 rounded-xl transition-all ${isDarkMode ? 'hover:bg-white/5 text-slate-400' : 'hover:bg-black/5 text-stone-400'}`}>
-                  <X size={16} />
+                <button onClick={handleCloseResult} className="p-2 rounded-lg hover:bg-stone-100 text-stone-400 transition-colors">
+                  <X size={18} />
                 </button>
               </div>
-
-              {/* Topic pill */}
-              <div
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-medium max-w-full ${isDarkMode ? 'bg-white/5 text-slate-300 border border-white/10' : 'bg-black/[0.03] text-stone-600 border border-black/[0.04]'
-                  }`}
-                style={{ animation: 'sfFadeUp 0.4s 0.3s ease-out both', backdropFilter: 'blur(8px)' }}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
-                <span className="truncate">{(surveyTopic || selectedSuggestion?.label || '').length > 50 ? (surveyTopic || selectedSuggestion?.label || '').slice(0, 50) + '...' : (surveyTopic || selectedSuggestion?.label || '')}</span>
+              {/* Topic */}
+              <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-stone-50 border border-stone-200 text-xs text-stone-600">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                <span className="truncate max-w-[300px]">{surveyTopic || selectedSuggestion?.label || 'Survey'}</span>
               </div>
             </div>
 
-            {/* Divider */}
-            <div className={`mx-5 sm:mx-6 h-px ${isDarkMode ? 'bg-white/5' : 'bg-black/[0.04]'}`} />
-
-            {/* Questions list */}
-            <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-3 sm:py-4 space-y-2 overscroll-contain">
+            {/* Questions List */}
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
               {(generatedSurvey?.questions || []).map((q, i) => {
                 const qType = normalizeType(q.type);
                 return (
-                  <div
-                    key={q.id || i}
-                    className={`p-3 sm:p-3.5 rounded-2xl transition-all ${isDarkMode
-                        ? 'bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.06]'
-                        : 'bg-white/60 border border-white/80 hover:bg-white/80'
-                      }`}
-                    style={{
-                      animation: `sfQuestionIn 0.35s ${0.15 + i * 0.04}s ease-out both`,
-                      backdropFilter: 'blur(12px)',
-                    }}
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <div className="flex-shrink-0 w-6 h-6 rounded-lg bg-gradient-to-br from-red-500 to-orange-400 flex items-center justify-center mt-0.5"
-                        style={{ boxShadow: '0 2px 8px rgba(239,68,68,0.25)' }}>
-                        <span className="text-white text-[10px] font-bold">{i + 1}</span>
-                      </div>
+                  <div key={q.id || i} className="py-3 border-b border-stone-100 last:border-0">
+                    <div className="flex items-start gap-3">
+                      <span className="flex-shrink-0 w-7 h-7 rounded-lg bg-slate-900 text-white flex items-center justify-center text-[11px] font-bold mt-0.5">
+                        {i + 1}
+                      </span>
                       <div className="flex-1 min-w-0">
-                        <p className={`text-xs sm:text-sm font-medium leading-relaxed ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
+                        <p className="text-[14px] font-medium text-slate-800 leading-relaxed">
                           {getQuestionText(q)}
                         </p>
+                        {/* Options for multiple choice */}
                         {qType === 'choice' && q.options && q.options.length > 0 && (
-                          <div className="mt-1.5 flex flex-wrap gap-1">
+                          <div className="mt-2 space-y-1.5">
                             {q.options.map((opt, oi) => (
-                              <span key={oi} className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] ${isDarkMode ? 'bg-white/5 text-slate-400 border border-white/5' : 'bg-black/[0.03] text-stone-500 border border-black/[0.03]'
-                                }`}>
-                                <span className="font-bold">{OPTION_KEYS[oi]}</span> {opt}
-                              </span>
+                              <div key={oi} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-stone-50 border border-stone-100">
+                                <span className="w-5 h-5 rounded-md bg-white border border-stone-200 flex items-center justify-center text-[10px] font-bold text-stone-500">
+                                  {OPTION_KEYS[oi]}
+                                </span>
+                                <span className="text-[13px] text-stone-700">{opt}</span>
+                              </div>
                             ))}
                           </div>
                         )}
-                        {qType === 'scale' && <p className={`mt-1 text-[9px] sm:text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-stone-400'}`}>Scale 1 — 10</p>}
-                        {qType === 'text' && <p className={`mt-1 text-[9px] sm:text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-stone-400'}`}>Open text</p>}
+                        {/* Type indicator for non-choice */}
+                        {qType === 'scale' && (
+                          <div className="mt-2 flex items-center gap-1.5">
+                            <div className="flex gap-0.5">
+                              {[1,2,3,4,5].map(n => (
+                                <span key={n} className="w-6 h-6 rounded bg-stone-100 border border-stone-200 flex items-center justify-center text-[10px] text-stone-400">{n}</span>
+                              ))}
+                            </div>
+                            <span className="text-[10px] text-stone-400 ml-1">Scale</span>
+                          </div>
+                        )}
+                        {qType === 'text' && (
+                          <div className="mt-2 px-3 py-2 rounded-lg bg-stone-50 border border-stone-100 border-dashed">
+                            <span className="text-[11px] text-stone-400 italic">Open text response</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -641,20 +811,15 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
               })}
             </div>
 
-            {/* Footer */}
-            <div className="px-5 sm:px-6 py-4 sm:py-5 space-y-2.5">
-                 <button
-                  onClick={() => { setShowResultModal(false); navigate(`/dashboard/edit/${generatedSurvey?.survey_id}`); }}
-                  className="w-full flex items-center justify-center gap-2 px-5 py-3 sm:py-3.5 rounded-2xl text-white text-xs sm:text-sm font-semibold transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0"
-                style={{
-                  background: 'linear-gradient(135deg, #ef4444, #f97316)',
-                  boxShadow: '0 8px 32px rgba(239,68,68,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
-                  fontFamily: "'Outfit', sans-serif",
-                }}
+            {/* Footer Actions */}
+            <div className="px-6 py-4 border-t border-stone-100 space-y-3">
+              <button
+                onClick={() => { handleCloseResult(); navigate(`/dashboard/edit/${generatedSurvey?.survey_id}`); }}
+                className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-white text-sm font-semibold bg-slate-900 hover:bg-slate-800 transition-colors"
               >
                 <Edit3 size={14} /> Open in Editor <ArrowRight size={14} />
               </button>
-              <div className="flex gap-2.5">
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   onClick={() => {
                     if (generatedSurvey) {
@@ -662,33 +827,21 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
                       window.open(link, '_blank');
                     }
                   }}
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-3 rounded-2xl text-[11px] sm:text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 ${isDarkMode
-                      ? 'bg-white/[0.06] text-white border border-white/10 hover:bg-white/10'
-                      : 'bg-stone-50 text-stone-700 border border-stone-200 hover:bg-stone-100'
-                    }`}
-                  style={{ fontFamily: "'Outfit', sans-serif" }}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-[11px] sm:text-xs font-medium border border-stone-200 text-stone-600 hover:bg-stone-50 transition-colors"
                 >
-                  <Eye size={13} /> Open in New Tab
+                  <Eye size={12} /> Preview
                 </button>
                 <button
                   onClick={handleShareLink}
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-3 rounded-2xl text-[11px] sm:text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 ${isDarkMode
-                      ? 'bg-white/[0.06] text-white border border-white/10 hover:bg-white/10'
-                      : 'bg-stone-50 text-stone-700 border border-stone-200 hover:bg-stone-100'
-                    }`}
-                  style={{ fontFamily: "'Outfit', sans-serif" }}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-[11px] sm:text-xs font-medium border border-stone-200 text-stone-600 hover:bg-stone-50 transition-colors"
                 >
-                  <Share2 size={13} /> {shareLinkCopied ? 'Copied!' : 'Share Link'}
+                  <Share2 size={12} /> {shareLinkCopied ? 'Copied!' : 'Share'}
                 </button>
                 <button
                   onClick={handleViewResponses}
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-3 rounded-2xl text-[11px] sm:text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 ${isDarkMode
-                      ? 'bg-white/[0.06] text-white border border-white/10 hover:bg-white/10'
-                      : 'bg-stone-50 text-stone-700 border border-stone-200 hover:bg-stone-100'
-                    }`}
-                  style={{ fontFamily: "'Outfit', sans-serif" }}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-[11px] sm:text-xs font-medium border border-stone-200 text-stone-600 hover:bg-stone-50 transition-colors"
                 >
-                  <BarChart2 size={13} /> Responses
+                  <BarChart2 size={12} /> Responses
                 </button>
               </div>
             </div>
@@ -866,6 +1019,13 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
           from { opacity: 0; transform: translateY(6px); }
           to { opacity: 1; transform: translateY(0); }
         }
+        .clarification-prompt-down {
+          animation: promptSlideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+        @keyframes promptSlideDown {
+          from { opacity: 0.8; transform: translateY(-8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
         @keyframes sfQuestionIn {
           from { opacity: 0; transform: translateY(8px); }
           to { opacity: 1; transform: translateY(0); }
@@ -874,8 +1034,103 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
           from { opacity: 0; transform: translateY(8px) scale(0.97); }
           to { opacity: 1; transform: translateY(0) scale(1); }
         }
+        
+        /* Prompt Slider */
+        .prompt-slider {
+          width: 100%;
+          height: var(--card-height);
+          overflow: hidden;
+          mask-image: linear-gradient(to right, transparent, #000 8% 92%, transparent);
+          -webkit-mask-image: linear-gradient(to right, transparent, #000 8% 92%, transparent);
+        }
+        .prompt-slider__track {
+          display: flex;
+          width: 100%;
+          min-width: calc(var(--card-width) * var(--quantity));
+          position: relative;
+          height: var(--card-height);
+        }
+        .prompt-slider__item {
+          width: var(--card-width);
+          height: var(--card-height);
+          position: absolute;
+          left: 100%;
+          border-radius: 16px;
+          padding: 16px;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          justify-content: center;
+          gap: 6px;
+          border: none;
+          cursor: pointer;
+          text-align: left;
+          animation: promptSlide var(--duration) linear infinite;
+          animation-delay: calc((var(--duration) / var(--quantity)) * (var(--position) - 1) - var(--duration)) !important;
+          transition: filter 0.3s, transform 0.3s;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+        }
+        .prompt-slider__item:hover {
+          transform: scale(1.04);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+        .prompt-slider:hover .prompt-slider__item {
+          animation-play-state: paused !important;
+          filter: brightness(0.85);
+        }
+        .prompt-slider:hover .prompt-slider__item:hover {
+          filter: brightness(1);
+        }
+        .prompt-slider__icon {
+          width: 28px;
+          height: 28px;
+          background: rgba(255,255,255,0.25);
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          backdrop-filter: blur(4px);
+        }
+        .prompt-slider__icon img {
+          width: 16px;
+          height: 16px;
+          object-fit: contain;
+          filter: brightness(0) invert(1);
+        }
+        .prompt-slider__title {
+          font-family: 'Outfit', sans-serif;
+          font-size: 14px;
+          font-weight: 700;
+          color: white;
+          margin: 0;
+          line-height: 1.2;
+        }
+        .prompt-slider__desc {
+          font-size: 11px;
+          font-weight: 500;
+          color: rgba(255,255,255,0.75);
+          margin: 0;
+          line-height: 1.3;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          max-width: 100%;
+        }
+        @keyframes promptSlide {
+          from { left: 100%; }
+          to { left: calc(var(--card-width) * -1); }
+        }
+        @keyframes sfSubPromptsIn {
+          from { opacity: 0; transform: translateY(16px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes sfSubCardIn {
+          from { opacity: 0; transform: translateY(20px) scale(0.9) rotateX(15deg); }
+          to { opacity: 1; transform: translateY(0) scale(1) rotateX(0deg); }
+        }
       `}</style>
     </div>
+    </>
   );
 };
 

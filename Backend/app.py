@@ -74,6 +74,7 @@ from utils.short_id import generate_short_id, is_valid_short_id
 
 from auth_middleware import requireAuth
 
+from smart_prompt_builder import build_generation_request
 
 from flask import g
 
@@ -1787,8 +1788,24 @@ def generate_survey():
             )
 
         # Get AI prompt template
-
-        ai_prompt = prompt_templates.get(template_type, prompt_templates["default"])
+        use_smart_builder = template_type == "custom"
+        
+        if use_smart_builder:
+            # Use new smart prompt builder with skip logic, parsing, etc.
+            wizard_answers = data.get("wizard_answers", {})
+            smart_result = build_generation_request(
+                prompt=prompt,
+                question_count_from_dropdown=question_count,
+                image_context=image_context,
+                audience=wizard_answers.get("audience"),
+                data_collection=wizard_answers.get("collection", "anonymous"),
+                clarification_answers=wizard_answers,
+            )
+            ai_prompt = smart_result["system_prompt"]
+            question_count = smart_result["final_question_count"]
+            print(f"Smart builder: {smart_result['user_questions_count']} user questions detected, generating {question_count} total")
+        else:
+            ai_prompt = prompt_templates.get(template_type, prompt_templates["default"])
 
         # Generate survey with retries
 
@@ -1805,10 +1822,15 @@ def generate_survey():
                 print(f"Attempt {attempt + 1} for template: {template_type}")
 
                 # Generate content via OpenAI
-
-                raw_response = generate_ai_content(
-                    ai_prompt, temperature=0.7, max_tokens=1024
-                )
+                if use_smart_builder:
+                    # Smart builder uses JSON output, higher token limit
+                    raw_response = generate_ai_content(
+                        ai_prompt, temperature=0.7, max_tokens=4096
+                    )
+                else:
+                    raw_response = generate_ai_content(
+                        ai_prompt, temperature=0.7, max_tokens=1024
+                    )
 
                 if not raw_response:
 
@@ -1816,11 +1838,44 @@ def generate_survey():
 
                 raw_response = raw_response.strip()
 
-                print("AI Response:\n", raw_response)
+                print("AI Response:\n", raw_response[:500])
 
                 # Parse and validate questions
-
-                questions = parse_survey_response(raw_response)
+                if use_smart_builder:
+                    # Try JSON parsing first (new format with skip logic)
+                    try:
+                        import json as json_mod
+                        # Strip markdown code fences if present
+                        cleaned = raw_response
+                        if cleaned.startswith("```"):
+                            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+                        if cleaned.endswith("```"):
+                            cleaned = cleaned[:-3]
+                        cleaned = cleaned.strip()
+                        if cleaned.startswith("json"):
+                            cleaned = cleaned[4:].strip()
+                        
+                        parsed_json = json_mod.loads(cleaned)
+                        if isinstance(parsed_json, list):
+                            questions = []
+                            for i, q in enumerate(parsed_json):
+                                question_obj = {
+                                    "id": q.get("id", f"q{i+1}"),
+                                    "question": q.get("text", ""),
+                                    "type": q.get("type", "short_answer"),
+                                    "options": q.get("options", []),
+                                    "required": q.get("required", True),
+                                    "show_if": q.get("show_if", None),
+                                }
+                                if question_obj["question"]:
+                                    questions.append(question_obj)
+                        else:
+                            raise ValueError("Expected JSON array")
+                    except (json_mod.JSONDecodeError, ValueError) as json_err:
+                        print(f"JSON parse failed, falling back to text parser: {json_err}")
+                        questions = parse_survey_response(raw_response)
+                else:
+                    questions = parse_survey_response(raw_response)
 
                 if not questions:
 

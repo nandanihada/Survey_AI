@@ -1,14 +1,15 @@
-import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import './BasicSurveyTemplate.css';
-import type { Survey } from '../types/Survey';
+import type { Survey, ShowIfCondition } from '../types/Survey';
 import { getQuestionVariants, getAnswerVariants } from '../utils/animationConfig';
 import {
   buildRedirectUrl,
   createSessionContext
 } from '../utils/redirectBuilder';
 import { getMoustacheleadsPayload } from '../utils/moustacheleads';
+import { getVisibleQuestions } from '../utils/skipLogic';
 
 interface Question {
   id: string;
@@ -17,6 +18,7 @@ interface Question {
   answerDescription?: string;
   type: 'text' | 'radio' | 'range';
   options?: string[];
+  show_if?: ShowIfCondition | null;
 }
 
 interface RawQuestion {
@@ -26,6 +28,7 @@ interface RawQuestion {
   answerDescription?: string;
   type: string;
   options?: string[];
+  show_if?: ShowIfCondition | null;
 }
 
 interface Props {
@@ -72,6 +75,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     answerDescription: q.answerDescription,
     type: normalizeType(q.type),
     options: q.options || [],
+    show_if: q.show_if || null,
   }));
 
   const [formData, setFormData] = useState<Record<string, string | number>>(() => {
@@ -83,9 +87,22 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     return initialData;
   });
 
+  // Compute visible questions based on current answers (skip logic)
+  const visibleQuestions = useMemo(
+    () => getVisibleQuestions(normalizedQuestions, formData),
+    [normalizedQuestions, formData]
+  );
+
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [submitted, setSubmitted] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
+
+  // Clamp question index if visible questions change due to skip logic
+  useEffect(() => {
+    if (currentQuestionIndex >= visibleQuestions.length && visibleQuestions.length > 0) {
+      setCurrentQuestionIndex(visibleQuestions.length - 1);
+    }
+  }, [visibleQuestions.length, currentQuestionIndex]);
 
   const isLocalhost = window.location.hostname === 'localhost';
   const apiBaseUrl = isLocalhost
@@ -118,7 +135,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       setTimeout(() => {
         trackClickInteraction('survey_loaded', {
           survey_title: survey.title,
-          total_questions: normalizedQuestions.length
+          total_questions: visibleQuestions.length
         });
       }, 1000);
     }
@@ -153,7 +170,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     // Email triggers are now backend-only - no frontend checking needed
   };
 
-  const currentQuestion = normalizedQuestions[currentQuestionIndex];
+  const currentQuestion = visibleQuestions[currentQuestionIndex];
   const isCurrentAnswered = currentQuestion
     ? currentQuestion.type === 'range' 
       ? formData[currentQuestion.id] !== undefined && formData[currentQuestion.id] !== ''
@@ -161,7 +178,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     : false;
 
   const handleNext = useCallback(() => {
-    if (currentQuestionIndex < normalizedQuestions.length - 1 && isCurrentAnswered) {
+    if (currentQuestionIndex < visibleQuestions.length - 1 && isCurrentAnswered) {
       setCurrentQuestionIndex(prev => prev + 1);
       trackClickInteraction('question_navigation', {
         action: 'next',
@@ -169,7 +186,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         to_question: currentQuestionIndex + 2
       });
     }
-  }, [currentQuestionIndex, normalizedQuestions.length, isCurrentAnswered]);
+  }, [currentQuestionIndex, visibleQuestions.length, isCurrentAnswered]);
 
   const handlePrev = () => {
     if (currentQuestionIndex > 0) {
@@ -193,9 +210,9 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const unanswered = normalizedQuestions.find(q => {
+    // Only validate visible questions (skip logic hides some)
+    const unanswered = visibleQuestions.find(q => {
       const val = formData[q.id];
-      // For range questions, 0 is a valid answer, so don't treat it as unanswered
       if (q.type === 'range') {
         return val === undefined || val === '';
       }
@@ -204,15 +221,16 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     if (unanswered) return;
 
     try {
+      // Only submit answers for visible questions
       const responses: Record<string, string | number> = {};
-      normalizedQuestions.forEach(q => {
+      visibleQuestions.forEach(q => {
         const val = formData[q.id];
         if (val !== undefined && val !== '') {
           if (q.type === 'range') {
-            responses[q.id] = val;  // Use question ID as key
+            responses[q.id] = val;
           } else {
             if (val !== 0) {
-              responses[q.id] = val;  // Use question ID as key
+              responses[q.id] = val;
             }
           }
         }
@@ -351,7 +369,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       >
         <div className="pepper-question-number">
           <span className="num-badge">{index + 1}</span>
-          Question {index + 1} of {normalizedQuestions.length}
+          Question {index + 1} of {visibleQuestions.length}
         </div>
 
         {!previewMode ? (
@@ -419,17 +437,17 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
         {/* Progress Bar */}
         <div className="pepper-progress">
-          <div className="pepper-progress-track" style={{ '--progress-width': `${((currentQuestionIndex + 1) / normalizedQuestions.length) * 100}%` } as React.CSSProperties}>
+          <div className="pepper-progress-track" style={{ '--progress-width': `${((currentQuestionIndex + 1) / visibleQuestions.length) * 100}%` } as React.CSSProperties}>
           </div>
           <span className="pepper-progress-counter">
-            {currentQuestionIndex + 1}/{normalizedQuestions.length}
+            {currentQuestionIndex + 1}/{visibleQuestions.length}
           </span>
         </div>
 
         {/* Questions */}
         <form onSubmit={handleSubmit}>
           <AnimatePresence mode="wait">
-            {normalizedQuestions.map((q, i) => renderQuestion(q, i))}
+            {visibleQuestions.map((q, i) => renderQuestion(q, i))}
           </AnimatePresence>
 
           {/* Footer Navigation */}
@@ -447,7 +465,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
                 <div />
               )}
 
-              {currentQuestionIndex < normalizedQuestions.length - 1 ? (
+              {currentQuestionIndex < visibleQuestions.length - 1 ? (
                 <button
                   type="button"
                   className="pepper-btn pepper-btn-next"
@@ -478,7 +496,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           )}
 
           {/* Keyboard hint */}
-          {!previewMode && isCurrentAnswered && currentQuestionIndex < normalizedQuestions.length - 1 && (
+          {!previewMode && isCurrentAnswered && currentQuestionIndex < visibleQuestions.length - 1 && (
             <div className="pepper-keyboard-hint">
               Press <kbd>Enter ↵</kbd> to continue
             </div>

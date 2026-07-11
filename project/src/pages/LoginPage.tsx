@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, User as UserIcon } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, User as UserIcon, ChevronDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { auth, googleProvider } from '../config/firebase';
 import { signInWithPopup, OAuthProvider } from 'firebase/auth';
+import CookieConsent from '../components/CookieConsent';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -20,6 +21,10 @@ const LoginPage: React.FC = () => {
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [acceptCookies, setAcceptCookies] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [prefEmails, setPrefEmails] = useState(true);
+  const [prefAnalytics, setPrefAnalytics] = useState(true);
+  const [prefPersonalization, setPrefPersonalization] = useState(true);
   const [showSuccess, setShowSuccess] = useState(false);
 
   const mouseX = useMotionValue(0);
@@ -48,11 +53,6 @@ const LoginPage: React.FC = () => {
         await login({ email, password });
         navigate('/dashboard');
       } else {
-        if (!acceptCookies) {
-          setError('Please accept cookies to continue');
-          setIsLoading(false);
-          return;
-        }
         if (!acceptTerms) {
           setError('Please accept the terms and conditions');
           setIsLoading(false);
@@ -424,7 +424,7 @@ const LoginPage: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Cookies & Terms checkboxes (signup only) */}
+                {/* Terms & Preferences (signup only) */}
                 <AnimatePresence>
                   {!isLogin && (
                     <motion.div
@@ -432,32 +432,79 @@ const LoginPage: React.FC = () => {
                       animate={{ opacity: 1, height: 'auto' }}
                       exit={{ opacity: 0, height: 0 }}
                       transition={{ duration: 0.3 }}
-                      className="space-y-3 pt-2"
+                      className="pt-2"
                     >
-                      <div className="flex items-start gap-3">
-                        <input
-                          id="terms"
-                          type="checkbox"
-                          checked={acceptTerms}
-                          onChange={() => setAcceptTerms(!acceptTerms)}
-                          className="mt-0.5 h-4 w-4 rounded border border-gray-300 bg-white accent-red-500 cursor-pointer"
-                        />
-                        <label htmlFor="terms" className="text-xs text-gray-500 leading-relaxed cursor-pointer">
-                          I agree to the <span className="text-red-500 font-medium hover:underline">Terms & Conditions</span> and <span className="text-red-500 font-medium hover:underline">Privacy Policy</span>
-                        </label>
+                      {/* Terms checkbox with expand arrow */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-start gap-3">
+                          <input
+                            id="terms"
+                            type="checkbox"
+                            checked={acceptTerms}
+                            onChange={() => setAcceptTerms(!acceptTerms)}
+                            className="mt-0.5 h-4 w-4 rounded border border-gray-300 bg-white accent-red-500 cursor-pointer"
+                          />
+                          <label htmlFor="terms" className="text-xs text-gray-500 leading-relaxed cursor-pointer">
+                            I agree to the <span className="text-red-500 font-medium hover:underline">Terms & Conditions</span> and <span className="text-red-500 font-medium hover:underline">Privacy Policy</span>
+                          </label>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowPreferences(!showPreferences)}
+                          className={`p-1 rounded-md transition-all ${showPreferences ? 'bg-stone-100 rotate-180' : 'hover:bg-stone-50'}`}
+                        >
+                          <ChevronDown size={14} className="text-stone-400" />
+                        </button>
                       </div>
-                      <div className="flex items-start gap-3">
-                        <input
-                          id="cookies"
-                          type="checkbox"
-                          checked={acceptCookies}
-                          onChange={() => setAcceptCookies(!acceptCookies)}
-                          className="mt-0.5 h-4 w-4 rounded border border-gray-300 bg-white accent-red-500 cursor-pointer"
-                        />
-                        <label htmlFor="cookies" className="text-xs text-gray-500 leading-relaxed cursor-pointer">
-                          🍪 I accept cookies for analytics and personalized experience
-                        </label>
-                      </div>
+
+                      {/* Expandable preferences */}
+                      <AnimatePresence>
+                        {showPreferences && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={{ duration: 0.25 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="mt-3 ml-7 space-y-2.5 max-h-[120px] overflow-y-auto pr-1">
+                              {/* Preference 1 */}
+                              <div className="flex items-center justify-between py-1.5 border-b border-stone-100">
+                                <span className="text-[11px] text-gray-500">Receive tips, updates & offers via email</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setPrefEmails(!prefEmails)}
+                                  className={`w-8 h-[18px] rounded-full transition-colors flex-shrink-0 ${prefEmails ? 'bg-red-500' : 'bg-stone-300'}`}
+                                >
+                                  <div className={`w-3.5 h-3.5 rounded-full bg-white shadow-sm transition-transform ${prefEmails ? 'translate-x-[17px]' : 'translate-x-[2px]'}`} />
+                                </button>
+                              </div>
+                              {/* Preference 2 */}
+                              <div className="flex items-center justify-between py-1.5 border-b border-stone-100">
+                                <span className="text-[11px] text-gray-500">Allow analytics to improve experience</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setPrefAnalytics(!prefAnalytics)}
+                                  className={`w-8 h-[18px] rounded-full transition-colors flex-shrink-0 ${prefAnalytics ? 'bg-red-500' : 'bg-stone-300'}`}
+                                >
+                                  <div className={`w-3.5 h-3.5 rounded-full bg-white shadow-sm transition-transform ${prefAnalytics ? 'translate-x-[17px]' : 'translate-x-[2px]'}`} />
+                                </button>
+                              </div>
+                              {/* Preference 3 */}
+                              <div className="flex items-center justify-between py-1.5">
+                                <span className="text-[11px] text-gray-500">Personalize content based on activity</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setPrefPersonalization(!prefPersonalization)}
+                                  className={`w-8 h-[18px] rounded-full transition-colors flex-shrink-0 ${prefPersonalization ? 'bg-red-500' : 'bg-stone-300'}`}
+                                >
+                                  <div className={`w-3.5 h-3.5 rounded-full bg-white shadow-sm transition-transform ${prefPersonalization ? 'translate-x-[17px]' : 'translate-x-[2px]'}`} />
+                                </button>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -554,6 +601,7 @@ const LoginPage: React.FC = () => {
           </div>
         </motion.div>
       </motion.div>
+      <CookieConsent />
     </div>
   );
 };

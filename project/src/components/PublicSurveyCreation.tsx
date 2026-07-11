@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { generateSurvey, parseImage, getWizardSuggestions } from '../utils/api';
 import { generateSurveyLink } from '../utils/surveyLinkUtils';
 import { Loader2, Hash, X, ChevronRight, ImagePlus, Sparkles, Check, ArrowRight, Lightbulb, ChevronDown, ExternalLink, Share2, Eye, BarChart2, Zap } from 'lucide-react';
+import { parsePrompt, getClarificationNeeds } from '../utils/promptParser';
+import SurveyClarification, { ClarificationAnswers } from './SurveyClarification';
+import SearchLoader from './SearchLoader';
 
 interface Question {
   id: string;
@@ -41,6 +44,8 @@ const PublicSurveyCreation: React.FC = () => {
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [shareLinkCopied, setShareLinkCopied] = useState(false);
   const [isDarkMode] = useState(false);
+  const [showClarification, setShowClarification] = useState(false);
+  const [clarificationNeeds, setClarificationNeeds] = useState<ReturnType<typeof getClarificationNeeds> | null>(null);
 
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
@@ -84,16 +89,16 @@ const PublicSurveyCreation: React.FC = () => {
   }, [chatHistory, wizardStep, loadingPhase]);
 
   const SUGGESTION_PROMPTS = [
-    { emoji: '⭐', label: 'Customer Feedback', prompt: 'Customer satisfaction survey to understand how happy our customers are with our product quality, support experience, and overall service' },
-    { emoji: '👥', label: 'Employee Check-in', prompt: 'Employee engagement and well-being check-in covering job satisfaction, work-life balance, team collaboration, and career growth' },
-    { emoji: '🛒', label: 'Product Experience', prompt: 'Product feedback survey about usability, features, pricing satisfaction, and what improvements users would like to see' },
-    { emoji: '🎓', label: 'Training Feedback', prompt: 'Post-training feedback survey evaluating content quality, instructor effectiveness, practical applicability, and suggestions for improvement' },
-    { emoji: '🌐', label: 'Website Experience', prompt: 'Website user experience survey covering navigation ease, page load speed, content relevance, design appeal, and conversion barriers' },
-    { emoji: '🚀', label: 'Onboarding Review', prompt: 'New user onboarding experience survey about setup ease, documentation clarity, time to first value, and support quality' },
-    { emoji: '🎪', label: 'Event Feedback', prompt: 'Post-event feedback survey covering event organization, speaker quality, networking opportunities, venue satisfaction, and likelihood to attend again' },
-    { emoji: '🤝', label: 'Team Collaboration', prompt: 'Team collaboration and communication survey about meeting effectiveness, tool satisfaction, cross-team coordination, and remote work experience' },
-    { emoji: '📱', label: 'App Usability', prompt: 'Mobile app usability survey covering interface design, feature discoverability, performance, crash frequency, and feature requests' },
-    { emoji: '🏥', label: 'Service Cancellation', prompt: 'Service cancellation feedback survey to understand reasons for leaving, what could have been done differently, and likelihood of returning' },
+    { icon: '/icons/star.svg', gradient: 'linear-gradient(135deg, #ff7e5f, #feb47b)', label: 'Customer Feedback', prompt: 'Customer satisfaction survey to understand how happy our customers are with our product quality, support experience, and overall service' },
+    { icon: '/icons/users.svg', gradient: 'linear-gradient(135deg, #6a11cb, #2575fc)', label: 'Employee Check-in', prompt: 'Employee engagement and well-being check-in covering job satisfaction, work-life balance, team collaboration, and career growth' },
+    { icon: '/icons/cart.svg', gradient: 'linear-gradient(135deg, #00c6ff, #0072ff)', label: 'Product Experience', prompt: 'Product feedback survey about usability, features, pricing satisfaction, and what improvements users would like to see' },
+    { icon: '/icons/graduation.svg', gradient: 'linear-gradient(135deg, #f857a6, #ff5858)', label: 'Training Feedback', prompt: 'Post-training feedback survey evaluating content quality, instructor effectiveness, practical applicability, and suggestions for improvement' },
+    { icon: '/icons/globe.svg', gradient: 'linear-gradient(135deg, #11998e, #38ef7d)', label: 'Website Experience', prompt: 'Website user experience survey covering navigation ease, page load speed, content relevance, design appeal, and conversion barriers' },
+    { icon: '/icons/rocket.svg', gradient: 'linear-gradient(135deg, #fc5c7d, #6a82fb)', label: 'Onboarding Review', prompt: 'New user onboarding experience survey about setup ease, documentation clarity, time to first value, and support quality' },
+    { icon: '/icons/calendar.svg', gradient: 'linear-gradient(135deg, #f2994a, #f2c94c)', label: 'Event Feedback', prompt: 'Post-event feedback survey covering event organization, speaker quality, networking opportunities, venue satisfaction, and likelihood to attend again' },
+    { icon: '/icons/handshake.svg', gradient: 'linear-gradient(135deg, #a1c4fd, #c2e9fb)', label: 'Team Collaboration', prompt: 'Team collaboration and communication survey about meeting effectiveness, tool satisfaction, cross-team coordination, and remote work experience' },
+    { icon: '/icons/phone.svg', gradient: 'linear-gradient(135deg, #667eea, #764ba2)', label: 'App Usability', prompt: 'Mobile app usability survey covering interface design, feature discoverability, performance, crash frequency, and feature requests' },
+    { icon: '/icons/heart.svg', gradient: 'linear-gradient(135deg, #ff512f, #dd2476)', label: 'Service Cancellation', prompt: 'Service cancellation feedback survey to understand reasons for leaving, what could have been done differently, and likelihood of returning' },
   ];
 
   const loadingMessages = [
@@ -166,47 +171,34 @@ const PublicSurveyCreation: React.FC = () => {
     }
     setError('');
     
-    let initialMsg = surveyTopic.trim();
-    if (selectedSuggestion) {
-      initialMsg = initialMsg ? `${selectedSuggestion.label}: ${initialMsg}` : selectedSuggestion.label;
-    } else if (imageContext && !initialMsg) {
-      initialMsg = "Base survey on the uploaded image.";
+    // Parse the prompt to check what's clear
+    const promptText = selectedSuggestion
+      ? (surveyTopic.trim() ? `${selectedSuggestion.prompt}. Additionally: ${surveyTopic.trim()}` : selectedSuggestion.prompt)
+      : surveyTopic.trim();
+
+    const parsed = parsePrompt(promptText, questionCount);
+    const needs = getClarificationNeeds(parsed, questionCount !== 10);
+
+    // If topic is clear, show minimal clarification (just data collection)
+    if (parsed.isTopicClear) {
+      setShowClarification(true);
+      setClarificationNeeds(needs);
+      return;
     }
-    
-    // Initial loading indicator message
-    setChatHistory([
-      { role: 'user', text: initialMsg },
-      { role: 'ai', text: "Analyzing your request..." }
-    ]);
-    
-    try {
-      const suggestions = await getWizardSuggestions(initialMsg);
-      if (suggestions && (suggestions.suggested_type || suggestions.suggested_collect)) {
-         setWizardSuggestions({ type: suggestions.suggested_type, collect: suggestions.suggested_collect });
-         
-         const matchCount = suggestions.total_matched || 2;
-         const newQ = suggestions.suggested_type 
-            ? `Got it! Based on ${matchCount} similar surveys past users created, the most common format is "${suggestions.suggested_type}". Does this work for you?`
-            : "Got it! Is this an internal team survey or casual feedback?";
-            
-         setChatHistory([
-           { role: 'user', text: initialMsg },
-           { role: 'ai', text: newQ }
-         ]);
-      } else {
-         setChatHistory([
-           { role: 'user', text: initialMsg },
-           { role: 'ai', text: "Got it! Is this an internal team survey or casual feedback?" }
-         ]);
-      }
-    } catch (err) {
-       setChatHistory([
-         { role: 'user', text: initialMsg },
-         { role: 'ai', text: "Got it! Is this an internal team survey or casual feedback?" }
-       ]);
-    }
-    
-    setWizardStep(0);
+
+    // Topic unclear — still show clarification but with topic field
+    setShowClarification(true);
+    setClarificationNeeds(needs);
+  };
+
+  const handleClarificationSubmit = (answers: ClarificationAnswers) => {
+    setShowClarification(false);
+    const finalAnswers: Record<number, string> = {};
+    if (answers.audience) finalAnswers[0] = answers.audience;
+    if (answers.dataCollection) finalAnswers[1] = answers.dataCollection;
+    if (answers.questionCount) setQuestionCount(answers.questionCount);
+    if (answers.topic) setSurveyTopic(prev => prev || answers.topic!);
+    handleFinalGenerateSurvey(finalAnswers);
   };
 
   const handleNextStep = (answer?: string) => {
@@ -343,8 +335,9 @@ const PublicSurveyCreation: React.FC = () => {
             </p>
           </div>
 
-          {wizardStep === -1 ? (
-          /* Input Card */
+          {wizardStep === -1 && (
+          <>
+          {/* Input Card */}
           <div className={`rounded-2xl border-2 p-1 transition-all duration-300 ${isDarkMode ? 'bg-slate-800 border-slate-600 focus-within:border-red-500' : 'bg-white border-stone-200 focus-within:border-red-400 shadow-lg'
             }`}>
             {imagePreview && (
@@ -432,7 +425,7 @@ const PublicSurveyCreation: React.FC = () => {
                               }`}
                             style={{ animation: `sfFadeUp 0.2s ${i * 0.04}s ease-out both` }}
                           >
-                            <span className="text-base flex-shrink-0">{s.emoji}</span>
+                            <span className="text-base flex-shrink-0"><img src={s.icon} alt="" className="w-5 h-5 object-contain" /></span>
                             <div className="flex-1 min-w-0">
                               <p className={`text-[11px] sm:text-xs font-medium ${isDarkMode ? 'text-white' : 'text-stone-700'}`}>{s.label}</p>
                               <p className={`text-[9px] sm:text-[10px] truncate ${isDarkMode ? 'text-slate-400' : 'text-stone-400'}`}>{s.prompt.slice(0, 65)}...</p>
@@ -473,7 +466,20 @@ const PublicSurveyCreation: React.FC = () => {
               </button>
             </div>
           </div>
-          ) : (
+
+          {/* Clarification Panel */}
+          {showClarification && clarificationNeeds && (
+            <SurveyClarification
+              needs={clarificationNeeds}
+              onSubmit={handleClarificationSubmit}
+              onCancel={() => setShowClarification(false)}
+              isDarkMode={isDarkMode}
+            />
+          )}
+          </>
+          )}
+
+          {wizardStep !== -1 && (
             <div className={`relative rounded-[2rem] p-4 sm:p-6 transition-all duration-500 overflow-hidden flex flex-col gap-4 ${
                isDarkMode 
                 ? 'bg-slate-900 border border-slate-700/60 shadow-[0_16px_40px_rgba(0,0,0,0.4)]'
@@ -501,17 +507,7 @@ const PublicSurveyCreation: React.FC = () => {
                   ))}
                   
                   {wizardStep === 99 && isLoading && (
-                     <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-500">
-                        <div className={`w-8 h-8 rounded-[0.8rem] flex items-center justify-center shadow-sm flex-shrink-0 mr-3 mt-1 border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-1.5`}>
-                           <img src="/logo.png" alt="AI" className="w-full h-full object-contain drop-shadow-sm animate-pulse" />
-                        </div>
-                        <div className={`rounded-[1.25rem] px-4 py-3.5 rounded-tl-sm flex items-center gap-3 shadow-md border ${isDarkMode ? 'bg-slate-800 text-slate-200 border-slate-700/50' : 'bg-white text-stone-800 border-red-500/20'}`}>
-                           <Loader2 className="animate-spin text-red-500" size={16} />
-                           <span className="text-[14px] sm:text-[15px] font-bold tracking-wide" style={{ fontFamily: "'Outfit', sans-serif" }}>
-                              {loadingMessages[loadingPhase]}
-                           </span>
-                        </div>
-                     </div>
+                     <SearchLoader message={loadingMessages[loadingPhase]} />
                   )}
                </div>
 
@@ -559,6 +555,36 @@ const PublicSurveyCreation: React.FC = () => {
           )}
 
           {error && <div className="mt-4 sm:mt-6 bg-red-100/50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-[13px] sm:text-[14px] font-medium text-center">{error}</div>}
+
+          {/* ── Auto-scrolling Prompt Suggestion Slider ── */}
+          {wizardStep === -1 && !selectedSuggestion && (
+            <div className="mt-6 sm:mt-8" style={{ animation: 'sfFadeUp 0.5s 0.2s ease-out both' }}>
+              <div
+                className="prompt-slider"
+                style={{ '--card-width': '200px', '--card-height': '110px', '--quantity': SUGGESTION_PROMPTS.length, '--duration': '25s' } as React.CSSProperties}
+              >
+                <div className="prompt-slider__track">
+                  {SUGGESTION_PROMPTS.map((s, i) => (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        setSelectedSuggestion({ label: s.label, prompt: s.prompt });
+                        setSurveyTopic(s.prompt);
+                      }}
+                      className="prompt-slider__item"
+                      style={{ '--position': i + 1, background: s.gradient } as React.CSSProperties}
+                    >
+                      <div className="prompt-slider__icon">
+                        <img src={s.icon} alt={s.label} />
+                      </div>
+                      <p className="prompt-slider__title">{s.label}</p>
+                      <p className="prompt-slider__desc">{s.prompt.slice(0, 50)}...</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center justify-center mt-4 sm:mt-6">
             <button onClick={() => navigate('/login')}
@@ -848,6 +874,92 @@ const PublicSurveyCreation: React.FC = () => {
         @keyframes sfSuggestIn {
           from { opacity: 0; transform: translateY(8px) scale(0.97); }
           to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        
+        /* Prompt Slider */
+        .prompt-slider {
+          width: 100%;
+          height: var(--card-height);
+          overflow: hidden;
+          mask-image: linear-gradient(to right, transparent, #000 8% 92%, transparent);
+          -webkit-mask-image: linear-gradient(to right, transparent, #000 8% 92%, transparent);
+        }
+        .prompt-slider__track {
+          display: flex;
+          width: 100%;
+          min-width: calc(var(--card-width) * var(--quantity));
+          position: relative;
+          height: var(--card-height);
+        }
+        .prompt-slider__item {
+          width: var(--card-width);
+          height: var(--card-height);
+          position: absolute;
+          left: 100%;
+          border-radius: 16px;
+          padding: 14px;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          justify-content: center;
+          gap: 5px;
+          border: none;
+          cursor: pointer;
+          text-align: left;
+          animation: promptSlide var(--duration) linear infinite;
+          animation-delay: calc((var(--duration) / var(--quantity)) * (var(--position) - 1) - var(--duration)) !important;
+          transition: filter 0.3s, transform 0.3s;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+        }
+        .prompt-slider__item:hover {
+          transform: scale(1.04);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+        .prompt-slider:hover .prompt-slider__item {
+          animation-play-state: paused !important;
+          filter: brightness(0.85);
+        }
+        .prompt-slider:hover .prompt-slider__item:hover {
+          filter: brightness(1);
+        }
+        .prompt-slider__icon {
+          width: 26px;
+          height: 26px;
+          background: rgba(255,255,255,0.25);
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          backdrop-filter: blur(4px);
+        }
+        .prompt-slider__icon img {
+          width: 14px;
+          height: 14px;
+          object-fit: contain;
+          filter: brightness(0) invert(1);
+        }
+        .prompt-slider__title {
+          font-family: 'Outfit', sans-serif;
+          font-size: 13px;
+          font-weight: 700;
+          color: white;
+          margin: 0;
+          line-height: 1.2;
+        }
+        .prompt-slider__desc {
+          font-size: 10px;
+          font-weight: 500;
+          color: rgba(255,255,255,0.75);
+          margin: 0;
+          line-height: 1.3;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          max-width: 100%;
+        }
+        @keyframes promptSlide {
+          from { left: 100%; }
+          to { left: calc(var(--card-width) * -1); }
         }
       `}</style>
     </div>

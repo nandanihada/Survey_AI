@@ -1,3 +1,9 @@
+export interface ShowIfCondition {
+  depends_on: string;
+  condition: 'equals' | 'not_equals' | 'greater_than' | 'less_than' | 'contains';
+  value: string | number;
+}
+
 export interface Question {
   id: string;
   question: string;
@@ -6,6 +12,7 @@ export interface Question {
   type: 'text' | 'radio' | 'checkbox' | 'dropdown' | 'range' | 'multiple_choice' | 'yes_no' | 'short_answer' | 'rating';
   options?: string[];
   required?: boolean;
+  show_if?: ShowIfCondition | null;
   validation?: {
     minLength?: number;
     maxLength?: number;
