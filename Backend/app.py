@@ -921,15 +921,7 @@ def parse_image():
 
         return "", 200
 
-    # Manual auth check (after OPTIONS is handled)
-
-    from auth_middleware import requireAuth as _reqAuth
-
-    auth_header = request.headers.get("Authorization")
-
-    if not auth_header:
-
-        return jsonify({"error": "Authorization required"}), 401
+    # Allow unauthenticated access for image parsing (same as /generate)
 
     try:
 
@@ -956,13 +948,26 @@ def parse_image():
                     "content": [
                         {
                             "type": "text",
-                            "text": "Extract all text, questions, and survey content from this image. List each question or piece of text on a new line. If there are answer options, include them. Be thorough and accurate.",
+                            "text": """Look at this image of a survey/questionnaire. Extract EVERY question with its answer options.
+
+Return ONLY a JSON array (no markdown, no backticks). Each item:
+{"question": "exact question text", "type": "multiple_choice or short_answer or yes_no or rating", "options": ["option1", "option2", ...]}
+
+Rules:
+- If a question has checkboxes/radio buttons with choices listed, type = "multiple_choice" and include ALL choices in "options"
+- If a question has a blank line for writing, type = "short_answer" and options = []
+- If a question only has Yes/No, type = "yes_no" and options = ["Yes", "No"]
+- Sub-questions (a. b. c. d.) are SEPARATE questions
+- Section headers are NOT questions, skip them
+- Include EVERY option exactly as written in the image
+
+Return valid JSON only.""",
                         },
                         {"type": "image_url", "image_url": {"url": image_data}},
                     ],
                 }
             ],
-            "max_tokens": 2048,
+            "max_tokens": 4096,
         }
 
         resp = requests.post(
@@ -977,8 +982,30 @@ def parse_image():
         result = resp.json()
 
         extracted_text = result["choices"][0]["message"]["content"]
+        
+        # Try to parse as JSON for structured extraction
+        structured_questions = None
+        try:
+            import json as json_mod
+            cleaned = extracted_text.strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+            if cleaned.endswith("```"):
+                cleaned = cleaned[:-3]
+            cleaned = cleaned.strip()
+            if cleaned.startswith("json"):
+                cleaned = cleaned[4:].strip()
+            parsed_qs = json_mod.loads(cleaned)
+            if isinstance(parsed_qs, list):
+                structured_questions = parsed_qs
+        except:
+            pass
 
-        return jsonify({"extracted_text": extracted_text})
+        # Return both structured and raw text
+        return jsonify({
+            "extracted_text": extracted_text,
+            "structured_questions": structured_questions,
+        })
 
     except Exception as e:
 
@@ -1101,6 +1128,26 @@ def generate_survey():
         if not prompt:
 
             return jsonify({"error": "Prompt is required and cannot be empty"}), 400
+
+        # ── Content Safety Filter ──
+        BLOCKED_KEYWORDS = [
+            r'\bbombs?\b', r'\bbombing\b', r'\bexplosives?\b', r'\bdetonate\b',
+            r'\bblast\b', r'\batom\s*bomb\b', r'\bnuclear\s*weapon\b', r'\bweapons?\b',
+            r'\bguns?\b', r'\bkilling\b', r'\bmurder\b', r'\bassassinate\b',
+            r'\bterrorism\b', r'\bterrorist\b',
+            r'\bhacking\b', r'\bphishing\b', r'\bmalware\b', r'\bransomware\b', r'\bddos\b',
+            r'\bpoisoning\b', r'\bdrug\s*manufacturing\b', r'\bmeth\s*lab\b',
+            r'\bsuicide\b', r'\bself[\-\s]harm\b', r'\bchild\s*abuse\b', r'\btrafficking\b',
+            r'\bbioweapon\b', r'\bchemical\s*weapon\b', r'\banthrax\b', r'\bricin\b',
+            r'\bhow\s+to\s+(make|build|create)\s+(a\s+)?(bomb|weapon|explosive|gun)\b',
+        ]
+        prompt_lower = prompt.lower()
+        blocked_match = next((w for w in BLOCKED_KEYWORDS if re.search(w, prompt_lower)), None)
+        if blocked_match:
+            return jsonify({
+                "error": "Your prompt contains content that violates our safety guidelines. Please rephrase your survey topic.",
+                "error_type": "content_blocked"
+            }), 400
 
         # Learning loop logic: log user ML inputs for wizard suggestion endpoint
         ml_topic = data.get("topic", "").strip()
@@ -1789,6 +1836,7 @@ def generate_survey():
 
         # Get AI prompt template
         use_smart_builder = template_type == "custom"
+        pre_populated_questions = []  # Questions from image that bypass AI
         
         if use_smart_builder:
             # Use new smart prompt builder with skip logic, parsing, etc.
@@ -1803,6 +1851,55 @@ def generate_survey():
             )
             ai_prompt = smart_result["system_prompt"]
             question_count = smart_result["final_question_count"]
+            
+            # If we have parsed image questions, pre-populate them directly (bypass AI for these)
+            parsed_data = smart_result.get("parsed", {})
+            image_qs = parsed_data.get("image_questions", [])
+            if image_qs and len(image_qs) > 0:
+                # Parse the formatted image text to extract structured questions
+                import json as json_mod2
+                raw_img = parsed_data.get("raw_image_text", "")
+                # Try to detect structured format: "1. Question [type]\n   A) Option"
+                current_q = None
+                for line in raw_img.split('\n'):
+                    line = line.strip()
+                    # Question line: "1. Question text [type]"
+                    q_match = re.match(r'^\d+\.\s+(.+?)\s*\[([\w_]+)\]\s*$', line)
+                    if q_match:
+                        if current_q:
+                            pre_populated_questions.append(current_q)
+                        current_q = {
+                            "id": f"q{len(pre_populated_questions) + 1}",
+                            "question": q_match.group(1).strip(),
+                            "type": q_match.group(2),
+                            "options": [],
+                            "required": True,
+                            "show_if": None,
+                        }
+                    # Option line: "   A) Option text"
+                    elif current_q and re.match(r'^\s*[A-Z]\)\s+(.+)$', line):
+                        opt_text = re.match(r'^\s*[A-Z]\)\s+(.+)$', line).group(1)
+                        current_q["options"].append(opt_text)
+                if current_q:
+                    pre_populated_questions.append(current_q)
+                
+                if pre_populated_questions:
+                    # Adjust: only ask AI for remaining questions
+                    remaining = max(0, question_count - len(pre_populated_questions))
+                    if remaining == 0:
+                        # Image has enough or more than requested — use only what's needed
+                        if len(pre_populated_questions) > question_count:
+                            pre_populated_questions = pre_populated_questions[:question_count]
+                        questions = pre_populated_questions
+                        print(f"Smart builder: Using {len(pre_populated_questions)} pre-populated image questions, skipping AI")
+                    else:
+                        question_count = remaining
+                        # Tell AI NOT to repeat image questions
+                        image_q_texts = [q["question"] for q in pre_populated_questions]
+                        avoid_list = "\n".join(f"- {t}" for t in image_q_texts)
+                        ai_prompt += f"\n\nDO NOT generate any of these questions (they already exist from the user's image):\n{avoid_list}\n\nGenerate {remaining} NEW questions only."
+                        print(f"Smart builder: {len(pre_populated_questions)} from image, asking AI for {remaining} more")
+            
             print(f"Smart builder: {smart_result['user_questions_count']} user questions detected, generating {question_count} total")
         else:
             ai_prompt = prompt_templates.get(template_type, prompt_templates["default"])
@@ -1881,6 +1978,14 @@ def generate_survey():
 
                     raise ValueError("Failed to parse any valid questions")
 
+                # Post-process: ensure yes_no questions have options
+                for q in questions:
+                    qtype = q.get("type", "")
+                    if qtype == "yes_no" and not q.get("options"):
+                        q["options"] = ["Yes", "No"]
+                    if qtype == "multiple_choice" and not q.get("options"):
+                        q["options"] = ["Option A", "Option B", "Option C", "Option D"]
+
                 if len(questions) >= max(3, question_count // 2):
 
                     break  # Success
@@ -1950,15 +2055,48 @@ def generate_survey():
                         f"Failed after {max_retries} attempts: {str(last_error)}"
                     )
 
-        # your backend
+        # Merge pre-populated image questions with AI-generated ones
+        if pre_populated_questions and questions:
+            # Re-number AI questions to continue from where image questions left off
+            for i, q in enumerate(questions):
+                q["id"] = f"q{len(pre_populated_questions) + i + 1}"
+            questions = pre_populated_questions + questions
+            print(f"Merged: {len(pre_populated_questions)} image + {len(questions) - len(pre_populated_questions)} AI = {len(questions)} total")
+        elif pre_populated_questions and not questions:
+            questions = pre_populated_questions
 
-        # def get_frontend_url():
+        # Deduplicate questions (remove exact or near-exact duplicates)
+        seen_texts = set()
+        deduped = []
+        for q in questions:
+            q_text = q.get("question", "").strip().lower()
+            if q_text and q_text not in seen_texts:
+                seen_texts.add(q_text)
+                deduped.append(q)
+        if len(deduped) < len(questions):
+            print(f"Deduplication: removed {len(questions) - len(deduped)} duplicate questions")
+        questions = deduped
+        
+        # Trim to requested count if we have more than needed
+        # Use the clarification/dropdown count the user explicitly chose
+        user_requested_count = data.get("question_count", 10)
+        if use_smart_builder:
+            # The smart builder may have adjusted the count, but user's explicit choice wins
+            parsed_count = smart_result.get("parsed", {}).get("question_count_from_prompt")
+            if parsed_count:
+                user_requested_count = parsed_count
+            elif data.get("question_count") and data.get("question_count") != 10:
+                user_requested_count = data.get("question_count")
+            else:
+                user_requested_count = smart_result["final_question_count"]
+        
+        if len(questions) > user_requested_count:
+            questions = questions[:user_requested_count]
+            print(f"Trimmed to user's requested count: {user_requested_count}")
 
-        #     if "localhost" in request.host or "127.0.0.1" in request.host:
-
-        #         return "http://localhost:5173"
-
-        #     return "https://pepperadsresponses.web.app"
+        # Re-number question IDs
+        for i, q in enumerate(questions):
+            q["id"] = f"q{i + 1}"
 
         # Dynamic frontend URL based on environment
 

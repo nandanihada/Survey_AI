@@ -2,7 +2,7 @@
    PepperAds Signature Design - Paper & Pin
    ============================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Kalam:wght@400;700&display=swap');
 
 :root {
   --pepper-red: #C4785C;
@@ -200,7 +200,7 @@
 }
 
 /* ── Question ── */
-.pepper-question-area { padding: 0 36px 16px 36px; }
+.pepper-question-area { padding: 0 36px 16px 36px; padding-top: 24px; }
 
 .pepper-question-number {
   display: inline-flex;
@@ -358,7 +358,7 @@
   box-shadow: 0 0 0 3px rgba(196, 120, 92, 0.1);
 }
 
-.pepper-textarea::placeholder { color: var(--pepper-text-lighter); }
+.pepper-textarea::placeholder { color: #7a6e65; }
 
 /* ── Scale ── */
 .pepper-scale { padding: 16px 0; }

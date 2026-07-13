@@ -85,6 +85,10 @@ function extractQuestionCount(text: string, dropdownCount: number | null): numbe
     /\b(generate|create|make|give me)\s+(\d+)/i,
     /\btotal\s*(?:of\s*)?(\d+)/i,
     /\bexactly\s+(\d+)/i,
+    // Non-English: number followed by common question words in other languages
+    /(\d+)\s*(प्रश्न|सवाल|preguntas?|questions?|fragen|вопрос|質問|pertanyaan|soal)/i,
+    // Comma/space separated number at end of prompt (common in non-English: "..., 10 प्रश्न")
+    /,\s*(\d+)\s*\S*$/,
   ];
   
   for (const pattern of patterns) {
@@ -92,7 +96,7 @@ function extractQuestionCount(text: string, dropdownCount: number | null): numbe
     if (match) {
       // Find the numeric capture group
       const num = parseInt(match[1]) || parseInt(match[2]);
-      if (num >= 1 && num <= 100) {
+      if (num >= 3 && num <= 100) {
         return num; // Prompt always wins over dropdown
       }
     }
@@ -150,6 +154,17 @@ function extractAudience(text: string): string | null {
     [/\bcustomer\s+(satisfaction|feedback|experience|support)/i, 'customers'],
     [/\bstudent\s+(feedback|evaluation|assessment)/i, 'students'],
     [/\bwebsite\s+(visitors?|users?|experience)/i, 'users'],
+    [/\b(app|mobile|software|product|platform)\s+(user|usability|experience|ux)\b/i, 'users'],
+    [/\buser\s+(experience|feedback|satisfaction|research|testing)\b/i, 'users'],
+    [/\b(ux|ui)\s+(survey|feedback|research|testing)\b/i, 'users'],
+    [/\b(membership|subscriber|purchase|buying|shopping|dining|restaurant|hotel|store|shop|service)\s+(satisfaction|feedback|experience)/i, 'customers'],
+    [/\b(satisfaction|feedback|experience)\s+(survey|form|questionnaire)\b/i, 'customers'],
+    [/\b(team|developer|engineering|software|sprint|agile|workplace|office|department)\s+(productivity|performance|collaboration|culture|survey|feedback|check)/i, 'employees'],
+    [/\b(productivity|performance|collaboration)\s+(survey|feedback|assessment)\b/i, 'employees'],
+    // Non-English audience detection
+    [/ग्राहक|cliente|client|müşteri/i, 'customers'],
+    [/कर्मचारी|empleado|employé|mitarbeiter/i, 'employees'],
+    [/छात्र|estudiante|étudiant|schüler/i, 'students'],
   ];
   
   for (const [pattern, audience] of audiencePatterns) {
@@ -192,8 +207,14 @@ function checkTopicClarity(text: string): boolean {
   
   // Too short
   if (trimmed.length < 10) return false;
+
+  // Non-Latin scripts (Hindi, Arabic, Chinese, etc.) — always consider clear
+  // These users typed a specific topic in their language
+  if (/[\u0900-\u097F\u0600-\u06FF\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/.test(text)) {
+    return true;
+  }
   
-  // Exact vague patterns
+  // Exact vague patterns (English only)
   const vaguePatterns = [
     /^(make|create|generate|build|give|get)\s+(me\s+)?(a\s+)?(survey|questionnaire|form|questions?)\.?$/i,
     /^(i\s+)?(need|want|require)\s+(a\s+)?(some\s+)?(survey|questions?|form|questionnaire)\.?$/i,

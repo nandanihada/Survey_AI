@@ -96,6 +96,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [submitted, setSubmitted] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Clamp question index if visible questions change due to skip logic
   useEffect(() => {
@@ -220,6 +221,8 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     });
     if (unanswered) return;
 
+    setIsSubmitting(true);
+
     try {
       // Only submit answers for visible questions
       const responses: Record<string, string | number> = {};
@@ -297,6 +300,8 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       } else {
         alert('Submission failed');
       }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -316,9 +321,9 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           >
             <span className="pepper-option-key">{OPTION_KEYS[i] || i + 1}</span>
             {!previewMode ? (
-              <motion.span className="pepper-option-label" variants={aVariants} initial="initial" animate="animate">{option}</motion.span>
+              <motion.span className="pepper-option-label" variants={aVariants} initial="initial" animate="animate">{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</motion.span>
             ) : (
-              <span className="pepper-option-label">{option}</span>
+              <span className="pepper-option-label">{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</span>
             )}
           </div>
         );
@@ -336,27 +341,31 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     />
   );
 
-  const renderScale = (question: Question) => (
-    <div className="pepper-scale">
-      <div className="pepper-scale-labels">
-        <span>Not at all</span>
-        <span>Extremely</span>
+  const renderScale = (question: Question) => {
+    // Determine scale range: use 5 for rating type, 10 for opinion_scale
+    const scaleMax = 5;
+    return (
+      <div className="pepper-scale">
+        <div className="pepper-scale-labels">
+          <span>Low</span>
+          <span>High</span>
+        </div>
+        <div className="pepper-scale-track">
+          {Array.from({ length: scaleMax }, (_, i) => i + 1).map(num => (
+            <motion.button
+              key={num}
+              type="button"
+              className={`pepper-scale-point ${formData[question.id] === num ? 'active' : ''}`}
+              onClick={() => handleAnswer(question.id, num)}
+              whileTap={{ scale: 0.9 }}
+            >
+              {num}
+            </motion.button>
+          ))}
+        </div>
       </div>
-      <div className="pepper-scale-track">
-        {Array.from({ length: 10 }, (_, i) => i + 1).map(num => (
-          <motion.button
-            key={num}
-            type="button"
-            className={`pepper-scale-point ${formData[question.id] === num ? 'active' : ''}`}
-            onClick={() => handleAnswer(question.id, num)}
-            whileTap={{ scale: 0.9 }}
-          >
-            {num}
-          </motion.button>
-        ))}
-      </div>
-    </div>
-  );
+    );
+  };
 
   const renderQuestion = (question: Question, index: number) => {
     if (!previewMode && index !== currentQuestionIndex) return null;
@@ -417,25 +426,24 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   /* ── Main Render ── */
   return (
     <div className="pepper-survey-container">
+      {/* Title + Logo — OUTSIDE the paper card */}
+      <div style={{ maxWidth: '880px', width: '100%', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '4px' }}>
+        <div style={{ width: '28px', height: '28px', backgroundImage: 'url(/logo.png)', backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', flexShrink: 0 }} />
+        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--pepper-dark)', fontFamily: "'Kalam', cursive" }}>
+          {survey.title || 'Survey'}
+        </h1>
+      </div>
+
       <div className="pepper-card-wrapper">
-        {/* Pin icon - positioned at top-left corner, half on paper half outside */}
-        <div className="pepper-pin">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640">
+        {/* Clip — just above the paper card top edge */}
+        <div style={{ position: 'absolute', top: '-18px', left: '30px', zIndex: 20, width: '36px', height: '36px', transform: 'rotate(-20deg)', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))' }}>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="36" height="36">
             <path fill="#2D2520" d="M288.6 76.8C344.8 20.6 436 20.6 492.2 76.8C548.4 133 548.4 224.2 492.2 280.4L328.2 444.4C293.8 478.8 238.1 478.8 203.7 444.4C169.3 410 169.3 354.3 203.7 319.9L356.5 167.3C369 154.8 389.3 154.8 401.8 167.3C414.3 179.8 414.3 200.1 401.8 212.6L249 365.3C239.6 374.7 239.6 389.9 249 399.2C258.4 408.5 273.6 408.6 282.9 399.2L446.9 235.2C478.1 204 478.1 153.3 446.9 122.1C415.7 90.9 365 90.9 333.8 122.1L169.8 286.1C116.7 339.2 116.7 425.3 169.8 478.4C222.9 531.5 309 531.5 362.1 478.4L492.3 348.3C504.8 335.8 525.1 335.8 537.6 348.3C550.1 360.8 550.1 381.1 537.6 393.6L407.4 523.6C329.3 601.7 202.7 601.7 124.6 523.6C46.5 445.5 46.5 318.9 124.6 240.8L288.6 76.8z"/>
           </svg>
         </div>
 
         <div className={`pepper-card ${previewMode ? 'preview-mode' : ''}`}>
-        {/* Header */}
-        <div className="pepper-header">
-          <div className="pepper-brand">
-            <div className="pepper-brand-icon"></div>
-          </div>
-          <h1 className="pepper-title">{survey.title || 'Survey'}</h1>
-          {survey.subtitle && <p className="pepper-subtitle">{survey.subtitle}</p>}
-        </div>
-
-        {/* Progress Bar */}
+        {/* Progress Bar (hidden via CSS) */}
         <div className="pepper-progress">
           <div className="pepper-progress-track" style={{ '--progress-width': `${((currentQuestionIndex + 1) / visibleQuestions.length) * 100}%` } as React.CSSProperties}>
           </div>
@@ -557,6 +565,68 @@ const BasicSurveyTemplate: React.FC<Props> = ({
             <p>Your responses have been recorded successfully. We appreciate your time and feedback.</p>
           </motion.div>
         </motion.div>
+      )}
+
+      {/* Submission Loading Overlay */}
+      {isSubmitting && (
+        <div className="pepper-submitting-overlay">
+          <div className="pepper-submitting-content">
+            <div className="pepper-submitting-dots">
+              <span></span><span></span><span></span>
+            </div>
+            <p>Submitting your responses...</p>
+          </div>
+          <style>{`
+            .pepper-submitting-overlay {
+              position: fixed;
+              inset: 0;
+              z-index: 9999;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              background: rgba(255,255,255,0.92);
+              animation: pepperSubFadeIn 0.3s ease-out;
+            }
+            .pepper-submitting-content {
+              text-align: center;
+            }
+            .pepper-submitting-content p {
+              margin-top: 20px;
+              font-size: 15px;
+              font-weight: 500;
+              color: #64748b;
+              font-family: 'Outfit', sans-serif;
+            }
+            .pepper-submitting-dots {
+              display: flex;
+              gap: 8px;
+              justify-content: center;
+            }
+            .pepper-submitting-dots span {
+              width: 12px;
+              height: 12px;
+              border-radius: 50%;
+              background: #ef4444;
+              animation: pepperDotBounce 1.4s ease-in-out infinite;
+            }
+            .pepper-submitting-dots span:nth-child(2) {
+              animation-delay: 0.16s;
+              background: #f97316;
+            }
+            .pepper-submitting-dots span:nth-child(3) {
+              animation-delay: 0.32s;
+              background: #fbbf24;
+            }
+            @keyframes pepperDotBounce {
+              0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+              40% { transform: scale(1.2); opacity: 1; }
+            }
+            @keyframes pepperSubFadeIn {
+              from { opacity: 0; }
+              to { opacity: 1; }
+            }
+          `}</style>
+        </div>
       )}
     </div>
   );

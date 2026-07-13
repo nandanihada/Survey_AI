@@ -65,18 +65,29 @@ def parse_user_prompt(prompt_text: str, image_context: str = "") -> dict:
                 if re.match(r'^(what|how|why|when|where|which|who|do|does|did|is|are|was|were|have|has|would|could|should|can|rate|describe|explain)', content, re.IGNORECASE):
                     result["user_questions"].append(content)
 
-    # Extract questions from image context
+    # Extract questions from image context — keep the raw text too
     if image_context:
+        result["raw_image_text"] = image_context.strip()
         img_lines = image_context.split('\n')
         for line in img_lines:
             stripped = line.strip()
-            if stripped.endswith('?') and len(stripped) > 12:
+            if not stripped or len(stripped) < 8:
+                continue
+            # Lines ending with ?
+            if stripped.endswith('?') and len(stripped) > 10:
                 cleaned = re.sub(r'^[\d]+[.\)\-]\s*', '', stripped).strip()
-                if len(cleaned) > 12:
+                cleaned = re.sub(r'^[-•*]\s*', '', cleaned).strip()
+                if len(cleaned) > 10:
                     result["image_questions"].append(cleaned)
-            elif re.match(r'^[\d]+[.\)\-]\s+(.{15,})', stripped):
-                content = re.match(r'^[\d]+[.\)\-]\s+(.{15,})', stripped).group(1)
+            # Numbered items
+            elif re.match(r'^[\d]+[.\)\-]\s+(.{10,})', stripped):
+                content = re.match(r'^[\d]+[.\)\-]\s+(.{10,})', stripped).group(1)
                 result["image_questions"].append(content)
+            # Bullet points
+            elif re.match(r'^[-•*]\s+(.{10,})', stripped):
+                content = re.match(r'^[-•*]\s+(.{10,})', stripped).group(1)
+                if any(w in content.lower() for w in ['what', 'how', 'why', 'when', 'which', 'who', 'do ', 'did ', 'is ', 'are ', 'would', 'rate']):
+                    result["image_questions"].append(content)
 
     # Detect audience
     audience_patterns = [
@@ -117,13 +128,36 @@ def parse_user_prompt(prompt_text: str, image_context: str = "") -> dict:
     if re.search(r'\b(yes\s*/?\s*no)\b', prompt_text, re.IGNORECASE):
         result["mentioned_types"].append("yes_no")
 
+    # Detect language (non-English scripts)
+    result["language"] = "english"
+    # Hindi (Devanagari script)
+    if re.search(r'[\u0900-\u097F]', prompt_text):
+        result["language"] = "hindi"
+    # Hinglish detection (Hindi words written in Roman/Latin script)
+    elif re.search(r'\b(karo|banao|banaen|chahiye|kaise|kitne|sawal|prashna|survekshan|santusti|grahak|karmchari|baare|mein|hai|hain|aur|ya|ke liye|mujhe|humein|hamari)\b', prompt_text, re.IGNORECASE):
+        result["language"] = "hinglish"
+    # Spanish (strong indicators only)
+    elif re.search(r'\b(encuesta|preguntas?\s+sobre|satisfacción|crear\s+una)\b', prompt_text, re.IGNORECASE):
+        result["language"] = "spanish"
+    # French (strong indicators only)
+    elif re.search(r'\b(sondage|enquête|créer\s+un|à\s+propos)\b', prompt_text, re.IGNORECASE):
+        result["language"] = "french"
+    # Arabic
+    elif re.search(r'[\u0600-\u06FF]', prompt_text):
+        result["language"] = "arabic"
+    # Chinese/Japanese/Korean
+    elif re.search(r'[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]', prompt_text):
+        result["language"] = "cjk"
+
     # Extract topic (cleaned version)
     topic = prompt_text
     # Remove count phrases
     topic = re.sub(r'\b\d+\s*(?:questions?|qs?)\b', '', topic, flags=re.IGNORECASE)
+    topic = re.sub(r'\d+\s*(?:प्रश्न|सवाल|preguntas?|fragen)', '', topic)
     topic = re.sub(r'\b(?:generate|create|make|build|give me)\s+', '', topic, flags=re.IGNORECASE)
-    topic = topic.strip()
-    if len(topic) < 5:
+    topic = re.sub(r'(?:बनाएं|बनाओ|crear|créer)', '', topic)
+    topic = topic.strip().strip(',').strip()
+    if len(topic) < 3:
         topic = prompt_text
     result["topic"] = topic
 
@@ -133,12 +167,22 @@ def parse_user_prompt(prompt_text: str, image_context: str = "") -> dict:
 def calculate_question_count(parsed: dict, dropdown_count: int) -> int:
     """
     Priority: prompt text > dropdown (if changed from default) > default 10
+    BUT: if user provided more questions than the requested count, use the user's count.
     """
+    user_q_count = len(parsed["user_questions"]) + len(parsed["image_questions"])
+    
+    # Get the requested count
+    requested = 10  # default
     if parsed["question_count_from_prompt"]:
-        return parsed["question_count_from_prompt"]
-    if dropdown_count and dropdown_count != 10:
-        return dropdown_count
-    return 10
+        requested = parsed["question_count_from_prompt"]
+    elif dropdown_count and dropdown_count != 10:
+        requested = dropdown_count
+    
+    # If user provided more questions than requested, include all of theirs
+    if user_q_count > requested:
+        return min(user_q_count, 100)  # Cap at 100
+    
+    return min(requested, 100)  # Cap at 100
 
 
 def build_system_prompt(
@@ -156,13 +200,42 @@ def build_system_prompt(
 
     # Build user questions section
     user_q_section = ""
+    raw_image_text = parsed.get("raw_image_text", "")
+    
     if user_questions:
-        user_q_section = f"""
+        if user_q_count >= final_question_count:
+            user_q_section = f"""
+USER-PROVIDED QUESTIONS (INCLUDE ALL VERBATIM — DO NOT REPHRASE OR SKIP ANY):
+{chr(10).join(f'  {i+1}. {q}' for i, q in enumerate(user_questions))}
+
+You MUST include ALL {user_q_count} questions above exactly as written. Do NOT generate any additional questions.
+The total survey will have exactly {user_q_count} questions.
+"""
+        else:
+            user_q_section = f"""
 USER-PROVIDED QUESTIONS (INCLUDE VERBATIM — DO NOT REPHRASE):
 {chr(10).join(f'  {i+1}. {q}' for i, q in enumerate(user_questions))}
 
 You must include ALL {user_q_count} questions above exactly as written.
 Generate {questions_to_generate} additional questions to reach the total of {final_question_count}.
+"""
+    elif raw_image_text:
+        # We have image content — pass it with very explicit instructions
+        user_q_section = f"""
+IMAGE CONTENT — THE USER UPLOADED A SURVEY IMAGE. REPRODUCE IT EXACTLY:
+---
+{raw_image_text}
+---
+
+YOU MUST:
+1. Copy each question WORD-FOR-WORD from the text above.
+2. Copy each option WORD-FOR-WORD. If the text above shows options like "A) Book Club" then your options array must be ["Book Club"] — use THE EXACT WORDS shown above.
+3. Do NOT invent new options. Do NOT use generic options like "Fiction/Non-Fiction". Use ONLY what is written above.
+4. Do NOT duplicate any question.
+5. If the text shows [multiple_choice] tag, set type to "multiple_choice" and copy all listed options.
+6. If the text shows [short_answer] tag, set type to "short_answer" with empty options.
+7. If the text shows [yes_no] tag, set type to "yes_no" with options ["Yes", "No"].
+8. The final survey should have exactly {final_question_count} questions total. If image has fewer, add relevant ones. If image has more, include all from image.
 """
 
     # Audience context
@@ -197,7 +270,52 @@ Generate {questions_to_generate} additional questions to reach the total of {fin
     # Question type distribution
     type_instruction = ""
     if parsed["mentioned_types"]:
-        type_instruction = f"\nPREFERRED QUESTION TYPES: Focus on {', '.join(parsed['mentioned_types'])} questions."
+        types_str = ', '.join(parsed['mentioned_types'])
+        if len(parsed["mentioned_types"]) == 1:
+            the_type = parsed["mentioned_types"][0]
+            # Build type-specific enforcement
+            if the_type == "multiple_choice":
+                type_instruction = f"""
+QUESTION TYPES — STRICT REQUIREMENT:
+ALL {final_question_count} questions MUST be multiple_choice ONLY.
+Every single question must have exactly 4 answer options (A, B, C, D).
+Do NOT include any rating scales, open text, yes/no, or any other type. ONLY multiple choice.
+"""
+            elif the_type == "rating":
+                type_instruction = f"""
+QUESTION TYPES — STRICT REQUIREMENT:
+ALL {final_question_count} questions MUST be rating scale ONLY.
+Every single question must be answerable on a 1-5 numeric scale.
+Do NOT include any multiple choice, open text, yes/no, or any other type. ONLY rating (1-5 scale).
+Set type to "rating" for every question. No options array needed.
+"""
+            elif the_type == "short_answer":
+                type_instruction = f"""
+QUESTION TYPES — STRICT REQUIREMENT:
+ALL {final_question_count} questions MUST be short_answer (open text) ONLY.
+Every single question must be answered with free-form text.
+Do NOT include any multiple choice, rating scales, yes/no, or any other type. ONLY open-ended text.
+Set type to "short_answer" for every question. No options array needed.
+"""
+            elif the_type == "yes_no":
+                type_instruction = f"""
+QUESTION TYPES — STRICT REQUIREMENT:
+ALL {final_question_count} questions MUST be yes_no ONLY.
+Every single question must have exactly 2 options: ["Yes", "No"].
+Do NOT include any multiple choice, rating scales, open text, or any other type. ONLY yes/no.
+"""
+            else:
+                type_instruction = f"""
+QUESTION TYPES — STRICT REQUIREMENT:
+ALL questions MUST be {types_str} type ONLY. Do NOT use any other question type.
+"""
+        else:
+            # Multiple types mentioned — only use those
+            type_instruction = f"""
+QUESTION TYPES — STRICT REQUIREMENT:
+ONLY use these question types: {types_str}. Do NOT use any other type.
+Distribute questions evenly among the allowed types.
+"""
     else:
         type_instruction = """
 QUESTION TYPE DISTRIBUTION (for generated questions):
@@ -208,11 +326,25 @@ QUESTION TYPE DISTRIBUTION (for generated questions):
 - Opinion Scale: ~15%
 """
 
+    # Language instruction
+    language_instruction = ""
+    if parsed.get("language", "english") != "english":
+        lang_map = {
+            "hindi": "LANGUAGE: Generate the ENTIRE survey in Hindi (हिंदी). All question text and answer options must be in Hindi using Devanagari script.",
+            "hinglish": "LANGUAGE: Generate the ENTIRE survey in Hinglish (Hindi written in English/Roman script). Example: 'Aap kitne satisfied hain hamare product se?' — Mix Hindi words with English script. Do NOT use Devanagari. Do NOT use pure English.",
+            "spanish": "LANGUAGE: Generate the ENTIRE survey in Spanish (Español). All question text and answer options must be in Spanish.",
+            "french": "LANGUAGE: Generate the ENTIRE survey in French (Français). All question text and answer options must be in French.",
+            "arabic": "LANGUAGE: Generate the ENTIRE survey in Arabic (العربية). All question text and answer options must be in Arabic.",
+            "cjk": "LANGUAGE: Generate the ENTIRE survey in the same language as the user's prompt. All question text and answer options must be in that language.",
+        }
+        language_instruction = lang_map.get(parsed["language"], "")
+
     system_prompt = f"""You are an expert survey designer. Generate a high-quality survey following these exact rules.
 
 TOPIC: {parsed["topic"]}
 TOTAL QUESTIONS REQUIRED: {final_question_count}
 TONE: {tone_instruction}
+{language_instruction}
 {audience_context}
 {data_collection_context}
 {type_instruction}

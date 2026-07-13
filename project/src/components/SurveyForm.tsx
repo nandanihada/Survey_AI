@@ -39,7 +39,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
   const [generatedSurvey, setGeneratedSurvey] = useState<SurveyData | null>(null);
   const [error, setError] = useState('');
   const [showResultModal, setShowResultModal] = useState(false);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string[]>([]);
   const [imageContext, setImageContext] = useState('');
   const [isParsingImage, setIsParsingImage] = useState(false);
   const [loadingPhase, setLoadingPhase] = useState(0);
@@ -220,23 +220,31 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) { setError('Please upload an image file'); return; }
     if (file.size > 10 * 1024 * 1024) { setError('Image must be under 10MB'); return; }
+    if (imagePreview.length >= 3) { setError('Maximum 3 images allowed'); return; }
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const base64 = ev.target?.result as string;
-      setImagePreview(base64);
+      setImagePreview(prev => [...prev, base64]);
       setIsParsingImage(true);
       setError('');
       try {
         const extracted = await parseImage(base64);
-        setImageContext(extracted);
+        setImageContext(prev => prev ? `${prev}\n${extracted}` : extracted);
         if (!surveyTopic.trim()) setSurveyTopic('Survey based on uploaded content');
       } catch { setError('Could not parse image. Describe your survey manually.'); }
       finally { setIsParsingImage(false); }
     };
     reader.readAsDataURL(file);
-  }, [surveyTopic]);
+  }, [surveyTopic, imagePreview.length]);
 
-  const removeImage = () => { setImagePreview(null); setImageContext(''); if (fileInputRef.current) fileInputRef.current.value = ''; };
+  const removeImage = (index: number) => {
+    setImagePreview(prev => prev.filter((_, i) => i !== index));
+    // Re-parse remaining images would be complex, so just clear context if all removed
+    if (imagePreview.length <= 1) {
+      setImageContext('');
+    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   const handleStartWizard = async () => {
     if (!surveyTopic.trim() && !imageContext && !selectedSuggestion) { 
@@ -369,7 +377,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
     setShowClarification(false);
     setClarificationNeeds(null);
     setQuestionCount(10);
-    setImagePreview(null);
+    setImagePreview([]);
     setImageContext('');
     setError('');
   };
@@ -461,20 +469,19 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
             : 'bg-white border border-stone-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.05)] focus-within:shadow-[0_12px_40px_rgba(239,68,68,0.06)] focus-within:border-red-400/40 focus-within:ring-2 focus-within:ring-red-500/[0.04]'
           }`}>
 
-          {imagePreview && (
-            <div className="relative mx-2 mt-2 mb-1">
-              <div className={`relative rounded-xl overflow-hidden border ${isDarkMode ? 'border-slate-600' : 'border-stone-200'}`}>
-                <img src={imagePreview} alt="Uploaded" className="w-full max-h-20 object-cover" />
-                <button onClick={removeImage} className="absolute top-1.5 right-1.5 p-1 bg-black/60 rounded-full text-white hover:bg-black/80"><X size={10} /></button>
-                {isParsingImage && (
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                    <div className="flex items-center gap-1.5 text-white text-[10px] bg-black/60 px-2 py-1 rounded-full"><Loader2 className="animate-spin" size={10} /> Extracting...</div>
-                  </div>
-                )}
-                {imageContext && !isParsingImage && (
-                  <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1 text-[9px] bg-green-500 text-white px-2 py-0.5 rounded-full"><Check size={9} /> Done</div>
-                )}
-              </div>
+          {imagePreview.length > 0 && (
+            <div className="flex gap-2 mx-2 mt-2 mb-1 overflow-x-auto">
+              {imagePreview.map((img, idx) => (
+                <div key={idx} className={`relative rounded-xl overflow-hidden border flex-shrink-0 ${isDarkMode ? 'border-slate-600' : 'border-stone-200'}`} style={{ width: imagePreview.length === 1 ? '100%' : '120px', height: '64px' }}>
+                  <img src={img} alt={`Uploaded ${idx + 1}`} className="w-full h-full object-cover" />
+                  <button onClick={() => removeImage(idx)} className="absolute top-1 right-1 p-0.5 bg-black/60 rounded-full text-white hover:bg-black/80"><X size={8} /></button>
+                </div>
+              ))}
+              {isParsingImage && (
+                <div className="flex-shrink-0 w-16 h-16 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center">
+                  <Loader2 className="animate-spin text-stone-400" size={14} />
+                </div>
+              )}
             </div>
           )}
           {selectedSuggestion && (
@@ -491,16 +498,44 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
           )}
           <textarea
             value={surveyTopic} onChange={(e) => setSurveyTopic(e.target.value)}
-            placeholder="Describe your survey topic..."
+            placeholder="Describe your survey topic or paste an image..."
             className={`relative w-full px-3.5 sm:px-4 py-3 text-[14px] sm:text-[15px] rounded-xl resize-none border-0 focus:outline-none focus:ring-0 z-10 font-medium ${isDarkMode ? 'bg-transparent text-white placeholder-slate-500' : 'bg-transparent text-slate-800 placeholder-slate-400'
               }`}
             rows={2}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && (surveyTopic.trim() || selectedSuggestion)) { e.preventDefault(); handleStartWizard(); } }}
+            onPaste={(e) => {
+              const items = e.clipboardData?.items;
+              if (!items) return;
+              for (let i = 0; i < items.length; i++) {
+                if (items[i].type.startsWith('image/')) {
+                  e.preventDefault();
+                  if (imagePreview.length >= 3) { setError('Maximum 3 images allowed'); return; }
+                  const file = items[i].getAsFile();
+                  if (!file) return;
+                  if (file.size > 10 * 1024 * 1024) { setError('Image must be under 10MB'); return; }
+                  const reader = new FileReader();
+                  reader.onload = async (ev) => {
+                    const base64 = ev.target?.result as string;
+                    setImagePreview(prev => [...prev, base64]);
+                    setIsParsingImage(true);
+                    setError('');
+                    try {
+                      const extracted = await parseImage(base64);
+                      setImageContext(prev => prev ? `${prev}\n${extracted}` : extracted);
+                      if (!surveyTopic.trim()) setSurveyTopic('Survey based on pasted image');
+                    } catch { setError('Could not parse image. Describe your survey manually.'); }
+                    finally { setIsParsingImage(false); }
+                  };
+                  reader.readAsDataURL(file);
+                  break;
+                }
+              }
+            }}
           />
           <div className="relative z-10 flex items-center justify-between px-2.5 sm:px-3 pb-2.5 pt-0.5">
             <div className="flex items-center gap-1.5">
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-              <button onClick={() => fileInputRef.current?.click()} disabled={isParsingImage}
+              <button onClick={() => fileInputRef.current?.click()} disabled={isParsingImage || imagePreview.length >= 3}
                 className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-stone-100 text-stone-400'} disabled:opacity-40`}>
                 <ImagePlus size={14} />
               </button>
@@ -783,7 +818,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
                                 <span className="w-5 h-5 rounded-md bg-white border border-stone-200 flex items-center justify-center text-[10px] font-bold text-stone-500">
                                   {OPTION_KEYS[oi]}
                                 </span>
-                                <span className="text-[13px] text-stone-700">{opt}</span>
+                                <span className="text-[13px] text-stone-700">{opt.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</span>
                               </div>
                             ))}
                           </div>

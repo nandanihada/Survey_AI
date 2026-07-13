@@ -183,9 +183,24 @@ export const parseImage = async (imageBase64: string): Promise<string> => {
     const response = await makeApiRequest('/parse-image', {
       method: 'POST',
       body: JSON.stringify({ image: imageBase64 }),
-    });
+    }, true); // Allow unauthenticated
     if (!response.ok) throw new Error(`Image parse failed: ${response.status}`);
     const data = await response.json();
+    
+    // If we got structured questions, format them clearly for the prompt builder
+    if (data.structured_questions && Array.isArray(data.structured_questions)) {
+      const lines: string[] = [];
+      data.structured_questions.forEach((q: any, i: number) => {
+        lines.push(`${i + 1}. ${q.question} [${q.type || 'short_answer'}]`);
+        if (q.options && q.options.length > 0) {
+          q.options.forEach((opt: string, oi: number) => {
+            lines.push(`   ${String.fromCharCode(65 + oi)}) ${opt}`);
+          });
+        }
+      });
+      return lines.join('\n');
+    }
+    
     return data.extracted_text || '';
   } catch (error) {
     console.error('Image parsing failed:', error);
