@@ -99,6 +99,7 @@ import type { WidgetCustomizerSettings } from './components/WidgetCustomizer';
 
 const PublicSurveyCreation = lazyRetry(() => import('./components/PublicSurveyCreation'));
 const PricingPage = lazyRetry(() => import('./pages/PricingPage'));
+const UpgradePage = lazyRetry(() => import('./pages/UpgradePage'));
 const SurveyForm = lazyRetry(() => import('./components/SurveyForm'));
 const SurveyList = lazyRetry(() => import('./components/SurveyList'));
 const PostbackManager = lazyRetry(() => import('./components/PostbackManager'));
@@ -119,10 +120,7 @@ function LegacyDashboard() {
   const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'create');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showPreviewWidget, setShowPreviewWidget] = useState(false);
-  const [autoPreviewEnabled, setAutoPreviewEnabled] = useState(() => {
-    const saved = localStorage.getItem('widgetEnabled');
-    return saved !== null ? saved === 'true' : true;
-  });
+  const [autoPreviewEnabled, setAutoPreviewEnabled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Update activeTab when URL changes
@@ -278,9 +276,9 @@ function LegacyDashboard() {
                         key={value}
                         value={value}
                         onClick={(e) => {
-                          if (!hasAccess && isPremiumIcon) {
+                          if (!hasAccess) {
                             e.preventDefault();
-                            navigate('/signup');
+                            navigate('/pricing?theme=light');
                           }
                         }}
                         className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-md transition-all duration-150 relative ${!hasAccess && !isPremiumIcon
@@ -337,7 +335,7 @@ function LegacyDashboard() {
 
             <div className="hidden md:flex items-center gap-3">
               <button
-                onClick={() => navigate('/login')}
+                onClick={() => navigate('/pricing?theme=light')}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${isDarkMode
                     ? 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
                     : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-50'
@@ -476,7 +474,7 @@ function LegacyDashboard() {
               </TabsContent>
               <TabsContent value="surveys">
                 <Suspense fallback={<OptimizedLoader type="page" message="Loading surveys..." />}>
-                  <SurveyList isDarkMode={isDarkMode} />
+                  <SurveyList isDarkMode={isDarkMode} onCreateNew={() => setActiveTab('create')} />
                 </Suspense>
               </TabsContent>
               <TabsContent value="responses">
@@ -628,6 +626,7 @@ export default function App() {
             {/* Public survey creation - allows 1 survey without login */}
             <Route path="/create-survey" element={<PublicSurveyCreation />} />
             <Route path="/pricing" element={<PricingPage />} />
+            <Route path="/upgrade" element={<UpgradePage />} />
 
             {/* Public routes */}
             <Route path="/login" element={<LoginPage />} />

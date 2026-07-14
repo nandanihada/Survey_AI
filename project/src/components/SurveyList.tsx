@@ -15,6 +15,7 @@ import {
 
 interface SurveyListProps {
   isDarkMode?: boolean;
+  onCreateNew?: () => void;
 }
 
 interface Survey {
@@ -26,7 +27,7 @@ interface Survey {
   response_count?: number;
 }
 
-const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false }) => {
+const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew }) => {
   const navigate = useNavigate();
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [loading, setLoading] = useState(true);
@@ -222,7 +223,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false }) => {
               <Filter size={16} />
             </button>
           </div>
-          <button className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2">
+          <button onClick={() => onCreateNew?.()} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2">
             <Plus size={16} />
             <span className="sm:inline">Create New</span>
           </button>
@@ -246,7 +247,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false }) => {
             <div className="text-center py-12">
               <FolderOpen size={48} className="mx-auto mb-4 text-gray-400" />
               <p className="text-gray-500 text-lg mb-4">No surveys found</p>
-              <button className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center gap-2 mx-auto">
+              <button onClick={() => onCreateNew?.()} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center gap-2 mx-auto">
                 <Plus size={16} />
                 Create Your First Survey
               </button>

@@ -633,6 +633,37 @@ def webhook():
     return {"status": "success"}, 200
 
 
+@app.route("/api/billing-inquiry", methods=["POST", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins="*")
+def billing_inquiry():
+    if request.method == "OPTIONS":
+        return "", 200
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        billing_doc = {
+            "name": data.get("name", ""),
+            "email": data.get("email", ""),
+            "phone": data.get("phone", ""),
+            "plan": data.get("plan", "pro"),
+            "billing_cycle": data.get("billing_cycle", "yearly"),
+            "amount": data.get("amount", 0),
+            "currency": data.get("currency", "INR"),
+            "status": "pending",
+            "created_at": datetime.utcnow(),
+        }
+
+        db["billing_inquiries"].insert_one(billing_doc)
+        print(f"Billing inquiry saved: {billing_doc['email']} - {billing_doc['plan']}")
+
+        return jsonify({"success": True, "message": "Billing inquiry saved"})
+    except Exception as e:
+        print(f"Billing inquiry error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 def parse_survey_response(response_text):
 
     if not response_text:

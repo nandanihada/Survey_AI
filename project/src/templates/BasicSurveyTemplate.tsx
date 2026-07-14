@@ -342,8 +342,8 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   );
 
   const renderScale = (question: Question) => {
-    // Determine scale range: use 5 for rating type, 10 for opinion_scale
-    const scaleMax = 5;
+    // Determine scale range: use 10 for rating questions
+    const scaleMax = 10;
     return (
       <div className="pepper-scale">
         <div className="pepper-scale-labels">

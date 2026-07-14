@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Check } from 'lucide-react';
 
 const PricingPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
+  const isLight = searchParams.get('theme') === 'light';
 
   const plans = [
     {
@@ -18,9 +20,8 @@ const PricingPage: React.FC = () => {
       ctaStyle: 'border-2 border-red-500 text-red-500 hover:bg-red-50',
       popular: false,
       features: [
-        '100 responses / month',
-        '20 AI-generated surveys / month',
-        'Basic analytics dashboard',
+        '2,000 responses / month',
+        '70 AI-generated surveys / month',
         'AI editing assistance',
         'Survey widget embed',
         'Pepperwahl branding',
@@ -70,31 +71,31 @@ const PricingPage: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className={`min-h-screen ${isLight ? 'bg-white text-slate-900' : 'bg-slate-950 text-white'}`}>
       {/* Header */}
       <div className="text-center pt-16 pb-12 px-4">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-800 border border-slate-700 mb-6">
-          <span className="text-yellow-400">🌶️</span>
-          <span className="text-[11px] font-bold tracking-widest uppercase text-slate-300">Simple, Spicy Pricing</span>
+        <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-6 ${isLight ? 'bg-stone-100 border border-stone-200' : 'bg-slate-800 border border-slate-700'}`}>
+          <img src="/logo.png" alt="" className="w-4 h-4 object-contain" />
+          <span className={`text-[11px] font-bold tracking-widest uppercase ${isLight ? 'text-stone-600' : 'text-slate-300'}`}>Simple, Spicy Pricing</span>
         </div>
-        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold mb-4" style={{ fontFamily: "'Outfit', sans-serif" }}>
+        <h1 className={`text-3xl sm:text-4xl lg:text-5xl font-extrabold mb-4 ${isLight ? 'text-slate-900' : ''}`} style={{ fontFamily: "'Outfit', sans-serif" }}>
           Pick Your <span className="text-red-500">Pepper</span>
         </h1>
-        <p className="text-sm sm:text-base text-slate-400 max-w-md mx-auto">
+        <p className={`text-sm sm:text-base max-w-md mx-auto ${isLight ? 'text-stone-500' : 'text-slate-400'}`}>
           From solo creators to enterprise teams — every plan is packed with flavor. No hidden costs, no surprises.
         </p>
 
         {/* Billing toggle */}
-        <div className="flex items-center justify-center gap-1 mt-8 bg-slate-800 rounded-full p-1 w-fit mx-auto">
+        <div className={`flex items-center justify-center gap-1 mt-8 rounded-full p-1 w-fit mx-auto ${isLight ? 'bg-stone-100' : 'bg-slate-800'}`}>
           <button
             onClick={() => setBilling('monthly')}
-            className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${billing === 'monthly' ? 'bg-red-500 text-white' : 'text-slate-400 hover:text-white'}`}
+            className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${billing === 'monthly' ? 'bg-red-500 text-white' : isLight ? 'text-stone-500 hover:text-stone-800' : 'text-slate-400 hover:text-white'}`}
           >
             Monthly
           </button>
           <button
             onClick={() => setBilling('annual')}
-            className={`px-5 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${billing === 'annual' ? 'bg-red-500 text-white' : 'text-slate-400 hover:text-white'}`}
+            className={`px-5 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${billing === 'annual' ? 'bg-red-500 text-white' : isLight ? 'text-stone-500 hover:text-stone-800' : 'text-slate-400 hover:text-white'}`}
           >
             Annual <span className="text-[10px] bg-green-500 text-white px-1.5 py-0.5 rounded-full font-bold">Save 20%</span>
           </button>
@@ -106,7 +107,11 @@ const PricingPage: React.FC = () => {
         {plans.map((plan) => (
           <div
             key={plan.name}
-            className={`relative rounded-2xl p-8 flex flex-col ${plan.popular ? 'bg-slate-800 border-2 border-slate-600 ring-1 ring-red-500/20' : 'bg-slate-900 border border-slate-800'}`}
+            className={`relative rounded-2xl p-8 flex flex-col transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_20px_60px_rgba(239,68,68,0.15)] ${
+              plan.popular
+                ? isLight ? 'bg-white border-2 border-red-200 shadow-lg' : 'bg-slate-800 border-2 border-slate-600 ring-1 ring-red-500/20'
+                : isLight ? 'bg-white border border-stone-200 shadow-sm hover:border-stone-300' : 'bg-slate-900 border border-slate-800 hover:border-slate-600'
+            }`}
           >
             {plan.popular && (
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-red-500 text-white text-[10px] font-bold uppercase tracking-wider rounded-full">
@@ -120,35 +125,39 @@ const PricingPage: React.FC = () => {
             </div>
 
             {/* Plan name & description */}
-            <h3 className="text-xl font-bold text-white mb-1">{plan.name}</h3>
-            <p className="text-xs text-slate-400 mb-5">{plan.description}</p>
+            <h3 className={`text-xl font-bold mb-1 ${isLight ? 'text-slate-900' : 'text-white'}`}>{plan.name}</h3>
+            <p className={`text-xs mb-5 ${isLight ? 'text-stone-500' : 'text-slate-400'}`}>{plan.description}</p>
 
             {/* Price */}
             <div className="mb-1">
-              <span className="text-3xl font-extrabold text-white">{plan.price}</span>
-              <span className="text-sm text-slate-400 ml-1">{plan.priceSuffix}</span>
+              <span className={`text-3xl font-extrabold ${isLight ? 'text-slate-900' : 'text-white'}`}>{plan.price}</span>
+              <span className={`text-sm ml-1 ${isLight ? 'text-stone-500' : 'text-slate-400'}`}>{plan.priceSuffix}</span>
             </div>
-            <p className="text-[11px] text-slate-500 mb-6">{plan.priceNote}</p>
+            <p className={`text-[11px] mb-6 ${isLight ? 'text-stone-400' : 'text-slate-500'}`}>{plan.priceNote}</p>
 
             {/* CTA */}
             <button
-              onClick={() => navigate('/login?mode=signup')}
+              onClick={() => {
+                if (plan.name === 'Pro') navigate('/upgrade');
+                else if (plan.name === 'Enterprise') window.location.href = 'mailto:business@moustacheleads.com?subject=Pepperwahl Enterprise Plan Inquiry';
+                else navigate('/login?mode=signup');
+              }}
               className={`w-full py-3 rounded-xl text-sm font-semibold transition-all ${plan.ctaStyle}`}
             >
               {plan.cta}
             </button>
 
             {/* Features */}
-            <div className="mt-6 pt-6 border-t border-slate-700/50">
+            <div className={`mt-6 pt-6 border-t ${isLight ? 'border-stone-100' : 'border-slate-700/50'}`}>
               {plan.prefix && (
-                <p className="text-[10px] font-bold tracking-wider text-slate-500 uppercase mb-3">{plan.prefix}</p>
+                <p className={`text-[10px] font-bold tracking-wider uppercase mb-3 ${isLight ? 'text-stone-400' : 'text-slate-500'}`}>{plan.prefix}</p>
               )}
               {!plan.prefix && (
-                <p className="text-[10px] font-bold tracking-wider text-slate-500 uppercase mb-3">What's included:</p>
+                <p className={`text-[10px] font-bold tracking-wider uppercase mb-3 ${isLight ? 'text-stone-400' : 'text-slate-500'}`}>What's included:</p>
               )}
               <ul className="space-y-2.5">
                 {plan.features.map((f, i) => (
-                  <li key={i} className="flex items-center gap-2.5 text-[13px] text-slate-300">
+                  <li key={i} className={`flex items-center gap-2.5 text-[13px] ${isLight ? 'text-stone-700' : 'text-slate-300'}`}>
                     <Check size={14} className="text-green-500 flex-shrink-0" />
                     {f}
                   </li>
