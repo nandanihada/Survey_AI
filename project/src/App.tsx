@@ -589,22 +589,7 @@ function LegacyDashboard() {
         </div>
       </div>
 
-      {/* Preview Widget */}
-      {showPreviewWidget && widgetSettings && (
-        <Suspense fallback={null}>
-          <FloatingWidget
-            isDarkMode={isDarkMode}
-            customColor={widgetSettings.color}
-            glassEffect={widgetSettings.glassEffect}
-            transparency={widgetSettings.transparency}
-            animationSpeed={widgetSettings.animationSpeed}
-            questionDelay={widgetSettings.questionDelay}
-            customQuestions={widgetSettings.questions}
-            onComplete={handleWidgetComplete}
-            onDismiss={handleWidgetDismiss}
-          />
-        </Suspense>
-      )}
+      {/* Preview Widget - Disabled */}
     </FloatingWidgetProvider>
   );
 }
