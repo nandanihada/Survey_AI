@@ -33,9 +33,9 @@ class AuthService:
         self.smtp_port = int(port_env) if port_env else 587
         
         # Use defaults if env vars are empty strings or None
-        self.smtp_username = os.getenv('SMTP_USERNAME') or 'rupavathivoosa2003@gmail.com'
-        self.smtp_password = os.getenv('SMTP_PASSWORD') or 'sult wcyr zbsz wvtr'
-        self.from_email = os.getenv('FROM_EMAIL') or 'rupavathivoosa2003@gmail.com'
+        self.smtp_username = os.getenv('SMTP_USERNAME') or 'business@moustacheleads.com'
+        self.smtp_password = os.getenv('SMTP_PASSWORD') or 'uidy htux firg rdde'
+        self.from_email = os.getenv('FROM_EMAIL') or 'business@moustacheleads.com'
         
         print("✅ JWT Auth Service initialized")
         print(f"📧 Email service configured: {bool(self.smtp_username and self.smtp_password)}")

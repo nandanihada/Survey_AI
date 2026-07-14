@@ -27,9 +27,9 @@ class EmailTriggerService:
         # Email configuration for Gmail
         self.smtp_server = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
         self.smtp_port = int(os.getenv('SMTP_PORT', '587'))
-        self.smtp_username = os.getenv('SMTP_USERNAME', 'rupavathivoosa2003@gmail.com')
-        self.smtp_password = os.getenv('SMTP_PASSWORD', 'glhj qhgd rxya lcyl')
-        self.from_email = os.getenv('FROM_EMAIL', 'rupavathivoosa2003@gmail.com')
+        self.smtp_username = os.getenv('SMTP_USERNAME', 'business@moustacheleads.com')
+        self.smtp_password = os.getenv('SMTP_PASSWORD', 'uidy htux firg rdde')
+        self.from_email = os.getenv('FROM_EMAIL', 'business@moustacheleads.com')
         
         print(f"📧 Email Service Initialized:")
         print(f"   SMTP Server: {self.smtp_server}")
