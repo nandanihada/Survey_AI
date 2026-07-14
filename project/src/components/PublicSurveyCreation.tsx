@@ -1,8 +1,8 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { generateSurvey, parseImage, getWizardSuggestions } from '../utils/api';
+import { generateSurvey, parseImage } from '../utils/api';
 import { generateSurveyLink } from '../utils/surveyLinkUtils';
-import { Loader2, Hash, X, ChevronRight, ImagePlus, Sparkles, Check, ArrowRight, Lightbulb, ChevronDown, ExternalLink, Share2, Eye, BarChart2, Zap } from 'lucide-react';
+import { Loader2, Hash, X, ChevronRight, ImagePlus, Check, ArrowRight, Lightbulb, ChevronDown, Share2, Eye, BarChart2, Zap, Edit3 } from 'lucide-react';
 import { parsePrompt, getClarificationNeeds } from '../utils/promptParser';
 import SurveyClarification, { ClarificationAnswers } from './SurveyClarification';
 import SearchLoader from './SearchLoader';
@@ -23,6 +23,8 @@ interface SurveyData {
   prompt: string;
   animationSpeed: number;
 }
+
+const OPTION_KEYS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
 
 const PublicSurveyCreation: React.FC = () => {
   const navigate = useNavigate();
@@ -48,45 +50,6 @@ const PublicSurveyCreation: React.FC = () => {
   const [clarificationNeeds, setClarificationNeeds] = useState<ReturnType<typeof getClarificationNeeds> | null>(null);
 
   const suggestionsRef = useRef<HTMLDivElement>(null);
-
-  // Wizard conversational state
-  const [wizardStep, setWizardStep] = useState(-1);
-  const [wizardAnswers, setWizardAnswers] = useState<Record<number, string>>({});
-  const [wizardSuggestions, setWizardSuggestions] = useState<{ type?: string, collect?: string }>({});
-  const [chatHistory, setChatHistory] = useState<{ role: 'ai' | 'user'; text: string }[]>([]);
-  const [wizardTextInput, setWizardTextInput] = useState('');
-  const chatScrollRef = useRef<HTMLDivElement>(null);
-
-  const WIZARD_STEPS = [
-    {
-      id: 'type',
-      question: wizardSuggestions.type 
-         ? `Got it! Most people building this survey choose "${wizardSuggestions.type}". Does this work for you, or do you want something else?`
-         : "Got it! Is this an internal team survey or casual feedback?",
-      options: ["Internal team survey", "Casual feedback", "Formal assessment", "Customer feedback", "Skip"],
-      inputType: 'options'
-    },
-    {
-      id: 'collect',
-      question: wizardSuggestions.collect
-         ? `To follow standard practices, people usually choose "${wizardSuggestions.collect}". Do you want to do that?`
-         : "Do you want to collect respondent details?",
-      options: ["Email only", "Full personal details", "Keep it anonymous", "Skip"],
-      inputType: 'options'
-    },
-    {
-      id: 'audience',
-      question: "Lastly, who is your target audience and what is the primary goal?",
-      inputType: 'text'
-    }
-  ];
-
-  // Auto-scroll chat history
-  useEffect(() => {
-    if (chatScrollRef.current) {
-      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
-    }
-  }, [chatHistory, wizardStep, loadingPhase]);
 
   const SUGGESTION_PROMPTS = [
     { icon: '/icons/star.svg', gradient: 'linear-gradient(135deg, #ff7e5f, #feb47b)', label: 'Customer Feedback', prompt: 'Customer satisfaction survey to understand how happy our customers are with our product quality, support experience, and overall service' },
@@ -179,51 +142,20 @@ const PublicSurveyCreation: React.FC = () => {
     const parsed = parsePrompt(promptText, questionCount);
     const needs = getClarificationNeeds(parsed, questionCount !== 10);
 
-    // If topic is clear, show minimal clarification (just data collection)
-    if (parsed.isTopicClear) {
-      setShowClarification(true);
-      setClarificationNeeds(needs);
-      return;
-    }
-
-    // Topic unclear — still show clarification but with topic field
+    // Show clarification (handles both clear and unclear topics)
     setShowClarification(true);
     setClarificationNeeds(needs);
   };
 
   const handleClarificationSubmit = (answers: ClarificationAnswers) => {
     setShowClarification(false);
+    // Go straight to generation
     const finalAnswers: Record<number, string> = {};
     if (answers.audience) finalAnswers[0] = answers.audience;
     if (answers.dataCollection) finalAnswers[1] = answers.dataCollection;
     if (answers.questionCount) setQuestionCount(answers.questionCount);
     if (answers.topic) setSurveyTopic(prev => prev || answers.topic!);
     handleFinalGenerateSurvey(finalAnswers);
-  };
-
-  const handleNextStep = (answer?: string) => {
-    let actualAnswer = answer;
-    if (!answer && WIZARD_STEPS[wizardStep].inputType === 'text') {
-      actualAnswer = wizardTextInput.trim() || 'Skipped';
-    } else if (!answer) {
-      actualAnswer = 'Skipped';
-    }
-
-    const newHistory: { role: 'ai' | 'user'; text: string }[] = [...chatHistory, { role: 'user', text: actualAnswer as string }];
-    const newAnswers = { ...wizardAnswers, [wizardStep]: actualAnswer as string };
-    
-    setWizardAnswers(newAnswers);
-    setWizardTextInput('');
-
-    if (wizardStep + 1 < WIZARD_STEPS.length) {
-      newHistory.push({ role: 'ai', text: WIZARD_STEPS[wizardStep + 1].question });
-      setChatHistory(newHistory);
-      setWizardStep(wizardStep + 1);
-    } else {
-      setChatHistory(newHistory);
-      setWizardStep(99); 
-      handleFinalGenerateSurvey(newAnswers);
-    }
   };
 
   const handleFinalGenerateSurvey = useCallback(async (finalAnswers: Record<number, string>) => {
@@ -242,8 +174,8 @@ const PublicSurveyCreation: React.FC = () => {
       }
       
       // Append gathered context
-      if (finalAnswers[0] && finalAnswers[0] !== 'Skip' && finalAnswers[0] !== 'Skipped') finalPrompt += `\nSurvey Type: ${finalAnswers[0]}`;
-      if (finalAnswers[1] && finalAnswers[1] !== 'Skip' && finalAnswers[1] !== 'Skipped') finalPrompt += `\nData Collection Details: ${finalAnswers[1]}`;
+      if (finalAnswers[0] && finalAnswers[0] !== 'Skip' && finalAnswers[0] !== 'Skipped') finalPrompt += `\nAudience: ${finalAnswers[0]}`;
+      if (finalAnswers[1] && finalAnswers[1] !== 'Skip' && finalAnswers[1] !== 'Skipped') finalPrompt += `\nData Collection: ${finalAnswers[1]}`;
       if (finalAnswers[2] && finalAnswers[2] !== 'Skip' && finalAnswers[2] !== 'Skipped') finalPrompt += `\nTarget Audience & Goal: ${finalAnswers[2]}`;
 
       const result = await generateSurvey({
@@ -269,9 +201,6 @@ const PublicSurveyCreation: React.FC = () => {
     } catch (err: unknown) {
       clearInterval(phaseInterval);
       setError(err instanceof Error ? err.message : 'Failed to generate survey');
-      setWizardStep(-1);
-      setChatHistory([]);
-      setWizardAnswers({});
     } finally { 
       setIsLoading(false); 
     }
@@ -286,6 +215,19 @@ const PublicSurveyCreation: React.FC = () => {
       case 'rating': case 'opinion_scale': case 'scale': case 'range': return 'scale';
       default: return 'text';
     }
+  };
+
+  const handleCloseResult = () => {
+    setShowResultModal(false);
+    setSurveyTopic('');
+    setSelectedSuggestion(null);
+    setGeneratedSurvey(null);
+    setShowClarification(false);
+    setClarificationNeeds(null);
+    setQuestionCount(10);
+    setImagePreview(null);
+    setImageContext('');
+    setError('');
   };
 
   const handleShareLink = async () => {
@@ -318,6 +260,10 @@ const PublicSurveyCreation: React.FC = () => {
   const handleSignup = () => navigate('/login');
 
   return (
+    <>
+    {/* Full-page Gooey Loader */}
+    {isLoading && <SearchLoader message={loadingMessages[loadingPhase]} />}
+
     <div className={`min-h-screen ${isDarkMode ? 'bg-slate-900 text-white' : 'bg-gray-50 text-gray-900'}`}>
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-3 sm:px-4 py-8">
         <div className="w-full max-w-xl">
@@ -335,8 +281,6 @@ const PublicSurveyCreation: React.FC = () => {
             </p>
           </div>
 
-          {wizardStep === -1 && (
-          <>
           {/* Input Card */}
           <div className={`rounded-2xl border-2 p-1 transition-all duration-300 ${isDarkMode ? 'bg-slate-800 border-slate-600 focus-within:border-red-500' : 'bg-white border-stone-200 focus-within:border-red-400 shadow-lg'
             }`}>
@@ -469,95 +413,20 @@ const PublicSurveyCreation: React.FC = () => {
 
           {/* Clarification Panel */}
           {showClarification && clarificationNeeds && (
-            <SurveyClarification
-              needs={clarificationNeeds}
-              onSubmit={handleClarificationSubmit}
-              onCancel={() => setShowClarification(false)}
-              isDarkMode={isDarkMode}
-            />
-          )}
-          </>
-          )}
-
-          {wizardStep !== -1 && (
-            <div className={`relative rounded-[2rem] p-4 sm:p-6 transition-all duration-500 overflow-hidden flex flex-col gap-4 ${
-               isDarkMode 
-                ? 'bg-slate-900 border border-slate-700/60 shadow-[0_16px_40px_rgba(0,0,0,0.4)]'
-                : 'bg-white border border-stone-200 shadow-[0_16px_40px_rgba(0,0,0,0.06)] ring-1 ring-black/5'
-            }`}>
-               {/* Chat History */}
-               <div ref={chatScrollRef} className="flex flex-col gap-4 max-h-[45vh] overflow-y-auto pr-2" style={{ scrollBehavior: 'smooth' }}>
-                  {chatHistory.map((msg, idx) => (
-                     <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        {msg.role === 'ai' && (
-                           <div className={`w-8 h-8 rounded-[0.8rem] flex items-center justify-center shadow-sm flex-shrink-0 mr-3 mt-1 border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'} p-1.5`}>
-                              <img src="/logo.png" alt="AI" className="w-full h-full object-contain drop-shadow-sm" />
-                           </div>
-                        )}
-                        <div className={`max-w-[85%] rounded-[1.25rem] px-4 py-3 ${
-                           msg.role === 'user' 
-                             ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-tr-sm shadow-md'
-                             : isDarkMode 
-                                 ? 'bg-slate-800 text-slate-200 border border-slate-700/50 rounded-tl-sm shadow-sm'
-                                 : 'bg-stone-50 text-stone-800 border border-stone-200 rounded-tl-sm shadow-sm'
-                        }`}>
-                           <p className="text-[14px] sm:text-[15px] font-medium leading-relaxed" style={{ fontFamily: "'Outfit', sans-serif" }}>{msg.text}</p>
-                        </div>
-                     </div>
-                  ))}
-                  
-                  {wizardStep === 99 && isLoading && (
-                     <SearchLoader message={loadingMessages[loadingPhase]} />
-                  )}
-               </div>
-
-               {wizardStep < WIZARD_STEPS.length && wizardStep !== 99 && (
-                   <div className={`pt-4 border-t mt-2 animate-in fade-in slide-in-from-bottom-4 duration-500 ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
-                       {WIZARD_STEPS[wizardStep].inputType === 'text' ? (
-                           <div className="flex flex-col gap-3">
-                               <input 
-                                 type="text"
-                                 value={wizardTextInput}
-                                 onChange={(e) => setWizardTextInput(e.target.value)}
-                                 onKeyDown={(e) => { if (e.key === 'Enter') handleNextStep(); }}
-                                 placeholder="Type your answer, or skip..."
-                                 className={`w-full px-4 py-3.5 rounded-xl border focus:outline-none focus:ring-[3px] focus:ring-red-500/20 transition-all font-medium text-[15px] ${
-                                    isDarkMode ? 'bg-slate-800/50 border-slate-700 text-white placeholder-slate-500' : 'bg-stone-50 border-stone-200 text-stone-800'
-                                 }`}
-                                 style={{ fontFamily: "'Outfit', sans-serif" }}
-                               />
-                               <div className="flex justify-end gap-2">
-                                   <button onClick={() => handleNextStep('Skip')} className={`px-4 py-2.5 text-sm font-bold rounded-xl transition-colors ${isDarkMode ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-500 hover:bg-slate-100'}`}>Skip</button>
-                                   <button onClick={() => handleNextStep()} className="px-5 py-2.5 text-[15px] font-bold rounded-xl bg-gradient-to-r from-red-500 to-orange-500 text-white hover:shadow-[0_4px_20px_rgba(239,68,68,0.3)] transition-all">Send</button>
-                               </div>
-                           </div>
-                       ) : (
-                           <div className="flex flex-wrap gap-2 justify-end">
-                               {WIZARD_STEPS[wizardStep].options!.map(opt => (
-                                   <button 
-                                       key={opt}
-                                       onClick={() => handleNextStep(opt)}
-                                       className={`px-4 py-2.5 rounded-xl text-[14px] font-bold transition-all ${
-                                          opt === 'Skip'
-                                            ? isDarkMode ? 'border border-slate-700 text-slate-400 hover:bg-slate-800' : 'border border-slate-200 text-slate-500 hover:bg-slate-50'
-                                            : isDarkMode ? 'bg-slate-800 border border-slate-700 text-white hover:border-red-500 hover:text-red-400' : 'bg-white border border-slate-200 text-slate-700 hover:border-red-500 hover:text-red-500 shadow-sm hover:shadow-md'
-                                       }`}
-                                       style={{ fontFamily: "'Outfit', sans-serif" }}
-                                   >
-                                       {opt}
-                                   </button>
-                               ))}
-                           </div>
-                       )}
-                   </div>
-               )}
+            <div className="mt-4">
+              <SurveyClarification
+                needs={clarificationNeeds}
+                onSubmit={handleClarificationSubmit}
+                onCancel={() => setShowClarification(false)}
+                isDarkMode={isDarkMode}
+              />
             </div>
           )}
 
           {error && <div className="mt-4 sm:mt-6 bg-red-100/50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-[13px] sm:text-[14px] font-medium text-center">{error}</div>}
 
-          {/* ── Auto-scrolling Prompt Suggestion Slider ── */}
-          {wizardStep === -1 && !selectedSuggestion && (
+          {/* Auto-scrolling Prompt Suggestion Slider */}
+          {!selectedSuggestion && !showClarification && (
             <div className="mt-6 sm:mt-8" style={{ animation: 'sfFadeUp 0.5s 0.2s ease-out both' }}>
               <div
                 className="prompt-slider"
@@ -596,104 +465,81 @@ const PublicSurveyCreation: React.FC = () => {
         </div>
       </div>
 
-      {/* Survey Result Modal */}
+      {/* ── Survey Result Modal (clean design from SurveyForm) ── */}
       {showResultModal && generatedSurvey && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" style={{ animation: 'sfOverlayIn 0.35s ease-out' }}>
-          <div className="absolute inset-0 bg-black/30 backdrop-blur-xl" onClick={() => setShowResultModal(false)} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ animation: 'sfOverlayIn 0.3s ease-out' }}>
+          <div className="absolute inset-0 bg-slate-900/50" onClick={handleCloseResult} />
 
           <div
-            className="relative w-full sm:w-[92vw] sm:max-w-lg max-h-[88vh] sm:max-h-[82vh] rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col"
-            style={{
-              animation: 'sfModalIn 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
-              background: isDarkMode ? 'linear-gradient(135deg, rgba(30,41,59,0.92) 0%, rgba(15,23,42,0.95) 100%)' : 'linear-gradient(135deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.92) 100%)',
-              backdropFilter: 'blur(40px) saturate(1.8)',
-              WebkitBackdropFilter: 'blur(40px) saturate(1.8)',
-              border: isDarkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.6)',
-              boxShadow: isDarkMode ? '0 32px 64px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)' : '0 32px 64px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.03), inset 0 1px 0 rgba(255,255,255,0.8)',
-            }}
+            className="relative w-full max-w-2xl max-h-[85vh] rounded-2xl overflow-hidden flex flex-col bg-white shadow-xl"
+            style={{ animation: 'sfModalIn 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}
           >
-            {/* Drag handle (mobile) */}
-            <div className="sm:hidden flex justify-center pt-3 pb-1">
-              <div className={`w-10 h-1 rounded-full ${isDarkMode ? 'bg-slate-600' : 'bg-stone-300'}`} />
-            </div>
-
             {/* Header */}
-            <div className="px-5 sm:px-6 pt-4 sm:pt-5 pb-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center"
-                    style={{
-                      background: 'linear-gradient(135deg, #ef4444, #f97316)',
-                      boxShadow: '0 8px 24px rgba(239,68,68,0.3)',
-                      animation: 'sfIconPop 0.6s 0.15s cubic-bezier(0.34, 1.56, 0.64, 1) both',
-                    }}
-                  >
-                    <Sparkles size={16} className="text-white" />
-                  </div>
-                  <div style={{ animation: 'sfFadeUp 0.4s 0.2s ease-out both' }}>
-                    <h2 className={`text-base sm:text-lg font-bold leading-tight ${isDarkMode ? 'text-white' : 'text-stone-800'}`} style={{ fontFamily: "'Outfit', sans-serif" }}>
-                      Your Survey is Live
-                    </h2>
-                    <p className={`text-[10px] sm:text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-stone-500'}`}>
-                      Successfully generated {generatedSurvey?.questions?.length || 0} tailored questions
-                    </p>
-                  </div>
+            <div className="px-6 pt-5 pb-4 border-b border-stone-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+                    Your survey is ready
+                  </h2>
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    {generatedSurvey?.questions?.length || 0} questions generated
+                  </p>
                 </div>
-                <button onClick={() => setShowResultModal(false)}
-                  className={`p-1.5 sm:p-2 rounded-xl transition-all ${isDarkMode ? 'hover:bg-white/5 text-slate-400' : 'hover:bg-black/5 text-stone-400'}`}>
-                  <X size={16} />
+                <button onClick={handleCloseResult} className="p-2 rounded-lg hover:bg-stone-100 text-stone-400 transition-colors">
+                  <X size={18} />
                 </button>
               </div>
-
-              {/* Topic pill */}
-              <div
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-medium max-w-full ${isDarkMode ? 'bg-white/5 text-slate-300 border border-white/10' : 'bg-black/[0.03] text-stone-600 border border-black/[0.04]'
-                  }`}
-                style={{ animation: 'sfFadeUp 0.4s 0.3s ease-out both', backdropFilter: 'blur(8px)' }}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
-                <span className="truncate">{(surveyTopic || selectedSuggestion?.label || '').length > 50 ? (surveyTopic || selectedSuggestion?.label || '').slice(0, 50) + '...' : (surveyTopic || selectedSuggestion?.label || '')}</span>
+              {/* Topic */}
+              <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-stone-50 border border-stone-200 text-xs text-stone-600">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                <span className="truncate max-w-[300px]">{surveyTopic || selectedSuggestion?.label || 'Survey'}</span>
               </div>
             </div>
 
-            {/* Divider */}
-            <div className={`mx-5 sm:mx-6 h-px ${isDarkMode ? 'bg-white/5' : 'bg-black/[0.04]'}`} />
-
-            <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-3 sm:py-4 space-y-2 overscroll-contain">
+            {/* Questions List */}
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
               {(generatedSurvey?.questions || []).map((q, i) => {
                 const qType = normalizeType(q.type);
                 return (
-                  <div
-                    key={q.id || i}
-                    className={`p-3 sm:p-3.5 rounded-2xl transition-all ${isDarkMode ? 'bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.06]' : 'bg-white/60 border border-white/80 hover:bg-white/80'
-                      }`}
-                    style={{
-                      animation: `sfQuestionIn 0.35s ${0.15 + i * 0.04}s ease-out both`,
-                      backdropFilter: 'blur(12px)',
-                    }}
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <div className="flex-shrink-0 w-6 h-6 rounded-lg bg-gradient-to-br from-red-500 to-orange-400 flex items-center justify-center mt-0.5"
-                        style={{ boxShadow: '0 2px 8px rgba(239,68,68,0.25)' }}>
-                        <span className="text-white text-[10px] font-bold">{i + 1}</span>
-                      </div>
+                  <div key={q.id || i} className="py-3 border-b border-stone-100 last:border-0">
+                    <div className="flex items-start gap-3">
+                      <span className="flex-shrink-0 w-7 h-7 rounded-lg bg-slate-900 text-white flex items-center justify-center text-[11px] font-bold mt-0.5">
+                        {i + 1}
+                      </span>
                       <div className="flex-1 min-w-0">
-                        <p className={`text-xs sm:text-sm font-medium leading-relaxed ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
+                        <p className="text-[14px] font-medium text-slate-800 leading-relaxed">
                           {getQuestionText(q)}
                         </p>
+                        {/* Options for multiple choice */}
                         {qType === 'choice' && q.options && q.options.length > 0 && (
-                          <div className="mt-1.5 flex flex-wrap gap-1">
+                          <div className="mt-2 space-y-1.5">
                             {q.options.map((opt, oi) => (
-                              <span key={oi} className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] ${isDarkMode ? 'bg-white/5 text-slate-400 border border-white/5' : 'bg-black/[0.03] text-stone-500 border border-black/[0.03]'
-                                }`}>
-                                <span className="font-bold">{String.fromCharCode(65 + oi)}</span> {opt}
-                              </span>
+                              <div key={oi} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-stone-50 border border-stone-100">
+                                <span className="w-5 h-5 rounded-md bg-white border border-stone-200 flex items-center justify-center text-[10px] font-bold text-stone-500">
+                                  {OPTION_KEYS[oi]}
+                                </span>
+                                <span className="text-[13px] text-stone-700">{opt.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</span>
+                              </div>
                             ))}
                           </div>
                         )}
-                        {qType === 'scale' && <p className={`mt-1 text-[9px] sm:text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-stone-400'}`}>Scale 1 — 10</p>}
-                        {qType === 'text' && <p className={`mt-1 text-[9px] sm:text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-stone-400'}`}>Open text</p>}
+                        {/* Scale indicator */}
+                        {qType === 'scale' && (
+                          <div className="mt-2 flex items-center gap-1.5">
+                            <div className="flex gap-0.5">
+                              {[1,2,3,4,5].map(n => (
+                                <span key={n} className="w-6 h-6 rounded bg-stone-100 border border-stone-200 flex items-center justify-center text-[10px] text-stone-400">{n}</span>
+                              ))}
+                            </div>
+                            <span className="text-[10px] text-stone-400 ml-1">Scale</span>
+                          </div>
+                        )}
+                        {/* Open text indicator */}
+                        {qType === 'text' && (
+                          <div className="mt-2 px-3 py-2 rounded-lg bg-stone-50 border border-stone-100 border-dashed">
+                            <span className="text-[11px] text-stone-400 italic">Open text response</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -701,40 +547,37 @@ const PublicSurveyCreation: React.FC = () => {
               })}
             </div>
 
-            {/* Footer */}
-            <div className="px-5 sm:px-6 py-4 sm:py-5 space-y-2.5">
+            {/* Footer Actions */}
+            <div className="px-6 py-4 border-t border-stone-100 space-y-3">
               <button
-                onClick={() => {
-                  const link = generateSurveyLink(generatedSurvey.survey_id);
-                  window.open(link, '_blank', 'noopener,noreferrer');
-                }}
-                className="w-full flex items-center justify-center gap-2 px-5 py-3 sm:py-3.5 rounded-2xl text-white text-xs sm:text-sm font-semibold transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0"
-                style={{
-                  background: 'linear-gradient(135deg, #ef4444, #f97316)',
-                  boxShadow: '0 8px 32px rgba(239,68,68,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
-                  fontFamily: "'Outfit', sans-serif",
-                }}
+                onClick={() => { handleCloseResult(); navigate(`/dashboard/edit/${generatedSurvey?.survey_id}`); }}
+                className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-white text-sm font-semibold bg-slate-900 hover:bg-slate-800 transition-colors"
               >
-                <ExternalLink size={14} /> Preview Live <ArrowRight size={14} />
+                <Edit3 size={14} /> Open in Editor <ArrowRight size={14} />
               </button>
-
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => {
+                    if (generatedSurvey) {
+                      const link = generateSurveyLink(generatedSurvey.survey_id);
+                      window.open(link, '_blank');
+                    }
+                  }}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-[11px] sm:text-xs font-medium border border-stone-200 text-stone-600 hover:bg-stone-50 transition-colors"
+                >
+                  <Eye size={12} /> Preview
+                </button>
                 <button
                   onClick={handleShareLink}
-                  className={`flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-3 rounded-2xl text-[11px] sm:text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 ${isDarkMode ? 'bg-white/[0.06] text-white border border-white/10 hover:bg-white/10' : 'bg-stone-50 text-stone-700 border border-stone-200 hover:bg-stone-100'
-                    }`}
-                  style={{ fontFamily: "'Outfit', sans-serif" }}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-[11px] sm:text-xs font-medium border border-stone-200 text-stone-600 hover:bg-stone-50 transition-colors"
                 >
-                  <Share2 size={13} /> {shareLinkCopied ? 'Copied!' : 'Share Link'}
+                  <Share2 size={12} /> {shareLinkCopied ? 'Copied!' : 'Share'}
                 </button>
-
                 <button
                   onClick={handleViewResponses}
-                  className={`flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-3 rounded-2xl text-[11px] sm:text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 ${isDarkMode ? 'bg-white/[0.06] text-white border border-white/10 hover:bg-white/10' : 'bg-stone-50 text-stone-700 border border-stone-200 hover:bg-stone-100'
-                    }`}
-                  style={{ fontFamily: "'Outfit', sans-serif" }}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-[11px] sm:text-xs font-medium border border-stone-200 text-stone-600 hover:bg-stone-50 transition-colors"
                 >
-                  <Eye size={13} /> Responses
+                  <BarChart2 size={12} /> Responses
                 </button>
               </div>
             </div>
@@ -742,9 +585,7 @@ const PublicSurveyCreation: React.FC = () => {
         </div>
       )}
 
-
-
-      {/* ── Premium Login Prompt Modal ── */}
+      {/* ── Login Prompt Modal ── */}
       {showLoginPrompt && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-0" style={{ animation: 'sfOverlayIn 0.35s ease-out' }}>
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setShowLoginPrompt(false)} />
@@ -806,13 +647,13 @@ const PublicSurveyCreation: React.FC = () => {
                   <div className="w-16 h-16 mb-8 rounded-[1.25rem] flex items-center justify-center mx-auto sm:mx-0">
                     <img
                       src="/logo.png"
-                      alt="PepperAds Logo"
+                      alt="Pepperwahl Logo"
                       className="w-full h-full object-contain"
                     />
                   </div>
 
                   <h3 className={`text-[2rem] font-extrabold mb-3 leading-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`} style={{ fontFamily: "'Outfit', sans-serif" }}>
-                    Join PepperAds
+                    Join Pepperwahl
                   </h3>
                   <p className={`text-[15px] leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                     You've successfully created your survey! Secure your data and unlock full analytics capabilities now.
@@ -963,6 +804,7 @@ const PublicSurveyCreation: React.FC = () => {
         }
       `}</style>
     </div>
+    </>
   );
 };
 
