@@ -253,7 +253,7 @@ const PublicSurveyCreation: React.FC = () => {
   };
 
   const handleViewResponses = () => {
-    setShowLoginPrompt(true);
+    navigate('/pricing');
   };
 
   const handleLogin = () => navigate('/login');
@@ -550,7 +550,7 @@ const PublicSurveyCreation: React.FC = () => {
             {/* Footer Actions */}
             <div className="px-6 py-4 border-t border-stone-100 space-y-3">
               <button
-                onClick={() => { handleCloseResult(); navigate(`/dashboard/edit/${generatedSurvey?.survey_id}`); }}
+                onClick={() => { handleCloseResult(); navigate('/pricing'); }}
                 className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-white text-sm font-semibold bg-slate-900 hover:bg-slate-800 transition-colors"
               >
                 <Edit3 size={14} /> Open in Editor <ArrowRight size={14} />

@@ -98,6 +98,7 @@ import { FloatingWidgetProvider } from './components/FloatingWidgetProvider';
 import type { WidgetCustomizerSettings } from './components/WidgetCustomizer';
 
 const PublicSurveyCreation = lazyRetry(() => import('./components/PublicSurveyCreation'));
+const PricingPage = lazyRetry(() => import('./pages/PricingPage'));
 const SurveyForm = lazyRetry(() => import('./components/SurveyForm'));
 const SurveyList = lazyRetry(() => import('./components/SurveyList'));
 const PostbackManager = lazyRetry(() => import('./components/PostbackManager'));
@@ -626,6 +627,7 @@ export default function App() {
 
             {/* Public survey creation - allows 1 survey without login */}
             <Route path="/create-survey" element={<PublicSurveyCreation />} />
+            <Route path="/pricing" element={<PricingPage />} />
 
             {/* Public routes */}
             <Route path="/login" element={<LoginPage />} />
