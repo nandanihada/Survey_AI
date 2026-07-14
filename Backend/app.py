@@ -5134,6 +5134,22 @@ def serve_logo():
     """Serve logo.png from dist root"""
     return send_from_directory(DIST_DIR, 'logo.png')
 
+@app.route('/red_chilli.png')
+def serve_red_chilli():
+    return send_from_directory(DIST_DIR, 'red_chilli.png')
+
+@app.route('/green_chilli.png')
+def serve_green_chilli():
+    return send_from_directory(DIST_DIR, 'green_chilli.png')
+
+@app.route('/yellow_chilli.png')
+def serve_yellow_chilli():
+    return send_from_directory(DIST_DIR, 'yellow_chilli.png')
+
+@app.route('/icons/<path:filename>')
+def serve_icons(filename):
+    return send_from_directory(os.path.join(DIST_DIR, 'icons'), filename)
+
 @app.errorhandler(404)
 def catch_all(e):
     """Serve index.html for all unmatched routes (SPA fallback)"""
