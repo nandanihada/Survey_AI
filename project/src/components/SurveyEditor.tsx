@@ -5,7 +5,7 @@ import TemplateSelector from './TemplateSelector';
 import type { Survey, Question, AnimationConfig } from '../types/Survey';
 import { generateSurveyLink, type SurveyLinkParams } from '../utils/surveyLinkUtils';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, Save, ArrowLeft, Grid3X3, Copy, CheckCircle, Settings, ExternalLink, Share2, Trash2, X, ChevronUp, ChevronDown, Zap } from 'lucide-react';
+import { Plus, Save, ArrowLeft, Grid3X3, Copy, CheckCircle, Settings, ExternalLink, Share2, Trash2, X, ChevronUp, ChevronDown, Zap, Sparkles, RefreshCw } from 'lucide-react';
 import './SurveyEditor.css';
 
 const QUESTION_TYPES = [
@@ -133,6 +133,8 @@ const SurveyEditor: React.FC = () => {
   const [showSharePopup, setShowSharePopup] = useState(false);
   const [shareLinkRevealed, setShareLinkRevealed] = useState(false);
   const [showAnimationPanel, setShowAnimationPanel] = useState(false);
+  const [isRefining, setIsRefining] = useState(false);
+  const [isGeneratingOptions, setIsGeneratingOptions] = useState(false);
 
   const animConfig = survey?.animation || DEFAULT_ANIMATION;
   const updateAnimation = (field: keyof AnimationConfig, value: AnimationConfig[keyof AnimationConfig]) => {
@@ -278,11 +280,44 @@ const SurveyEditor: React.FC = () => {
     const updated = { ...survey };
     updated.questions = [...updated.questions];
     const q = { ...updated.questions[index], type: newType as Question['type'] };
-    if ((newType === 'multiple_choice' || newType === 'yes_no' || newType === 'radio') && (!q.options || q.options.length === 0)) {
-      q.options = newType === 'yes_no' ? ['Yes', 'No'] : ['Option 1', 'Option 2'];
+    if (newType === 'yes_no') {
+      q.options = ['Yes', 'No'];
+    } else if ((newType === 'multiple_choice' || newType === 'radio') && (!q.options || q.options.length === 0)) {
+      q.options = ['Option 1', 'Option 2'];
     }
     updated.questions[index] = q;
     setSurvey(updated);
+    // Auto-generate AI options when switching to multiple choice (only if question has real text)
+    if ((newType === 'multiple_choice' || newType === 'radio') && q.question && q.question !== 'New Question') {
+      generateOptionsForQuestion(q.question, newType, index);
+    }
+  };
+
+  const generateOptionsForQuestion = async (questionText: string, questionType: string, index: number) => {
+    setIsGeneratingOptions(true);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/refine-question`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: questionText, type: questionType, action: 'generate_options' })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.options && data.options.length > 0) {
+          setSurvey(prev => {
+            if (!prev) return prev;
+            const updated = { ...prev };
+            updated.questions = [...updated.questions];
+            updated.questions[index] = { ...updated.questions[index], options: data.options };
+            return updated;
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to generate options:', err);
+    } finally {
+      setIsGeneratingOptions(false);
+    }
   };
 
   const moveQuestion = (index: number, direction: 'up' | 'down') => {
@@ -294,6 +329,29 @@ const SurveyEditor: React.FC = () => {
     [updated.questions[index], updated.questions[newIndex]] = [updated.questions[newIndex], updated.questions[index]];
     setSurvey(updated);
     setActiveQuestionIndex(newIndex);
+  };
+
+  const refineQuestion = async (index: number) => {
+    if (!survey) return;
+    const q = survey.questions[index];
+    setIsRefining(true);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/refine-question`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q.question, type: q.type, action: 'refine' })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.refined_question) {
+          updateQuestion(index, 'question', data.refined_question);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to refine question:', err);
+    } finally {
+      setIsRefining(false);
+    }
   };
 
   if (isLoading) return <OptimizedLoader type="page" message="Loading survey editor..." />;
@@ -331,7 +389,7 @@ const SurveyEditor: React.FC = () => {
       <div className="bg-white border-b border-gray-200 sticky top-0 z-30 shrink-0">
         <div className="px-3 sm:px-6 flex items-center justify-between h-12 sm:h-14 gap-2">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-gray-500 hover:text-gray-900 text-xs sm:text-sm transition-colors flex-shrink-0">
+            <button onClick={() => { if (window.history.length > 1) { navigate(-1); } else { navigate('/dashboard'); } }} className="flex items-center gap-1 text-gray-500 hover:text-gray-900 text-xs sm:text-sm transition-colors flex-shrink-0">
               <ArrowLeft size={14} /> <span className="hidden sm:inline">Back</span>
             </button>
             <span className="text-gray-300 hidden sm:inline">|</span>
@@ -776,20 +834,41 @@ const SurveyEditor: React.FC = () => {
                 </div>
 
                 {/* Editable question text */}
-                <textarea
-                  value={activeQ.question}
-                  onChange={(e) => updateQuestion(activeQuestionIndex, 'question', e.target.value)}
-                  placeholder="Type your question here..."
-                  rows={2}
-                  style={{
-                    width: '100%', fontSize: 22, fontWeight: 600, color: theme.text,
-                    background: 'transparent', border: 'none', outline: 'none',
-                    fontFamily: "'Outfit', sans-serif", marginBottom: 6,
-                    borderBottom: `2px dashed ${theme.dashed}`, paddingBottom: 6,
-                    position: 'relative', zIndex: 1, resize: 'none',
-                    wordBreak: 'break-word',
-                  }}
-                />
+                <div className="relative group">
+                  <textarea
+                    value={activeQ.question}
+                    onChange={(e) => updateQuestion(activeQuestionIndex, 'question', e.target.value)}
+                    placeholder="Type your question here..."
+                    rows={2}
+                    style={{
+                      width: '100%', fontSize: 22, fontWeight: 600, color: theme.text,
+                      background: 'transparent', border: 'none', outline: 'none',
+                      fontFamily: "'Outfit', sans-serif", marginBottom: 6,
+                      borderBottom: `2px dashed ${theme.dashed}`, paddingBottom: 6,
+                      paddingRight: 44,
+                      resize: 'none',
+                      wordBreak: 'break-word',
+                    }}
+                  />
+                  {/* AI Refine Button */}
+                  <button
+                    onClick={() => refineQuestion(activeQuestionIndex)}
+                    disabled={isRefining}
+                    title="AI: Rephrase this question"
+                    className={`absolute top-1 right-1 z-10 p-2 rounded-lg transition-all ${
+                      isRefining
+                        ? 'bg-purple-100 text-purple-500 cursor-wait'
+                        : 'bg-gray-50 text-gray-400 hover:bg-purple-50 hover:text-purple-600 opacity-0 group-hover:opacity-100'
+                    }`}
+                    style={{ pointerEvents: 'auto' }}
+                  >
+                    {isRefining ? (
+                      <RefreshCw size={16} className="animate-spin" />
+                    ) : (
+                      <Sparkles size={16} />
+                    )}
+                  </button>
+                </div>
 
                 {/* Description */}
                 <input
@@ -807,6 +886,14 @@ const SurveyEditor: React.FC = () => {
 
                 {/* ── Inline answer editing ── */}
                 <div style={{ position: 'relative', zIndex: 1 }}>
+
+                  {/* AI Options Loading */}
+                  {isGeneratingOptions && (
+                    <div className="flex items-center gap-2 mb-3 px-2 py-2 bg-purple-50 rounded-lg">
+                      <RefreshCw size={14} className="animate-spin text-purple-500" />
+                      <span className="text-xs text-purple-600 font-medium">AI is generating options...</span>
+                    </div>
+                  )}
 
                   {/* Multiple Choice / Yes-No / Radio */}
                   {hasOptions && (

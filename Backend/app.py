@@ -5153,6 +5153,87 @@ def initialize_default_suggestion_filters():
 
 
 # ═══════════════════════════════════════════════════════════
+# AI QUESTION REFINEMENT
+# ═══════════════════════════════════════════════════════════
+@app.route("/api/refine-question", methods=["POST", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins="*")
+def refine_question():
+    """AI-powered question refinement - rephrases the question or generates options for a new type"""
+    if request.method == "OPTIONS":
+        return "", 200
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        question_text = data.get("question", "").strip()
+        question_type = data.get("type", "multiple_choice")
+        current_options = data.get("options", [])
+        action = data.get("action", "refine")  # "refine" or "generate_options"
+
+        if not question_text:
+            return jsonify({"error": "Question text is required"}), 400
+
+        if action == "refine":
+            # Rephrase the question in a different style
+            prompt = f"""Rephrase this survey question in a different, more engaging way. Keep the same meaning and intent but change the wording style. Make it clear, concise, and professional.
+
+Original question: "{question_text}"
+
+Rules:
+- Keep the same topic and intent
+- Change the phrasing/style of asking
+- Keep it concise (max 15 words if possible)
+- Do NOT add quotes around the result
+- Return ONLY the rephrased question text, nothing else"""
+
+            refined = generate_ai_content(prompt, temperature=0.8, max_tokens=100)
+            refined = refined.strip().strip('"').strip("'")
+
+            return jsonify({"refined_question": refined})
+
+        elif action == "generate_options":
+            # Generate appropriate options for the question based on type
+            if question_type == "yes_no":
+                return jsonify({"options": ["Yes", "No"]})
+
+            if question_type == "rating":
+                return jsonify({"options": []})
+
+            if question_type == "short_answer":
+                return jsonify({"options": []})
+
+            # For multiple_choice / radio - generate relevant options
+            prompt = f"""Generate 4 answer options for this survey question. The options should be realistic, relevant, and cover a good range of possible answers.
+
+Question: "{question_text}"
+Question type: {question_type}
+
+Rules:
+- Generate exactly 4 options
+- Each option should be concise (2-5 words)
+- Options should be distinct and cover different perspectives
+- Return ONLY the options, one per line, no numbering or bullets"""
+
+            result = generate_ai_content(prompt, temperature=0.7, max_tokens=150)
+            options = [opt.strip().strip('-').strip('•').strip() for opt in result.strip().split('\n') if opt.strip()]
+            options = [opt for opt in options if len(opt) > 0][:4]
+
+            if len(options) < 2:
+                options = ["Option 1", "Option 2", "Option 3", "Option 4"]
+
+            return jsonify({"options": options})
+
+        else:
+            return jsonify({"error": "Invalid action. Use 'refine' or 'generate_options'"}), 400
+
+    except Exception as e:
+        print(f"Error in refine-question: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+# ═══════════════════════════════════════════════════════════
 # SERVE FRONTEND STATIC FILES (SPA)
 # This allows hostslice to serve both API and frontend
 # ═══════════════════════════════════════════════════════════

@@ -95,7 +95,7 @@ const SurveyResponsesPage: React.FC = () => {
             <button
               key={tab.key}
               onClick={() => {
-                if (tab.key === 'partner-mapping' && !hasFeature('postback')) {
+                if ((tab.key === 'partner-mapping' || tab.key === 'response-logs') && !hasFeature('analytics')) {
                   navigate('/pricing?theme=light');
                 } else {
                   setActiveTab(tab.key);
@@ -104,12 +104,12 @@ const SurveyResponsesPage: React.FC = () => {
               className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 flex items-center gap-1 ${
                 activeTab === tab.key
                   ? 'bg-red-500 text-white'
-                  : tab.key === 'partner-mapping' && !hasFeature('postback')
+                  : (tab.key === 'partner-mapping' || tab.key === 'response-logs') && !hasFeature('analytics')
                     ? 'bg-gray-100 text-gray-400'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              {tab.key === 'partner-mapping' && !hasFeature('postback') && <Lock size={12} />}
+              {(tab.key === 'partner-mapping' || tab.key === 'response-logs') && !hasFeature('analytics') && <Lock size={12} />}
               {tab.label}
             </button>
           ))}
