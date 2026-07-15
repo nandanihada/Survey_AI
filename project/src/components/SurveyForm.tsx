@@ -405,8 +405,9 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
   };
 
   const handleViewResponses = () => {
-    setShowLoginPrompt(true);
-    setIsLoginMode(false); // Start with signup mode
+    if (generatedSurvey) {
+      window.open(`/dashboard/responses/${generatedSurvey.survey_id}`, '_blank');
+    }
   };
 
   const handleLogin = () => {
@@ -849,7 +850,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
             {/* Footer Actions */}
             <div className="px-6 py-4 border-t border-stone-100 space-y-3">
               <button
-                onClick={() => { handleCloseResult(); navigate(`/dashboard/edit/${generatedSurvey?.survey_id}`); }}
+                onClick={() => window.open(`/dashboard/edit/${generatedSurvey?.survey_id}`, '_blank')}
                 className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-white text-sm font-semibold bg-slate-900 hover:bg-slate-800 transition-colors"
               >
                 <Edit3 size={14} /> Open in Editor <ArrowRight size={14} />
@@ -885,159 +886,6 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
       )}
 
 
-
-      {/* ── Premium Login Prompt Modal ── */}
-      {showLoginPrompt && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-0" style={{ animation: 'sfOverlayIn 0.35s ease-out' }}>
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setShowLoginPrompt(false)} />
-
-          <div
-            className="relative w-full max-w-[900px] rounded-[2.5rem] overflow-hidden flex flex-col sm:flex-row shadow-[0_0_80px_rgba(0,0,0,0.2)]"
-            style={{
-              animation: 'sfModalIn 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
-              background: isDarkMode ? '#0f172a' : '#ffffff',
-            }}
-          >
-            {/* Left Side: Abstract Luxury Design */}
-            <div className="hidden sm:flex flex-col justify-between w-5/12 p-12 text-white relative overflow-hidden"
-              style={{ background: '#0B0F19' }}>
-              {/* Abstract glowing orbs */}
-              <div className="absolute top-0 right-0 -mt-24 -mr-24 w-96 h-96 bg-red-500 opacity-20 rounded-full blur-[80px] pointer-events-none" />
-              <div className="absolute bottom-0 left-0 -mb-24 -ml-24 w-96 h-96 bg-orange-500 opacity-20 rounded-full blur-[80px] pointer-events-none" />
-
-              <div className="relative z-10 flex flex-col h-full">
-                <div>
-                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 mb-10 backdrop-blur-md shadow-xl">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                    <span className="text-[11px] font-bold tracking-[0.2em] text-slate-300 uppercase">Premium Access</span>
-                  </div>
-
-                  <h3 className="text-[2.5rem] font-extrabold mb-6 leading-[1.15] text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400" style={{ fontFamily: "'Outfit', sans-serif" }}>
-                    Unlock your survey's true potential.
-                  </h3>
-                  <p className="text-slate-400 text-[15px] leading-relaxed mb-12 font-medium">
-                    Create a free account to access our powerful analytics dashboard, track real-time responses, and manage campaigns seamlessly.
-                  </p>
-                </div>
-
-                <div className="space-y-5 mt-auto">
-                  <div className="flex items-center gap-4 group">
-                    <div className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center backdrop-blur-md group-hover:bg-white/10 transition-colors">
-                      <BarChart2 size={18} className="text-red-400" />
-                    </div>
-                    <span className="text-[15px] font-semibold text-slate-200 group-hover:text-white transition-colors">Real-time Analytics</span>
-                  </div>
-                  <div className="flex items-center gap-4 group">
-                    <div className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center backdrop-blur-md group-hover:bg-white/10 transition-colors">
-                      <Zap size={18} className="text-orange-400" />
-                    </div>
-                    <span className="text-[15px] font-semibold text-slate-200 group-hover:text-white transition-colors">AI-Powered Insights</span>
-                  </div>
-                  <div className="flex items-center gap-4 group">
-                    <div className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center backdrop-blur-md group-hover:bg-white/10 transition-colors">
-                      <Lock size={18} className="text-emerald-400" />
-                    </div>
-                    <span className="text-[15px] font-semibold text-slate-200 group-hover:text-white transition-colors">Secure Data Storage</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Right Side: Form */}
-            <div className={`w-full sm:w-7/12 p-8 sm:p-14 flex flex-col justify-center relative ${isDarkMode ? 'bg-slate-900 border-l border-slate-800' : 'bg-white'}`}>
-              <button onClick={() => setShowLoginPrompt(false)} className={`absolute top-6 right-6 p-2.5 rounded-full transition-all duration-300 hover:rotate-90 ${isDarkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-600'}`}>
-                <X size={20} className="stroke-[2.5]" />
-              </button>
-
-              <div className="max-w-[360px] mx-auto w-full">
-                <div className="text-center sm:text-left mb-10">
-                  <h3 className={`text-[2rem] font-extrabold mb-3 leading-tight tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`} style={{ fontFamily: "'Outfit', sans-serif" }}>
-                    {isLoginMode ? 'Welcome back' : 'Join PepperAds'}
-                  </h3>
-                  <p className={`text-[15px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                    {isLoginMode ? 'Sign in to access your analytics dashboard' : 'Join thousands of creators building better surveys'}
-                  </p>
-                </div>
-
-                <form onSubmit={handleSubmit} className="space-y-5">
-                  <div className="space-y-1.5">
-                    <label className={`text-[13px] font-bold tracking-wide ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>EMAIL ADDRESS</label>
-                    <div className="relative group">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-red-500">
-                        <Mail size={18} className={isDarkMode ? 'text-slate-500' : 'text-slate-400'} />
-                      </div>
-                      <input
-                        type="email"
-                        placeholder="you@example.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                        className={`w-full pl-11 pr-4 py-3.5 rounded-2xl border text-[15px] transition-all duration-300 focus:outline-none focus:ring-[3px] focus:ring-red-500/20 ${isDarkMode
-                            ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500 focus:border-red-500'
-                            : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-red-500 focus:bg-white'
-                          }`}
-                        style={{ fontFamily: "'Outfit', sans-serif" }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className={`text-[13px] font-bold tracking-wide ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>PASSWORD</label>
-                      {isLoginMode && (
-                        <a href="#" className="text-[13px] text-red-500 hover:text-red-600 font-bold transition-colors">Forgot password?</a>
-                      )}
-                    </div>
-                    <div className="relative group">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-red-500">
-                        <Lock size={18} className={isDarkMode ? 'text-slate-500' : 'text-slate-400'} />
-                      </div>
-                      <input
-                        type="password"
-                        placeholder="••••••••"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                        className={`w-full pl-11 pr-4 py-3.5 rounded-2xl border text-[15px] transition-all duration-300 focus:outline-none focus:ring-[3px] focus:ring-red-500/20 ${isDarkMode
-                            ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500 focus:border-red-500'
-                            : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-red-500 focus:bg-white'
-                          }`}
-                        style={{ fontFamily: "'Outfit', sans-serif" }}
-                      />
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="group relative w-full mt-2 flex items-center justify-center gap-3 px-6 py-4 rounded-2xl text-white text-[15px] font-bold overflow-hidden transition-all duration-300 hover:shadow-[0_8px_32px_rgba(239,68,68,0.3)] active:scale-[0.98]"
-                    style={{
-                      background: 'linear-gradient(135deg, #ef4444, #f97316)',
-                      fontFamily: "'Outfit', sans-serif",
-                    }}
-                  >
-                    <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
-                    <span className="relative z-10">{isLoginMode ? 'Sign In Securely' : 'Create Account'}</span>
-                    <ArrowRight size={18} className="relative z-10 group-hover:translate-x-1 transition-transform" />
-                  </button>
-                </form>
-
-                <div className="mt-8 pt-8 border-t border-slate-200 dark:border-slate-800 text-center">
-                  <p className={`text-[15px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                    {isLoginMode ? "Don't have an account?" : "Already have an account?"}
-                    <button
-                      type="button"
-                      onClick={isLoginMode ? handleSignup : handleLogin}
-                      className="ml-2 font-bold text-red-500 hover:text-red-600 transition-colors"
-                    >
-                      {isLoginMode ? 'Sign up' : 'Sign in'}
-                    </button>
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Keyframes */}
       <style>{`

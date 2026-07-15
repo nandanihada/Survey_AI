@@ -124,13 +124,8 @@ export const makeApiRequest = async (
 
   
 
-  // For unauthenticated requests (like survey creation), don't add auth headers
-
-  const defaultHeaders = allowUnauthenticated 
-
-    ? { 'Content-Type': 'application/json' }
-
-    : getAuthHeaders();
+  // Always send auth headers if available, even for allowUnauthenticated requests
+  const defaultHeaders = getAuthHeaders();
 
   
 

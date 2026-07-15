@@ -1126,6 +1126,34 @@ def generate_survey():
 
         return "", 200
 
+    # Optional auth: try to authenticate user but don't fail if not present
+    auth_header = request.headers.get("Authorization")
+    print(f"DEBUG: Auth header present: {bool(auth_header)}, value: {auth_header[:30] if auth_header else 'None'}")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+        try:
+            from auth_service import AuthService
+            auth_svc = AuthService()
+            payload = auth_svc.verify_jwt_token(token)
+            print(f"DEBUG: JWT payload: {payload}")
+            if payload:
+                user_id = payload.get("user_id")
+                print(f"DEBUG: Looking up user_id: {user_id}")
+                user_doc = db.users.find_one({"_id": user_id})
+                if not user_doc:
+                    # Try with email from payload
+                    email = payload.get("email")
+                    if email:
+                        user_doc = db.users.find_one({"email": email})
+                        print(f"DEBUG: Tried email lookup: {email}, found: {bool(user_doc)}")
+                if user_doc:
+                    g.current_user = user_doc
+                    print(f"DEBUG: Authenticated user for generate: {user_doc.get('email', 'unknown')}")
+                else:
+                    print(f"DEBUG: User not found in DB for user_id: {user_id}")
+        except Exception as auth_err:
+            print(f"DEBUG: Optional auth failed (continuing as anonymous): {auth_err}")
+
     template_type = "customer_feedback"
 
     raw_response = ""

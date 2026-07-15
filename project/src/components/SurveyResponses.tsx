@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, User, Mail, Download, RefreshCw, Eye, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 interface SurveyResponse {
   _id: string;
@@ -24,7 +25,30 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
   const [error, setError] = useState<string | null>(null);
   const [selectedResponse, setSelectedResponse] = useState<SurveyResponse | null>(null);
   const [needsAuth, setNeedsAuth] = useState(false);
+  const [questionMap, setQuestionMap] = useState<Record<string, string>>({});
   const navigate = useNavigate();
+  const { hasFeature } = useAuth();
+
+  // Fetch survey questions to map IDs to text
+  useEffect(() => {
+    const fetchSurvey = async () => {
+      try {
+        const isLocalhost = window.location.hostname === 'localhost';
+        const baseUrl = isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+        const res = await fetch(`${baseUrl}/survey/${surveyId}/view`);
+        if (res.ok) {
+          const data = await res.json();
+          const survey = data.survey || data;
+          const map: Record<string, string> = {};
+          (survey.questions || []).forEach((q: any) => {
+            map[q.id] = q.question || q.text || q.id;
+          });
+          setQuestionMap(map);
+        }
+      } catch {}
+    };
+    if (surveyId) fetchSurvey();
+  }, [surveyId]);
 
   const fetchResponses = async () => {
     try {
@@ -201,9 +225,10 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
           </button>
           {responses.length > 0 && (
             <button
-              onClick={exportToCSV}
-              className="flex items-center gap-1 px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              onClick={() => hasFeature('analytics') ? exportToCSV() : navigate('/pricing?theme=light')}
+              className={`flex items-center gap-1 px-3 py-2 text-sm rounded-lg transition-colors ${hasFeature('analytics') ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-200 text-gray-500'}`}
             >
+              {!hasFeature('analytics') && <Lock size={12} />}
               <Download size={14} />
               Export CSV
             </button>
@@ -343,7 +368,7 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
                     {Object.entries(selectedResponse.responses || {}).map(([question, answer]) => (
                       <div key={question} className="bg-gray-50 rounded-lg p-3">
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {question}
+                          {questionMap[question] || question}
                         </label>
                         <p className="text-gray-900">{String(answer)}</p>
                       </div>

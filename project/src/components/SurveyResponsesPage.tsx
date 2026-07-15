@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, BarChart3 } from 'lucide-react';
+import { ArrowLeft, BarChart3, Lock } from 'lucide-react';
 import { fetchSurveyData } from '../utils/api';
 import type { Survey } from '../types/Survey';
 import SurveyResponses from './SurveyResponses';
 import ResponseLogs from './ResponseLogs';
 import PartnerMapping from './PartnerMapping';
+import { useAuth } from '../contexts/AuthContext';
 
 const SurveyResponsesPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { hasFeature } = useAuth();
   const [survey, setSurvey] = useState<Survey | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -66,7 +68,7 @@ const SurveyResponsesPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14 sm:h-16 gap-2">
             <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-              <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-gray-600 hover:text-gray-900 transition-colors flex-shrink-0">
+              <button onClick={() => navigate('/dashboard?tab=surveys')} className="flex items-center gap-1 text-gray-600 hover:text-gray-900 transition-colors flex-shrink-0">
                 <ArrowLeft size={16} /> <span className="hidden sm:inline">Back</span>
               </button>
               <div className="w-px h-5 bg-gray-300 hidden sm:block" />
@@ -92,13 +94,22 @@ const SurveyResponsesPage: React.FC = () => {
           {tabs.map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
+              onClick={() => {
+                if (tab.key === 'partner-mapping' && !hasFeature('postback')) {
+                  navigate('/pricing?theme=light');
+                } else {
+                  setActiveTab(tab.key);
+                }
+              }}
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 flex items-center gap-1 ${
                 activeTab === tab.key
                   ? 'bg-red-500 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  : tab.key === 'partner-mapping' && !hasFeature('postback')
+                    ? 'bg-gray-100 text-gray-400'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
+              {tab.key === 'partner-mapping' && !hasFeature('postback') && <Lock size={12} />}
               {tab.label}
             </button>
           ))}
