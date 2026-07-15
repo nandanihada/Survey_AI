@@ -94,7 +94,6 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/Tabs';
 import { PenSquare, FolderOpen, TrendingUp, Link, Mail, MapPin, Sun, Moon, Settings, Lock, Menu, X, User } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
-import { FloatingWidgetProvider } from './components/FloatingWidgetProvider';
 import type { WidgetCustomizerSettings } from './components/WidgetCustomizer';
 
 const PublicSurveyCreation = lazyRetry(() => import('./components/PublicSurveyCreation'));
@@ -233,11 +232,6 @@ function LegacyDashboard() {
   }, [activeTab, autoPreviewEnabled]);
 
   return (
-    <FloatingWidgetProvider
-      isDarkMode={isDarkMode}
-      onWidgetComplete={handleWidgetComplete}
-      onWidgetDismiss={handleWidgetDismiss}
-    >
       <div className={`min-h-screen transition-all duration-300 mobile-scroll safe-area-inset ${isDarkMode ? 'bg-dark-theme text-white' : 'bg-light-theme text-stone-800'}`}>
         {/* Header */}
         <div className={`sticky top-0 z-50 border-b ${isDarkMode ? 'bg-slate-800/90 border-slate-700' : 'bg-white/90 border-stone-200'} backdrop-blur-sm`}>
@@ -586,8 +580,6 @@ function LegacyDashboard() {
         </div>
       </div>
 
-      {/* Preview Widget - Disabled */}
-    </FloatingWidgetProvider>
   );
 }
 
