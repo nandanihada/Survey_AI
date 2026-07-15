@@ -300,6 +300,7 @@ def firebase_login():
             
             return jsonify({
                 'token': token,
+                'isNewUser': False,
                 'user': {
                     'id': str(existing_user['_id']),
                     'email': existing_user['email'],
@@ -341,6 +342,7 @@ def firebase_login():
             
             return jsonify({
                 'token': token,
+                'isNewUser': True,
                 'user': {
                     'id': str(user_data['_id']),
                     'email': user_data['email'],

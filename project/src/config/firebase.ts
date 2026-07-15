@@ -5,13 +5,13 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBNZRCyZu9y99puB4vGoWuK21NcTJ8JbkE",
-  authDomain: "hostsliceresponse.firebaseapp.com",
-  projectId: "hostsliceresponse",
-  storageBucket: "hostsliceresponse.firebasestorage.app",
-  messagingSenderId: "19783450306",
-  appId: "1:19783450306:web:bb503c9ffe26ce290e455b",
-  measurementId: "G-1444H8DE56"
+  apiKey: "AIzaSyAeAQgJJh3oYpKA3EFOVggYqsyDwivcC-g",
+  authDomain: "pepperwahl-18d42.firebaseapp.com",
+  projectId: "pepperwahl-18d42",
+  storageBucket: "pepperwahl-18d42.firebasestorage.app",
+  messagingSenderId: "759162701457",
+  appId: "1:759162701457:web:680f1cbcb4974583db2130",
+  measurementId: "G-15DYJNQH8K"
 };
 
 // Initialize Firebase

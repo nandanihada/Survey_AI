@@ -241,12 +241,17 @@ class AuthService:
             
             # Send email
             print(f"📧 Connecting to SMTP server: {self.smtp_server}:{self.smtp_port}")
-            server = smtplib.SMTP(self.smtp_server, self.smtp_port)
-            print(f"✅ SMTP connection established")
-            
-            print(f"📧 Starting TLS...")
-            server.starttls()
-            print(f"✅ TLS started successfully")
+            if self.smtp_port == 465:
+                # SSL connection (Hostinger, etc.)
+                server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port)
+                print(f"✅ SMTP SSL connection established")
+            else:
+                # STARTTLS connection (Gmail, etc.)
+                server = smtplib.SMTP(self.smtp_server, self.smtp_port)
+                print(f"✅ SMTP connection established")
+                print(f"📧 Starting TLS...")
+                server.starttls()
+                print(f"✅ TLS started successfully")
             
             print(f"📧 Logging in with username: {self.smtp_username}")
             server.login(self.smtp_username, self.smtp_password)

@@ -26,6 +26,8 @@ const LoginPage: React.FC = () => {
   const [prefAnalytics, setPrefAnalytics] = useState(true);
   const [prefPersonalization, setPrefPersonalization] = useState(true);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showCreatingAccount, setShowCreatingAccount] = useState(false);
+  const [creatingMessages, setCreatingMessages] = useState<string[]>([]);
 
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
@@ -104,8 +106,31 @@ const LoginPage: React.FC = () => {
         const data = await response.json();
         localStorage.setItem('auth_token', data.token);
         localStorage.setItem('user_data', JSON.stringify(data.user));
-        navigate('/dashboard');
-        window.location.reload();
+        
+        if (data.isNewUser) {
+          // Show account creation animation
+          localStorage.setItem('welcome_new_user', data.user.name || data.user.email);
+          setShowCreatingAccount(true);
+          setIsLoading(false);
+          
+          const messages = [
+            "Hold tight...",
+            "Setting up your account...",
+            "Configuring your workspace...",
+            "Almost there...",
+            `Welcome aboard, ${data.user.name || 'there'}! 🎉`
+          ];
+          
+          for (let i = 0; i < messages.length; i++) {
+            await new Promise(resolve => setTimeout(resolve, i === 0 ? 500 : 1200));
+            setCreatingMessages(prev => [...prev, messages[i]]);
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          window.location.href = '/dashboard';
+        } else {
+          window.location.href = '/dashboard';
+        }
       } else {
         const err = await response.json();
         setError(err.error || 'Google sign-in failed');
@@ -115,7 +140,7 @@ const LoginPage: React.FC = () => {
         setError(err.message || 'Google sign-in failed');
       }
     } finally {
-      setIsLoading(false);
+      if (!showCreatingAccount) setIsLoading(false);
     }
   };
 
@@ -148,8 +173,10 @@ const LoginPage: React.FC = () => {
         const data = await response.json();
         localStorage.setItem('auth_token', data.token);
         localStorage.setItem('user_data', JSON.stringify(data.user));
-        navigate('/dashboard');
-        window.location.reload();
+        if (data.isNewUser) {
+          localStorage.setItem('welcome_new_user', data.user.name || data.user.email);
+        }
+        window.location.href = '/dashboard';
       } else {
         const err = await response.json();
         setError(err.error || 'Microsoft sign-in failed');
@@ -162,6 +189,93 @@ const LoginPage: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  // Account creation animation overlay
+  if (showCreatingAccount) {
+    return (
+      <div className="min-h-screen w-full bg-gradient-to-br from-gray-950 via-red-950/40 to-gray-950 relative overflow-hidden flex flex-col items-center justify-center"
+           style={{ animation: 'loaderFadeIn 0.3s ease-out' }}>
+        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-[80vh] h-[40vh] rounded-b-full bg-red-500/10 blur-[100px]" />
+        
+        <div className="relative z-10 flex flex-col items-center">
+          {/* Gooey Loader */}
+          <div className="relative flex items-center justify-center mb-12">
+            <svg className="absolute w-0 h-0">
+              <defs>
+                <filter id="gooey-signup-filter">
+                  <feGaussianBlur in="SourceGraphic" stdDeviation={12} result="blur" />
+                  <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 48 -7" result="goo" />
+                  <feComposite in="SourceGraphic" in2="goo" operator="atop" />
+                </filter>
+              </defs>
+            </svg>
+            <style>{`
+              .signup-gooey-loader {
+                width: 12em;
+                height: 3em;
+                position: relative;
+                overflow: hidden;
+                border-bottom: 8px solid rgba(255,255,255,0.15);
+                filter: url(#gooey-signup-filter);
+              }
+              .signup-gooey-loader::before,
+              .signup-gooey-loader::after {
+                content: '';
+                position: absolute;
+                border-radius: 50%;
+              }
+              .signup-gooey-loader::before {
+                width: 22em;
+                height: 18em;
+                background-color: #ef4444;
+                left: -2em;
+                bottom: -18em;
+                animation: signup-gooey1 2s linear infinite;
+              }
+              .signup-gooey-loader::after {
+                width: 16em;
+                height: 12em;
+                background-color: #fca5a5;
+                left: -4em;
+                bottom: -12em;
+                animation: signup-gooey2 2s linear infinite 0.75s;
+              }
+              @keyframes signup-gooey1 {
+                0% { transform: translateX(-10em) rotate(0deg); }
+                100% { transform: translateX(7em) rotate(180deg); }
+              }
+              @keyframes signup-gooey2 {
+                0% { transform: translateX(-8em) rotate(0deg); }
+                100% { transform: translateX(8em) rotate(180deg); }
+              }
+            `}</style>
+            <div className="signup-gooey-loader" />
+          </div>
+
+          {/* Messages appearing one by one */}
+          <div className="space-y-4 min-h-[200px] text-center px-4">
+            <AnimatePresence>
+              {creatingMessages.map((msg, index) => (
+                <motion.p
+                  key={index}
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5 }}
+                  className={`${
+                    index === creatingMessages.length - 1
+                      ? 'text-white font-bold text-2xl'
+                      : 'text-white/40 text-base'
+                  } transition-colors duration-300`}
+                >
+                  {msg}
+                </motion.p>
+              ))}
+            </AnimatePresence>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (showSuccess) {
     return (
@@ -544,14 +658,14 @@ const LoginPage: React.FC = () => {
                 </div>
 
                 {/* Social buttons */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="flex justify-center">
                   {/* Google */}
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     type="button"
                     onClick={handleGoogleLogin}
-                    className="relative bg-white h-11 rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all flex items-center justify-center gap-2"
+                    className="w-full bg-white h-11 rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all flex items-center justify-center gap-2"
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24">
                       <path fill="#EA4335" d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582L19.91 3C17.782 1.145 15.055 0 12 0 7.27 0 3.198 2.698 1.24 6.65l4.026 3.115Z"/>
@@ -559,24 +673,7 @@ const LoginPage: React.FC = () => {
                       <path fill="#4A90D9" d="M19.834 21c2.195-2.048 3.62-5.096 3.62-9 0-.71-.109-1.473-.272-2.182H12v4.637h6.436c-.317 1.559-1.17 2.766-2.395 3.558L19.834 21Z"/>
                       <path fill="#FBBC05" d="M5.277 14.268A7.12 7.12 0 0 1 4.909 12c0-.782.125-1.533.357-2.235L1.24 6.65A11.934 11.934 0 0 0 0 12c0 1.92.445 3.73 1.237 5.335l4.04-3.067Z"/>
                     </svg>
-                    <span className="text-gray-700 text-xs font-medium">Google</span>
-                  </motion.button>
-
-                  {/* Microsoft */}
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    type="button"
-                    onClick={handleMicrosoftLogin}
-                    className="relative bg-white h-11 rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all flex items-center justify-center gap-2"
-                  >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24">
-                      <rect fill="#F25022" x="1" y="1" width="10" height="10"/>
-                      <rect fill="#7FBA00" x="13" y="1" width="10" height="10"/>
-                      <rect fill="#00A4EF" x="1" y="13" width="10" height="10"/>
-                      <rect fill="#FFB900" x="13" y="13" width="10" height="10"/>
-                    </svg>
-                    <span className="text-gray-700 text-xs font-medium">Microsoft</span>
+                    <span className="text-gray-700 text-sm font-medium">Continue with Google</span>
                   </motion.button>
                 </div>
 

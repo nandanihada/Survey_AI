@@ -84,6 +84,19 @@ const Dashboard: React.FC = () => {
 
   const [copiedSurvey, setCopiedSurvey] = useState<string | null>(null);
 
+  const [welcomeMessage, setWelcomeMessage] = useState<string | null>(null);
+
+  // Check for new user welcome message
+  useEffect(() => {
+    const newUserName = localStorage.getItem('welcome_new_user');
+    if (newUserName) {
+      setWelcomeMessage(newUserName);
+      localStorage.removeItem('welcome_new_user');
+      // Auto-dismiss after 6 seconds
+      setTimeout(() => setWelcomeMessage(null), 6000);
+    }
+  }, []);
+
 
 
   const fetchSurveys = async () => {
@@ -366,7 +379,26 @@ const Dashboard: React.FC = () => {
 
       <Header />
 
-      
+      {/* Welcome Toast for new users */}
+      {welcomeMessage && (
+        <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top-2 duration-300">
+          <div className="bg-white border border-green-200 rounded-xl shadow-lg p-4 max-w-sm flex items-start gap-3">
+            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+              <span className="text-green-600 text-lg">✓</span>
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold text-slate-800">Welcome, {welcomeMessage}!</p>
+              <p className="text-sm text-slate-500 mt-0.5">Your account has been created successfully. You're all set to start creating surveys.</p>
+            </div>
+            <button
+              onClick={() => setWelcomeMessage(null)}
+              className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
 
