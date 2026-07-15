@@ -126,13 +126,10 @@ function LegacyDashboard() {
   // Update activeTab when URL changes
   useEffect(() => {
     const tab = searchParams.get('tab');
-    console.log('URL tab parameter:', tab);
-    console.log('Current activeTab:', activeTab);
-    if (tab && tab !== activeTab) {
-      console.log('Setting activeTab to:', tab);
+    if (tab) {
       setActiveTab(tab);
     }
-  }, [searchParams, activeTab]);
+  }, [searchParams]);
 
   // State for widget settings
   const [widgetSettings, setWidgetSettings] = useState<WidgetCustomizerSettings | null>(null);
