@@ -8,6 +8,7 @@ import {
   Download
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { getApiBaseUrl } from '../utils/deploymentFix';
 
 // Fix native leaflet icons globally by pointing to CDN
 L.Icon.Default.imagePath = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/';
@@ -58,7 +59,7 @@ export default function SessionAnalyticsDashboard() {
   const [selectedSurvey, setSelectedSurvey] = useState<string>('all');
   
   const { hasFeature } = useAuth();
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const API_URL = getApiBaseUrl();
 
   useEffect(() => {
     fetchSessions();

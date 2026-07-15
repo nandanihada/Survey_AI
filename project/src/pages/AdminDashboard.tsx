@@ -9,6 +9,7 @@ import SendNotificationModal from '../components/SendNotificationModal';
 import PassFailAdmin from '../components/PassFailAdmin';
 import LinkMasking from '../components/LinkMasking';
 import { Bell, Filter, Save, Edit2, X, Check, ToggleLeft, ToggleRight, Eye, EyeOff, Play, RotateCcw, AlertCircle } from 'lucide-react';
+import { getApiBaseUrl } from '../utils/deploymentFix';
 
 interface User {
   _id?: string;
@@ -95,7 +96,7 @@ const AdminDashboard: React.FC = () => {
   const [filterSuccess, setFilterSuccess] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
-  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const baseUrl = getApiBaseUrl();
 
   // User functions
   const fetchUsers = async () => {

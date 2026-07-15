@@ -7,9 +7,6 @@ from link_masking import link_handler
 from flask_cors import CORS, cross_origin
 
 
-import google.generativeai as genai
-
-
 import random
 
 
@@ -145,6 +142,15 @@ CORS(
     expose_headers=["Set-Cookie"],
     max_age=600,  # Cache preflight requests for 10 minutes
 )
+
+
+# Health check endpoint - responds immediately without DB dependency
+# This ensures Render health checks pass even during startup
+@app.route("/health")
+@app.route("/healthz")
+def health_check():
+    """Health check endpoint for Render - no DB required"""
+    return jsonify({"status": "healthy", "service": "hostslice"}), 200
 
 
 @app.route("/api/surveys/<survey_id>", methods=["GET"])

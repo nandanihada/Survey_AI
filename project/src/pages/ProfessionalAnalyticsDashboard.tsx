@@ -21,6 +21,7 @@ import {
   Tablet
 } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } from 'recharts';
+import { getApiBaseUrl } from '../utils/deploymentFix';
 
 interface Response {
   id: string;
@@ -96,7 +97,7 @@ const ProfessionalAnalyticsDashboard: React.FC = () => {
     responseSource: 'all'
   });
 
-  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const baseUrl = getApiBaseUrl();
 
   // Calculate real analytics from survey and response data
   const calculateAnalytics = (surveys: Survey[], responses: Response[]) => {

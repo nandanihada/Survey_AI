@@ -55,7 +55,8 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
       setLoading(true);
       setError(null);
       
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const isLocalhost = window.location.hostname === 'localhost';
+      const baseUrl = isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
       const token = localStorage.getItem('auth_token');
       
       if (!token) {

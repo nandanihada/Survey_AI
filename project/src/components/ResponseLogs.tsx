@@ -18,8 +18,7 @@ import {
   Smartphone,
   Tablet
 } from 'lucide-react';
-
-interface ResponseLog {
+import { getApiBaseUrl } from '../utils/deploymentFix';interface ResponseLog {
   _id: string;
   survey_id: string;
   session_id: string | null;
@@ -79,7 +78,7 @@ const ResponseLogs: React.FC<ResponseLogsProps> = ({ surveyId }) => {
       setLoading(true);
       setError(null);
       
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const baseUrl = getApiBaseUrl();
       const token = localStorage.getItem('auth_token');
       
       const response = await fetch(`${baseUrl}/api/enhanced-response-logs/${surveyId}`, {
@@ -168,7 +167,7 @@ const ResponseLogs: React.FC<ResponseLogsProps> = ({ surveyId }) => {
 
   const exportToCSV = async () => {
     try {
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const baseUrl = getApiBaseUrl();
       const token = localStorage.getItem('auth_token');
       
       const response = await fetch(`${baseUrl}/api/enhanced-response-logs/${surveyId}/export`, {

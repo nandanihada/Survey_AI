@@ -8,6 +8,7 @@ import DeviceDistributionChart from '../components/analytics/DeviceDistributionC
 import GeographicResponses from '../components/analytics/GeographicResponses';
 import SurveyList from '../components/analytics/SurveyList';
 import SummaryAnalytics from '../components/analytics/SummaryAnalytics';
+import { getApiBaseUrl } from '../utils/deploymentFix';
 
 interface Survey {
   id: string;
@@ -163,7 +164,7 @@ const AnalyticsDashboard: React.FC = () => {
     setAnalyticsData(analytics);
   }, [filteredResponses]);
 
-  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const baseUrl = getApiBaseUrl();
 
   // Fetch real data from API
   useEffect(() => {
