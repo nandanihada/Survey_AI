@@ -18,6 +18,7 @@ interface Question {
   answerDescription?: string;
   type: 'text' | 'radio' | 'range';
   options?: string[];
+  answerStyle?: string;
   show_if?: ShowIfCondition | null;
 }
 
@@ -75,6 +76,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     answerDescription: q.answerDescription,
     type: normalizeType(q.type),
     options: q.options || [],
+    answerStyle: (q as any).answerStyle || undefined,
     show_if: q.show_if || null,
   }));
 
@@ -309,8 +311,12 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
   const qVariants = getQuestionVariants(survey.animation);
 
+  const answerStyle = (survey as any).answerStyle || 'classic';
+
+  const getStyleForQuestion = (question: Question) => question.answerStyle || answerStyle;
+
   const renderRadioOptions = (question: Question) => (
-    <div className="pepper-options">
+    <div className={`pepper-options pepper-style-${getStyleForQuestion(question)}`}>
       {question.options?.map((option, i) => {
         const aVariants = getAnswerVariants(survey.animation, i);
         return (
@@ -336,7 +342,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       value={formData[question.id] as string}
       onChange={(e) => handleAnswer(question.id, e.target.value)}
       placeholder="Type your answer here..."
-      className="pepper-textarea"
+      className={`pepper-textarea pepper-textarea-${getStyleForQuestion(question)}`}
       rows={4}
     />
   );

@@ -12,6 +12,7 @@ export interface Question {
   type: 'text' | 'radio' | 'checkbox' | 'dropdown' | 'range' | 'multiple_choice' | 'yes_no' | 'short_answer' | 'rating';
   options?: string[];
   required?: boolean;
+  answerStyle?: string;
   show_if?: ShowIfCondition | null;
   validation?: {
     minLength?: number;
@@ -37,6 +38,8 @@ export interface AnimationConfig {
   autoAdvanceDelay: number; // delay before auto-advance (500-5000ms)
 }
 
+export type AnswerStyle = 'classic' | 'underline' | 'card' | 'pill' | 'flat';
+
 export interface Survey {
   id: string;
   _id?: string;
@@ -47,6 +50,7 @@ export interface Survey {
   questions: Question[];
   pages?: SurveyPage[];
   animation?: AnimationConfig;
+  answerStyle?: AnswerStyle;
   theme?: {
     font: string;
     intent: string;

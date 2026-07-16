@@ -1129,7 +1129,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
                     try {
                       const prompt = surveyTopic || selectedSuggestion?.prompt || '';
                       const result = await generateSurvey({
-                        prompt: prompt + `\nTone: ${newTone}`,
+                        prompt: prompt + `\nTone: ${newTone}\nIMPORTANT: Generate completely NEW and DIFFERENT questions from the previous set. Explore fresh angles.`,
                         question_count: newCount,
                         response_type: 'multiple_choice',
                         template_type: 'custom',

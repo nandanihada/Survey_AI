@@ -366,7 +366,30 @@ TONE: {tone_instruction}
 CRITICAL RULES:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. SKIP LOGIC (MOST IMPORTANT):
+0. NEVER USE THE RAW PROMPT AS A QUESTION:
+   - The user's prompt is INSTRUCTIONS for you, NOT a survey question
+   - NEVER copy the user's prompt text into any question field
+   - If the prompt contains multiple topics/questions separated by commas or "and", break them into SEPARATE clean questions
+   - Transform messy prompts into proper, concise survey questions
+
+1. QUESTION TYPE MATCHING:
+   - "What did you enjoy?" / "What would you improve?" / "What do you think about..." / "Describe..." / "Explain..." / "Tell us..." / "Share your thoughts..." = short_answer (NOT rating)
+   - "How satisfied are you?" / "How would you rate..." / "How likely..." / "On a scale of..." / "To what extent..." = rating (1-10)
+   - "Do you..." / "Have you..." / "Would you..." / "Is this..." / "Are you..." = yes_no
+   - "Which..." / "What is your preferred..." / "Select..." / "Choose..." = multiple_choice
+   - Rating questions must ONLY ask things that can be answered with a NUMBER
+   - If a question asks "what" or "why" or requests an opinion/description, it MUST be short_answer
+   - If a question asks "how much" or "how likely" or "to what extent", it should be rating
+   - ALWAYS match the question TYPE to the question WORDING — never mismatch
+
+2. REGENERATION RULE:
+   - Each time you generate, create FRESH and UNIQUE questions
+   - Do NOT repeat questions from any previous generation
+   - Explore different angles, perspectives, and aspects of the topic
+   - Use varied question structures and phrasings
+   - If regenerating, assume the user wants DIFFERENT questions, not the same ones reworded
+
+2. SKIP LOGIC (MOST IMPORTANT):
    - For every Yes/No question, check if any following question assumes "Yes"
    - If it does, add a show_if condition to that follow-up question
    - For "Do you use/have X?" questions, ALL follow-ups about X must be gated

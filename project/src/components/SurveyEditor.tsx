@@ -899,14 +899,30 @@ const SurveyEditor: React.FC = () => {
                   {/* Multiple Choice / Yes-No / Radio */}
                   {hasOptions && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      {(activeQ.options || []).map((opt, optIdx) => (
+                      {(activeQ.options || []).map((opt, optIdx) => {
+                        const qStyle = activeQ.answerStyle || survey.answerStyle || 'classic';
+                        const optionStyles: Record<string, React.CSSProperties> = {
+                          classic: { border: `1px solid ${theme.border}`, borderRadius: 10, background: theme.paperInner, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+                          underline: { border: 'none', borderBottom: `2px solid ${theme.border}`, borderRadius: 0, background: 'transparent', boxShadow: 'none' },
+                          card: { border: 'none', borderLeft: '4px solid transparent', borderRadius: 16, background: 'linear-gradient(145deg, #ffffff, #fafafa)', boxShadow: '0 4px 14px rgba(0,0,0,0.06)' },
+                          pill: { border: `1.5px solid ${theme.border}`, borderRadius: 50, background: theme.paperInner, boxShadow: 'none' },
+                          flat: { border: 'none', borderRadius: 8, background: '#f3f2ef', boxShadow: 'none' },
+                        };
+                        const keyStyles: Record<string, React.CSSProperties> = {
+                          classic: { borderRadius: 8, border: `1px solid ${theme.border}`, background: theme.paperInner },
+                          underline: { borderRadius: 8, border: `1px solid ${theme.border}`, background: theme.paperInner },
+                          card: { borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #C4785C, #A8624A)', color: '#fff' },
+                          pill: { borderRadius: '50%', border: `1px solid ${theme.border}`, background: theme.paperInner },
+                          flat: { borderRadius: 6, border: 'none', background: '#e5e3df' },
+                        };
+                        return (
                         <div key={optIdx} className="group" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                           <span style={{
-                            width: 34, height: 34, borderRadius: 8,
-                            border: `1px solid ${theme.border}`, background: theme.paperInner,
+                            width: 34, height: 34,
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 13, fontWeight: 700, color: theme.textLight, flexShrink: 0,
+                            fontSize: 13, fontWeight: 700, color: keyStyles[qStyle]?.color || theme.textLight, flexShrink: 0,
                             fontFamily: "'Outfit', sans-serif",
+                            ...keyStyles[qStyle],
                           }}>
                             {OPTION_KEYS[optIdx] || optIdx + 1}
                           </span>
@@ -917,13 +933,12 @@ const SurveyEditor: React.FC = () => {
                             placeholder={`Choice ${optIdx + 1}`}
                             style={{
                               flex: 1, padding: '10px 14px',
-                              border: `1px solid ${theme.border}`, borderRadius: 8,
-                              fontSize: 14, color: theme.text, background: theme.paperInner,
+                              fontSize: 14, color: theme.text,
                               fontFamily: "'Outfit', sans-serif", outline: 'none',
-                              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                              ...optionStyles[qStyle],
                             }}
                             onFocus={(e) => { e.target.style.borderColor = theme.accent; e.target.style.boxShadow = `0 0 0 3px ${theme.accentShadow}`; }}
-                            onBlur={(e) => { e.target.style.borderColor = theme.border; e.target.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)'; }}
+                            onBlur={(e) => { e.target.style.borderColor = ''; e.target.style.boxShadow = ''; }}
                           />
                           <button
                             onClick={() => removeOption(activeQuestionIndex, optIdx)}
@@ -933,7 +948,8 @@ const SurveyEditor: React.FC = () => {
                             <X size={14} />
                           </button>
                         </div>
-                      ))}
+                        );
+                      })}
                       <button
                         onClick={() => addOption(activeQuestionIndex)}
                         style={{
@@ -1075,6 +1091,59 @@ const SurveyEditor: React.FC = () => {
                     <ChevronDown size={14} /> Move Down
                   </button>
                 </div>
+              </div>
+
+              {/* Answer Style */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-2">Answer Style</label>
+                <div className="grid grid-cols-1 gap-1.5">
+                  {[
+                    { value: 'classic', label: 'Classic Box', preview: '┌───┐' },
+                    { value: 'underline', label: 'Underline', preview: '────' },
+                    { value: 'card', label: 'Card', preview: '▓▓▓▓' },
+                    { value: 'pill', label: 'Pill', preview: '(══)' },
+                    { value: 'flat', label: 'Flat', preview: '░░░░' },
+                  ].map(style => {
+                    const currentStyle = activeQ.answerStyle || survey.answerStyle || 'classic';
+                    return (
+                      <button
+                        key={style.value}
+                        onClick={() => {
+                          // Apply to current question only by default
+                          const updated = { ...survey };
+                          updated.questions = [...updated.questions];
+                          updated.questions[activeQuestionIndex] = { ...updated.questions[activeQuestionIndex], answerStyle: style.value };
+                          setSurvey(updated);
+                        }}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+                          currentStyle === style.value
+                            ? 'bg-blue-50 text-blue-600 font-medium border border-blue-200'
+                            : 'text-gray-600 hover:bg-gray-50 border border-transparent'
+                        }`}
+                      >
+                        <span className="text-[10px] font-mono w-8 text-center opacity-60">{style.preview}</span>
+                        {style.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* Apply to all button */}
+                <button
+                  onClick={() => {
+                    const style = activeQ.answerStyle || survey.answerStyle || 'classic';
+                    setSurvey(prev => {
+                      if (!prev) return prev;
+                      return {
+                        ...prev,
+                        answerStyle: style as any,
+                        questions: prev.questions.map(q => ({ ...q, answerStyle: style }))
+                      };
+                    });
+                  }}
+                  className="mt-2 w-full text-[10px] font-medium text-center py-1.5 rounded-lg border border-dashed border-gray-300 text-gray-500 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50/50 transition-colors"
+                >
+                  Apply to all questions
+                </button>
               </div>
 
               {/* Actions */}

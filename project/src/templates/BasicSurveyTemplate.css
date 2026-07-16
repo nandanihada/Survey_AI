@@ -650,3 +650,154 @@
 }
 
 .pepper-animate-in { animation: slideIn 0.3s ease forwards; }
+
+/* ═══════════════════════════════════════════════════════════
+   ANSWER STYLE VARIANTS
+   ═══════════════════════════════════════════════════════════ */
+
+/* 1. Classic Box (default) — no changes needed, uses base styles */
+
+/* 2. Underline — minimal bottom border only */
+.pepper-style-underline .pepper-option {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid var(--pepper-border);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 12px 8px;
+}
+.pepper-style-underline .pepper-option:hover {
+  border-bottom-color: var(--pepper-red);
+  transform: none;
+  box-shadow: none;
+  background: rgba(196, 120, 92, 0.03);
+}
+.pepper-style-underline .pepper-option.selected {
+  border-bottom-color: var(--pepper-red);
+  border-bottom-width: 3px;
+  background: rgba(196, 120, 92, 0.04);
+  box-shadow: none;
+}
+.pepper-style-underline .pepper-option.selected::before { display: none; }
+.pepper-textarea-underline {
+  border: none !important;
+  border-bottom: 2px solid var(--pepper-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.pepper-textarea-underline:focus {
+  border-bottom-color: var(--pepper-red) !important;
+}
+
+/* 3. Card — distinct floating cards with colored left border and depth */
+.pepper-style-card .pepper-option {
+  background: #ffffff;
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.04);
+  padding: 16px 20px;
+  margin-bottom: 6px;
+  border-left: 5px solid #e8d5cf;
+  position: relative;
+  overflow: hidden;
+}
+.pepper-style-card .pepper-option::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 60px;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(196, 120, 92, 0.03));
+  pointer-events: none;
+}
+.pepper-style-card .pepper-option:hover {
+  transform: translateX(4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1), 0 2px 6px rgba(0, 0, 0, 0.05);
+  border: none;
+  border-left: 5px solid var(--pepper-red);
+}
+.pepper-style-card .pepper-option.selected {
+  background: #fffbf9;
+  box-shadow: 0 4px 20px rgba(196, 120, 92, 0.15);
+  border: none;
+  border-left: 5px solid var(--pepper-red);
+}
+.pepper-style-card .pepper-option.selected::before { display: none; }
+.pepper-style-card .pepper-option-key {
+  background: var(--pepper-red);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.pepper-textarea-card {
+  border: none !important;
+  border-left: 5px solid #e8d5cf !important;
+  border-radius: 12px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06) !important;
+  background: #fff !important;
+}
+.pepper-textarea-card:focus {
+  border-left-color: var(--pepper-red) !important;
+}
+
+/* 4. Pill — fully rounded capsule */
+.pepper-style-pill .pepper-option {
+  border-radius: 50px;
+  padding: 10px 20px;
+  background: var(--pepper-paper-inner);
+  border: 1.5px solid var(--pepper-border);
+  box-shadow: none;
+}
+.pepper-style-pill .pepper-option:hover {
+  border-color: var(--pepper-red);
+  transform: none;
+  box-shadow: 0 2px 8px rgba(196, 120, 92, 0.12);
+  background: rgba(196, 120, 92, 0.04);
+}
+.pepper-style-pill .pepper-option.selected {
+  border-color: var(--pepper-red);
+  background: rgba(196, 120, 92, 0.08);
+  box-shadow: 0 2px 8px rgba(196, 120, 92, 0.2);
+}
+.pepper-style-pill .pepper-option.selected::before { display: none; }
+.pepper-style-pill .pepper-option-key {
+  border-radius: 50%;
+}
+.pepper-textarea-pill {
+  border-radius: 50px !important;
+  padding-left: 24px !important;
+  padding-right: 24px !important;
+}
+
+/* 5. Flat — filled background, no border */
+.pepper-style-flat .pepper-option {
+  background: #f3f2ef;
+  border: none;
+  border-radius: 8px;
+  box-shadow: none;
+  padding: 12px 16px;
+}
+.pepper-style-flat .pepper-option:hover {
+  background: #eae8e4;
+  transform: none;
+  box-shadow: none;
+  border: none;
+}
+.pepper-style-flat .pepper-option.selected {
+  background: rgba(196, 120, 92, 0.12);
+  border: none;
+  box-shadow: inset 0 0 0 2px var(--pepper-red);
+}
+.pepper-style-flat .pepper-option.selected::before { display: none; }
+.pepper-textarea-flat {
+  border: none !important;
+  background: #f3f2ef !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+.pepper-textarea-flat:focus {
+  background: #eae8e4 !important;
+}
