@@ -21,7 +21,8 @@ export interface ClarificationNeeds {
   needsQuestionCount: boolean;
   needsTopic: boolean;
   needsAudience: boolean;
-  needsDataCollection: boolean;       // always true per our rules
+  needsDataCollection: boolean;
+  needsTone: boolean;
 }
 
 /**
@@ -47,11 +48,15 @@ export function parsePrompt(prompt: string, dropdownCount: number | null): Parse
  * Determine what still needs clarification
  */
 export function getClarificationNeeds(parsed: ParsedPrompt, dropdownChanged: boolean): ClarificationNeeds {
+  // Check if tone was explicitly mentioned in prompt
+  const toneExplicit = /\b(casual|informal|fun|formal|academic|professional|corporate|friendly|warm|direct|concise|brief)\b/i.test(parsed.rawPrompt);
+  
   return {
     needsTopic: !parsed.isTopicClear,
     needsQuestionCount: parsed.questionCount === null && !dropdownChanged,
     needsAudience: parsed.audience === null,
-    needsDataCollection: parsed.dataCollection === null, // Only ask if not detected in prompt
+    needsDataCollection: parsed.dataCollection === null,
+    needsTone: !toneExplicit,
   };
 }
 
@@ -175,6 +180,13 @@ function extractAudience(text: string): string | null {
 }
 
 function detectTone(text: string): 'formal' | 'casual' | 'professional' {
+  // Explicit tone keywords
+  if (/\b(casual|informal|fun|playful|relaxed|chill)\b/i.test(text)) return 'casual';
+  if (/\b(formal|academic|scholarly|research|institutional)\b/i.test(text)) return 'formal';
+  if (/\b(professional|corporate|business|neutral)\b/i.test(text)) return 'professional';
+  if (/\b(friendly|warm|welcoming|approachable)\b/i.test(text)) return 'professional'; // friendly maps to professional detection
+  if (/\b(direct|concise|brief|short|no.?fluff)\b/i.test(text)) return 'professional'; // direct maps here
+  
   const casualIndicators = /\b(hey|cool|awesome|gonna|wanna|lol|haha|btw|tbh|chill|vibe)\b/i;
   const formalIndicators = /\b(pursuant|regarding|pertaining|henceforth|whereby|stakeholders|comprehensive|assessment)\b/i;
   

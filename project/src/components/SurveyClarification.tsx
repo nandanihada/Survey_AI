@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Edit3 } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Edit3, Sparkles } from 'lucide-react';
 import { ClarificationNeeds } from '../utils/promptParser';
 
 interface ClarificationProps {
@@ -7,6 +7,7 @@ interface ClarificationProps {
   onSubmit: (answers: ClarificationAnswers) => void;
   onCancel: () => void;
   isDarkMode?: boolean;
+  prompt?: string;
 }
 
 export interface ClarificationAnswers {
@@ -14,12 +15,15 @@ export interface ClarificationAnswers {
   topic?: string;
   audience?: string;
   dataCollection: string;
+  tone?: string;
+  aiContext?: string;
 }
 
 interface Step {
   key: string;
   phrase: string;
   options: { key: string; label: string }[];
+  isAI?: boolean;
 }
 
 const SurveyClarification: React.FC<ClarificationProps> = ({
@@ -27,7 +31,38 @@ const SurveyClarification: React.FC<ClarificationProps> = ({
   onSubmit,
   onCancel,
   isDarkMode = false,
+  prompt = '',
 }) => {
+  const [aiStep, setAiStep] = useState<Step | null>(null);
+
+  // Fetch AI contextual question on mount
+  useEffect(() => {
+    if (!prompt || prompt.length < 10) return;
+    const fetchAIQuestion = async () => {
+      try {
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const apiBase = isLocal ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+        const res = await fetch(`${apiBase}/api/contextual-question`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.question && data.options && data.options.length > 0) {
+            setAiStep({
+              key: 'aiContext',
+              phrase: data.question,
+              options: data.options.map((opt: string, i: number) => ({ key: opt, label: opt })),
+              isAI: true,
+            });
+          }
+        }
+      } catch {}
+    };
+    fetchAIQuestion();
+  }, [prompt]);
+
   const steps: Step[] = [];
 
   if (needs.needsTopic) {
@@ -76,10 +111,18 @@ const SurveyClarification: React.FC<ClarificationProps> = ({
     ],
   });
 
+  // Tone step removed - now handled via dropdown in prompt box toolbar
+
+  // Add AI contextual question as last step (if fetched)
+  if (aiStep) {
+    steps.push(aiStep);
+  }
+
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [customText, setCustomText] = useState('');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const customRef = useRef<HTMLInputElement>(null);
 
   const handleSelect = (value: string) => {
@@ -89,8 +132,12 @@ const SurveyClarification: React.FC<ClarificationProps> = ({
 
     setTimeout(() => {
       if (currentStep + 1 < steps.length) {
-        setCurrentStep(prev => prev + 1);
-        setSelectedKey(null);
+        setIsTransitioning(true);
+        setTimeout(() => {
+          setCurrentStep(prev => prev + 1);
+          setSelectedKey(null);
+          setIsTransitioning(false);
+        }, 3000);
       } else {
         finishClarification(newAnswers);
       }
@@ -109,10 +156,45 @@ const SurveyClarification: React.FC<ClarificationProps> = ({
       questionCount: finalAnswers.questionCount ? parseInt(finalAnswers.questionCount) : undefined,
       audience: finalAnswers.audience || undefined,
       dataCollection: finalAnswers.dataCollection || 'anonymous',
+      tone: finalAnswers.tone || undefined,
+      aiContext: finalAnswers.aiContext || undefined,
     });
   };
 
   const step = steps[currentStep];
+
+  if (isTransitioning) {
+    return (
+      <div
+        className="clarification-glass rounded-xl overflow-hidden"
+        style={{ animation: 'clarDropIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both' }}
+      >
+        <div className="flex items-center justify-center px-4 py-6 gap-3">
+          <div className="flex gap-1">
+            <span className="w-2 h-2 rounded-full bg-red-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="w-2 h-2 rounded-full bg-red-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+            <span className="w-2 h-2 rounded-full bg-red-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
+          <span className={`text-[12px] font-medium ${isDarkMode ? 'text-slate-400' : 'text-stone-400'}`}>
+            Thinking...
+          </span>
+        </div>
+        <style>{`
+          .clarification-glass {
+            background: ${isDarkMode
+              ? 'rgba(15, 23, 42, 0.7)'
+              : 'rgba(255, 255, 255, 0.65)'};
+            backdrop-filter: blur(16px) saturate(1.4);
+            -webkit-backdrop-filter: blur(16px) saturate(1.4);
+            border: 1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'};
+            box-shadow: ${isDarkMode
+              ? '0 8px 32px rgba(0,0,0,0.3)'
+              : '0 4px 24px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)'};
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -121,9 +203,10 @@ const SurveyClarification: React.FC<ClarificationProps> = ({
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2.5">
-        <p className={`text-[13px] font-semibold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}
+        <p className={`text-[13px] font-semibold flex items-center gap-1.5 ${isDarkMode ? 'text-white' : 'text-slate-800'}`}
           style={{ fontFamily: "'Space Grotesk', sans-serif" }}
         >
+          {step.isAI && <Sparkles size={12} className="text-purple-500" />}
           {step.phrase}
         </p>
         <span className={`text-[10px] font-medium ${isDarkMode ? 'text-slate-500' : 'text-stone-400'}`}>

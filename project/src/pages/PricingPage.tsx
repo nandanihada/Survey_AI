@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Check } from 'lucide-react';
+import { Check, ArrowLeft } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 const PricingPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
   const isLight = searchParams.get('theme') === 'light';
+  const { authenticated } = useAuth();
 
   const plans = [
     {
@@ -72,6 +74,16 @@ const PricingPage: React.FC = () => {
 
   return (
     <div className={`min-h-screen ${isLight ? 'bg-white text-slate-900' : 'bg-slate-950 text-white'}`}>
+      {/* Back to Dashboard */}
+      <div className="max-w-6xl mx-auto px-4 pt-4">
+        <button
+          onClick={() => navigate('/dashboard')}
+          className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${isLight ? 'text-stone-500 hover:text-stone-800' : 'text-slate-400 hover:text-white'}`}
+        >
+          <ArrowLeft size={16} /> Back to Dashboard
+        </button>
+      </div>
+
       {/* Header */}
       <div className="text-center pt-16 pb-12 px-4">
         <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-6 ${isLight ? 'bg-stone-100 border border-stone-200' : 'bg-slate-800 border border-slate-700'}`}>
@@ -140,7 +152,7 @@ const PricingPage: React.FC = () => {
               onClick={() => {
                 if (plan.name === 'Pro') navigate('/upgrade');
                 else if (plan.name === 'Enterprise') window.location.href = 'mailto:business@moustacheleads.com?subject=Pepperwahl Enterprise Plan Inquiry';
-                else navigate('/login?mode=signup');
+                else navigate(authenticated ? '/dashboard' : '/login?mode=signup');
               }}
               className={`w-full py-3 rounded-xl text-sm font-semibold transition-all ${plan.ctaStyle}`}
             >

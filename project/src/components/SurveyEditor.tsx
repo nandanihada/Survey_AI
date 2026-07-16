@@ -210,12 +210,13 @@ const SurveyEditor: React.FC = () => {
 
   const copyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(shareLink);
+      const shareText = `Hey! Take this quick 2-minute survey 👉 ${shareLink}`;
+      await navigator.clipboard.writeText(shareText);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
       const textArea = document.createElement('textarea');
-      textArea.value = shareLink;
+      textArea.value = `Hey! Take this quick 2-minute survey 👉 ${shareLink}`;
       document.body.appendChild(textArea);
       textArea.select();
       document.execCommand('copy');

@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { generateSurvey, parseImage } from '../utils/api';
-import { Loader2, Sparkles, ImagePlus, Check, X, ArrowRight, Lightbulb, ChevronDown, Eye, Share2, BarChart2, Zap, Lock, Mail, ChevronRight, Hash, Edit3 } from 'lucide-react';
+import { Loader2, Sparkles, ImagePlus, Check, X, ArrowRight, Lightbulb, ChevronDown, Eye, Share2, BarChart2, Zap, Lock, Mail, ChevronRight, Hash, Edit3, RefreshCcw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { generateSurveyLink } from '../utils/surveyLinkUtils';
 import { parsePrompt as parsePromptFn, getClarificationNeeds as getClarificationNeedsFn, ClarificationNeeds as ClarificationNeedsType } from '../utils/promptParser';
@@ -48,6 +48,10 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
   const [selectedSuggestion, setSelectedSuggestion] = useState<{ label: string; prompt: string } | null>(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [shareLinkCopied, setShareLinkCopied] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [selectedTone, setSelectedTone] = useState('Professional');
+  const [showToneDropdown, setShowToneDropdown] = useState(false);
+  const toneDropdownRef = useRef<HTMLDivElement>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoginMode, setIsLoginMode] = useState(false);
@@ -60,6 +64,8 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
   const [wizardStep, setWizardStep] = useState(-1);
   const [wizardAnswers, setWizardAnswers] = useState<Record<number, string>>({});
   const [showMoreOptions, setShowMoreOptions] = useState(false);
+  const [contextualQuestion, setContextualQuestion] = useState<{question: string; options: string[]} | null>(null);
+  const [isFetchingContextual, setIsFetchingContextual] = useState(false);
 
   const WIZARD_STEPS = [
     {
@@ -73,6 +79,12 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
       id: 'audience',
       question: "Who is this survey for?",
       options: ["Customers", "Friends / personal network", "Students", "Employees / team", "General public"],
+      inputType: 'options'
+    },
+    {
+      id: 'tone',
+      question: "What tone should your survey have?",
+      options: ["Professional", "Friendly", "Casual", "Academic", "Direct"],
       inputType: 'options'
     },
     {
@@ -263,33 +275,31 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
     const needs = getClarificationNeedsFn(parsed, questionCount !== 10);
 
     // Check if ANYTHING needs clarification
-    const needsAnything = needs.needsTopic || needs.needsQuestionCount || needs.needsAudience || needs.needsDataCollection;
+    const needsAnything = needs.needsTopic || needs.needsQuestionCount || needs.needsAudience || needs.needsDataCollection || needs.needsTone;
 
     if (!needsAnything) {
-      // Everything is clear from the prompt — go straight to generation
+      // Everything is clear — go straight to generation
       const directAnswers: Record<number, string> = {};
       if (parsed.audience) directAnswers[1] = parsed.audience;
-      if (parsed.dataCollection) directAnswers[2] = parsed.dataCollection;
+      if (parsed.dataCollection) directAnswers[3] = parsed.dataCollection;
       handleFinalGenerateSurvey(directAnswers, {
         questionCount: parsed.questionCount || questionCount,
         audience: parsed.audience || undefined,
         dataCollection: parsed.dataCollection || 'anonymous',
       });
     } else {
-      // Show clarification for what's missing
+      // Show clarification panel inline (the one inside the prompt area)
       setShowClarification(true);
       setClarificationNeeds(needs);
     }
   };
 
-  const handleClarificationSubmit = (answers: ClarificationAnswersType) => {
+  const handleClarificationSubmit = async (answers: ClarificationAnswersType) => {
     setShowClarification(false);
-    // Merge answers and generate
     const merged: Record<number, string> = {};
     if (answers.audience) merged[1] = answers.audience;
-    if (answers.dataCollection) merged[2] = answers.dataCollection;
+    if (answers.dataCollection) merged[3] = answers.dataCollection;
     if (answers.questionCount) setQuestionCount(answers.questionCount);
-    // If user provided a custom topic, override whatever was there
     if (answers.topic) setSurveyTopic(answers.topic);
     handleFinalGenerateSurvey(merged, answers);
   };
@@ -298,7 +308,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
     setShowClarification(false);
   };
 
-  const handleNextStep = (answer?: string) => {
+  const handleNextStep = async (answer?: string) => {
     let actualAnswer = answer || 'Skipped';
 
     const newAnswers = { ...wizardAnswers, [wizardStep]: actualAnswer };
@@ -314,6 +324,30 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
     if (wizardStep + 1 < WIZARD_STEPS.length) {
       setWizardStep(wizardStep + 1);
     } else {
+      // All wizard steps done — fetch AI contextual question
+      const promptText = surveyTopic || selectedSuggestion?.prompt || '';
+      if (promptText.length > 10 && !contextualQuestion) {
+        setIsFetchingContextual(true);
+        try {
+          const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+          const apiBase = isLocal ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+          const res = await fetch(`${apiBase}/api/contextual-question`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: promptText })
+          });
+          if (res.ok) {
+            const cData = await res.json();
+            if (cData.question && cData.options) {
+              setContextualQuestion(cData);
+              setIsFetchingContextual(false);
+              setWizardStep(WIZARD_STEPS.length); // Show contextual question step
+              return;
+            }
+          }
+        } catch {}
+        setIsFetchingContextual(false);
+      }
       setWizardStep(99); 
       handleFinalGenerateSurvey(newAnswers);
     }
@@ -336,8 +370,12 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
       // Append gathered context from clarification
       if (clarificationAnswers?.audience) finalPrompt += `\nAudience: ${clarificationAnswers.audience}`;
       if (clarificationAnswers?.dataCollection) finalPrompt += `\nData Collection: ${clarificationAnswers.dataCollection}`;
+      if (clarificationAnswers?.tone) finalPrompt += `\nTone: ${clarificationAnswers.tone}`;
+      else finalPrompt += `\nTone: ${selectedTone}`;
+      if (clarificationAnswers?.aiContext) finalPrompt += `\nContext: ${clarificationAnswers.aiContext}`;
       if (finalAnswers[1] && finalAnswers[1] !== 'Skip') finalPrompt += `\nAudience: ${finalAnswers[1]}`;
-      if (finalAnswers[2] && finalAnswers[2] !== 'Skip') finalPrompt += `\nData Collection: ${finalAnswers[2]}`;
+      if (finalAnswers[2] && finalAnswers[2] !== 'Skip') finalPrompt += `\nTone: ${finalAnswers[2]}`;
+      if (finalAnswers[3] && finalAnswers[3] !== 'Skip') finalPrompt += `\nData Collection: ${finalAnswers[3]}`;
 
       const finalCount = clarificationAnswers?.questionCount || questionCount;
 
@@ -349,7 +387,8 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
         wizard_answers: { 
           type: clarificationAnswers?.audience || finalAnswers[0],
           audience: clarificationAnswers?.audience || finalAnswers[1],
-          collection: clarificationAnswers?.dataCollection || finalAnswers[2],
+          collection: clarificationAnswers?.dataCollection || finalAnswers[3],
+          tone: clarificationAnswers?.tone || selectedTone || finalAnswers[2],
         }
       });
       clearInterval(phaseInterval);
@@ -390,11 +429,11 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
         if (navigator.share) {
           await navigator.share({
             title: surveyTopic || 'Survey',
-            text: 'I just created a survey. I would love your feedback!',
+            text: 'Hey! Take this quick 2-minute survey. Would love your feedback!',
             url: link,
           });
         } else {
-          await navigator.clipboard.writeText(link);
+          await navigator.clipboard.writeText(`Hey! Take this quick 2-minute survey 👉 ${link}`);
           setShareLinkCopied(true);
           setTimeout(() => setShareLinkCopied(false), 3000);
         }
@@ -461,6 +500,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
               onSubmit={handleClarificationSubmit}
               onCancel={handleClarificationCancel}
               isDarkMode={isDarkMode}
+              prompt={surveyTopic || selectedSuggestion?.prompt || ''}
             />
           </div>
         )}
@@ -540,6 +580,110 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
                 className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-stone-100 text-stone-400'} disabled:opacity-40`}>
                 <ImagePlus size={14} />
               </button>
+              {/* Microphone button - uses MediaRecorder + Whisper API */}
+              <button
+                onClick={async () => {
+                  if (isListening) {
+                    // Stop recording
+                    (window as any).__mediaRecorder?.stop();
+                    return;
+                  }
+                  try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                    const chunks: Blob[] = [];
+                    (window as any).__mediaRecorder = mediaRecorder;
+                    setIsListening(true);
+
+                    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+                    mediaRecorder.onstop = async () => {
+                      stream.getTracks().forEach(t => t.stop());
+                      setIsListening(false);
+                      if (chunks.length === 0) return;
+                      
+                      const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+                      const formData = new FormData();
+                      formData.append('file', audioBlob, 'recording.webm');
+                      formData.append('model', 'whisper-1');
+                      formData.append('language', 'en');
+                      
+                      setSurveyTopic(prev => prev + (prev ? ' ' : '') + '⏳ Transcribing...');
+                      
+                      try {
+                        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                        const apiBase = isLocal ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+                        const res = await fetch(`${apiBase}/api/transcribe-audio`, {
+                          method: 'POST',
+                          body: formData,
+                        });
+                        if (res.ok) {
+                          const data = await res.json();
+                          setSurveyTopic(prev => prev.replace('⏳ Transcribing...', '').trim() + (prev.replace('⏳ Transcribing...', '').trim() ? ' ' : '') + data.text);
+                        } else {
+                          setSurveyTopic(prev => prev.replace('⏳ Transcribing...', '').trim());
+                          setError('Failed to transcribe audio. Try again.');
+                        }
+                      } catch {
+                        setSurveyTopic(prev => prev.replace('⏳ Transcribing...', '').trim());
+                        setError('Failed to transcribe. Check connection.');
+                      }
+                    };
+                    mediaRecorder.start(250); // collect data every 250ms for silence detection
+                    
+                    // Silence detection using AudioContext
+                    const audioCtx = new AudioContext();
+                    const source = audioCtx.createMediaStreamSource(stream);
+                    const analyser = audioCtx.createAnalyser();
+                    analyser.fftSize = 512;
+                    source.connect(analyser);
+                    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                    let silenceStart = Date.now();
+                    let hasSpeech = false;
+                    
+                    const checkSilence = () => {
+                      if (mediaRecorder.state !== 'recording') return;
+                      analyser.getByteFrequencyData(dataArray);
+                      const volume = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+                      
+                      if (volume > 10) {
+                        silenceStart = Date.now();
+                        hasSpeech = true;
+                      } else if (hasSpeech && Date.now() - silenceStart > 4000) {
+                        // 4 seconds of silence after speech — auto-stop
+                        mediaRecorder.stop();
+                        audioCtx.close();
+                        return;
+                      }
+                      requestAnimationFrame(checkSilence);
+                    };
+                    checkSilence();
+                    
+                    // Auto-stop after 30 seconds max
+                    setTimeout(() => { if (mediaRecorder.state === 'recording') { mediaRecorder.stop(); audioCtx.close(); } }, 30000);
+                  } catch (err: any) {
+                    setIsListening(false);
+                    setError('Microphone access denied. Allow in browser settings.');
+                  }
+                }}
+                title={isListening ? 'Click to stop recording' : 'Speak your prompt'}
+                className={`p-1.5 rounded-lg transition-all ${
+                  isListening
+                    ? 'bg-red-500 text-white animate-pulse ring-2 ring-red-300 shadow-lg'
+                    : isDarkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-stone-100 text-stone-400'
+                }`}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  {isListening ? (
+                    <rect x="6" y="6" width="12" height="12" rx="2" />
+                  ) : (
+                    <>
+                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                      <line x1="12" x2="12" y1="19" y2="22"/>
+                    </>
+                  )}
+                </svg>
+              </button>
               {/* Custom Question Count Dropdown */}
               <div className="relative" ref={qsDropdownRef}>
                 <button
@@ -580,6 +724,49 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
                   </div>
                 )}
               </div>
+              {/* Tone/Style Selector */}
+              <div className="relative" ref={toneDropdownRef}>
+                <button
+                  onClick={() => setShowToneDropdown(!showToneDropdown)}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-semibold transition-all ${
+                    showToneDropdown
+                      ? isDarkMode ? 'bg-purple-600/30 text-purple-300' : 'bg-purple-100 text-purple-700'
+                      : isDarkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-stone-100 text-stone-600 hover:bg-stone-150'
+                  }`}
+                  title="Survey tone"
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                  </svg>
+                  <span>{selectedTone}</span>
+                  <ChevronDown size={9} className={`transition-transform ${showToneDropdown ? 'rotate-180' : ''}`} />
+                </button>
+                {showToneDropdown && (
+                  <div
+                    className={`absolute top-full left-0 mt-1.5 rounded-xl overflow-hidden z-50 min-w-[120px] ${
+                      isDarkMode ? 'bg-slate-800 border border-slate-600' : 'bg-white border border-stone-200'
+                    }`}
+                    style={{
+                      animation: 'sfSuggestIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                      boxShadow: isDarkMode ? '0 8px 24px rgba(0,0,0,0.4)' : '0 8px 24px rgba(0,0,0,0.1)',
+                    }}
+                  >
+                    {['Professional', 'Friendly', 'Casual', 'Academic', 'Direct'].map(tone => (
+                      <button
+                        key={tone}
+                        onClick={() => { setSelectedTone(tone); setShowToneDropdown(false); }}
+                        className={`w-full text-left px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                          selectedTone === tone
+                            ? isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-50 text-purple-600'
+                            : isDarkMode ? 'text-slate-300 hover:bg-slate-700' : 'text-stone-600 hover:bg-stone-50'
+                        }`}
+                      >
+                        {tone}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <button onClick={handleStartWizard} disabled={(!surveyTopic.trim() && !imageContext && !selectedSuggestion)}
               className="p-2 rounded-xl bg-gradient-to-r from-red-500 to-orange-400 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-[0_4px_12px_rgba(239,68,68,0.3)] transition-all">
@@ -599,8 +786,63 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
               {/* Generation Loading State */}
               {wizardStep === 99 && isLoading && null}
 
+              {/* AI Contextual Question (shows after all wizard steps) */}
+              {wizardStep === WIZARD_STEPS.length && contextualQuestion && (
+                <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <div className="flex flex-col items-center text-center">
+                    <span className="text-[11px] sm:text-xs font-bold tracking-widest text-purple-500 uppercase mb-2 flex items-center gap-1.5">
+                      <Sparkles size={12} /> AI Question
+                    </span>
+                    <h2 className={`text-2xl sm:text-3xl font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`} style={{ fontFamily: "'Outfit', sans-serif" }}>
+                      {contextualQuestion.question}
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                    {contextualQuestion.options.map((opt) => (
+                      <button
+                        key={opt}
+                        onClick={() => {
+                          // Append contextual answer to prompt and generate
+                          setSurveyTopic(prev => prev + `\nContext: ${contextualQuestion.question} → ${opt}`);
+                          setContextualQuestion(null);
+                          setWizardStep(99);
+                          handleFinalGenerateSurvey({...wizardAnswers, [WIZARD_STEPS.length]: opt});
+                        }}
+                        className={`px-5 py-4 rounded-2xl text-[15px] font-semibold text-center transition-all flex items-center justify-center min-h-[70px] ${
+                          isDarkMode
+                            ? 'bg-slate-800 border-2 border-transparent text-white hover:border-purple-500 hover:bg-slate-800/80 shadow-sm'
+                            : 'bg-stone-50 border-2 border-transparent text-slate-800 hover:border-purple-500 hover:bg-white shadow-sm hover:shadow-md'
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => {
+                      setContextualQuestion(null);
+                      setWizardStep(99);
+                      handleFinalGenerateSurvey(wizardAnswers);
+                    }}
+                    className={`text-sm font-bold flex items-center gap-2 transition-colors mx-auto mt-2 ${
+                      isDarkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-400 hover:text-slate-600'
+                    }`}
+                  >
+                    Skip →
+                  </button>
+                </div>
+              )}
+
+              {/* Loading state while fetching contextual question */}
+              {isFetchingContextual && (
+                <div className="flex flex-col items-center justify-center py-8 gap-3">
+                  <div className="w-8 h-8 border-3 border-purple-200 border-t-purple-500 rounded-full animate-spin" />
+                  <span className="text-sm text-stone-500">Preparing a question for you...</span>
+                </div>
+              )}
+
               {/* Guided Step Area */}
-              {wizardStep < WIZARD_STEPS.length && wizardStep !== 99 && (
+              {wizardStep < WIZARD_STEPS.length && wizardStep !== 99 && !contextualQuestion && !isFetchingContextual && (
                  <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                      <div className="flex flex-col items-center text-center">
                         <span className="text-[11px] sm:text-xs font-bold tracking-widest text-red-500 uppercase mb-2">Step {wizardStep + 1} of {WIZARD_STEPS.length}</span>
@@ -769,11 +1011,11 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
       {/* ── Survey Result Modal ── */}
       {showResultModal && generatedSurvey && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ animation: 'sfOverlayIn 0.3s ease-out' }}>
-          <div className="absolute inset-0 bg-slate-900/50" onClick={handleCloseResult} />
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={handleCloseResult} />
 
           <div
-            className="relative w-full max-w-2xl max-h-[85vh] rounded-2xl overflow-hidden flex flex-col bg-white shadow-xl"
-            style={{ animation: 'sfModalIn 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}
+            className="relative w-full max-w-3xl max-h-[92vh] rounded-2xl overflow-hidden flex flex-col shadow-2xl border border-white/20"
+            style={{ animation: 'sfModalIn 0.4s cubic-bezier(0.16, 1, 0.3, 1)', background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(20px)' }}
           >
             {/* Header */}
             <div className="px-6 pt-5 pb-4 border-b border-stone-100">
@@ -848,7 +1090,70 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
             </div>
 
             {/* Footer Actions */}
-            <div className="px-6 py-4 border-t border-stone-100 space-y-3">
+            <div className="px-6 py-4 border-t border-stone-200/50 space-y-3" style={{ background: 'rgba(255,255,255,0.6)' }}>
+              {/* Regenerate with different count and tone */}
+              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-stone-50/80 border border-stone-200/60 flex-wrap">
+                <span className="text-xs text-stone-500 flex-shrink-0">Regenerate with</span>
+                <select
+                  defaultValue={generatedSurvey?.questions?.length || 10}
+                  id="regenerate-count"
+                  className="px-2 py-1 text-xs font-semibold rounded-lg border border-stone-200 bg-white text-slate-800 cursor-pointer"
+                >
+                  {[3, 5, 7, 10, 12, 15, 20].map(n => (
+                    <option key={n} value={n}>{n} Qs</option>
+                  ))}
+                </select>
+                <select
+                  defaultValue={selectedTone}
+                  id="regenerate-tone"
+                  className="px-2 py-1 text-xs font-semibold rounded-lg border border-stone-200 bg-white text-slate-800 cursor-pointer"
+                >
+                  {['Professional', 'Friendly', 'Casual', 'Academic', 'Direct'].map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={async () => {
+                    const countEl = document.getElementById('regenerate-count') as HTMLSelectElement;
+                    const toneEl = document.getElementById('regenerate-tone') as HTMLSelectElement;
+                    const newCount = Number(countEl?.value || 10);
+                    const newTone = toneEl?.value || 'Professional';
+                    setQuestionCount(newCount);
+                    setSelectedTone(newTone);
+                    setShowResultModal(false);
+                    setIsLoading(true);
+                    setLoadingPhase(0);
+                    const phaseInterval = setInterval(() => {
+                      setLoadingPhase(prev => (prev < 3 ? prev + 1 : prev));
+                    }, 2500);
+                    try {
+                      const prompt = surveyTopic || selectedSuggestion?.prompt || '';
+                      const result = await generateSurvey({
+                        prompt: prompt + `\nTone: ${newTone}`,
+                        question_count: newCount,
+                        response_type: 'multiple_choice',
+                        template_type: 'custom',
+                        image_context: imageContext || undefined,
+                        theme: { font: 'Outfit', intent: 'general', colors: { primary: '#ef4444', background: '#ffffff', text: '#1e293b' } },
+                        wizard_answers: { tone: newTone },
+                      });
+                      clearInterval(phaseInterval);
+                      setGeneratedSurvey(result);
+                      setShowResultModal(true);
+                    } catch (err: any) {
+                      clearInterval(phaseInterval);
+                      setError(err.message || 'Failed to regenerate');
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  }}
+                  disabled={isLoading}
+                  className="ml-auto px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors flex items-center gap-1 disabled:opacity-50"
+                >
+                  <RefreshCcw size={11} /> Regenerate
+                </button>
+              </div>
+
               <button
                 onClick={() => window.open(`/dashboard/edit/${generatedSurvey?.survey_id}`, '_blank')}
                 className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-white text-sm font-semibold bg-slate-900 hover:bg-slate-800 transition-colors"
@@ -868,7 +1173,14 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
                   <Eye size={12} /> Preview
                 </button>
                 <button
-                  onClick={handleShareLink}
+                  onClick={() => {
+                    if (generatedSurvey) {
+                      const link = generateSurveyLink(generatedSurvey.survey_id);
+                      navigator.clipboard.writeText(`Hey! Take this quick 2-minute survey 👉 ${link}`);
+                      setShareLinkCopied(true);
+                      setTimeout(() => setShareLinkCopied(false), 3000);
+                    }
+                  }}
                   className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-[11px] sm:text-xs font-medium border border-stone-200 text-stone-600 hover:bg-stone-50 transition-colors"
                 >
                   <Share2 size={12} /> {shareLinkCopied ? 'Copied!' : 'Share'}

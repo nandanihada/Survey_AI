@@ -253,19 +253,31 @@ YOU MUST:
     # Data collection context
     data_collection_context = ""
     if data_collection == "full_details":
-        data_collection_context = "\nDATA COLLECTION: Include fields for Name, Email, and Phone at the beginning."
+        data_collection_context = "\nDATA COLLECTION: Include fields for Name, Email, and Phone but do NOT place them at positions 1, 2, or 3. Scatter them randomly among the middle questions (positions 4-8 or later). Never group them together consecutively."
     elif data_collection == "email_only":
-        data_collection_context = "\nDATA COLLECTION: Include an Email field at the beginning."
+        data_collection_context = "\nDATA COLLECTION: Include an Email field but do NOT place it at position 1 or 2. Put it somewhere in the middle of the survey (position 4 or later)."
     elif data_collection == "anonymous":
         data_collection_context = "\nDATA COLLECTION: Survey is anonymous. Do NOT ask for name, email, or phone."
 
     # Tone instruction
     tone_map = {
-        "casual": "Use friendly, conversational language. Keep it light and approachable.",
-        "formal": "Use formal, professional language suitable for corporate/academic contexts.",
-        "professional": "Use clear, professional but approachable language.",
+        "casual": "Use friendly, relaxed, conversational language. Feel free to use emojis and informal phrasing. Keep it fun and approachable.",
+        "formal": "Use formal, precise, academic language. Structured and research-appropriate. Suitable for institutional or scholarly contexts.",
+        "professional": "Use clear, professional but approachable language. Business-appropriate, neutral, and concise.",
     }
-    tone_instruction = tone_map.get(parsed["tone"], tone_map["professional"])
+    # Check for specific tone label from wizard
+    tone_label = parsed.get("tone_label", "")
+    if tone_label:
+        tone_label_map = {
+            "Professional": "Use clear, professional but approachable language. Business-appropriate, neutral, and concise. Suitable for corporate surveys.",
+            "Friendly": "Use warm, conversational, and welcoming language. Make respondents feel comfortable sharing honest feedback. Approachable but still respectful.",
+            "Casual": "Use relaxed, informal language. Feel free to use emojis, slang, and a fun tone. Like talking to a friend. Keep it light and engaging.",
+            "Academic": "Use precise, structured, research-grade language. Formal phrasing suitable for universities, research papers, and institutional assessments.",
+            "Direct": "Use short, no-fluff, straight-to-the-point language. Minimal wording, maximum clarity. No pleasantries — just ask what you need to know.",
+        }
+        tone_instruction = tone_label_map.get(tone_label, tone_map.get(parsed["tone"], tone_map["professional"]))
+    else:
+        tone_instruction = tone_map.get(parsed["tone"], tone_map["professional"])
 
     # Question type distribution
     type_instruction = ""
@@ -285,8 +297,8 @@ Do NOT include any rating scales, open text, yes/no, or any other type. ONLY mul
                 type_instruction = f"""
 QUESTION TYPES — STRICT REQUIREMENT:
 ALL {final_question_count} questions MUST be rating scale ONLY.
-Every single question must be answerable on a 1-5 numeric scale.
-Do NOT include any multiple choice, open text, yes/no, or any other type. ONLY rating (1-5 scale).
+Every single question must be answerable on a 1-10 numeric scale.
+Do NOT include any multiple choice, open text, yes/no, or any other type. ONLY rating (1-10 scale).
 Set type to "rating" for every question. No options array needed.
 """
             elif the_type == "short_answer":
@@ -320,7 +332,7 @@ Distribute questions evenly among the allowed types.
         type_instruction = """
 QUESTION TYPE DISTRIBUTION (for generated questions):
 - Multiple Choice: ~30% (4 options A-D)
-- Rating (1-5 or 1-10): ~20%
+- Rating (1-10 scale): ~20%
 - Yes/No: ~15%
 - Short Answer (open text): ~20%
 - Opinion Scale: ~15%
@@ -358,7 +370,7 @@ CRITICAL RULES:
    - For every Yes/No question, check if any following question assumes "Yes"
    - If it does, add a show_if condition to that follow-up question
    - For "Do you use/have X?" questions, ALL follow-ups about X must be gated
-   - For rating questions: if score is low (1-3), show "what can we improve?"
+   - For rating questions: if score is low (1-4), show "what can we improve?"
      If score is high (8-10), show "what did you enjoy?"
    - NEVER generate a question that contradicts a possible answer to a previous one
 
@@ -438,6 +450,19 @@ def build_generation_request(
             data_collection = clarification_answers["dataCollection"]
         if clarification_answers.get("questionCount"):
             question_count_from_dropdown = clarification_answers["questionCount"]
+        # Override tone from wizard selection
+        if clarification_answers.get("tone"):
+            tone_val = clarification_answers["tone"].lower()
+            tone_mapping = {
+                "professional": "professional",
+                "friendly": "professional",  # friendly maps to approachable professional
+                "casual": "casual",
+                "academic": "formal",
+                "direct": "professional",
+            }
+            parsed["tone"] = tone_mapping.get(tone_val, "professional")
+            # Store the original tone label for more specific instructions
+            parsed["tone_label"] = clarification_answers["tone"]
 
     # Calculate final question count
     final_count = calculate_question_count(parsed, question_count_from_dropdown)

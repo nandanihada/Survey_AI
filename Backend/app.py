@@ -1223,6 +1223,7 @@ def generate_survey():
                 "wizard_type": ml_wiz.get("type"),
                 "wizard_collection": ml_wiz.get("collection"),
                 "wizard_audience": ml_wiz.get("audience"),
+                "wizard_tone": ml_wiz.get("tone"),
                 "created_at": datetime.utcnow()
             })
 
@@ -5149,6 +5150,109 @@ def initialize_default_suggestion_filters():
 
     except Exception as e:
 
+        return jsonify({"error": str(e)}), 500
+
+
+# ═══════════════════════════════════════════════════════════
+# AI CONTEXTUAL QUESTION (prompt-specific clarifying question)
+# ═══════════════════════════════════════════════════════════
+@app.route("/api/contextual-question", methods=["POST", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins="*")
+def get_contextual_question():
+    """Generate a single clarifying question based on the user's prompt"""
+    if request.method == "OPTIONS":
+        return "", 200
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        prompt = data.get("prompt", "").strip()
+        if not prompt or len(prompt) < 5:
+            return jsonify({"question": None})
+
+        ai_prompt = f"""Based on this survey topic, generate ONE short clarifying question that would help create a better survey. The question should ask about something specific that the user hasn't mentioned but would be useful to know.
+
+User's survey topic: "{prompt}"
+
+Rules:
+- Ask about a specific detail that would improve the survey (scope, timeframe, specific aspect to focus on, etc.)
+- Provide exactly 3-4 short answer options that cover likely responses
+- Keep the question under 15 words
+- Keep each option under 5 words
+- Return ONLY valid JSON, no markdown
+
+Format:
+{{"question": "Your clarifying question?", "options": ["Option 1", "Option 2", "Option 3", "Option 4"]}}"""
+
+        result = generate_ai_content(ai_prompt, temperature=0.7, max_tokens=150)
+        
+        # Parse the JSON response
+        import json as json_mod
+        cleaned = result.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        cleaned = cleaned.strip()
+        if cleaned.startswith("json"):
+            cleaned = cleaned[4:].strip()
+        
+        parsed = json_mod.loads(cleaned)
+        return jsonify(parsed)
+
+    except Exception as e:
+        print(f"Contextual question error: {e}")
+        return jsonify({"question": None})
+
+
+# ═══════════════════════════════════════════════════════════
+# AUDIO TRANSCRIPTION (Whisper API)
+# ═══════════════════════════════════════════════════════════
+@app.route("/api/transcribe-audio", methods=["POST", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins="*")
+def transcribe_audio():
+    """Transcribe audio using OpenAI Whisper API"""
+    if request.method == "OPTIONS":
+        return "", 200
+
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "No audio file provided"}), 400
+
+        audio_file = request.files['file']
+        
+        # Send to OpenAI Whisper
+        headers = {
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+        }
+        
+        files = {
+            'file': (audio_file.filename or 'audio.webm', audio_file.stream, audio_file.content_type or 'audio/webm'),
+        }
+        data = {
+            'model': 'whisper-1',
+            'language': 'en',
+        }
+        
+        resp = requests.post(
+            "https://api.openai.com/v1/audio/transcriptions",
+            headers=headers,
+            files=files,
+            data=data,
+            timeout=30
+        )
+        
+        if resp.status_code == 200:
+            result = resp.json()
+            return jsonify({"text": result.get("text", "")})
+        else:
+            print(f"Whisper API error: {resp.status_code} - {resp.text}")
+            return jsonify({"error": "Transcription failed"}), 500
+
+    except Exception as e:
+        print(f"Transcribe error: {e}")
         return jsonify({"error": str(e)}), 500
 
 

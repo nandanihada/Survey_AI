@@ -70,7 +70,7 @@ const LoginPage: React.FC = () => {
           setIsLoading(false);
           return;
         }
-        await register({ email, password, name });
+        await register({ email, password, name, consent: { acceptedTerms: true, prefEmails, prefAnalytics, prefPersonalization, consentDate: new Date().toISOString() } });
         setShowSuccess(true);
       }
     } catch (err: any) {
@@ -555,25 +555,27 @@ const LoginPage: React.FC = () => {
                             id="terms"
                             type="checkbox"
                             checked={acceptTerms}
-                            onChange={() => setAcceptTerms(!acceptTerms)}
+                            onChange={() => { setAcceptTerms(!acceptTerms); if (acceptTerms) setShowPreferences(false); }}
                             className="mt-0.5 h-4 w-4 rounded border border-gray-300 bg-white accent-red-500 cursor-pointer"
                           />
                           <label htmlFor="terms" className="text-xs text-gray-500 leading-relaxed cursor-pointer">
                             I agree to the <span className="text-red-500 font-medium hover:underline">Terms & Conditions</span> and <span className="text-red-500 font-medium hover:underline">Privacy Policy</span>
                           </label>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setShowPreferences(!showPreferences)}
-                          className={`p-1 rounded-md transition-all ${showPreferences ? 'bg-stone-100 rotate-180' : 'hover:bg-stone-50'}`}
-                        >
-                          <ChevronDown size={14} className="text-stone-400" />
-                        </button>
+                        {acceptTerms && (
+                          <button
+                            type="button"
+                            onClick={() => setShowPreferences(!showPreferences)}
+                            className={`p-1 rounded-md transition-all ${showPreferences ? 'bg-stone-100 rotate-180' : 'hover:bg-stone-50'}`}
+                          >
+                            <ChevronDown size={14} className="text-stone-400" />
+                          </button>
+                        )}
                       </div>
 
                       {/* Expandable preferences */}
                       <AnimatePresence>
-                        {showPreferences && (
+                        {acceptTerms && showPreferences && (
                           <motion.div
                             initial={{ opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: 'auto' }}

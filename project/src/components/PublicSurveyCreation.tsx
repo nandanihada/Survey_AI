@@ -48,8 +48,37 @@ const PublicSurveyCreation: React.FC = () => {
   const [isDarkMode] = useState(false);
   const [showClarification, setShowClarification] = useState(false);
   const [clarificationNeeds, setClarificationNeeds] = useState<ReturnType<typeof getClarificationNeeds> | null>(null);
+  const [isListening, setIsListening] = useState(false);
 
   const suggestionsRef = useRef<HTMLDivElement>(null);
+
+  // Voice recognition
+  const startListening = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setError('Voice input is not supported in this browser. Try Chrome or Edge.');
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    setIsListening(true);
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setSurveyTopic(prev => prev ? prev + ' ' + transcript : transcript);
+      setIsListening(false);
+    };
+    recognition.onerror = () => {
+      setIsListening(false);
+    };
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+    recognition.start();
+  };
 
   const SUGGESTION_PROMPTS = [
     { icon: '/icons/star.svg', gradient: 'linear-gradient(135deg, #ff7e5f, #feb47b)', label: 'Customer Feedback', prompt: 'Customer satisfaction survey to understand how happy our customers are with our product quality, support experience, and overall service' },
@@ -237,12 +266,12 @@ const PublicSurveyCreation: React.FC = () => {
       try {
         if (navigator.share) {
           await navigator.share({
-            title: surveyTopic || 'Survey',
-            text: 'I just created a survey. I would love your feedback!',
+            title: '2-Minute Survey | PepperWahl',
+            text: `Hey! I created a quick 2-minute survey${surveyTopic ? ' about ' + surveyTopic : ''}. Would love your feedback!`,
             url: link,
           });
         } else {
-          await navigator.clipboard.writeText(link);
+          await navigator.clipboard.writeText(`Hey! Take this quick 2-minute survey 👉 ${link}`);
           setShareLinkCopied(true);
           setTimeout(() => setShareLinkCopied(false), 3000);
         }
@@ -330,6 +359,24 @@ const PublicSurveyCreation: React.FC = () => {
                 <button onClick={() => fileInputRef.current?.click()} disabled={isParsingImage}
                   className={`p-1.5 sm:p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-stone-100 text-stone-400'} disabled:opacity-40`}>
                   <ImagePlus size={15} />
+                </button>
+
+                {/* Microphone button */}
+                <button
+                  onClick={startListening}
+                  disabled={isListening}
+                  title={isListening ? 'Listening...' : 'Speak your prompt'}
+                  className={`p-1.5 sm:p-2 rounded-lg transition-colors ${
+                    isListening
+                      ? 'bg-red-100 text-red-500 animate-pulse'
+                      : isDarkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-stone-100 text-stone-400'
+                  }`}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" x2="12" y1="19" y2="22"/>
+                  </svg>
                 </button>
 
                 <div className="relative" ref={suggestionsRef}>

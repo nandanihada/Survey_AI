@@ -26,6 +26,13 @@ export interface RegisterRequest {
   email: string;
   password: string;
   name: string;
+  consent?: {
+    acceptedTerms: boolean;
+    prefEmails: boolean;
+    prefAnalytics: boolean;
+    prefPersonalization: boolean;
+    consentDate: string;
+  };
 }
 
 class AuthService {

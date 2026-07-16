@@ -28,10 +28,12 @@ def register():
         email = data.get('email', '').strip().lower()
         password = data.get('password', '')
         name = data.get('name', '').strip()
+        consent = data.get('consent', None)
         
         print(f"🔐 Email from request: {email}")
         print(f"🔐 Name from request: {name}")
         print(f"🔐 Password length: {len(password)} characters")
+        print(f"🔐 Consent data: {consent}")
         
         if not email or not password:
             print(f"❌ Email or password missing")
@@ -39,6 +41,23 @@ def register():
         
         print(f"🔐 Calling auth_service.register_user()...")
         user = auth_service.register_user(email, password, name)
+        
+        # Save consent preferences to user record
+        if consent and user.get('_id'):
+            from mongodb_config import db
+            db.users.update_one(
+                {'_id': user['_id']},
+                {'$set': {
+                    'consent': {
+                        'acceptedTerms': consent.get('acceptedTerms', False),
+                        'prefEmails': consent.get('prefEmails', True),
+                        'prefAnalytics': consent.get('prefAnalytics', True),
+                        'prefPersonalization': consent.get('prefPersonalization', True),
+                        'consentDate': consent.get('consentDate', datetime.utcnow().isoformat()),
+                    }
+                }}
+            )
+            print(f"✅ Consent preferences saved for user")
         
         print(f"✅ User registered successfully")
         print(f"✅ User ID: {user['_id']}")
