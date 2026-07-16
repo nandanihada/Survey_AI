@@ -1173,12 +1173,32 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
                   <Eye size={12} /> Preview
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     if (generatedSurvey) {
                       const link = generateSurveyLink(generatedSurvey.survey_id);
-                      navigator.clipboard.writeText(`Hey! Take this quick 2-minute survey 👉 ${link}`);
-                      setShareLinkCopied(true);
-                      setTimeout(() => setShareLinkCopied(false), 3000);
+                      const shareText = `Hey! Take this quick 2-minute survey 👉 ${link}`;
+                      
+                      if (navigator.share) {
+                        try {
+                          await navigator.share({
+                            title: '2-Minute Survey | PepperWahl',
+                            text: 'Hey! Take this quick 2-minute survey. Would love your feedback!',
+                            url: link,
+                          });
+                        } catch (err: any) {
+                          // User cancelled share — fallback to copy
+                          if (err.name !== 'AbortError') {
+                            await navigator.clipboard.writeText(shareText);
+                            setShareLinkCopied(true);
+                            setTimeout(() => setShareLinkCopied(false), 3000);
+                          }
+                        }
+                      } else {
+                        // No native share — copy to clipboard
+                        await navigator.clipboard.writeText(shareText);
+                        setShareLinkCopied(true);
+                        setTimeout(() => setShareLinkCopied(false), 3000);
+                      }
                     }
                   }}
                   className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-[11px] sm:text-xs font-medium border border-stone-200 text-stone-600 hover:bg-stone-50 transition-colors"
