@@ -77,10 +77,10 @@ const PricingPage: React.FC = () => {
       {/* Back to Dashboard */}
       <div className="max-w-6xl mx-auto px-4 pt-4">
         <button
-          onClick={() => navigate('/dashboard')}
+          onClick={() => navigate(-1)}
           className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${isLight ? 'text-stone-500 hover:text-stone-800' : 'text-slate-400 hover:text-white'}`}
         >
-          <ArrowLeft size={16} /> Back to Dashboard
+          <ArrowLeft size={16} /> Go Back
         </button>
       </div>
 

@@ -38,12 +38,10 @@ const AnalyticsHeroHeader: React.FC<Props> = ({ title, description, stats, onBac
       )}
 
       {/* 5 Stat Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-6">
         <StatCard value={stats.total_responses.toString()} label="Total Responses" />
         <StatCard value={`${stats.avg_completion_time}s`} label="Avg Completion" />
         <StatCard value={stats.careful_count.toString()} label="Careful" />
-        <StatCard value={stats.rushed_count.toString()} label="Rushed" />
-        <StatCard value={`${stats.rush_rate}%`} label="Rush Rate" highlight />
       </div>
     </div>
   );
