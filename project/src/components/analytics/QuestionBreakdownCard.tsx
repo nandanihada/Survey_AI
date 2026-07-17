@@ -121,8 +121,8 @@ const QuestionBreakdownCard: React.FC<Props> = ({ question, index, userTier, sur
     question.question_type === 'short_answer' || 
     question.question_type === 'open_text' ||
     (question.options.length === 0 && question.question_type !== 'range' && question.question_type !== 'rating' && question.question_type !== 'scale' && question.question_type !== 'opinion_scale');
-  // 0=pie, 1=doughnut, 2=horizontal bar, 3=vertical bar, 4=polar-style doughnut
-  const chartVariants = [0, 1, 2, 3, 1, 0, 2, 3]; // pattern for variety
+  // 0=pie, 1=doughnut, 2=horizontal bar(chartjs), 3=vertical bar(chartjs), 4=progress bars with badges
+  const chartVariants = [0, 4, 1, 2, 4, 3, 0, 4, 1, 2]; // more variety with badge bars
   const chartType = chartVariants[index % chartVariants.length];
   
   // Pick unique color palette per question
@@ -245,30 +245,57 @@ const QuestionBreakdownCard: React.FC<Props> = ({ question, index, userTier, sur
           </div>
         ) : (
           /* Multiple choice / Scale — show chart */
-          <div className={`mb-6 ${(chartType === 2 || chartType === 3) ? '' : 'flex flex-col md:flex-row items-center gap-6'}`}>
+          <div className={`mb-6 ${(chartType === 2 || chartType === 3) ? '' : chartType === 4 ? '' : 'flex flex-col md:flex-row items-center gap-6'}`}>
             {/* Chart */}
-            <div className={(chartType === 2 || chartType === 3) ? 'w-full max-w-lg' : 'w-44 h-44 flex-shrink-0'}>
-              {chartType === 0 && <Pie data={chartData} options={pieOptions} />}
-              {chartType === 1 && <Doughnut data={chartData} options={pieOptions} />}
-              {chartType === 2 && <Bar data={chartData} options={barOptions} />}
-              {chartType === 3 && <Bar data={chartData} options={verticalBarOptions} />}
-            </div>
-            
-            {/* Legend (for pie/doughnut only) */}
-            {(chartType === 0 || chartType === 1) && (
-              <div className="flex-1 space-y-2 mt-4 md:mt-0">
+            {chartType === 4 ? (
+              /* Progress bars with numbered badges */
+              <div className="w-full space-y-3">
                 {question.answer_distribution.map((item, i) => (
                   <div key={i} className="flex items-center gap-3">
                     <span
-                      className="w-3 h-3 rounded-full flex-shrink-0"
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
                       style={{ backgroundColor: palette[i % palette.length] }}
-                    />
-                    <span className="text-sm text-gray-700 flex-1 truncate" title={item.answer}>{item.answer}</span>
-                    <span className="text-sm font-semibold text-gray-900">{item.percentage}%</span>
-                    <span className="text-xs text-gray-400">({item.count})</span>
+                    >
+                      {i + 1}
+                    </span>
+                    <span className="text-sm text-gray-700 w-36 truncate flex-shrink-0" title={item.answer}>{item.answer}</span>
+                    <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${item.percentage}%`, backgroundColor: palette[i % palette.length] }}
+                      />
+                    </div>
+                    <span className="text-sm font-semibold text-gray-800 w-12 text-right">{item.percentage}%</span>
+                    <span className="text-xs text-gray-400 w-8">({item.count})</span>
                   </div>
                 ))}
               </div>
+            ) : (
+              <>
+                <div className={(chartType === 2 || chartType === 3) ? 'w-full max-w-lg' : 'w-44 h-44 flex-shrink-0'}>
+                  {chartType === 0 && <Pie data={chartData} options={pieOptions} />}
+                  {chartType === 1 && <Doughnut data={chartData} options={pieOptions} />}
+                  {chartType === 2 && <Bar data={chartData} options={barOptions} />}
+                  {chartType === 3 && <Bar data={chartData} options={verticalBarOptions} />}
+                </div>
+                
+                {/* Legend (for pie/doughnut only) */}
+                {(chartType === 0 || chartType === 1) && (
+                  <div className="flex-1 space-y-2 mt-4 md:mt-0">
+                    {question.answer_distribution.map((item, i) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <span
+                          className="w-3 h-3 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: palette[i % palette.length] }}
+                        />
+                        <span className="text-sm text-gray-700 flex-1 truncate" title={item.answer}>{item.answer}</span>
+                        <span className="text-sm font-semibold text-gray-900">{item.percentage}%</span>
+                        <span className="text-xs text-gray-400">({item.count})</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         )
