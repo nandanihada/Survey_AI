@@ -64,35 +64,20 @@ const IndividualResponsesTable: React.FC<Props> = ({ responses, userTier, questi
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">#</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Answer</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  {isPremium ? 'Time' : (
-                    <span className="flex items-center gap-1">
-                      Time <Lock className="h-3 w-3 text-gray-400" />
-                    </span>
-                  )}
-                </th>
+                {/* Only show extra columns for premium+ */}
+                {isPremium && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
+                )}
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  {isPremium ? 'Location' : (
-                    <span className="flex items-center gap-1">
-                      Location <Lock className="h-3 w-3 text-gray-400" />
-                    </span>
-                  )}
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  {isPremium ? 'Device' : (
-                    <span className="flex items-center gap-1">
-                      Device <Lock className="h-3 w-3 text-gray-400" />
-                    </span>
-                  )}
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  {isEnterprise ? 'IP' : (
-                    <span className="flex items-center gap-1">
-                      IP <Lock className="h-3 w-3 text-gray-400" />
-                    </span>
-                  )}
-                </th>
+                {isPremium && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
+                )}
+                {isPremium && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Device</th>
+                )}
+                {isEnterprise && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -102,18 +87,14 @@ const IndividualResponsesTable: React.FC<Props> = ({ responses, userTier, questi
                   <td className="px-4 py-3 font-medium text-gray-900">{resp.name || 'Anonymous'}</td>
                   <td className="px-4 py-3 text-gray-700">{resp.answer}</td>
                   
-                  {/* Time - locked for free */}
-                  <td className="px-4 py-3">
-                    {isPremium ? (
+                  {isPremium && (
+                    <td className="px-4 py-3">
                       <span className={`font-medium ${resp.status === 'Rushed' ? 'text-red-500' : 'text-green-600'}`}>
                         {resp.time !== null ? `${resp.time.toFixed(1)}s` : '—'}
                       </span>
-                    ) : (
-                      <span className="text-gray-300 select-none">•••</span>
-                    )}
-                  </td>
+                    </td>
+                  )}
                   
-                  {/* Status */}
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                       resp.status === 'Rushed' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
@@ -122,54 +103,21 @@ const IndividualResponsesTable: React.FC<Props> = ({ responses, userTier, questi
                     </span>
                   </td>
                   
-                  {/* Location - locked for free */}
-                  <td className="px-4 py-3">
-                    {isPremium ? (
-                      <span className="text-gray-600">{resp.location || '—'}</span>
-                    ) : (
-                      <span className="text-gray-300 select-none">•••</span>
-                    )}
-                  </td>
+                  {isPremium && (
+                    <td className="px-4 py-3 text-gray-600">{resp.location || '—'}</td>
+                  )}
                   
-                  {/* Device - locked for free */}
-                  <td className="px-4 py-3">
-                    {isPremium ? (
-                      <span className="text-gray-600">{resp.device}</span>
-                    ) : (
-                      <span className="text-gray-300 select-none">•••</span>
-                    )}
-                  </td>
+                  {isPremium && (
+                    <td className="px-4 py-3 text-gray-600">{resp.device}</td>
+                  )}
                   
-                  {/* IP - locked for free & premium */}
-                  <td className="px-4 py-3">
-                    {isEnterprise ? (
-                      <span className="text-gray-600 font-mono text-xs">{resp.ip_address || '—'}</span>
-                    ) : (
-                      <span className="text-gray-300 select-none">•••</span>
-                    )}
-                  </td>
+                  {isEnterprise && (
+                    <td className="px-4 py-3 font-mono text-xs text-gray-500">{resp.ip_address || '—'}</td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
-
-          {/* Upgrade hint for locked columns */}
-          {!isPremium && (
-            <div className="bg-red-50 border-t border-red-200 px-4 py-3 flex items-center gap-2">
-              <Lock className="h-4 w-4 text-red-500" />
-              <p className="text-sm text-red-700">
-                Upgrade to <span className="font-semibold">Premium</span> to unlock Time, Location & Device columns.
-              </p>
-            </div>
-          )}
-          {isPremium && !isEnterprise && (
-            <div className="bg-purple-50 border-t border-purple-200 px-4 py-3 flex items-center gap-2">
-              <Lock className="h-4 w-4 text-purple-500" />
-              <p className="text-sm text-purple-700">
-                Upgrade to <span className="font-semibold">Enterprise</span> to unlock IP address column.
-              </p>
-            </div>
-          )}
         </div>
       )}
     </div>

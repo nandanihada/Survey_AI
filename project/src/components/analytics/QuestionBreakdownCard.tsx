@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Sparkles, TrendingUp, Brain, Users, ChevronDown, ChevronUp } from 'lucide-react';
+import { Lock, Sparkles, TrendingUp, Brain, Users, ChevronDown, ChevronUp, ChevronRight } from 'lucide-react';
 import { Pie, Doughnut, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -317,172 +317,17 @@ const QuestionBreakdownCard: React.FC<Props> = ({ question, index, userTier, sur
       {/* ═══════ PREMIUM SECTION ═══════ */}
       {showLockedPremiumDropdown && (
         <div className="mt-4">
-          {/* Dropdown toggle */}
+          {/* Direct redirect to pricing — no dropdown */}
           <button
-            onClick={() => setPremiumOpen(!premiumOpen)}
+            onClick={() => navigate('/pricing?theme=light')}
             className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-red-200 bg-red-50/50 hover:bg-red-50 transition-colors"
           >
             <div className="flex items-center gap-2">
               <Lock className="h-4 w-4 text-red-400" />
-              <span className="text-sm font-medium text-red-700">Premium Insights</span>
-              <span className="text-xs text-red-400">— Time tracking, rush detection & more</span>
+              <span className="text-sm font-medium text-red-700">Premium</span>
             </div>
-            {premiumOpen ? (
-              <ChevronUp className="h-4 w-4 text-red-400" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-red-400" />
-            )}
+            <ChevronRight className="h-4 w-4 text-red-400" />
           </button>
-
-          {/* Dropdown content */}
-          {premiumOpen && (
-            <div className="relative mt-3 rounded-xl overflow-hidden border border-red-100">
-              {/* Blurred real data */}
-              <div className="filter blur-[5px] pointer-events-none select-none p-5 bg-white/80">
-                {/* Real time stat cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-                  <div className="bg-gray-50 rounded-lg p-3 text-center">
-                    <div className="text-xl font-bold text-gray-900">{question.timing_stats.avg_time || '—'}s</div>
-                    <div className="text-xs text-gray-500">Avg Time</div>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-3 text-center">
-                    <div className="text-xl font-bold text-gray-900">{question.timing_stats.median_time || '—'}s</div>
-                    <div className="text-xs text-gray-500">Median</div>
-                  </div>
-                  <div className="bg-green-50 rounded-lg p-3 text-center">
-                    <div className="text-xl font-bold text-green-700">{question.timing_stats.careful_count}</div>
-                    <div className="text-xs text-gray-500">Careful</div>
-                  </div>
-                  <div className="bg-red-50 rounded-lg p-3 text-center">
-                    <div className="text-xl font-bold text-red-600">{question.timing_stats.rushed_count}</div>
-                    <div className="text-xs text-gray-500">Rushed</div>
-                  </div>
-                </div>
-
-                {/* Real distribution chart */}
-                {question.timing_stats.timings.length > 0 && (
-                  <div className="mb-5">
-                    <p className="text-xs text-gray-500 font-medium mb-2">
-                      Time Distribution · Min {question.timing_stats.min_time}s — Max {question.timing_stats.max_time}s
-                    </p>
-                    <div className="flex items-end gap-0.5 h-12">
-                      {[...question.timing_stats.timings]
-                        .sort((a, b) => a - b)
-                        .map((t, i) => (
-                          <div
-                            key={i}
-                            className={`flex-1 rounded-t-sm ${t < 3 ? 'bg-red-400' : 'bg-green-400'}`}
-                            style={{ height: `${Math.min((t / Math.max(...question.timing_stats.timings, 1)) * 100, 100)}%`, minHeight: '4px' }}
-                          />
-                        ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Real careful vs rushed */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <p className="text-xs font-bold text-green-700 uppercase mb-2">
-                      Careful Answers ({question.timing_stats.careful_count})
-                    </p>
-                    <div className="space-y-1">
-                      {Object.entries(question.careful_answers).slice(0, 4).map(([ans, count]) => (
-                        <div key={ans} className="flex justify-between text-sm">
-                          <span>{ans}</span>
-                          <span className="font-medium">
-                            {question.timing_stats.careful_count > 0
-                              ? Math.round((count / question.timing_stats.careful_count) * 100) : 0}%
-                          </span>
-                        </div>
-                      ))}
-                      {Object.keys(question.careful_answers).length === 0 && (
-                        <p className="text-xs text-gray-400">Collecting data...</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <p className="text-xs font-bold text-red-600 uppercase mb-2">
-                      Rushed Answers ({question.timing_stats.rushed_count})
-                    </p>
-                    <div className="space-y-1">
-                      {Object.entries(question.rushed_answers).slice(0, 4).map(([ans, count]) => (
-                        <div key={ans} className="flex justify-between text-sm">
-                          <span>{ans}</span>
-                          <span className="font-medium">
-                            {question.timing_stats.rushed_count > 0
-                              ? Math.round((count / question.timing_stats.rushed_count) * 100) : 0}%
-                          </span>
-                        </div>
-                      ))}
-                      {Object.keys(question.rushed_answers).length === 0 && (
-                        <p className="text-xs text-gray-400">Collecting data...</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* AI insights */}
-                <div className="space-y-3">
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <p className="text-xs font-bold text-green-700 uppercase mb-1">AI Insight — Careful Respondents</p>
-                    <p className="text-sm text-gray-700">Detailed AI analysis of careful respondent patterns and preferences for this question.</p>
-                  </div>
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <p className="text-xs font-bold text-red-600 uppercase mb-1">AI Insight — Rushed Respondents</p>
-                    <p className="text-sm text-gray-700">Detailed AI analysis of rushed respondent patterns and behavioral signals for this question.</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Lock overlay */}
-              <div className="absolute inset-0 flex items-center justify-center"
-                style={{
-                  background: 'rgba(255, 255, 255, 0.3)',
-                  backdropFilter: 'blur(1px)',
-                }}
-              >
-                <div className="text-center px-6 py-5 rounded-2xl max-w-sm"
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.95)',
-                    border: '1px solid rgba(239, 68, 68, 0.2)',
-                    boxShadow: '0 12px 40px rgba(0, 0, 0, 0.08)',
-                  }}
-                >
-                  <div className="w-11 h-11 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3">
-                    <Lock className="h-5 w-5 text-red-500" />
-                  </div>
-                  <h4 className="text-sm font-bold text-gray-900 mb-1">Unlock Premium Analytics</h4>
-                  <p className="text-xs text-gray-500 mb-3">
-                    See the full picture behind every response
-                  </p>
-                  <div className="space-y-1.5 text-left text-xs text-gray-600 mb-4 px-3">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-3 w-3 text-red-400 flex-shrink-0" />
-                      <span>Per-question time tracking</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <TrendingUp className="h-3 w-3 text-red-400 flex-shrink-0" />
-                      <span>Rushed vs careful breakdown</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Brain className="h-3 w-3 text-red-400 flex-shrink-0" />
-                      <span>Dual AI insights per question</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Users className="h-3 w-3 text-red-400 flex-shrink-0" />
-                      <span>Individual responses: timing, location & device</span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => navigate('/pricing?theme=light')}
-                    className="w-full px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm"
-                  >
-                    Upgrade to Premium →
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
