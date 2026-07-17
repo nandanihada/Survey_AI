@@ -100,6 +100,10 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const [redirecting, setRedirecting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Per-question timing tracking
+  const [questionTimings, setQuestionTimings] = useState<Record<string, number>>({});
+  const [questionStartTime, setQuestionStartTime] = useState<number>(Date.now());
+
   // Clamp question index if visible questions change due to skip logic
   useEffect(() => {
     if (currentQuestionIndex >= visibleQuestions.length && visibleQuestions.length > 0) {
@@ -182,6 +186,13 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
   const handleNext = useCallback(() => {
     if (currentQuestionIndex < visibleQuestions.length - 1 && isCurrentAnswered) {
+      // Record time spent on current question
+      const currentQ = visibleQuestions[currentQuestionIndex];
+      if (currentQ) {
+        const timeSpent = (Date.now() - questionStartTime) / 1000; // seconds
+        setQuestionTimings(prev => ({ ...prev, [currentQ.id]: timeSpent }));
+      }
+      setQuestionStartTime(Date.now());
       setCurrentQuestionIndex(prev => prev + 1);
       trackClickInteraction('question_navigation', {
         action: 'next',
@@ -189,10 +200,20 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         to_question: currentQuestionIndex + 2
       });
     }
-  }, [currentQuestionIndex, visibleQuestions.length, isCurrentAnswered]);
+  }, [currentQuestionIndex, visibleQuestions.length, isCurrentAnswered, questionStartTime]);
 
   const handlePrev = () => {
     if (currentQuestionIndex > 0) {
+      // Record time spent on current question before going back
+      const currentQ = visibleQuestions[currentQuestionIndex];
+      if (currentQ) {
+        const timeSpent = (Date.now() - questionStartTime) / 1000;
+        setQuestionTimings(prev => ({
+          ...prev,
+          [currentQ.id]: (prev[currentQ.id] || 0) + timeSpent
+        }));
+      }
+      setQuestionStartTime(Date.now());
       setCurrentQuestionIndex(prev => prev - 1);
     }
   };
@@ -223,6 +244,14 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     });
     if (unanswered) return;
 
+    // Record timing for the last question
+    const lastQ = visibleQuestions[currentQuestionIndex];
+    const finalTimings = { ...questionTimings };
+    if (lastQ) {
+      const timeSpent = (Date.now() - questionStartTime) / 1000;
+      finalTimings[lastQ.id] = timeSpent;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -246,6 +275,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           responses,
+          question_timings: finalTimings,
           email: email, // Use URL email parameter
           username,
           tracking_id: trackingId,

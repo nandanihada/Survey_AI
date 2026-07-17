@@ -1041,7 +1041,7 @@ const SurveyEditor: React.FC = () => {
                 textAlign: 'center', fontSize: 12, color: theme.textLight,
                 fontFamily: "'Outfit', sans-serif", marginTop: 16, paddingBottom: 8,
               }}>
-                Powered by <span style={{ color: theme.accent, fontWeight: 600 }}>PepperAds</span>
+                Powered by <span style={{ color: theme.accent, fontWeight: 600 }}>Pepperwahl</span>
               </div>
             </div>
           ) : (

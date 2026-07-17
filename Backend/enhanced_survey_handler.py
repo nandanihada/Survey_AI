@@ -65,6 +65,9 @@ class EnhancedSurveyHandler:
             print(f"📝 Responses received: {len(responses)} answers")
             print(f"👤 User: {username} ({email})")
             
+            # Extract question timings if provided
+            question_timings = request_data.get("question_timings", {})
+            
             # Step 2: Verify survey exists
             survey = self.db.surveys.find_one({
                 "$or": [{"_id": survey_id}, {"id": survey_id}]
@@ -114,6 +117,7 @@ class EnhancedSurveyHandler:
                 "survey_id": survey_id,
                 "session_id": session_id,
                 "responses": responses,
+                "question_timings": question_timings,
                 "user_info": user_info,
                 "submitted_at": datetime.now(timezone.utc),
                 "is_public": True,

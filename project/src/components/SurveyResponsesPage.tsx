@@ -77,13 +77,22 @@ const SurveyResponsesPage: React.FC = () => {
                 <span className="truncate">{survey.title || 'Survey'} — Responses</span>
               </h1>
             </div>
-            <button
-              onClick={() => navigate(`/dashboard/edit/${id}`)}
-              className="flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex-shrink-0"
-            >
-              <span className="hidden sm:inline">Edit Survey</span>
-              <span className="sm:hidden">Edit</span>
-            </button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={() => window.open(`/analytics/${id}`, '_blank')}
+                className="flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+              >
+                <BarChart3 size={14} />
+                <span className="hidden sm:inline">Analytics</span>
+              </button>
+              <button
+                onClick={() => navigate(`/dashboard/edit/${id}`)}
+                className="flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <span className="hidden sm:inline">Edit Survey</span>
+                <span className="sm:hidden">Edit</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -95,7 +104,7 @@ const SurveyResponsesPage: React.FC = () => {
             <button
               key={tab.key}
               onClick={() => {
-                if ((tab.key === 'partner-mapping' || tab.key === 'response-logs') && !hasFeature('analytics')) {
+                if ((tab.key === 'partner-mapping' || tab.key === 'response-logs') && !hasFeature('response_logs')) {
                   navigate('/pricing?theme=light');
                 } else {
                   setActiveTab(tab.key);
@@ -104,12 +113,12 @@ const SurveyResponsesPage: React.FC = () => {
               className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 flex items-center gap-1 ${
                 activeTab === tab.key
                   ? 'bg-red-500 text-white'
-                  : (tab.key === 'partner-mapping' || tab.key === 'response-logs') && !hasFeature('analytics')
+                  : (tab.key === 'partner-mapping' || tab.key === 'response-logs') && !hasFeature('response_logs')
                     ? 'bg-gray-100 text-gray-400'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              {(tab.key === 'partner-mapping' || tab.key === 'response-logs') && !hasFeature('analytics') && <Lock size={12} />}
+              {(tab.key === 'partner-mapping' || tab.key === 'response-logs') && !hasFeature('response_logs') && <Lock size={12} />}
               {tab.label}
             </button>
           ))}

@@ -108,6 +108,7 @@ const WidgetResponsesView = lazyRetry(() => import('./components/WidgetResponses
 const EmailDashboard = lazyRetry(() => import('./pages/EmailDashboard'));
 const PassFailAdmin = lazyRetry(() => import('./components/PassFailAdmin'));
 const AnalyticsDashboard = lazyRetry(() => import('./pages/AnalyticsDashboard'));
+const SurveyAnalyticsPage = lazyRetry(() => import('./pages/SurveyAnalyticsPage'));
 const ProfessionalAnalyticsDashboard = lazyRetry(() => import('./pages/ProfessionalAnalyticsDashboard'));
 const SessionAnalyticsView = lazyRetry(() => import('./pages/SessionAnalyticsView'));
 
@@ -256,7 +257,7 @@ function LegacyDashboard() {
                     { value: 'create', icon: PenSquare, label: 'Create', requiresFeature: 'create' },
                     { value: 'surveys', icon: FolderOpen, label: 'Surveys', requiresFeature: 'survey' },
                     { value: 'responses', icon: TrendingUp, label: 'Analytics', requiresFeature: 'analytics' },
-                    { value: 'sessions', icon: MapPin, label: 'Sessions', requiresFeature: 'analytics' },
+                    { value: 'sessions', icon: MapPin, label: 'Sessions', requiresFeature: 'sessions', isPremiumIcon: true },
                     { value: 'postback', icon: Link, label: 'Postback', requiresFeature: 'postback', isPremiumIcon: true },
                     { value: 'passfail', icon: Settings, label: 'Pass/Fail', requiresFeature: 'pass_fail', isPremiumIcon: true },
                     { value: 'testlab', icon: () => <span className="text-xs">🧪</span>, label: 'Test Lab', requiresFeature: 'test_lab', isPremiumIcon: true }
@@ -379,7 +380,7 @@ function LegacyDashboard() {
                   { value: 'create', icon: PenSquare, label: 'Create', desc: 'Generate AI surveys', requiresFeature: 'create' },
                   { value: 'surveys', icon: FolderOpen, label: 'Surveys', desc: 'Manage your surveys', requiresFeature: 'survey' },
                   { value: 'responses', icon: TrendingUp, label: 'Analytics', desc: 'View responses & data', requiresFeature: 'analytics' },
-                  { value: 'sessions', icon: MapPin, label: 'Sessions', desc: 'Real-time session tracking', requiresFeature: 'analytics' },
+                  { value: 'sessions', icon: MapPin, label: 'Sessions', desc: 'Real-time session tracking', requiresFeature: 'sessions', isPremiumIcon: true },
                   { value: 'postback', icon: Link, label: 'Postback', desc: 'Configure postbacks', requiresFeature: 'postback', isPremiumIcon: true },
                   { value: 'email', icon: Mail, label: 'Email', desc: 'Email triggers & templates', requiresFeature: 'email' },
                   { value: 'passfail', icon: Settings, label: 'Pass/Fail', desc: 'Set evaluation rules', requiresFeature: 'pass_fail', isPremiumIcon: true },
@@ -471,8 +472,7 @@ function LegacyDashboard() {
               <TabsContent value="responses">
                 <div className="space-y-6">
                   <Suspense fallback={<OptimizedLoader type="page" message="Loading analytics..." />}>
-                    <ResponseAnalytics isDarkMode={isDarkMode} />
-                    <WidgetResponsesView isDarkMode={isDarkMode} />
+                    <AnalyticsDashboard />
                   </Suspense>
                 </div>
               </TabsContent>
@@ -682,6 +682,11 @@ export default function App() {
             <Route path="/analytics" element={
               <ProtectedRoute>
                 <AnalyticsDashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/analytics/:surveyId" element={
+              <ProtectedRoute>
+                <SurveyAnalyticsPage />
               </ProtectedRoute>
             } />
             <Route path="/analytics-pro" element={

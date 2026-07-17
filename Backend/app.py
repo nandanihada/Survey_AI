@@ -403,6 +403,7 @@ try:
     from user_postback_api import user_postback_bp
     from email_trigger_api import email_trigger_bp
     from session_insights_api import session_insights_bp
+    from analytics_api import analytics_bp
     # Register blueprints
 
     print("Registering blueprints...")
@@ -432,6 +433,7 @@ try:
     app.register_blueprint(user_postback_bp, url_prefix="/api")
     app.register_blueprint(email_trigger_bp, url_prefix="/api")  # Email trigger routes
     app.register_blueprint(session_insights_bp)
+    app.register_blueprint(analytics_bp)
 
     print("✅ All blueprints registered successfully")
 

@@ -226,10 +226,10 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
           </button>
           {responses.length > 0 && (
             <button
-              onClick={() => hasFeature('analytics') ? exportToCSV() : navigate('/pricing?theme=light')}
-              className={`flex items-center gap-1 px-3 py-2 text-sm rounded-lg transition-colors ${hasFeature('analytics') ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-200 text-gray-500'}`}
+              onClick={() => hasFeature('export_csv') ? exportToCSV() : navigate('/pricing?theme=light')}
+              className={`flex items-center gap-1 px-3 py-2 text-sm rounded-lg transition-colors ${hasFeature('export_csv') ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-200 text-gray-500'}`}
             >
-              {!hasFeature('analytics') && <Lock size={12} />}
+              {!hasFeature('export_csv') && <Lock size={12} />}
               <Download size={14} />
               Export CSV
             </button>

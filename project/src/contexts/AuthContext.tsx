@@ -177,10 +177,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const hasFeature = (feature: string) => {
     if (user?.role === 'admin') return true;
-    if (user?.role === 'enterprise') return ['create', 'survey', 'analytics', 'postback', 'email', 'pass_fail', 'test_lab'].includes(feature);
-    if (user?.role === 'premium') return ['create', 'survey', 'analytics', 'postback', 'email'].includes(feature);
-    // Free tier: only create and surveys
-    return ['create', 'survey'].includes(feature);
+    if (user?.role === 'enterprise') return ['create', 'survey', 'analytics', 'sessions', 'postback', 'email', 'pass_fail', 'test_lab', 'response_logs', 'export_csv'].includes(feature);
+    if (user?.role === 'premium') return ['create', 'survey', 'analytics', 'sessions', 'postback', 'email', 'response_logs', 'export_csv'].includes(feature);
+    // Free tier: create, surveys, and analytics (with limited features shown)
+    return ['create', 'survey', 'analytics'].includes(feature);
   };
 
   const hasPremiumAccess =
