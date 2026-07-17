@@ -127,12 +127,33 @@ def get_question_breakdown(survey_id, survey):
         
         total_answers = sum(answer_counts.values())
         answer_distribution = []
-        for ans, count in sorted_answers:
-            answer_distribution.append({
-                "answer": ans,
-                "count": count,
-                "percentage": round((count / total_answers) * 100) if total_answers > 0 else 0
-            })
+        
+        # Include ALL options from the question (even with 0 responses)
+        if q_options:
+            for opt in q_options:
+                opt_str = str(opt)
+                count = answer_counts.get(opt_str, 0)
+                answer_distribution.append({
+                    "answer": opt_str,
+                    "count": count,
+                    "percentage": round((count / total_answers) * 100) if total_answers > 0 else 0
+                })
+            # Also add any answers not in options (custom text answers)
+            for ans, count in sorted_answers:
+                if ans not in [str(o) for o in q_options]:
+                    answer_distribution.append({
+                        "answer": ans,
+                        "count": count,
+                        "percentage": round((count / total_answers) * 100) if total_answers > 0 else 0
+                    })
+        else:
+            # No predefined options — use whatever was answered
+            for ans, count in sorted_answers:
+                answer_distribution.append({
+                    "answer": ans,
+                    "count": count,
+                    "percentage": round((count / total_answers) * 100) if total_answers > 0 else 0
+                })
         
         breakdown.append({
             "question_id": q_id,

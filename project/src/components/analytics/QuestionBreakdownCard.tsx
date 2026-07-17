@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { Lock, Sparkles, TrendingUp, Brain, Users, ChevronDown, ChevronUp, ChevronRight } from 'lucide-react';
-import { Pie, Doughnut, Bar } from 'react-chartjs-2';
+import { Pie, Doughnut, Bar, Line, Radar, PolarArea } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   ArcElement,
@@ -9,11 +10,21 @@ import {
   Legend,
   CategoryScale,
   LinearScale,
-  BarElement
+  BarElement,
+  PointElement,
+  LineElement,
+  RadialLinearScale,
+  Filler
 } from 'chart.js';
 import { getApiBaseUrl } from '../../utils/deploymentFix';
 
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement, RadialLinearScale, Filler);
+
+// Enable animations globally
+ChartJS.defaults.animation = {
+  duration: 1000,
+  easing: 'easeOutQuart',
+};
 
 interface AnswerItem {
   answer: string;
@@ -116,13 +127,11 @@ const QuestionBreakdownCard: React.FC<Props> = ({ question, index, userTier, sur
     setLoadingSummary(false);
   };
 
-  // Determine if this is a text-type question (no predefined options)
-  const isTextQuestion = question.question_type === 'text' || 
-    question.question_type === 'short_answer' || 
-    question.question_type === 'open_text' ||
-    (question.options.length === 0 && question.question_type !== 'range' && question.question_type !== 'rating' && question.question_type !== 'scale' && question.question_type !== 'opinion_scale');
+  // Use charts for ALL question types — no restriction
+  const isTextQuestion = false; // Always show charts
   // 0=pie, 1=doughnut, 2=horizontal bar(chartjs), 3=vertical bar(chartjs), 4=progress bars with badges
-  const chartVariants = [0, 4, 1, 2, 4, 3, 0, 4, 1, 2]; // more variety with badge bars
+  // 5=line chart, 6=radar/spider, 7=polar area
+  const chartVariants = [0, 4, 5, 1, 2, 6, 3, 7, 4, 0, 5, 1, 6, 2, 7, 3];
   const chartType = chartVariants[index % chartVariants.length];
   
   // Pick unique color palette per question
@@ -139,9 +148,54 @@ const QuestionBreakdownCard: React.FC<Props> = ({ question, index, userTier, sur
     }]
   };
 
+  // Line chart data — with filled area
+  const lineChartData = {
+    labels: question.answer_distribution.map(item => item.answer),
+    datasets: [{
+      label: 'Responses',
+      data: question.answer_distribution.map(item => item.count),
+      borderColor: palette[0],
+      backgroundColor: `${palette[0]}20`,
+      fill: true,
+      tension: 0.4,
+      pointBackgroundColor: question.answer_distribution.map((_, i) => palette[i % palette.length]),
+      pointBorderColor: '#fff',
+      pointBorderWidth: 2,
+      pointRadius: 6,
+      pointHoverRadius: 8,
+    }]
+  };
+
+  // Radar chart data
+  const radarChartData = {
+    labels: question.answer_distribution.map(item => item.answer),
+    datasets: [{
+      label: 'Response distribution',
+      data: question.answer_distribution.map(item => item.count),
+      backgroundColor: `${palette[0]}30`,
+      borderColor: palette[0],
+      borderWidth: 2,
+      pointBackgroundColor: question.answer_distribution.map((_, i) => palette[i % palette.length]),
+      pointBorderColor: '#fff',
+      pointBorderWidth: 2,
+      pointRadius: 5,
+    }]
+  };
+
+  // Polar area chart data
+  const polarChartData = {
+    labels: question.answer_distribution.map(item => item.answer),
+    datasets: [{
+      data: question.answer_distribution.map(item => item.count),
+      backgroundColor: question.answer_distribution.map((_, i) => `${palette[i % palette.length]}90`),
+      borderColor: question.answer_distribution.map((_, i) => palette[i % palette.length]),
+      borderWidth: 2,
+    }]
+  };
+
   const pieOptions = {
     responsive: true,
-    maintainAspectRatio: true,
+    maintainAspectRatio: false,
     plugins: {
       legend: { display: false },
       tooltip: {
@@ -155,9 +209,67 @@ const QuestionBreakdownCard: React.FC<Props> = ({ question, index, userTier, sur
     }
   };
 
+  const lineOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (ctx: any) => {
+            const item = question.answer_distribution[ctx.dataIndex];
+            return item ? `${item.answer}: ${item.count} responses (${item.percentage}%)` : '';
+          }
+        }
+      }
+    },
+    scales: {
+      y: { 
+        beginAtZero: true,
+        grid: { color: '#f3f4f6' },
+        ticks: { font: { size: 11 }, color: '#6b7280', stepSize: 1 }
+      },
+      x: {
+        grid: { display: false },
+        ticks: { font: { size: 10 }, color: '#6b7280', maxRotation: 30 }
+      }
+    }
+  };
+
+  const radarOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+    },
+    scales: {
+      r: {
+        beginAtZero: true,
+        grid: { color: '#e5e7eb' },
+        pointLabels: { font: { size: 10 }, color: '#374151' },
+        ticks: { stepSize: 1, font: { size: 9 }, color: '#9ca3af' }
+      }
+    }
+  };
+
+  const polarOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+    },
+    scales: {
+      r: {
+        beginAtZero: true,
+        grid: { color: '#e5e7eb' },
+        ticks: { display: false }
+      }
+    }
+  };
+
   const barOptions = {
     responsive: true,
-    maintainAspectRatio: true,
+    maintainAspectRatio: false,
     indexAxis: 'y' as const,
     plugins: {
       legend: { display: false },
@@ -181,7 +293,7 @@ const QuestionBreakdownCard: React.FC<Props> = ({ question, index, userTier, sur
 
   const verticalBarOptions = {
     responsive: true,
-    maintainAspectRatio: true,
+    maintainAspectRatio: false,
     plugins: {
       legend: { display: false },
       tooltip: {
@@ -194,7 +306,11 @@ const QuestionBreakdownCard: React.FC<Props> = ({ question, index, userTier, sur
       }
     },
     scales: {
-      y: { display: false, grid: { display: false } },
+      y: { 
+        beginAtZero: true,
+        grid: { color: '#f3f4f6' },
+        ticks: { font: { size: 11 }, color: '#6b7280', stepSize: 1 }
+      },
       x: {
         grid: { display: false },
         ticks: { font: { size: 10 }, color: '#6b7280', maxRotation: 45 }
@@ -203,7 +319,12 @@ const QuestionBreakdownCard: React.FC<Props> = ({ question, index, userTier, sur
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6 shadow-sm">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: index * 0.1 }}
+      className="bg-white rounded-xl border border-gray-200 p-6 mb-6 shadow-sm"
+    >
       {/* Question Header */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
@@ -223,29 +344,10 @@ const QuestionBreakdownCard: React.FC<Props> = ({ question, index, userTier, sur
 
       <h3 className="text-lg font-semibold text-gray-900 mb-5">{question.question_text}</h3>
 
-      {/* Chart + Legend OR Text Responses */}
+      {/* Chart + Legend */}
       {question.answer_distribution.length > 0 && (
-        isTextQuestion ? (
-          /* Text question — show answers as colorful chips */
-          <div className="mb-6">
-            <div className="flex flex-wrap gap-2">
-              {question.answer_distribution.map((item, i) => (
-                <span
-                  key={i}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-white"
-                  style={{ backgroundColor: palette[i % palette.length] }}
-                >
-                  {item.answer}
-                  {item.count > 1 && (
-                    <span className="bg-white/30 text-xs px-1.5 py-0.5 rounded-full">×{item.count}</span>
-                  )}
-                </span>
-              ))}
-            </div>
-          </div>
-        ) : (
           /* Multiple choice / Scale — show chart */
-          <div className={`mb-6 ${(chartType === 2 || chartType === 3) ? '' : chartType === 4 ? '' : 'flex flex-col md:flex-row items-center gap-6'}`}>
+          <div className={`mb-6 ${(chartType === 2 || chartType === 3 || chartType === 5) ? '' : chartType === 4 ? '' : 'flex flex-col md:flex-row items-center gap-6'}`}>
             {/* Chart */}
             {chartType === 4 ? (
               /* Progress bars with numbered badges */
@@ -272,15 +374,22 @@ const QuestionBreakdownCard: React.FC<Props> = ({ question, index, userTier, sur
               </div>
             ) : (
               <>
-                <div className={(chartType === 2 || chartType === 3) ? 'w-full max-w-lg' : 'w-44 h-44 flex-shrink-0'}>
+                <div className={
+                  (chartType === 2 || chartType === 3 || chartType === 5) ? 'w-full max-w-xl h-48' :
+                  (chartType === 6 || chartType === 7) ? 'w-52 h-52 flex-shrink-0' :
+                  'w-48 h-48 flex-shrink-0'
+                }>
                   {chartType === 0 && <Pie data={chartData} options={pieOptions} />}
                   {chartType === 1 && <Doughnut data={chartData} options={pieOptions} />}
                   {chartType === 2 && <Bar data={chartData} options={barOptions} />}
                   {chartType === 3 && <Bar data={chartData} options={verticalBarOptions} />}
+                  {chartType === 5 && <Line data={lineChartData} options={lineOptions} />}
+                  {chartType === 6 && <Radar data={radarChartData} options={radarOptions} />}
+                  {chartType === 7 && <PolarArea data={polarChartData} options={polarOptions} />}
                 </div>
                 
-                {/* Legend (for pie/doughnut only) */}
-                {(chartType === 0 || chartType === 1) && (
+                {/* Legend (for circular charts) */}
+                {(chartType === 0 || chartType === 1 || chartType === 6 || chartType === 7) && (
                   <div className="flex-1 space-y-2 mt-4 md:mt-0">
                     {question.answer_distribution.map((item, i) => (
                       <div key={i} className="flex items-center gap-3">
@@ -298,7 +407,6 @@ const QuestionBreakdownCard: React.FC<Props> = ({ question, index, userTier, sur
               </>
             )}
           </div>
-        )
       )}
 
       {/* AI Summary */}
@@ -433,7 +541,7 @@ const QuestionBreakdownCard: React.FC<Props> = ({ question, index, userTier, sur
           )}
         </div>
       )}
-    </div>
+    </motion.div>
   );
 };
 
