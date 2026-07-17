@@ -114,7 +114,7 @@ const SessionAnalyticsView = lazyRetry(() => import('./pages/SessionAnalyticsVie
 
 // Legacy dashboard component - will be removed after migration
 function LegacyDashboard() {
-  const { hasFeature, user, authenticated } = useAuth();
+  const { hasFeature, user, authenticated, isAdmin } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'create');
@@ -337,6 +337,18 @@ function LegacyDashboard() {
                 <span className="w-1 h-1 rounded-full bg-slate-400"></span>
                 <span className={isDarkMode ? 'text-white' : 'text-stone-900'}>Upgrade</span>
               </button>
+              {isAdmin && (
+                <button
+                  onClick={() => navigate('/admin')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${isDarkMode
+                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30 hover:bg-purple-500/30'
+                      : 'bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100'
+                    }`}
+                >
+                  <Settings size={12} />
+                  Admin
+                </button>
+              )}
               {authenticated && user && (
                 <button
                   onClick={() => navigate('/profile')}

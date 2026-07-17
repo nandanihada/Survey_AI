@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import {
   FolderOpen,
   Plus,
@@ -30,6 +31,7 @@ interface Survey {
 
 const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew }) => {
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
@@ -336,7 +338,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                       <BarChart3 size={13} />
                       Responses
                     </button>
-                    {survey.prompt && (
+                    {isAdmin && survey.prompt && (
                       <button
                         onClick={() => setShowPromptId(showPromptId === survey.id ? null : survey.id)}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
@@ -352,10 +354,18 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                     )}
                   </div>
                   {/* Prompt reveal row */}
-                  {survey.prompt && showPromptId === survey.id && (
-                    <div className="mt-2 px-3 py-2 rounded-lg text-xs leading-relaxed" style={{ background: isDarkMode ? 'rgba(139,92,246,0.1)' : '#f5f3ff', border: isDarkMode ? '1px solid rgba(139,92,246,0.2)' : '1px solid #ede9fe' }}>
-                      <span className="font-semibold text-[10px] uppercase tracking-wider block mb-1" style={{ color: isDarkMode ? '#a78bfa' : '#7c3aed' }}>Original Prompt</span>
-                      <span style={{ color: isDarkMode ? '#c4b5fd' : '#4c1d95' }}>{survey.prompt}</span>
+                  {isAdmin && survey.prompt && showPromptId === survey.id && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowPromptId(null)}>
+                      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
+                      <div className="relative bg-white rounded-2xl shadow-xl max-w-lg w-full p-6" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-sm font-semibold text-violet-700 flex items-center gap-2">
+                            <FileText size={16} /> Original Prompt
+                          </h3>
+                          <button onClick={() => setShowPromptId(null)} className="text-gray-400 hover:text-gray-600 text-lg">×</button>
+                        </div>
+                        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{survey.prompt}</p>
+                      </div>
                     </div>
                   )}
                 </div>
