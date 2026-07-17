@@ -965,33 +965,50 @@ const SurveyEditor: React.FC = () => {
                   )}
 
                   {/* Short Answer */}
-                  {activeQ.type === 'short_answer' && (
-                    <div style={{
-                      borderBottom: `2px solid ${theme.border}`, paddingBottom: 8, maxWidth: 380,
-                    }}>
-                      <span style={{ fontSize: 14, color: theme.textLight, fontStyle: 'italic', fontFamily: "'Outfit', sans-serif" }}>
-                        Respondent's answer will appear here...
-                      </span>
-                    </div>
-                  )}
+                  {activeQ.type === 'short_answer' && (() => {
+                    const qStyle = activeQ.answerStyle || survey.answerStyle || 'classic';
+                    const textStyles: Record<string, React.CSSProperties> = {
+                      classic: { border: `1px solid ${theme.border}`, borderRadius: 10, padding: '12px 16px', background: theme.paperInner, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+                      underline: { border: 'none', borderBottom: `2px solid ${theme.accent}`, borderRadius: 0, padding: '12px 4px', background: 'transparent' },
+                      card: { border: 'none', borderLeft: '5px solid #e8d5cf', borderRadius: 12, padding: '14px 18px', background: '#fff', boxShadow: '0 4px 16px rgba(0,0,0,0.06)' },
+                      pill: { border: `1.5px solid ${theme.border}`, borderRadius: 50, padding: '12px 24px', background: theme.paperInner },
+                      flat: { border: 'none', borderRadius: 8, padding: '12px 16px', background: '#f3f2ef' },
+                    };
+                    return (
+                      <div style={{ maxWidth: 420, ...textStyles[qStyle] }}>
+                        <span style={{ fontSize: 14, color: theme.textLight, fontStyle: 'italic', fontFamily: "'Outfit', sans-serif" }}>
+                          Respondent's answer will appear here...
+                        </span>
+                      </div>
+                    );
+                  })()}
 
                   {/* Rating */}
-                  {activeQ.type === 'rating' && (
-                    <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                      {[1, 2, 3, 4, 5].map(n => (
-                        <div key={n} style={{
-                          width: 48, height: 48, borderRadius: '50%',
-                          border: `2px solid ${theme.border}`, background: theme.paperInner,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 16, fontWeight: 700, color: theme.textLight,
-                          fontFamily: "'Outfit', sans-serif",
-                          boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-                        }}>
-                          {n}
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  {activeQ.type === 'rating' && (() => {
+                    const qStyle = activeQ.answerStyle || survey.answerStyle || 'classic';
+                    const circleStyles: Record<string, React.CSSProperties> = {
+                      classic: { border: `2px solid ${theme.border}`, borderRadius: '50%', background: theme.paperInner, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' },
+                      underline: { border: 'none', borderBottom: `2px solid ${theme.accent}`, borderRadius: 0, background: 'transparent' },
+                      card: { border: 'none', borderRadius: 12, background: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.06)' },
+                      pill: { border: `1.5px solid ${theme.border}`, borderRadius: '50%', background: theme.paperInner },
+                      flat: { border: 'none', borderRadius: 8, background: '#f3f2ef' },
+                    };
+                    return (
+                      <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                        {[1, 2, 3, 4, 5].map(n => (
+                          <div key={n} style={{
+                            width: 48, height: 48,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 16, fontWeight: 700, color: theme.textLight,
+                            fontFamily: "'Outfit', sans-serif",
+                            ...circleStyles[qStyle],
+                          }}>
+                            {n}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
 
                   {/* Scale */}
                   {activeQ.type === 'range' && (
