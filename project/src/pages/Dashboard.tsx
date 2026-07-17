@@ -52,6 +52,8 @@ interface Survey {
 
   description: string;
 
+  prompt?: string;
+
   status: string;
 
   created_at: string;
@@ -782,7 +784,29 @@ const Dashboard: React.FC = () => {
 
                       </button>
 
+                      {survey.prompt && (
+                        <button
+                          onClick={(e) => {
+                            const el = e.currentTarget.parentElement?.parentElement?.querySelector('.prompt-reveal') as HTMLElement;
+                            if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+                          }}
+                          className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-purple-200 text-purple-600 rounded-lg hover:bg-purple-50 transition-colors text-sm font-medium"
+                          title="View original prompt"
+                        >
+                          <FileText size={14} />
+                          Prompt
+                        </button>
+                      )}
+
                     </div>
+
+                    {/* Prompt reveal */}
+                    {survey.prompt && (
+                      <div className="prompt-reveal mt-3 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600 leading-relaxed" style={{ display: 'none' }}>
+                        <span className="font-semibold text-slate-500 text-[10px] uppercase tracking-wider block mb-1">Original Prompt</span>
+                        {survey.prompt}
+                      </div>
+                    )}
 
                   </div>
 

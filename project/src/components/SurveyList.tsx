@@ -10,7 +10,8 @@ import {
   BarChart3,
   Edit,
   Eye,
-  Mail
+  Mail,
+  FileText
 } from 'lucide-react';
 
 interface SurveyListProps {
@@ -32,7 +33,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
-
+  const [showPromptId, setShowPromptId] = useState<string | null>(null);
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   const apiBaseUrl = isLocalhost
     ? 'http://localhost:5000'
@@ -335,7 +336,28 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                       <BarChart3 size={13} />
                       Responses
                     </button>
+                    {survey.prompt && (
+                      <button
+                        onClick={() => setShowPromptId(showPromptId === survey.id ? null : survey.id)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                          showPromptId === survey.id
+                            ? isDarkMode ? 'bg-violet-500/30 text-violet-200' : 'bg-violet-100 text-violet-700'
+                            : isDarkMode ? 'bg-violet-500/20 text-violet-300 hover:bg-violet-500/30' : 'bg-violet-50 text-violet-600 hover:bg-violet-100'
+                        }`}
+                        title="View original prompt"
+                      >
+                        <FileText size={13} />
+                        Prompt
+                      </button>
+                    )}
                   </div>
+                  {/* Prompt reveal row */}
+                  {survey.prompt && showPromptId === survey.id && (
+                    <div className="mt-2 px-3 py-2 rounded-lg text-xs leading-relaxed" style={{ background: isDarkMode ? 'rgba(139,92,246,0.1)' : '#f5f3ff', border: isDarkMode ? '1px solid rgba(139,92,246,0.2)' : '1px solid #ede9fe' }}>
+                      <span className="font-semibold text-[10px] uppercase tracking-wider block mb-1" style={{ color: isDarkMode ? '#a78bfa' : '#7c3aed' }}>Original Prompt</span>
+                      <span style={{ color: isDarkMode ? '#c4b5fd' : '#4c1d95' }}>{survey.prompt}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             ))
