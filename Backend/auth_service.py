@@ -303,6 +303,131 @@ class AuthService:
         user['status'] = UserStatus.APPROVED.value
         return user
     
+    def request_password_reset(self, email: str) -> bool:
+        """Generate a password reset token and send reset email"""
+        db = self.get_db_connection()
+        users_collection = db.users
+        
+        user = users_collection.find_one({'email': email.strip().lower()})
+        if not user:
+            # Don't reveal if user exists or not
+            return True
+        
+        # Generate reset token (expires in 1 hour)
+        reset_token = str(uuid.uuid4())
+        reset_expiry = datetime.utcnow() + timedelta(hours=1)
+        
+        users_collection.update_one(
+            {'_id': user['_id']},
+            {'$set': {
+                'resetPasswordToken': reset_token,
+                'resetPasswordExpiry': reset_expiry
+            }}
+        )
+        
+        # Send reset email
+        self._send_reset_email(email, reset_token, user.get('name', ''))
+        return True
+    
+    def reset_password(self, token: str, new_password: str) -> bool:
+        """Reset password using the token"""
+        db = self.get_db_connection()
+        users_collection = db.users
+        
+        if len(new_password) < 6:
+            raise ValueError("Password must be at least 6 characters long")
+        
+        user = users_collection.find_one({
+            'resetPasswordToken': token,
+            'resetPasswordExpiry': {'$gt': datetime.utcnow()}
+        })
+        
+        if not user:
+            raise ValueError("Invalid or expired reset link. Please request a new one.")
+        
+        # Hash new password and clear reset token
+        password_hash = self.hash_password(new_password)
+        users_collection.update_one(
+            {'_id': user['_id']},
+            {
+                '$set': {'passwordHash': password_hash},
+                '$unset': {'resetPasswordToken': "", 'resetPasswordExpiry': ""}
+            }
+        )
+        
+        return True
+    
+    def _send_reset_email(self, email: str, token: str, name: str = '') -> None:
+        """Send password reset email"""
+        if not self.smtp_username or not self.smtp_password:
+            print("❌ Email service not configured, cannot send reset email")
+            return
+        
+        try:
+            msg = MIMEMultipart()
+            msg['From'] = self.from_email
+            msg['To'] = email
+            msg['Subject'] = "Reset your password – PepperWahl"
+            
+            is_production = os.getenv("RENDER") or os.getenv("FLASK_ENV", "").lower() == "production"
+            default_frontend = "https://survey.pepperwahl.com" if is_production else "http://localhost:5173"
+            frontend_url = os.getenv('FRONTEND_URL')
+            if not frontend_url or "localhost:3000" in frontend_url:
+                frontend_url = default_frontend
+            
+            reset_link = f"{frontend_url}/reset-password?token={token}"
+            
+            body = f"""
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9; }}
+                    .header {{ background-color: #ffffff; padding: 30px; text-align: center; border-bottom: 3px solid #E8503A; }}
+                    .header h1 {{ color: #2D3142; margin: 0; font-size: 28px; }}
+                    .content {{ background-color: #ffffff; padding: 30px; }}
+                    .button-container {{ text-align: center; margin: 30px 0; }}
+                    .button {{ display: inline-block; background-color: #E8503A; color: white; padding: 14px 35px; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 16px; }}
+                    .footer {{ padding: 20px; text-align: center; color: #666; font-size: 12px; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>PepperWahl</h1>
+                    </div>
+                    <div class="content">
+                        <p>Hey {name or email.split('@')[0]},</p>
+                        <p>We received a request to reset your password. Click the button below to set a new one:</p>
+                        <div class="button-container">
+                            <a href="{reset_link}" class="button">Reset Password</a>
+                        </div>
+                        <p style="font-size: 12px; color: #666;">This link expires in 1 hour. If you didn't request this, ignore this email.</p>
+                    </div>
+                    <div class="footer">
+                        <p>— Team PepperWahl</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+            
+            msg.attach(MIMEText(body, 'html'))
+            
+            if self.smtp_port == 465:
+                server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port)
+            else:
+                server = smtplib.SMTP(self.smtp_server, self.smtp_port)
+                server.starttls()
+            
+            server.login(self.smtp_username, self.smtp_password)
+            server.sendmail(self.from_email, email, msg.as_string())
+            server.quit()
+            print(f"✅ Password reset email sent to {email}")
+            
+        except Exception as e:
+            print(f"❌ Failed to send reset email: {e}")
+
     def authenticate_user(self, email: str, password: str) -> Dict[str, Any]:
         """Authenticate user with email and password"""
         db = self.get_db_connection()

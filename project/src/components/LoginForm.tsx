@@ -85,6 +85,14 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, onSwitchToRegister }) 
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Enter your password"
             />
+            <div className="mt-1 text-right">
+              <a
+                href="/forgot-password"
+                className="text-xs text-red-500 hover:text-red-600 font-medium"
+              >
+                Forgot Password?
+              </a>
+            </div>
           </div>
 
           <button

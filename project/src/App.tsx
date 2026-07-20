@@ -72,6 +72,8 @@ const AdminDashboard = lazyRetry(() => import('./pages/AdminDashboard'));
 const MLInsightsDashboard = lazyRetry(() => import('./pages/MLInsightsDashboard'));
 const EmailTriggerManager = lazyRetry(() => import('./pages/EmailTriggerManager'));
 const LoginPage = lazyRetry(() => import('./pages/LoginPage'));
+const ForgotPasswordPage = lazyRetry(() => import('./pages/ForgotPasswordPage'));
+const ResetPasswordPage = lazyRetry(() => import('./pages/ResetPasswordPage'));
 const SignupPage = lazyRetry(() => import('./pages/SignupPage'));
 const ProfilePage = lazyRetry(() => import('./pages/ProfilePage'));
 const LinkMaskingDashboard = lazyRetry(() => import('./pages/LinkMaskingDashboard'));
@@ -636,6 +638,8 @@ export default function App() {
 
             <Route path="/confirm-email" element={<ConfirmPage />} />
             <Route path="/confirm" element={<ConfirmPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
 
             {/* Public survey routes */}
             <Route path="/survey/:id" element={<PublicSurveyPage />} />

@@ -125,6 +125,53 @@ def confirm_email():
     except Exception as e:
         return jsonify({'error': f'Email confirmation failed: {str(e)}'}), 500
 
+
+@auth_bp.route('/forgot-password', methods=['POST', 'OPTIONS'])
+def forgot_password():
+    """Send password reset link to user's email"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        data = request.json
+        email = data.get('email', '').strip().lower()
+        
+        if not email:
+            return jsonify({'error': 'Email is required'}), 400
+        
+        auth_service.request_password_reset(email)
+        
+        # Always return success (don't reveal if email exists)
+        return jsonify({
+            'message': 'If an account with that email exists, a reset link has been sent.'
+        })
+    except Exception as e:
+        return jsonify({'error': f'Failed to process request: {str(e)}'}), 500
+
+
+@auth_bp.route('/reset-password', methods=['POST', 'OPTIONS'])
+def reset_password():
+    """Reset password using token from email link"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        data = request.json
+        token = data.get('token', '')
+        new_password = data.get('password', '')
+        
+        if not token or not new_password:
+            return jsonify({'error': 'Token and new password are required'}), 400
+        
+        auth_service.reset_password(token, new_password)
+        
+        return jsonify({'message': 'Password reset successfully. You can now login.'})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': f'Password reset failed: {str(e)}'}), 500
+
+
 @auth_bp.route('/login', methods=['POST', 'OPTIONS'])
 def login():
     """Login user with email and password"""
