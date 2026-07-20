@@ -7,6 +7,7 @@ import PublicRoute from './components/PublicRoute';
 import LandingRedirect from './components/LandingRedirect';
 import NotificationBanner from './components/NotificationBanner';
 import EmailConfirmation from './components/EmailConfirmation';
+import { useAutoTracking } from './hooks/useTracking';
 import './styles/mobile-responsive.css';
 
 // Suppress React Router v7 deprecation warnings
@@ -270,6 +271,8 @@ function LegacyDashboard() {
                         onClick={(e) => {
                           if (!hasAccess) {
                             e.preventDefault();
+                            // Track premium feature attempt
+                            import('./hooks/useTracking').then(m => m.trackPremiumAttempt(requiresFeature, label));
                             navigate('/pricing?theme=light');
                           }
                         }}
@@ -327,7 +330,10 @@ function LegacyDashboard() {
 
             <div className="hidden md:flex items-center gap-3">
               <button
-                onClick={() => navigate('/pricing?theme=light')}
+                onClick={() => {
+                  import('./hooks/useTracking').then(m => m.trackPricingClick('dashboard_header_upgrade', '', 'Upgrade'));
+                  navigate('/pricing?theme=light');
+                }}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${isDarkMode
                     ? 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
                     : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-50'
@@ -595,11 +601,17 @@ function LegacyDashboard() {
   );
 }
 
+/** Silent component that runs auto-tracking on every route change */
+function AutoTracker() {
+  useAutoTracking();
+  return null;
+}
 
 export default function App() {
   return (
     <AppErrorBoundary>
       <AuthProvider>
+        <AutoTracker />
         <Suspense fallback={
           <div className="min-h-screen flex items-center justify-center bg-light-theme">
             <OptimizedLoader type="page" message="Loading..." />

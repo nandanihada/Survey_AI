@@ -404,6 +404,7 @@ try:
     from email_trigger_api import email_trigger_bp
     from session_insights_api import session_insights_bp
     from analytics_api import analytics_bp
+    from user_tracking_api import user_tracking_bp, setup_tracking_indexes
     # Register blueprints
 
     print("Registering blueprints...")
@@ -434,6 +435,10 @@ try:
     app.register_blueprint(email_trigger_bp, url_prefix="/api")  # Email trigger routes
     app.register_blueprint(session_insights_bp)
     app.register_blueprint(analytics_bp)
+    app.register_blueprint(user_tracking_bp)
+
+    # Setup tracking TTL indexes for 15-day auto-delete
+    setup_tracking_indexes()
 
     print("✅ All blueprints registered successfully")
 

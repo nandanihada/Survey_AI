@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Check, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { trackPricingClick } from '../hooks/useTracking';
 
 const PricingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -9,6 +10,11 @@ const PricingPage: React.FC = () => {
   const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
   const isLight = searchParams.get('theme') === 'light';
   const { authenticated } = useAuth();
+
+  // Track pricing page visit on mount
+  useEffect(() => {
+    trackPricingClick('pricing_page_view', '', 'Page Opened');
+  }, []);
 
   const plans = [
     {
@@ -150,6 +156,7 @@ const PricingPage: React.FC = () => {
             {/* CTA */}
             <button
               onClick={() => {
+                trackPricingClick('pricing_cta_click', plan.name.toLowerCase(), plan.cta);
                 if (plan.name === 'Pro') navigate('/upgrade');
                 else if (plan.name === 'Enterprise') window.location.href = 'mailto:business@moustacheleads.com?subject=Pepperwahl Enterprise Plan Inquiry';
                 else navigate(authenticated ? '/dashboard' : '/login?mode=signup');

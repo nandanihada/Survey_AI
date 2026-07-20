@@ -8,7 +8,8 @@ import FancyTable from '../components/FancyTable';
 import SendNotificationModal from '../components/SendNotificationModal';
 import PassFailAdmin from '../components/PassFailAdmin';
 import LinkMasking from '../components/LinkMasking';
-import { Bell, Filter, Save, Edit2, X, Check, ToggleLeft, ToggleRight, Eye, EyeOff, Play, RotateCcw, AlertCircle } from 'lucide-react';
+import TrackingTab from '../components/admin/TrackingTab';
+import { Bell, Filter, Save, Edit2, X, Check, ToggleLeft, ToggleRight, Eye, EyeOff, Play, RotateCcw, AlertCircle, Activity } from 'lucide-react';
 import { getApiBaseUrl } from '../utils/deploymentFix';
 
 interface User {
@@ -85,7 +86,7 @@ const AdminDashboard: React.FC = () => {
   const [surveys, setSurveys] = useState<any[]>([]);
   const [filters, setFilters] = useState<Filter[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking' | 'tracking'>('users');
   const [showNotifModal, setShowNotifModal] = useState(false);
   
   // Filter management states
@@ -500,6 +501,16 @@ const AdminDashboard: React.FC = () => {
                   }`}
                 >
                   Link Masking
+                </button>
+                <button
+                  onClick={() => setActiveTab('tracking')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center gap-1 ${
+                    activeTab === 'tracking'
+                      ? 'border-indigo-500 text-indigo-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <Activity size={14} /> Tracking
                 </button>
               </nav>
             </div>
@@ -1064,6 +1075,11 @@ const AdminDashboard: React.FC = () => {
                 {/* Link Masking Tab */}
                 {activeTab === 'link-masking' && (
                   <LinkMasking isDarkMode={false} />
+                )}
+
+                {/* Tracking Tab */}
+                {activeTab === 'tracking' && (
+                  <TrackingTab />
                 )}
               </>
             )}

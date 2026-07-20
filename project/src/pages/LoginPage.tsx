@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { auth, googleProvider } from '../config/firebase';
 import { signInWithPopup, OAuthProvider } from 'firebase/auth';
 import CookieConsent from '../components/CookieConsent';
+import { trackLoginEvent } from '../hooks/useTracking';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -53,6 +54,7 @@ const LoginPage: React.FC = () => {
     try {
       if (isLogin) {
         await login({ email, password });
+        trackLoginEvent('email');
         navigate('/dashboard');
       } else {
         if (!acceptTerms) {
@@ -106,6 +108,7 @@ const LoginPage: React.FC = () => {
         const data = await response.json();
         localStorage.setItem('auth_token', data.token);
         localStorage.setItem('user_data', JSON.stringify(data.user));
+        trackLoginEvent('google');
         
         if (data.isNewUser) {
           // Show account creation animation

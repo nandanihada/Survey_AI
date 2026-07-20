@@ -145,6 +145,27 @@ def login():
         user = auth_service.authenticate_user(email, password)
         token = auth_service.generate_jwt_token(user)
         
+        # Track login event
+        try:
+            from user_tracking_api import db as tracking_db
+            from datetime import timezone as tz
+            ip = request.headers.get('X-Forwarded-For', request.remote_addr or 'unknown')
+            if ',' in ip:
+                ip = ip.split(',')[0].strip()
+            tracking_db.login_events.insert_one({
+                "user_id": str(user['_id']),
+                "user_email": user['email'],
+                "user_name": user.get('name', ''),
+                "login_method": "email",
+                "ip_address": ip,
+                "device_info": {
+                    "user_agent": request.headers.get('User-Agent', ''),
+                },
+                "created_at": datetime.now(tz.utc)
+            })
+        except Exception as track_err:
+            print(f"⚠️ Login tracking failed (non-critical): {track_err}")
+        
         return jsonify({
             'message': 'Login successful',
             'token': token,
@@ -313,6 +334,24 @@ def firebase_login():
                 {'_id': existing_user['_id']},
                 {'$set': {'lastLogin': datetime.utcnow()}}
             )
+            
+            # Track login event
+            try:
+                from datetime import timezone as tz
+                ip = request.headers.get('X-Forwarded-For', request.remote_addr or 'unknown')
+                if ',' in ip:
+                    ip = ip.split(',')[0].strip()
+                db.login_events.insert_one({
+                    "user_id": str(existing_user['_id']),
+                    "user_email": email,
+                    "user_name": existing_user.get('name', name),
+                    "login_method": provider,
+                    "ip_address": ip,
+                    "device_info": {"user_agent": request.headers.get('User-Agent', '')},
+                    "created_at": datetime.now(tz.utc)
+                })
+            except Exception as track_err:
+                print(f"⚠️ Login tracking failed (non-critical): {track_err}")
             
             # Generate JWT token
             token = auth_service.generate_jwt_token(existing_user)
