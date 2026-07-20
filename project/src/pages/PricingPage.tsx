@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Check, ArrowLeft } from 'lucide-react';
+import { Check, ArrowLeft, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { trackPricingClick } from '../hooks/useTracking';
 
@@ -80,13 +80,14 @@ const PricingPage: React.FC = () => {
 
   return (
     <div className={`min-h-screen ${isLight ? 'bg-white text-slate-900' : 'bg-slate-950 text-white'}`}>
-      {/* Back to Dashboard */}
-      <div className="max-w-6xl mx-auto px-4 pt-4">
+      {/* Close button - top right */}
+      <div className="max-w-6xl mx-auto px-4 pt-4 flex justify-end">
         <button
           onClick={() => navigate(-1)}
-          className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${isLight ? 'text-stone-500 hover:text-stone-800' : 'text-slate-400 hover:text-white'}`}
+          className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors ${isLight ? 'text-stone-500 hover:bg-stone-100 hover:text-stone-800' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+          title="Close"
         >
-          <ArrowLeft size={16} /> Go Back
+          <X size={20} />
         </button>
       </div>
 
