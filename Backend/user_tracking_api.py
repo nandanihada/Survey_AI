@@ -788,7 +788,7 @@ def get_tracked_users_list():
         
         # Get all unique users from page_visits (most comprehensive source)
         pipeline = [
-            {"$match": {"created_at": {"$gte": since}, "user_id": {"$ne": "anonymous"}}},
+            {"$match": {"created_at": {"$gte": since}, "user_id": {"$ne": "anonymous"}, "user_email": {"$ne": "landing@pepperwahl.com"}}},
             {"$group": {
                 "_id": "$user_email",
                 "user_id": {"$first": "$user_id"},
@@ -974,5 +974,112 @@ def get_user_detail():
             "geolocations": geolocations,
             "premium_attempts": premium_attempts
         }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ==================== Session Linking (Landing → User) ====================
+
+@user_tracking_bp.route('/link-session', methods=['POST'])
+def link_landing_session():
+    """
+    Link landing page anonymous session data to a real user after login.
+    Called from the main app after successful login if a landing session ID is present.
+    Updates all tracking records from that session to the user's real identity.
+    """
+    try:
+        data = request.json or {}
+        session_id = data.get("session_id", "")
+        user_id = data.get("user_id", "")
+        user_email = data.get("user_email", "")
+        user_name = data.get("user_name", "")
+        
+        if not session_id or not user_email:
+            return jsonify({"status": "skipped", "reason": "missing session_id or user_email"}), 200
+        
+        # Update all landing page records with this session_id to the real user
+        update_filter = {"session_id": session_id, "user_email": "landing@pepperwahl.com"}
+        update_data = {
+            "$set": {
+                "user_id": user_id,
+                "user_email": user_email,
+                "user_name": user_name
+            }
+        }
+        
+        # Update across all tracking collections
+        collections = ['page_visits', 'button_clicks', 'user_sessions', 'user_geolocations', 'pricing_clicks']
+        total_updated = 0
+        
+        for coll_name in collections:
+            result = db[coll_name].update_many(update_filter, update_data)
+            total_updated += result.modified_count
+        
+        # Also prefix landing page paths with /landing to distinguish them
+        # Update page visits: /features → /landing/features
+        page_visits_to_update = list(db.page_visits.find({
+            "session_id": session_id,
+            "user_email": user_email,
+            "page": {"$not": {"$regex": "^/landing"}}
+        }))
+        
+        for pv in page_visits_to_update:
+            page = pv.get("page", "/")
+            # Only prefix if it doesn't already start with /landing or /dashboard etc (main app pages)
+            if not page.startswith("/dashboard") and not page.startswith("/admin") and not page.startswith("/login") and not page.startswith("/signup") and not page.startswith("/pricing") and not page.startswith("/analytics"):
+                db.page_visits.update_one(
+                    {"_id": pv["_id"]},
+                    {"$set": {"page": "/landing" + page}}
+                )
+        
+        print(f"✅ Linked session {session_id[:20]}... → {user_email} ({total_updated} records updated)")
+        return jsonify({"status": "ok", "records_updated": total_updated}), 200
+    except Exception as e:
+        print(f"❌ Session linking error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ==================== Contact Form Submissions ====================
+
+@user_tracking_bp.route('/admin/contact-submissions', methods=['GET'])
+@requireAdmin
+def get_contact_submissions():
+    """Get contact form submissions from landing page"""
+    try:
+        # Contact form submissions are stored as button_clicks with section=landing:contact_form
+        submissions_raw = list(db.button_clicks.find(
+            {"section": "landing:contact_form"},
+            {"_id": 0}
+        ).sort("created_at", -1).limit(200))
+        
+        submissions = []
+        for item in submissions_raw:
+            # Parse the form data from button_text
+            button_text = item.get("button_text", "")
+            form_data = {}
+            
+            # Format: "Contact Form | {json}" or "Contact Form Submitted | {json}"
+            if "|" in button_text:
+                json_part = button_text.split("|", 1)[1].strip()
+                try:
+                    import json
+                    form_data = json.loads(json_part)
+                except:
+                    form_data = {"raw": json_part}
+            
+            geo = item.get("geo", {})
+            
+            submissions.append({
+                "name": form_data.get("name", ""),
+                "email": form_data.get("email", ""),
+                "message": form_data.get("message", ""),
+                "page": item.get("page", ""),
+                "ip_address": item.get("ip_address", ""),
+                "city": geo.get("city", ""),
+                "country": geo.get("country", ""),
+                "created_at": item.get("created_at").isoformat() if item.get("created_at") else ""
+            })
+        
+        return jsonify({"submissions": submissions}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500

@@ -108,6 +108,38 @@ export function trackLoginEvent(loginMethod: string = 'email') {
   sendTrackingEvent('login-event', {
     login_method: loginMethod
   });
+
+  // Link landing page session to this user if ref_session exists in URL
+  linkLandingSession();
+}
+
+/** Link landing page anonymous session to the now-logged-in user */
+export function linkLandingSession() {
+  try {
+    // Check URL for ref_session parameter (passed from landing page)
+    const params = new URLSearchParams(window.location.search);
+    const landingSession = params.get('ref_session');
+    if (!landingSession) return;
+
+    const user = getUserInfo();
+    if (!user.user_email || user.user_email === '') return;
+
+    fetch(`${baseUrl}/api/tracking/link-session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: landingSession,
+        user_id: user.user_id,
+        user_email: user.user_email,
+        user_name: user.user_name
+      })
+    }).catch(() => {});
+
+    // Clean the URL param so it doesn't persist
+    params.delete('ref_session');
+    const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+    window.history.replaceState({}, '', newUrl);
+  } catch {}
 }
 
 // ==================== Auto-tracking hook ====================
