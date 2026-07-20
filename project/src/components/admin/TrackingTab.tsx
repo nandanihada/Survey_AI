@@ -350,7 +350,7 @@ function UserDetailView({ userEmail, onBack, days }: { userEmail: string; onBack
               <span className="text-gray-400 w-36">{v.created_at ? formatIST(v.created_at) : '-'}</span>
               <span className="font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded">{v.page}</span>
               {v.geo?.city && v.geo.city !== 'Local' && (
-                <span className="text-gray-400 text-[10px]">{v.geo.city}, {v.geo.country}</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded ${v.geo.source === 'gps' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{v.geo.city}, {v.geo.country}</span>
               )}
             </div>
           ))}
@@ -420,7 +420,7 @@ function UserDetailView({ userEmail, onBack, days }: { userEmail: string; onBack
                 <tr key={idx} className="border-b border-gray-50">
                   <td className="p-2 text-gray-600">{s.created_at ? formatIST(s.created_at) : '-'}</td>
                   <td className="p-2 text-gray-500">{s.ip_address || '-'}</td>
-                  <td className="p-2 text-gray-500">{s.geo?.city && s.geo.city !== 'Local' ? `${s.geo.city}, ${s.geo.country}` : '-'}</td>
+                  <td className="p-2">{s.geo?.city && s.geo.city !== 'Local' ? <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${s.geo.source === 'gps' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{s.geo.city}, {s.geo.country}</span> : '-'}</td>
                   <td className="p-2 text-gray-500">{s.device_info?.device || '-'} / {s.device_info?.browser || '-'}</td>
                 </tr>
               ))}
@@ -436,6 +436,7 @@ function UserDetailView({ userEmail, onBack, days }: { userEmail: string; onBack
           <table className="w-full text-xs">
             <thead><tr className="bg-teal-50">
               <th className="text-left p-2">Time</th>
+              <th className="text-left p-2">Source</th>
               <th className="text-left p-2">City</th>
               <th className="text-left p-2">Country</th>
               <th className="text-left p-2">IP</th>
@@ -445,13 +446,22 @@ function UserDetailView({ userEmail, onBack, days }: { userEmail: string; onBack
               {detail.geolocations.map((g: any, idx: number) => (
                 <tr key={idx} className="border-b border-gray-50">
                   <td className="p-2 text-gray-600">{g.created_at ? formatIST(g.created_at) : '-'}</td>
-                  <td className="p-2 text-gray-700 font-medium">{g.city || '-'}</td>
+                  <td className="p-2">
+                    {g.source === 'gps' ? (
+                      <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px] font-semibold">GPS</span>
+                    ) : (
+                      <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-[10px] font-semibold">IP</span>
+                    )}
+                  </td>
+                  <td className="p-2">
+                    <span className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${g.source === 'gps' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{g.city || '-'}</span>
+                  </td>
                   <td className="p-2 text-gray-500">{g.country || '-'}</td>
                   <td className="p-2 text-gray-400">{g.ip_address || '-'}</td>
-                  <td className="p-2 text-gray-400">{g.latitude?.toFixed(2)}, {g.longitude?.toFixed(2)}</td>
+                  <td className="p-2 text-gray-400">{g.latitude?.toFixed(4)}, {g.longitude?.toFixed(4)}</td>
                 </tr>
               ))}
-              {detail.geolocations.length === 0 && <tr><td colSpan={5} className="p-4 text-center text-gray-400">No location data</td></tr>}
+              {detail.geolocations.length === 0 && <tr><td colSpan={6} className="p-4 text-center text-gray-400">No location data</td></tr>}
             </tbody>
           </table>
         </div>

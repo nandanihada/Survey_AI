@@ -278,6 +278,7 @@ def track_session_start():
                 "country": geo.get("country", ""),
                 "city": geo.get("city", ""),
                 "region": geo.get("region", ""),
+                "source": "ip",
                 "created_at": datetime.now(timezone.utc)
             }
             db.user_geolocations.insert_one(geo_record)
@@ -1083,3 +1084,163 @@ def get_contact_submissions():
         return jsonify({"submissions": submissions}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ==================== GPS Geolocation Update ====================
+
+@user_tracking_bp.route('/geo-update', methods=['POST'])
+def track_geo_update():
+    """Receive GPS-based geolocation from browser (more precise than IP)"""
+    try:
+        data = request.json or {}
+        latitude = data.get("latitude")
+        longitude = data.get("longitude")
+        accuracy = data.get("accuracy", 0)
+        source = data.get("source", "gps")
+        
+        if not latitude or not longitude:
+            return jsonify({"status": "skipped", "reason": "no coords"}), 200
+        
+        # Reverse geocode GPS coordinates to get city/town name
+        city = "Unknown"
+        country = "Unknown"
+        region = ""
+        try:
+            # Use OpenStreetMap Nominatim for reverse geocoding (free, no API key)
+            geo_response = http_requests.get(
+                f"https://nominatim.openstreetmap.org/reverse?lat={latitude}&lon={longitude}&format=json&zoom=10&addressdetails=1",
+                headers={"User-Agent": "PeppperwahlTracking/1.0"},
+                timeout=5
+            )
+            if geo_response.status_code == 200:
+                geo_data = geo_response.json()
+                address = geo_data.get("address", {})
+                # Try to get the most precise location name
+                city = address.get("city") or address.get("town") or address.get("village") or address.get("suburb") or address.get("county") or "Unknown"
+                region = address.get("state", "")
+                country = address.get("country", "Unknown")
+        except Exception as geo_err:
+            print(f"  Reverse geocoding failed: {geo_err}")
+        
+        user_email = data.get("user_email", "")
+        session_id = data.get("session_id", "")
+        
+        # Store GPS geolocation record
+        geo_record = {
+            "user_id": data.get("user_id", "anonymous"),
+            "user_email": user_email,
+            "user_name": data.get("user_name", ""),
+            "session_id": session_id,
+            "ip_address": get_ip_from_request(),
+            "latitude": latitude,
+            "longitude": longitude,
+            "accuracy_meters": accuracy,
+            "city": city,
+            "region": region,
+            "country": country,
+            "source": source,  # "gps" = precise, "ip" = approximate
+            "created_at": datetime.now(timezone.utc)
+        }
+        
+        db.user_geolocations.insert_one(geo_record)
+        
+        # Also update the session record with GPS location
+        if session_id:
+            db.user_sessions.update_many(
+                {"session_id": session_id},
+                {"$set": {
+                    "geo": {
+                        "city": city,
+                        "region": region,
+                        "country": country,
+                        "latitude": latitude,
+                        "longitude": longitude,
+                        "source": source,
+                        "accuracy_meters": accuracy
+                    }
+                }}
+            )
+        
+        print(f"  GPS location: {city}, {region}, {country} (accuracy: {accuracy}m)")
+        return jsonify({"status": "ok", "city": city, "country": country}), 200
+    except Exception as e:
+        print(f"  GPS tracking error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ==================== GPS Geolocation Update ====================
+
+@user_tracking_bp.route('/geo-update', methods=['POST'])
+def track_geo_update():
+    """Receive GPS-based geolocation from browser (user allowed location access)"""
+    try:
+        data = request.json or {}
+        latitude = data.get("latitude")
+        longitude = data.get("longitude")
+        accuracy = data.get("accuracy")
+        source = data.get("source", "gps")
+        
+        if not latitude or not longitude:
+            return jsonify({"status": "skipped"}), 200
+        
+        # Reverse geocode GPS coordinates to get city/town name
+        city = "Unknown"
+        country = "Unknown"
+        region = ""
+        try:
+            geo_response = http_requests.get(
+                f"https://nominatim.openstreetmap.org/reverse?lat={latitude}&lon={longitude}&format=json&addressdetails=1&zoom=14",
+                headers={"User-Agent": "PepperwhalTracker/1.0"},
+                timeout=5
+            )
+            if geo_response.status_code == 200:
+                geo_data = geo_response.json()
+                address = geo_data.get("address", {})
+                # Get the most specific locality
+                city = address.get("town") or address.get("city") or address.get("village") or address.get("suburb") or address.get("county") or "Unknown"
+                region = address.get("state", "")
+                country = address.get("country", "Unknown")
+        except Exception as geo_err:
+            print(f"  GPS reverse geocode failed: {geo_err}")
+        
+        ip = get_ip_from_request()
+        
+        record = {
+            "user_id": data.get("user_id", "anonymous"),
+            "user_email": data.get("user_email", ""),
+            "user_name": data.get("user_name", ""),
+            "session_id": data.get("session_id", ""),
+            "ip_address": ip,
+            "latitude": latitude,
+            "longitude": longitude,
+            "accuracy_meters": accuracy,
+            "city": city,
+            "region": region,
+            "country": country,
+            "source": source,  # "gps" or "ip"
+            "created_at": datetime.now(timezone.utc)
+        }
+        
+        db.user_geolocations.insert_one(record)
+        
+        # Also update the user's session with GPS location
+        if data.get("session_id"):
+            db.user_sessions.update_one(
+                {"session_id": data.get("session_id")},
+                {"$set": {
+                    "geo": {
+                        "city": city,
+                        "region": region,
+                        "country": country,
+                        "latitude": latitude,
+                        "longitude": longitude,
+                        "source": source
+                    }
+                }}
+            )
+        
+        print(f"  GPS location: {city}, {region}, {country} (accuracy: {accuracy}m)")
+        return jsonify({"status": "ok", "city": city}), 200
+    except Exception as e:
+        print(f"  GPS update error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500

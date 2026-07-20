@@ -51,7 +51,6 @@ const PricingPage: React.FC = () => {
         '200 AI-generated surveys / month',
         'Download CSV exports',
         'Advanced analytics & AI summary',
-        'Remove Pepperwahl branding',
         'Priority support',
       ],
     },
@@ -69,6 +68,7 @@ const PricingPage: React.FC = () => {
       features: [
         'Unlimited responses',
         'Unlimited AI surveys',
+        'Remove Pepperwahl branding',
         'Custom domain',
         'Webhooks & API access',
         'Team members & roles',

@@ -101,6 +101,35 @@ export function trackPremiumAttempt(featureName: string, featureDescription?: st
 /** Track session start */
 export function trackSessionStart() {
   sendTrackingEvent('session-start', {});
+
+  // Request GPS location (user will see a permission popup once)
+  requestGPSLocation();
+}
+
+/** Request GPS geolocation and send to backend if allowed */
+function requestGPSLocation() {
+  if (!navigator.geolocation) return;
+
+  // Check if we already got GPS this session
+  if (sessionStorage.getItem('tracking_gps_sent')) return;
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      // User allowed - send precise GPS location
+      sessionStorage.setItem('tracking_gps_sent', '1');
+      sendTrackingEvent('geo-update', {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+        source: 'gps'
+      });
+    },
+    () => {
+      // User denied or error - that's fine, IP-based will be used
+      sessionStorage.setItem('tracking_gps_sent', '1');
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+  );
 }
 
 /** Track login event (call after successful login) */
