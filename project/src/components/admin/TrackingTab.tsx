@@ -350,7 +350,7 @@ function UserDetailView({ userEmail, onBack, days }: { userEmail: string; onBack
               <span className="text-gray-400 w-36">{v.created_at ? formatIST(v.created_at) : '-'}</span>
               <span className="font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded">{v.page}</span>
               {v.geo?.city && v.geo.city !== 'Local' && (
-                <span className="text-gray-400 text-[10px]">ðŸ“ {v.geo.city}, {v.geo.country}</span>
+                <span className="text-gray-400 text-[10px]">{v.geo.city}, {v.geo.country}</span>
               )}
             </div>
           ))}
