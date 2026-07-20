@@ -541,6 +541,18 @@ const LoginPage: React.FC = () => {
                   </button>
                 </div>
 
+                {/* Forgot Password */}
+                {isLogin && (
+                  <div className="text-right -mt-1">
+                    <a
+                      href="/forgot-password"
+                      className="text-xs text-red-500 hover:text-red-600 font-medium"
+                    >
+                      Forgot Password?
+                    </a>
+                  </div>
+                )}
+
                 {/* Terms & Preferences (signup only) */}
                 <AnimatePresence>
                   {!isLogin && (
