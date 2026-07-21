@@ -514,6 +514,33 @@ function UserDetailView({ userEmail, onBack, days }: { userEmail: string; onBack
           </table>
         </div>
       </Section>
+
+      {/* Cookie Preferences */}
+      <Section title="Cookie Preferences" icon={Globe} color="from-indigo-500 to-indigo-700" count={detail.cookie_preference ? 1 : 0}>
+        {detail.cookie_preference ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="p-3 rounded-lg bg-green-50 border border-green-200 text-center">
+              <div className="text-xs font-medium text-green-800 mb-1">Essential</div>
+              <div className="text-lg font-bold text-green-700">ON</div>
+              <div className="text-[10px] text-green-600">Always on</div>
+            </div>
+            <div className={`p-3 rounded-lg border text-center ${detail.cookie_preference.preferences?.functional ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
+              <div className={`text-xs font-medium mb-1 ${detail.cookie_preference.preferences?.functional ? 'text-blue-800' : 'text-gray-600'}`}>Functional</div>
+              <div className={`text-lg font-bold ${detail.cookie_preference.preferences?.functional ? 'text-blue-700' : 'text-gray-400'}`}>{detail.cookie_preference.preferences?.functional ? 'ON' : 'OFF'}</div>
+            </div>
+            <div className={`p-3 rounded-lg border text-center ${detail.cookie_preference.preferences?.analytics ? 'bg-purple-50 border-purple-200' : 'bg-gray-50 border-gray-200'}`}>
+              <div className={`text-xs font-medium mb-1 ${detail.cookie_preference.preferences?.analytics ? 'text-purple-800' : 'text-gray-600'}`}>Analytics</div>
+              <div className={`text-lg font-bold ${detail.cookie_preference.preferences?.analytics ? 'text-purple-700' : 'text-gray-400'}`}>{detail.cookie_preference.preferences?.analytics ? 'ON' : 'OFF'}</div>
+            </div>
+            <div className={`p-3 rounded-lg border text-center ${detail.cookie_preference.preferences?.marketing ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-200'}`}>
+              <div className={`text-xs font-medium mb-1 ${detail.cookie_preference.preferences?.marketing ? 'text-orange-800' : 'text-gray-600'}`}>Marketing</div>
+              <div className={`text-lg font-bold ${detail.cookie_preference.preferences?.marketing ? 'text-orange-700' : 'text-gray-400'}`}>{detail.cookie_preference.preferences?.marketing ? 'ON' : 'OFF'}</div>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400 text-center py-4">No cookie preference saved yet</p>
+        )}
+      </Section>
     </div>
   );
 }

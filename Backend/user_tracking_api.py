@@ -964,6 +964,11 @@ def get_user_detail():
             if ps.get("last_visit"):
                 ps["last_visit"] = ps["last_visit"].isoformat()
         
+        # Get cookie preference
+        cookie_pref = db.cookie_preferences.find_one({"user_email": user_email}, {"_id": 0, "preferences": 1, "created_at": 1})
+        if cookie_pref and cookie_pref.get("created_at"):
+            cookie_pref["created_at"] = cookie_pref["created_at"].isoformat()
+        
         return jsonify({
             "user_email": user_email,
             "page_visits": page_visits,
@@ -973,7 +978,8 @@ def get_user_detail():
             "pricing_clicks": pricing_clicks,
             "sessions": sessions,
             "geolocations": geolocations,
-            "premium_attempts": premium_attempts
+            "premium_attempts": premium_attempts,
+            "cookie_preference": cookie_pref
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1196,3 +1202,90 @@ def log_consent():
     except Exception as e:
         print(f"  Consent logging error: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ==================== Cookie Preferences ====================
+
+@user_tracking_bp.route('/cookie-preference', methods=['POST'])
+def save_cookie_preference():
+    """Save user's cookie consent preferences"""
+    try:
+        data = request.json or {}
+        ip = get_ip_from_request()
+        
+        user_email = data.get("user_email", "")
+        session_id = data.get("session_id", "")
+        preferences = data.get("preferences", {})
+        
+        # Upsert - update if same user/session exists, else insert
+        filter_query = {}
+        if user_email:
+            filter_query = {"user_email": user_email}
+        elif session_id:
+            filter_query = {"session_id": session_id}
+        else:
+            filter_query = {"ip_address": ip}
+        
+        record = {
+            "user_id": data.get("user_id", "anonymous"),
+            "user_email": user_email,
+            "user_name": data.get("user_name", ""),
+            "session_id": session_id,
+            "ip_address": ip,
+            "preferences": {
+                "essential": True,
+                "functional": preferences.get("functional", True),
+                "analytics": preferences.get("analytics", True),
+                "marketing": preferences.get("marketing", True)
+            },
+            "created_at": datetime.now(timezone.utc)
+        }
+        
+        db.cookie_preferences.update_one(
+            filter_query,
+            {"$set": record},
+            upsert=True
+        )
+        
+        return jsonify({"status": "ok"}), 200
+    except Exception as e:
+        print(f"  Cookie preference save error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@user_tracking_bp.route('/cookie-preference/check', methods=['GET'])
+def check_cookie_preference():
+    """Check if a user/session already has cookie preferences saved (for cross-domain sync)"""
+    try:
+        session_id = request.args.get('session_id', '')
+        user_email = request.args.get('email', '')
+        
+        query = {}
+        if user_email:
+            query = {"user_email": user_email}
+        elif session_id:
+            query = {"session_id": session_id}
+        else:
+            return jsonify({"has_preference": False}), 200
+        
+        record = db.cookie_preferences.find_one(query, {"_id": 0, "preferences": 1})
+        
+        if record:
+            return jsonify({"has_preference": True, "preferences": record.get("preferences", {})}), 200
+        return jsonify({"has_preference": False}), 200
+    except Exception as e:
+        return jsonify({"has_preference": False, "error": str(e)}), 200
+
+
+@user_tracking_bp.route('/admin/cookie-preferences', methods=['GET'])
+@requireAdmin
+def get_all_cookie_preferences():
+    """Get all cookie preferences for admin panel"""
+    try:
+        prefs = list(db.cookie_preferences.find({}, {"_id": 0}).sort("created_at", -1).limit(200))
+        for p in prefs:
+            if p.get("created_at"):
+                p["created_at"] = p["created_at"].isoformat()
+        return jsonify({"preferences": prefs}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

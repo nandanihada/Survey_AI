@@ -6,6 +6,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { Cookie, Shield, BarChart3, Megaphone, Settings2 } from 'lucide-react';
+import { getApiBaseUrl } from '../utils/deploymentFix';
 
 export interface CookiePreferences {
   essential: boolean; // always true
@@ -16,9 +17,9 @@ export interface CookiePreferences {
 
 const DEFAULT_PREFS: CookiePreferences = {
   essential: true,
-  functional: false,
-  analytics: false,
-  marketing: false,
+  functional: true,
+  analytics: true,
+  marketing: true,
 };
 
 /** Get saved cookie preferences */
@@ -69,7 +70,7 @@ const CookieConsent: React.FC = () => {
     setVisible(false);
     setShowCustomize(false);
 
-    // Track cookie preference choice
+    // Save cookie preferences to backend (for admin panel + cross-domain sync)
     import('../hooks/useTracking').then(m => {
       m.trackButtonClick(
         'cookie_preference',
@@ -78,6 +79,20 @@ const CookieConsent: React.FC = () => {
         'cookie_banner'
       );
     });
+
+    // Also save as a dedicated cookie preference record
+    const user = JSON.parse(localStorage.getItem('user_data') || '{}');
+    fetch(`${getApiBaseUrl()}/api/tracking/cookie-preference`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: user.id || user._id || 'anonymous',
+        user_email: user.email || '',
+        user_name: user.name || '',
+        session_id: sessionStorage.getItem('tracking_session_id') || '',
+        preferences: preferences
+      })
+    }).catch(() => {});
   };
 
   const handleAcceptAll = () => {
