@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { getApiBaseUrl } from '../utils/deploymentFix';
 import {
   FolderOpen,
   Plus,
@@ -12,7 +13,8 @@ import {
   Edit,
   Eye,
   Mail,
-  FileText
+  FileText,
+  Trash2
 } from 'lucide-react';
 
 interface SurveyListProps {
@@ -352,6 +354,40 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                         Prompt
                       </button>
                     )}
+                    <button
+                      onClick={async () => {
+                        const responseCount = survey.response_count || 0;
+                        const msg = responseCount > 0
+                          ? `This survey has ${responseCount} response(s). Deleting will permanently remove the survey and ALL its responses. This cannot be undone.\n\nAre you sure?`
+                          : `Delete survey "${survey.title || 'Untitled'}"? This cannot be undone.\n\nAre you sure?`;
+                        if (!window.confirm(msg)) return;
+                        try {
+                          const token = localStorage.getItem('auth_token');
+                          const baseUrl = getApiBaseUrl();
+                          const res = await fetch(`${baseUrl}/api/surveys/${survey.id}`, {
+                            method: 'DELETE',
+                            headers: { 'Authorization': `Bearer ${token}` }
+                          });
+                          if (res.ok) {
+                            window.location.reload();
+                          } else {
+                            const err = await res.json();
+                            alert(`Failed to delete: ${err.error || 'Unknown error'}`);
+                          }
+                        } catch (e) {
+                          alert('Network error while deleting survey');
+                        }
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        isDarkMode
+                          ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20'
+                          : 'bg-red-50 text-red-600 hover:bg-red-100'
+                      }`}
+                      title="Delete Survey"
+                    >
+                      <Trash2 size={13} />
+                      Delete
+                    </button>
                   </div>
                   {/* Prompt reveal row */}
                   {isAdmin && survey.prompt && showPromptId === survey.id && (

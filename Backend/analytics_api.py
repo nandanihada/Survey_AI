@@ -6,6 +6,7 @@ and AI summary generation.
 
 from flask import Blueprint, request, jsonify, g
 from datetime import datetime, timezone
+from pii_stripper import strip_pii_from_answers, strip_pii_from_prompt
 from mongodb_config import db
 from auth_middleware import requireAuth
 import os
@@ -271,7 +272,7 @@ def generate_ai_summary(question_text, answer_distribution, tier="free"):
         
         # Build prompt based on tier
         answers_text = "\n".join([
-            f"- {item['answer']}: {item['percentage']}% ({item['count']} responses)"
+            f"- {strip_pii_from_answers(item['answer'])}: {item['percentage']}% ({item['count']} responses)"
             for item in answer_distribution[:10]
         ])
         
@@ -337,8 +338,8 @@ def generate_careful_rushed_insights(question_text, careful_answers, rushed_answ
                 "rushed_insight": "Rushed respondents tend to pick familiar, top-of-mind options."
             }
         
-        careful_text = "\n".join([f"- {k}: {v}" for k, v in list(careful_answers.items())[:5]])
-        rushed_text = "\n".join([f"- {k}: {v}" for k, v in list(rushed_answers.items())[:5]])
+        careful_text = "\n".join([f"- {strip_pii_from_answers(k)}: {v}" for k, v in list(careful_answers.items())[:5]])
+        rushed_text = "\n".join([f"- {strip_pii_from_answers(k)}: {v}" for k, v in list(rushed_answers.items())[:5]])
         
         prompt = f"""For this survey question, compare the answer patterns between careful respondents (who took time) and rushed respondents (who answered quickly).
 

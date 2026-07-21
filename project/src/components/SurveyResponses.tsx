@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, User, Mail, Download, RefreshCw, Eye, Lock } from 'lucide-react';
+import { Calendar, User, Mail, Download, RefreshCw, Eye, Lock, Trash2, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -26,6 +26,8 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
   const [selectedResponse, setSelectedResponse] = useState<SurveyResponse | null>(null);
   const [needsAuth, setNeedsAuth] = useState(false);
   const [questionMap, setQuestionMap] = useState<Record<string, string>>({});
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
   const { hasFeature } = useAuth();
 
@@ -96,6 +98,79 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
       fetchResponses();
     }
   }, [surveyId]);
+
+  const getBaseUrl = () => {
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    return isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+  };
+
+  const deleteResponse = async (responseId: string) => {
+    if (!window.confirm('Delete this response? This cannot be undone.')) return;
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${getBaseUrl()}/api/surveys/${surveyId}/responses/${responseId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setResponses(prev => prev.filter(r => r._id !== responseId));
+        setSelectedIds(prev => { const n = new Set(prev); n.delete(responseId); return n; });
+      } else {
+        const err = await res.json();
+        alert(`Delete failed: ${err.error || 'Unknown error'}`);
+      }
+    } catch { alert('Network error'); }
+  };
+
+  const bulkDeleteResponses = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.size} selected response(s)? This cannot be undone.`)) return;
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${getBaseUrl()}/api/surveys/${surveyId}/responses/bulk-delete`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ response_ids: Array.from(selectedIds) })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setResponses(prev => prev.filter(r => !selectedIds.has(r._id)));
+        setSelectedIds(new Set());
+        alert(data.message);
+      } else {
+        const err = await res.json();
+        alert(`Bulk delete failed: ${err.error || 'Unknown error'}`);
+      }
+    } catch { alert('Network error'); }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredResponses.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredResponses.map(r => r._id)));
+    }
+  };
+
+  // Filter responses by search query
+  const filteredResponses = responses.filter(r => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      (r.email || '').toLowerCase().includes(q) ||
+      (r.username || '').toLowerCase().includes(q) ||
+      (r.sub1 || '').toLowerCase().includes(q) ||
+      (r._id || '').toLowerCase().includes(q)
+    );
+  });
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('en-US', {
@@ -209,14 +284,35 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold text-gray-900">Survey Responses</h3>
           <p className="text-sm text-gray-600">
             {responses.length} response{responses.length !== 1 ? 's' : ''} collected
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Search */}
+          <div className="relative">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search email, username..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-200 w-48"
+            />
+          </div>
+          {/* Bulk delete */}
+          {selectedIds.size > 0 && (
+            <button
+              onClick={bulkDeleteResponses}
+              className="flex items-center gap-1 px-3 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+            >
+              <Trash2 size={14} />
+              Delete ({selectedIds.size})
+            </button>
+          )}
           <button
             onClick={fetchResponses}
             className="flex items-center gap-1 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
@@ -247,79 +343,102 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
           <h3 className="text-lg font-medium text-gray-900 mb-2">No responses yet</h3>
           <p className="text-gray-600">Share your survey to start collecting responses.</p>
         </div>
+      ) : filteredResponses.length === 0 ? (
+        <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
+          <p className="text-gray-500">No responses match "{searchQuery}"</p>
+        </div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Submitted
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    User Info
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {responses.map((response) => (
-                  <tr key={response._id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center text-sm text-gray-900">
-                        <Calendar size={14} className="mr-2 text-gray-400" />
-                        {formatDate(response.submitted_at)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="space-y-1">
-                        {response.email && (
-                          <div className="flex items-center text-sm text-gray-900">
-                            <Mail size={14} className="mr-2 text-gray-400" />
-                            {response.email}
-                          </div>
-                        )}
-                        {response.username && (
-                          <div className="flex items-center text-sm text-gray-600">
-                            <User size={14} className="mr-2 text-gray-400" />
-                            {response.username}
-                          </div>
-                        )}
-                        {response.sub1 && (
-                          <div className="text-xs text-gray-500">
-                            Sub1: {response.sub1}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        response.status === 'submitted' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {response.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => setSelectedResponse(response)}
-                        className="flex items-center gap-1 text-blue-600 hover:text-blue-900"
-                      >
-                        <Eye size={14} />
-                        View Details
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="space-y-3">
+          {/* Select all row */}
+          <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200">
+            <input
+              type="checkbox"
+              checked={selectedIds.size === filteredResponses.length && filteredResponses.length > 0}
+              onChange={toggleSelectAll}
+              className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+            />
+            <span className="text-xs text-gray-500">
+              {selectedIds.size > 0 ? `${selectedIds.size} selected` : `Select all ${filteredResponses.length} responses`}
+            </span>
           </div>
+
+          {/* Response cards */}
+          {filteredResponses.map((response) => (
+            <div
+              key={response._id}
+              className={`border rounded-xl overflow-hidden transition-all ${selectedIds.has(response._id) ? 'border-red-300 bg-red-50/20' : 'border-gray-200 bg-white'}`}
+            >
+              {/* Response header */}
+              <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(response._id)}
+                    onChange={() => toggleSelect(response._id)}
+                    className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                  />
+                  <div className="flex items-center gap-4 text-xs text-gray-600">
+                    <span className="flex items-center gap-1">
+                      <Calendar size={12} className="text-gray-400" />
+                      {formatDate(response.submitted_at)}
+                    </span>
+                    {response.email && (
+                      <span className="flex items-center gap-1">
+                        <Mail size={12} className="text-gray-400" />
+                        <span className="font-medium text-gray-800">{response.email}</span>
+                      </span>
+                    )}
+                    {response.username && (
+                      <span className="flex items-center gap-1">
+                        <User size={12} className="text-gray-400" />
+                        {response.username}
+                      </span>
+                    )}
+                    {response.sub1 && (
+                      <span className="text-gray-500">Sub1: {response.sub1}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                    response.status === 'submitted' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                  }`}>{response.status}</span>
+                  <button
+                    onClick={() => setSelectedResponse(response)}
+                    className="flex items-center gap-1 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                  >
+                    <Eye size={12} /> View
+                  </button>
+                  <button
+                    onClick={() => deleteResponse(response._id)}
+                    className="flex items-center gap-1 px-2 py-1 text-xs text-red-500 hover:bg-red-50 rounded transition-colors"
+                  >
+                    <Trash2 size={12} /> Delete
+                  </button>
+                </div>
+              </div>
+
+              {/* Response answers table */}
+              {response.responses && Object.keys(response.responses).length > 0 && (
+                <div className="px-4 py-3">
+                  <table className="w-full text-xs">
+                    <tbody>
+                      {Object.entries(response.responses).map(([qId, answer], idx) => (
+                        <tr key={qId} className={idx % 2 === 0 ? '' : 'bg-gray-50/50'}>
+                          <td className="py-2 pr-4 text-gray-500 font-medium w-1/3 align-top">
+                            {questionMap[qId] || qId}
+                          </td>
+                          <td className="py-2 text-gray-800">
+                            {typeof answer === 'object' ? JSON.stringify(answer) : String(answer)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 

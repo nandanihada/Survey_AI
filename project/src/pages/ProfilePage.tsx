@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Mail, Globe, Link, Settings, Save, Plus, X, BarChart3 } from 'lucide-react';
+import { User, Mail, Globe, Link, Settings, Save, Plus, X, BarChart3, Trash2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Navigation from '../components/Navigation';
 import { makeApiRequest, handleApiError } from '../utils/deploymentFix';
@@ -476,8 +476,238 @@ export default function ProfilePage() {
               )}
             </button>
           </div>
+
+          {/* Data Export Section */}
+          <div className="lg:col-span-3">
+            <DataExportSection />
+          </div>
+
+          {/* Danger Zone - Account Deletion */}
+          <div className="lg:col-span-3">
+            <AccountDeletionSection />
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ==================== Data Export Section ====================
+function DataExportSection() {
+  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set(['account', 'surveys', 'responses']));
+
+  const getBaseUrl = () => {
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    return isLocal ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+  };
+
+  const toggleType = (type: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type); else next.add(type);
+      return next;
+    });
+  };
+
+  const handleExport = async () => {
+    if (selected.size === 0) { alert('Select at least one data type to export'); return; }
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${getBaseUrl()}/api/auth/export-data`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ export_types: Array.from(selected) })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Download as JSON file
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `pepperwahl-data-export-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else {
+        const err = await res.json();
+        alert(`Export failed: ${err.error || 'Unknown error'}`);
+      }
+    } catch { alert('Network error during export'); }
+    setLoading(false);
+  };
+
+  const exportOptions = [
+    { id: 'account', label: 'Account Information', desc: 'Name, email, role, registration date' },
+    { id: 'surveys', label: 'Surveys & Questions', desc: 'All surveys with questions and configurations' },
+    { id: 'responses', label: 'Survey Responses', desc: 'All responses collected across your surveys' },
+    { id: 'consent', label: 'Consent Logs', desc: 'Records of your consent preferences' },
+  ];
+
+  return (
+    <div className="mt-8 bg-white border border-gray-200 rounded-xl p-6">
+      <h2 className="text-lg font-bold text-blue-700 mb-1">Download My Data</h2>
+      <p className="text-sm text-gray-600 mb-4">Export your personal data in JSON format. Select what to include:</p>
+
+      <div className="space-y-2 mb-4">
+        {exportOptions.map(opt => (
+          <label key={opt.id} className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 cursor-pointer hover:border-blue-200 transition-colors">
+            <input
+              type="checkbox"
+              checked={selected.has(opt.id)}
+              onChange={() => toggleType(opt.id)}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <div>
+              <span className="text-sm font-medium text-gray-800">{opt.label}</span>
+              <p className="text-xs text-gray-500">{opt.desc}</p>
+            </div>
+          </label>
+        ))}
+      </div>
+
+      <button
+        onClick={handleExport}
+        disabled={loading || selected.size === 0}
+        className="px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      >
+        {loading ? 'Exporting...' : 'Download My Data'}
+      </button>
+    </div>
+  );
+}
+
+// ==================== Account Deletion Section ====================
+function AccountDeletionSection() {
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [deletionStatus, setDeletionStatus] = useState<any>(null);
+  const [statusLoading, setStatusLoading] = useState(true);
+
+  const getBaseUrl = () => {
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    return isLocal ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+  };
+
+  // Check deletion status on mount
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const token = localStorage.getItem('auth_token');
+        const res = await fetch(`${getBaseUrl()}/api/auth/deletion-status`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) setDeletionStatus(await res.json());
+      } catch {}
+      setStatusLoading(false);
+    };
+    checkStatus();
+  }, []);
+
+  const handleDelete = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${getBaseUrl()}/api/auth/delete-account`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setDeletionStatus({ has_pending_deletion: true, delete_after: data.delete_after, timeline: data.timeline });
+        setShowConfirm(false);
+        setPassword('');
+      } else {
+        alert(data.error || 'Failed to request deletion');
+      }
+    } catch { alert('Network error'); }
+    setLoading(false);
+  };
+
+  const handleCancel = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${getBaseUrl()}/api/auth/cancel-deletion`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setDeletionStatus({ has_pending_deletion: false });
+        alert('Deletion cancelled. Your account is safe.');
+      }
+    } catch { alert('Network error'); }
+  };
+
+  if (statusLoading) return null;
+
+  return (
+    <div className="mt-4 bg-white border-2 border-red-200 rounded-xl p-6">
+      <h2 className="text-lg font-bold text-red-700 mb-2">Danger Zone</h2>
+
+      {deletionStatus?.has_pending_deletion ? (
+        <div>
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+            <p className="text-sm text-amber-800 font-medium">Account deletion is scheduled.</p>
+            <p className="text-xs text-amber-700 mt-1">
+              Your data will be permanently deleted after: <strong>{new Date(deletionStatus.delete_after).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST</strong>
+            </p>
+            <p className="text-xs text-amber-600 mt-1">You can cancel anytime before this date to keep your account.</p>
+          </div>
+          <button
+            onClick={handleCancel}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+          >
+            Cancel Deletion — Keep My Account
+          </button>
+        </div>
+      ) : (
+        <div>
+          <p className="text-sm text-stone-600 mb-4">
+            Once you delete your account, all your surveys, responses, and data will be permanently removed after the cooling-off period based on your plan. This action cannot be undone after that period.
+          </p>
+
+          {!showConfirm ? (
+            <button
+              onClick={() => setShowConfirm(true)}
+              className="px-4 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
+            >
+              Delete My Account
+            </button>
+          ) : (
+            <div className="bg-white border border-red-200 rounded-lg p-4 space-y-3">
+              <p className="text-sm text-red-700 font-medium">Are you sure? Enter your password to confirm.</p>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                autoComplete="new-password"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-200"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleDelete}
+                  disabled={loading}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+                >
+                  {loading ? 'Processing...' : 'Confirm Delete'}
+                </button>
+                <button
+                  onClick={() => { setShowConfirm(false); setPassword(''); }}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

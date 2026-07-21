@@ -247,14 +247,15 @@ def delete_survey(survey_id):
     try:
         user = g.current_user
         
-        # Find survey
-        if is_valid_short_id(survey_id):
-            survey = db.surveys.find_one({'short_id': survey_id})
-        else:
+        # Find survey by short_id, id field, or ObjectId
+        survey = db.surveys.find_one({'short_id': survey_id})
+        if not survey:
+            survey = db.surveys.find_one({'id': survey_id})
+        if not survey:
             try:
                 survey = db.surveys.find_one({'_id': ObjectId(survey_id)})
             except:
-                return jsonify({'error': 'Invalid survey ID'}), 400
+                pass
         
         if not survey:
             return jsonify({'error': 'Survey not found'}), 404
@@ -266,12 +267,111 @@ def delete_survey(survey_id):
         
         # Delete survey and its responses
         db.surveys.delete_one({'_id': survey['_id']})
+        # Delete responses by both _id string and short_id
+        survey_short_id = survey.get('short_id', str(survey['_id']))
+        db.responses.delete_many({'survey_id': survey_short_id})
         db.responses.delete_many({'survey_id': str(survey['_id'])})
+        # Also clean up related tracking data
+        db.survey_clicks.delete_many({'survey_id': survey_short_id})
+        db.survey_sessions.delete_many({'survey_id': survey_short_id})
         
-        return jsonify({'message': 'Survey deleted successfully'})
+        return jsonify({
+            'message': 'Survey deleted successfully',
+            'deleted_responses': True
+        })
         
     except Exception as e:
         return jsonify({'error': f'Failed to delete survey: {str(e)}'}), 500
+
+
+@survey_bp.route('/<survey_id>/responses/bulk-delete', methods=['POST'])
+@requireAuth
+def bulk_delete_responses(survey_id):
+    """Bulk delete multiple responses from a survey"""
+    try:
+        user = g.current_user
+        data = request.json or {}
+        response_ids = data.get('response_ids', [])
+        
+        if not response_ids:
+            return jsonify({'error': 'No response IDs provided'}), 400
+        
+        # Find survey to verify ownership
+        survey = db.surveys.find_one({'short_id': survey_id})
+        if not survey:
+            survey = db.surveys.find_one({'id': survey_id})
+        if not survey:
+            try:
+                survey = db.surveys.find_one({'_id': ObjectId(survey_id)})
+            except:
+                pass
+        
+        if not survey:
+            return jsonify({'error': 'Survey not found'}), 404
+        
+        # Check ownership
+        user_id = str(user['_id'])
+        if survey.get('ownerUserId') != user_id and user.get('role') != 'admin':
+            return jsonify({'error': 'Access denied'}), 403
+        
+        # Delete responses
+        object_ids = []
+        for rid in response_ids:
+            try:
+                object_ids.append(ObjectId(rid))
+            except:
+                object_ids.append(rid)
+        
+        result = db.responses.delete_many({'_id': {'$in': object_ids}})
+        
+        return jsonify({
+            'message': f'{result.deleted_count} response(s) deleted successfully',
+            'deleted_count': result.deleted_count
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to bulk delete responses: {str(e)}'}), 500
+
+
+@survey_bp.route('/<survey_id>/responses/<response_id>', methods=['DELETE'])
+@requireAuth
+def delete_single_response(survey_id, response_id):
+    """Delete a single response from a survey"""
+    try:
+        user = g.current_user
+        
+        # Find survey to verify ownership
+        survey = db.surveys.find_one({'short_id': survey_id})
+        if not survey:
+            survey = db.surveys.find_one({'id': survey_id})
+        if not survey:
+            try:
+                survey = db.surveys.find_one({'_id': ObjectId(survey_id)})
+            except:
+                pass
+        
+        if not survey:
+            return jsonify({'error': 'Survey not found'}), 404
+        
+        # Check ownership
+        user_id = str(user['_id'])
+        if survey.get('ownerUserId') != user_id and user.get('role') != 'admin':
+            return jsonify({'error': 'Access denied'}), 403
+        
+        # Delete the response
+        try:
+            result = db.responses.delete_one({'_id': ObjectId(response_id)})
+        except:
+            result = db.responses.delete_one({'_id': response_id})
+        
+        if result.deleted_count == 0:
+            return jsonify({'error': 'Response not found'}), 404
+        
+        return jsonify({'message': 'Response deleted successfully'})
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to delete response: {str(e)}'}), 500
+
 
 @survey_bp.route('/<survey_id>/responses', methods=['GET'])
 @requireAuth

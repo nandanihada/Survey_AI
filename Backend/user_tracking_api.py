@@ -1289,3 +1289,75 @@ def get_all_cookie_preferences():
         return jsonify({"preferences": prefs}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ==================== Admin: Account Deletion Requests ====================
+
+@user_tracking_bp.route('/admin/deletion-requests', methods=['GET'])
+@requireAdmin
+def get_deletion_requests():
+    """Get all account deletion requests for admin panel"""
+    try:
+        requests_list = list(db.account_deletions.find({}, {"_id": 0}).sort("requested_at", -1).limit(100))
+        for r in requests_list:
+            if r.get("requested_at"):
+                r["requested_at"] = r["requested_at"].isoformat()
+            if r.get("delete_after"):
+                r["delete_after"] = r["delete_after"].isoformat()
+            if r.get("cancelled_at"):
+                r["cancelled_at"] = r["cancelled_at"].isoformat()
+            if r.get("completed_at"):
+                r["completed_at"] = r["completed_at"].isoformat()
+        return jsonify({"requests": requests_list}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@user_tracking_bp.route('/admin/deletion-requests/execute', methods=['POST'])
+@requireAdmin
+def admin_execute_deletion():
+    """Admin manually executes account deletion (before countdown)"""
+    try:
+        data = request.json or {}
+        user_id = data.get("user_id", "")
+        
+        if not user_id:
+            return jsonify({"error": "user_id is required"}), 400
+        
+        from bson import ObjectId
+        
+        # Find the user
+        try:
+            user = db.users.find_one({"_id": ObjectId(user_id)})
+        except:
+            user = db.users.find_one({"_id": user_id})
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        user_email = user.get("email", "")
+        
+        # Delete all user data
+        db.surveys.delete_many({"ownerUserId": user_id})
+        db.responses.delete_many({"user_id": user_id})
+        db.survey_sessions.delete_many({"user_id": user_id})
+        db.page_visits.delete_many({"user_id": user_id})
+        db.button_clicks.delete_many({"user_id": user_id})
+        db.user_sessions.delete_many({"user_id": user_id})
+        db.user_geolocations.delete_many({"user_id": user_id})
+        db.login_events.delete_many({"user_id": user_id})
+        db.consent_logs.delete_many({"user_id": user_id})
+        
+        # Delete the user account
+        db.users.delete_one({"_id": user["_id"]})
+        
+        # Mark deletion request as completed
+        db.account_deletions.update_one(
+            {"user_id": user_id, "status": "pending"},
+            {"$set": {"status": "completed", "completed_at": datetime.now(timezone.utc)}}
+        )
+        
+        print(f"🗑️ Admin executed deletion for: {user_email}")
+        return jsonify({"message": f"Account {user_email} and all data deleted successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

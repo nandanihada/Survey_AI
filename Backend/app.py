@@ -72,6 +72,7 @@ from utils.short_id import generate_short_id, is_valid_short_id
 from auth_middleware import requireAuth
 
 from smart_prompt_builder import build_generation_request
+from pii_stripper import strip_pii_from_prompt
 
 from flask import g
 
@@ -331,7 +332,7 @@ def generate_ai_content(prompt_text, temperature=0.7, max_tokens=1024):
 
     payload = {
         "model": "gpt-4o-mini",
-        "messages": [{"role": "user", "content": prompt_text}],
+        "messages": [{"role": "user", "content": strip_pii_from_prompt(prompt_text)}],
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
