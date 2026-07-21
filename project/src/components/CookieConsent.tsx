@@ -43,11 +43,37 @@ const CookieConsent: React.FC = () => {
 
   useEffect(() => {
     const existing = getCookiePreferences();
-    if (!existing) {
+    if (existing) {
+      setPrefs(existing);
+      return;
+    }
+
+    // Check if preferences exist on backend (cross-domain sync via ref_session)
+    const params = new URLSearchParams(window.location.search);
+    const refSession = params.get('ref_session');
+    const sessionId = refSession || sessionStorage.getItem('tracking_session_id') || '';
+
+    if (sessionId) {
+      fetch(`${getApiBaseUrl()}/api/tracking/cookie-preference/check?session_id=${sessionId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.has_preference && data.preferences) {
+            // Found preferences from landing page — apply them silently
+            localStorage.setItem('cookie_preferences', JSON.stringify(data.preferences));
+            localStorage.setItem('cookie_consent', 'synced');
+            setPrefs(data.preferences);
+            // Don't show popup
+          } else {
+            // No cross-domain preference found — show popup after delay
+            setTimeout(() => setVisible(true), 1000);
+          }
+        })
+        .catch(() => {
+          setTimeout(() => setVisible(true), 1000);
+        });
+    } else {
       const timer = setTimeout(() => setVisible(true), 1000);
       return () => clearTimeout(timer);
-    } else {
-      setPrefs(existing);
     }
   }, []);
 
