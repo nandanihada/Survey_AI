@@ -6,6 +6,8 @@ import ProtectedRoute from './components/ProtectedRoute';
 import PublicRoute from './components/PublicRoute';
 import LandingRedirect from './components/LandingRedirect';
 import NotificationBanner from './components/NotificationBanner';
+import CookieConsent from './components/CookieConsent';
+import LegalFooter from './components/LegalFooter';
 import EmailConfirmation from './components/EmailConfirmation';
 import { useAutoTracking } from './hooks/useTracking';
 import './styles/mobile-responsive.css';
@@ -101,6 +103,12 @@ import type { WidgetCustomizerSettings } from './components/WidgetCustomizer';
 
 const PublicSurveyCreation = lazyRetry(() => import('./components/PublicSurveyCreation'));
 const PricingPage = lazyRetry(() => import('./pages/PricingPage'));
+const TermsOfUse = lazyRetry(() => import('./pages/TermsOfUse'));
+const PrivacyPolicy = lazyRetry(() => import('./pages/PrivacyPolicy'));
+const CookieNotice = lazyRetry(() => import('./pages/CookieNotice'));
+const AcceptableUses = lazyRetry(() => import('./pages/AcceptableUses'));
+const DoNotSell = lazyRetry(() => import('./pages/DoNotSell'));
+const ContactPage = lazyRetry(() => import('./pages/ContactPage'));
 const UpgradePage = lazyRetry(() => import('./pages/UpgradePage'));
 const SurveyForm = lazyRetry(() => import('./components/SurveyForm'));
 const SurveyList = lazyRetry(() => import('./components/SurveyList'));
@@ -626,6 +634,12 @@ export default function App() {
             {/* Public survey creation - allows 1 survey without login */}
             <Route path="/create-survey" element={<PublicSurveyCreation />} />
             <Route path="/pricing" element={<PricingPage />} />
+            <Route path="/terms" element={<TermsOfUse />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/cookies" element={<CookieNotice />} />
+            <Route path="/acceptable-uses" element={<AcceptableUses />} />
+            <Route path="/do-not-sell" element={<DoNotSell />} />
+            <Route path="/contact" element={<ContactPage />} />
             <Route path="/upgrade" element={<UpgradePage />} />
 
             {/* Public routes */}
@@ -754,6 +768,8 @@ export default function App() {
           </Routes>
         </Suspense>
         <NotificationBanner />
+        <CookieConsent />
+        <LegalFooter />
       </AuthProvider>
     </AppErrorBoundary>
   );

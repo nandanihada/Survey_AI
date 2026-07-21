@@ -73,6 +73,17 @@ const LoginPage: React.FC = () => {
           return;
         }
         await register({ email, password, name, consent: { acceptedTerms: true, prefEmails, prefAnalytics, prefPersonalization, consentDate: new Date().toISOString() } });
+        // Log consent acceptance
+        fetch(`${window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:5000' : 'https://hostslice.onrender.com'}/api/tracking/consent-log`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_email: email,
+            user_name: name,
+            documents_accepted: ['terms_of_use_v1.2', 'privacy_policy_v1.5'],
+            consent_method: 'checkbox_signup'
+          })
+        }).catch(() => {});
         setShowSuccess(true);
       }
     } catch (err: any) {
@@ -574,7 +585,7 @@ const LoginPage: React.FC = () => {
                             className="mt-0.5 h-4 w-4 rounded border border-gray-300 bg-white accent-red-500 cursor-pointer"
                           />
                           <label htmlFor="terms" className="text-xs text-gray-500 leading-relaxed cursor-pointer">
-                            I agree to the <span className="text-red-500 font-medium hover:underline">Terms & Conditions</span> and <span className="text-red-500 font-medium hover:underline">Privacy Policy</span>
+                            I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-red-500 font-medium hover:underline" onClick={(e) => e.stopPropagation()}>Terms of Use</a> and <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-red-500 font-medium hover:underline" onClick={(e) => e.stopPropagation()}>Privacy Policy</a>
                           </label>
                         </div>
                         {acceptTerms && (

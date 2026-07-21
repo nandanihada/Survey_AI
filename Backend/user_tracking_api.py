@@ -789,7 +789,7 @@ def get_tracked_users_list():
         
         # Get all unique users from page_visits (most comprehensive source)
         pipeline = [
-            {"$match": {"created_at": {"$gte": since}, "user_id": {"$ne": "anonymous"}, "user_email": {"$ne": "landing@pepperwahl.com"}}},
+            {"$match": {"created_at": {"$gte": since}, "user_id": {"$ne": "anonymous"}}},
             {"$group": {
                 "_id": "$user_email",
                 "user_id": {"$first": "$user_id"},
@@ -1165,4 +1165,34 @@ def track_geo_update():
         return jsonify({"status": "ok", "city": city, "country": country}), 200
     except Exception as e:
         print(f"  GPS tracking error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ==================== Consent Logging ====================
+
+@user_tracking_bp.route('/consent-log', methods=['POST'])
+def log_consent():
+    """Log user consent acceptance (Terms of Use + Privacy Policy)"""
+    try:
+        data = request.json or {}
+        ip = get_ip_from_request()
+        
+        record = {
+            "user_id": data.get("user_id", ""),
+            "user_email": data.get("user_email", ""),
+            "user_name": data.get("user_name", ""),
+            "documents_accepted": data.get("documents_accepted", ["terms_of_use_v1.2", "privacy_policy_v1.5"]),
+            "terms_version": "1.2",
+            "privacy_version": "1.5",
+            "ip_address": ip,
+            "user_agent": request.headers.get('User-Agent', ''),
+            "consent_method": data.get("consent_method", "checkbox_signup"),
+            "created_at": datetime.now(timezone.utc)
+        }
+        
+        db.consent_logs.insert_one(record)
+        print(f"  Consent logged: {data.get('user_email', 'unknown')}")
+        return jsonify({"status": "ok"}), 200
+    except Exception as e:
+        print(f"  Consent logging error: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
