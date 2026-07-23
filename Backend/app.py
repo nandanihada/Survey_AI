@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, redirect, send_from_directory
 
-
+import uuid
 from link_masking import link_handler
 
 
@@ -406,6 +406,7 @@ try:
     from session_insights_api import session_insights_bp
     from analytics_api import analytics_bp
     from user_tracking_api import user_tracking_bp, setup_tracking_indexes
+    from redirect_rules_api import redirect_rules_bp
     # Register blueprints
 
     print("Registering blueprints...")
@@ -437,6 +438,7 @@ try:
     app.register_blueprint(session_insights_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(user_tracking_bp)
+    app.register_blueprint(redirect_rules_bp, url_prefix="/api")
 
     # Setup tracking TTL indexes for 15-day auto-delete
     setup_tracking_indexes()
@@ -3845,18 +3847,21 @@ def manage_survey_config(survey_id):
 
                 return jsonify({"error": "No data provided"}), 400
 
+            # Support both { config: {...} } and direct {...} format
+            config_payload = data.get("config", data)
+
             # Prepare configuration data
 
             config_data = {
                 "survey_id": survey_id,
-                "pass_fail_enabled": data.get("pass_fail_enabled", False),
-                "pepperads_redirect_enabled": data.get(
+                "pass_fail_enabled": config_payload.get("pass_fail_enabled", False),
+                "pepperads_redirect_enabled": config_payload.get(
                     "pepperads_redirect_enabled", False
                 ),
-                "criteria_set_id": data.get("criteria_set_id"),
-                "pepperads_offer_id": data.get("pepperads_offer_id"),
-                "moustacheleads_payout": data.get("moustacheleads_payout", 0.0),
-                "fail_page_config": data.get(
+                "criteria_set_id": config_payload.get("criteria_set_id"),
+                "pepperads_offer_id": config_payload.get("pepperads_offer_id"),
+                "moustacheleads_payout": config_payload.get("moustacheleads_payout", 0.0),
+                "fail_page_config": config_payload.get(
                     "fail_page_config",
                     {
                         "fail_page_url": "/survey-thankyou",
@@ -3864,6 +3869,8 @@ def manage_survey_config(survey_id):
                         "show_retry_option": False,
                     },
                 ),
+                "dynamic_redirect_enabled": config_payload.get("dynamic_redirect_enabled", False),
+                "dynamic_redirect_config": config_payload.get("dynamic_redirect_config"),
                 "updated_at": datetime.utcnow(),
             }
 
@@ -3933,6 +3940,7 @@ def manage_criteria():
                 "criteria": data.get("criteria", []),
                 "logic_type": data.get("logic_type", "all_required"),
                 "passing_threshold": data.get("passing_threshold", 50.0),
+                "survey_id": data.get("survey_id", ""),
                 "is_active": True,
                 "created_at": datetime.utcnow(),
                 "updated_at": datetime.utcnow(),
@@ -3947,6 +3955,26 @@ def manage_criteria():
         except Exception as e:
 
             return jsonify({"error": str(e)}), 500
+
+
+@app.route("/admin/criteria/by-survey/<survey_id>", methods=["GET"])
+def get_criteria_by_survey(survey_id):
+    """Get criteria sets for a specific survey (includes legacy ones without survey_id)"""
+    try:
+        criteria_sets = list(db.pass_fail_criteria.find({
+            "is_active": True,
+            "$or": [
+                {"survey_id": survey_id},
+                {"survey_id": {"$exists": False}},
+                {"survey_id": ""},
+                {"survey_id": None}
+            ]
+        }))
+        for criteria in criteria_sets:
+            criteria["_id"] = str(criteria["_id"])
+        return jsonify({"criteria_sets": criteria_sets, "survey_id": survey_id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/admin/criteria/<criteria_id>", methods=["GET", "PUT", "DELETE"])

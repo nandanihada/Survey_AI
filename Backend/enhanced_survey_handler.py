@@ -24,6 +24,7 @@ from moustacheleads_integration import (
     store_moustacheleads_session,
     handle_moustacheleads_completion
 )
+from redirect_rule_engine import evaluate_redirect_rules
 
 class EnhancedSurveyHandler:
     """Enhanced handler for survey responses with complete pass/fail workflow"""
@@ -260,7 +261,49 @@ class EnhancedSurveyHandler:
             print(f"🔄 Redirect decision: {redirect_decision['reason']}")
             print(f"📍 Redirect type: {redirect_decision['redirect_type']}")
             
-            # Check for dynamic redirect first (skip if Moustacheleads already handled)
+            # ═══ NEW: Check Answer-Based Redirect Rules first ═══
+            if redirect_info is None:
+                print(f"📡 [RedirectRules] Checking redirect rules for survey: {survey_id}")
+                rule_session_context = {
+                    "session_id": session_id,
+                    "survey_id": survey_id,
+                    "click_id": user_info.get("click_id", ""),
+                    "user_id": user_info.get("user_id", ""),
+                    "email": user_info.get("email", response_data.get("email", "")),
+                    "username": user_info.get("username", response_data.get("username", "")),
+                    "ip_address": user_info.get("ip_address", ""),
+                    "score": evaluation_result.get("score", 0),
+                    "status": evaluation_result.get("status", ""),
+                    "sub1": user_info.get("sub1", ""),
+                    "sub2": user_info.get("sub2", ""),
+                }
+                
+                redirect_rule_result = evaluate_redirect_rules(
+                    survey_id, responses, evaluation_result, rule_session_context
+                )
+                
+                print(f"📡 [RedirectRules] Result: {redirect_rule_result}")
+                
+                if redirect_rule_result.get("matched"):
+                    print(f"🎯 [RedirectRules] Matched → {redirect_rule_result['endpoint_name']} (status: {redirect_rule_result['status_code']})")
+                    redirect_info = {
+                        "redirect_url": redirect_rule_result["redirect_url"],
+                        "redirect_type": "redirect_rules",
+                        "custom_message": "Redirecting...",
+                        "endpoint_name": redirect_rule_result["endpoint_name"],
+                        "status_code": redirect_rule_result["status_code"],
+                        "s2s_result": redirect_rule_result.get("s2s_result")
+                    }
+                    redirect_decision["should_redirect"] = True
+                    redirect_decision["redirect_type"] = "redirect_rules"
+                    redirect_decision["reason"] = f"Rule matched: {redirect_rule_result['matched_rule']['name']}"
+                    
+                    track_step(session_id, "redirect",
+                              redirect_type="redirect_rules",
+                              redirect_url=redirect_rule_result["redirect_url"],
+                              endpoint_name=redirect_rule_result["endpoint_name"])
+            
+            # Check for dynamic redirect (skip if redirect rules already handled)
             if redirect_info is None:
                 dynamic_redirect_url = self._build_dynamic_redirect_url(survey_id, evaluation_result, session_id, user_info, request_data)
             else:
