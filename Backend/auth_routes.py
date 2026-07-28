@@ -67,6 +67,23 @@ def register():
         print(f"🔐 === REGISTRATION ENDPOINT SUCCESS ===")
         print(f"{'='*80}\n")
         
+        # Store ref_code on the user record so it can be attributed after email confirmation
+        # Do NOT create the referral event here — wait for email confirmation
+        ref_code = data.get('ref_code', '').strip().upper()
+        if ref_code:
+            try:
+                # Validate the promoter exists before storing
+                from mongodb_config import db as _db
+                promoter = _db.promoters.find_one({'ref_code': ref_code, 'status': 'active'})
+                if promoter and str(promoter['user_id']) != str(user['_id']):
+                    _db.users.update_one(
+                        {'_id': user['_id']},
+                        {'$set': {'pending_ref_code': ref_code}}
+                    )
+                    print(f"✅ Referral code {ref_code} stored — will credit after email confirmation")
+            except Exception as ref_err:
+                print(f"⚠️ Storing ref_code failed (non-critical): {ref_err}")
+        
         return jsonify({
             'message': 'Registration successful. Please check your email to confirm your account.',
             'user': {
@@ -108,7 +125,23 @@ def confirm_email():
             return jsonify({'error': 'Confirmation token is required'}), 400
         
         user = auth_service.confirm_email(token)
-        
+
+        # Trigger referral attribution now that email is verified
+        try:
+            pending_ref = user.get('pending_ref_code', '').strip().upper()
+            if pending_ref:
+                from referral_api import _record_signup_attribution
+                _record_signup_attribution(str(user['_id']), pending_ref, request)
+                # Clear the pending code
+                from mongodb_config import db as _db
+                _db.users.update_one(
+                    {'_id': user['_id']},
+                    {'$unset': {'pending_ref_code': ''}}
+                )
+                print(f"✅ Referral attribution applied after email confirmation: {pending_ref}")
+        except Exception as ref_err:
+            print(f"⚠️ Post-confirmation referral attribution failed (non-critical): {ref_err}")
+
         return jsonify({
             'message': 'Email confirmed successfully. You can now login.',
             'user': {
@@ -442,6 +475,15 @@ def firebase_login():
             user_data['_id'] = result.inserted_id
             
             print(f"✅ New OAuth user created: {email} (ID: {user_data['_id']})")
+            
+            # Referral attribution for new OAuth users (non-critical)
+            ref_code = data.get('ref_code', '').strip().upper()
+            if ref_code:
+                try:
+                    from referral_api import _record_signup_attribution
+                    _record_signup_attribution(str(user_data['_id']), ref_code, request)
+                except Exception as ref_err:
+                    print(f"⚠️ Referral attribution failed (non-critical): {ref_err}")
             
             # Generate JWT token
             token = auth_service.generate_jwt_token(user_data)

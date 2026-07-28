@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Settings, BarChart3, User, LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Home, Settings, BarChart3, User, LogOut, ChevronLeft, ChevronRight, Gift } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface NavigationProps {
@@ -27,6 +27,11 @@ export default function Navigation({ isDarkMode = false }: NavigationProps) {
       name: 'Profile',
       href: '/profile',
       icon: User,
+    },
+    {
+      name: 'Refer & Earn',
+      href: '/refer',
+      icon: Gift,
     },
     {
       name: 'Settings',
@@ -89,7 +94,9 @@ export default function Navigation({ isDarkMode = false }: NavigationProps) {
       <div className={`flex-1 ${collapsed ? 'p-2' : 'p-4'} space-y-1`}>
         {navigationItems.map((item) => {
           const Icon = item.icon;
-          const isActive = location.pathname === item.href || location.pathname.startsWith(item.href.split('?')[0]);
+          const basePath = item.href.split('?')[0];
+          const isActive = location.pathname === basePath ||
+            (basePath !== '/' && location.pathname.startsWith(basePath));
           
           return (
             <Link

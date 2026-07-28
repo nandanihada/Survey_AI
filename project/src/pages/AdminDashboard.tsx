@@ -11,7 +11,8 @@ import LinkMasking from '../components/LinkMasking';
 import TrackingTab from '../components/admin/TrackingTab';
 import ContactSubmissionsTab from '../components/admin/ContactSubmissionsTab';
 import DeletionRequestsTab from '../components/admin/DeletionRequestsTab';
-import { Bell, Filter, Save, Edit2, X, Check, ToggleLeft, ToggleRight, Eye, EyeOff, Play, RotateCcw, AlertCircle, Activity, Mail, AlertTriangle } from 'lucide-react';
+import ReferralTab from '../components/admin/ReferralTab';
+import { Bell, Filter, Save, Edit2, X, Check, ToggleLeft, ToggleRight, Eye, EyeOff, Play, RotateCcw, AlertCircle, Activity, Mail, AlertTriangle, Gift } from 'lucide-react';
 import { getApiBaseUrl } from '../utils/deploymentFix';
 
 interface User {
@@ -88,7 +89,7 @@ const AdminDashboard: React.FC = () => {
   const [surveys, setSurveys] = useState<any[]>([]);
   const [filters, setFilters] = useState<Filter[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking' | 'tracking' | 'contacts' | 'deletions'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking' | 'tracking' | 'contacts' | 'deletions' | 'referrals'>('users');
   const [showNotifModal, setShowNotifModal] = useState(false);
   
   // Filter management states
@@ -533,6 +534,16 @@ const AdminDashboard: React.FC = () => {
                   }`}
                 >
                   <AlertTriangle size={14} /> Deletions
+                </button>
+                <button
+                  onClick={() => setActiveTab('referrals')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center gap-1 ${
+                    activeTab === 'referrals'
+                      ? 'border-orange-500 text-orange-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <Gift size={14} /> Referrals
                 </button>
               </nav>
             </div>
@@ -1112,6 +1123,11 @@ const AdminDashboard: React.FC = () => {
                 {/* Deletion Requests Tab */}
                 {activeTab === 'deletions' && (
                   <DeletionRequestsTab />
+                )}
+
+                {/* Referrals Tab */}
+                {activeTab === 'referrals' && (
+                  <ReferralTab />
                 )}
               </>
             )}

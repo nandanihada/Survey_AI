@@ -83,6 +83,7 @@ const MaskedLinkViewer = lazyRetry(() => import('./pages/MaskedLinkViewer'));
 const NotFound = lazyRetry(() => import('./pages/NotFound'));
 const Unauthorized = lazyRetry(() => import('./pages/Unauthorized'));
 const AffiliateProgram = lazy(() => import('./pages/AffiliateProgram'));
+const ReferAndEarn = lazyRetry(() => import('./pages/ReferAndEarn'));
 const ConfirmPage = lazyRetry(() => import('./pages/ConfirmPage'));
 
 // Survey components
@@ -649,6 +650,9 @@ export default function App() {
             {/* Affiliate Program Landing Page */}
             <Route path="/partners" element={<AffiliateProgram />} />
             <Route path="/affiliate" element={<AffiliateProgram />} />
+
+            {/* Refer & Earn — info page is public, earnings panel requires auth (handled inside) */}
+            <Route path="/refer" element={<ReferAndEarn />} />
 
             <Route path="/confirm-email" element={<ConfirmPage />} />
             <Route path="/confirm" element={<ConfirmPage />} />

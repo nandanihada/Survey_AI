@@ -26,6 +26,7 @@ export interface RegisterRequest {
   email: string;
   password: string;
   name: string;
+  ref_code?: string;
   consent?: {
     acceptedTerms: boolean;
     prefEmails: boolean;

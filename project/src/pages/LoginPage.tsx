@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, User as UserIcon, ChevronDown } from 'lucide-react';
@@ -6,13 +6,16 @@ import { useAuth } from '../contexts/AuthContext';
 import { auth, googleProvider } from '../config/firebase';
 import { signInWithPopup, OAuthProvider } from 'firebase/auth';
 import CookieConsent from '../components/CookieConsent';
-import { trackLoginEvent } from '../hooks/useTracking';
+import { trackLoginEvent, captureRefCode, getStoredRefCode } from '../hooks/useTracking';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { login, register } = useAuth();
   const [isLogin, setIsLogin] = useState(searchParams.get('mode') !== 'signup');
+
+  // Capture any ?ref= param immediately — handles direct landing + redirect from /signup
+  useEffect(() => { captureRefCode(); }, []);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -72,7 +75,7 @@ const LoginPage: React.FC = () => {
           setIsLoading(false);
           return;
         }
-        await register({ email, password, name, consent: { acceptedTerms: true, prefEmails, prefAnalytics, prefPersonalization, consentDate: new Date().toISOString() } });
+        await register({ email, password, name, consent: { acceptedTerms: true, prefEmails, prefAnalytics, prefPersonalization, consentDate: new Date().toISOString() }, ref_code: getStoredRefCode() || undefined });
         // Log consent acceptance
         fetch(`${window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:5000' : 'https://hostslice.onrender.com'}/api/tracking/consent-log`, {
           method: 'POST',
@@ -111,7 +114,8 @@ const LoginPage: React.FC = () => {
           idToken,
           email: result.user.email,
           name: result.user.displayName || result.user.email?.split('@')[0],
-          provider: 'google'
+          provider: 'google',
+          ref_code: getStoredRefCode() || undefined
         })
       });
       
@@ -179,7 +183,8 @@ const LoginPage: React.FC = () => {
           idToken,
           email: result.user.email,
           name: result.user.displayName || result.user.email?.split('@')[0],
-          provider: 'microsoft'
+          provider: 'microsoft',
+          ref_code: getStoredRefCode() || undefined
         })
       });
       

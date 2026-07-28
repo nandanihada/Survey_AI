@@ -407,6 +407,7 @@ try:
     from analytics_api import analytics_bp
     from user_tracking_api import user_tracking_bp, setup_tracking_indexes
     from redirect_rules_api import redirect_rules_bp
+    from referral_api import referral_bp, setup_referral_indexes
     # Register blueprints
 
     print("Registering blueprints...")
@@ -439,9 +440,11 @@ try:
     app.register_blueprint(analytics_bp)
     app.register_blueprint(user_tracking_bp)
     app.register_blueprint(redirect_rules_bp, url_prefix="/api")
+    app.register_blueprint(referral_bp)
 
     # Setup tracking TTL indexes for 15-day auto-delete
     setup_tracking_indexes()
+    setup_referral_indexes()
 
     print("✅ All blueprints registered successfully")
 
