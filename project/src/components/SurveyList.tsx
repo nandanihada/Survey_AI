@@ -25,15 +25,18 @@ interface SurveyListProps {
 interface Survey {
   id: string;
   title?: string;
+  prompt?: string;
   created_at?: string;
   questions?: unknown[];
   template_type?: string;
   response_count?: number;
+  ownerUserId?: string;
+  shared_with?: string[];
 }
 
 const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew }) => {
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
@@ -272,6 +275,12 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                       <span className={`px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium flex-shrink-0 ${statusBadge(getStatus(survey))}`}>
                         {getStatus(survey)}
                       </span>
+                      {/* Shared-with-me badge — visible to the collaborator, not the owner */}
+                      {user?.id && survey.ownerUserId && survey.ownerUserId !== user.id && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium flex-shrink-0 bg-blue-100 text-blue-700">
+                          Shared with me
+                        </span>
+                      )}
                     </div>
                     <div className={`flex items-center flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-stone-500'}`}>
                       <span className="flex items-center gap-1">

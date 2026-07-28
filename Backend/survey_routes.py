@@ -45,6 +45,7 @@ def get_user_surveys():
                 {'ownerUserId': user_id},
                 {'user_id': user_id},
                 {'created_by.user_id': user_id},
+                {'shared_with': user_id},   # surveys shared with this user
             ]
             user_email = user.get('email', '')
             if user_email:
@@ -513,3 +514,192 @@ def get_user_surveys_admin(user_id):
         
     except Exception as e:
         return jsonify({'error': f'Failed to get user surveys: {str(e)}'}), 500
+
+
+# ==================== Collaborator / Sharing Routes ====================
+
+@survey_bp.route('/user-lookup', methods=['GET'])
+@requireAuth
+def lookup_user_by_email():
+    """
+    Look up a registered user by email address.
+    Used when adding a collaborator to a survey.
+    Returns only safe public fields: id, name, email.
+    """
+    try:
+        email = request.args.get('email', '').strip().lower()
+        if not email:
+            return jsonify({'error': 'Email is required'}), 400
+
+        user = db.users.find_one(
+            {'email': email},
+            {'_id': 1, 'name': 1, 'email': 1, 'simpleUserId': 1}
+        )
+        if not user:
+            return jsonify({'found': False, 'message': 'No account found with that email'}), 404
+
+        return jsonify({
+            'found': True,
+            'user': {
+                'id': str(user['_id']),
+                'name': user.get('name', ''),
+                'email': user.get('email', ''),
+                'simpleUserId': user.get('simpleUserId'),
+            }
+        })
+
+    except Exception as e:
+        return jsonify({'error': f'Lookup failed: {str(e)}'}), 500
+
+
+@survey_bp.route('/<survey_id>/collaborators', methods=['GET'])
+@requireAuth
+def get_collaborators(survey_id):
+    """Get the list of collaborators for a survey."""
+    try:
+        user = g.current_user
+        user_id = str(user['_id'])
+
+        # Find survey
+        survey = (
+            db.surveys.find_one({'id': survey_id}) or
+            db.surveys.find_one({'_id': survey_id}) or
+            db.surveys.find_one({'short_id': survey_id})
+        )
+        if not survey:
+            try:
+                survey = db.surveys.find_one({'_id': ObjectId(survey_id)})
+            except Exception:
+                pass
+        if not survey:
+            return jsonify({'error': 'Survey not found'}), 404
+
+        # Only the owner can manage collaborators
+        owner_id = str(survey.get('ownerUserId') or survey.get('user_id') or '')
+        if owner_id != user_id and user.get('role') != 'admin':
+            return jsonify({'error': 'Access denied'}), 403
+
+        shared_with = survey.get('shared_with', [])  # list of user_id strings
+
+        # Hydrate with user details
+        collaborators = []
+        for uid in shared_with:
+            try:
+                u = db.users.find_one(
+                    {'_id': ObjectId(uid)},
+                    {'_id': 1, 'name': 1, 'email': 1}
+                )
+                if u:
+                    collaborators.append({
+                        'id': str(u['_id']),
+                        'name': u.get('name', ''),
+                        'email': u.get('email', ''),
+                    })
+            except Exception:
+                pass
+
+        return jsonify({'collaborators': collaborators})
+
+    except Exception as e:
+        return jsonify({'error': f'Failed to get collaborators: {str(e)}'}), 500
+
+
+@survey_bp.route('/<survey_id>/collaborators', methods=['POST'])
+@requireAuth
+def add_collaborator(survey_id):
+    """Add a user to a survey's shared_with list."""
+    try:
+        user = g.current_user
+        user_id = str(user['_id'])
+        data = request.get_json() or {}
+        collaborator_id = data.get('user_id', '').strip()
+
+        if not collaborator_id:
+            return jsonify({'error': 'user_id is required'}), 400
+
+        # Find survey
+        survey = (
+            db.surveys.find_one({'id': survey_id}) or
+            db.surveys.find_one({'_id': survey_id}) or
+            db.surveys.find_one({'short_id': survey_id})
+        )
+        if not survey:
+            try:
+                survey = db.surveys.find_one({'_id': ObjectId(survey_id)})
+            except Exception:
+                pass
+        if not survey:
+            return jsonify({'error': 'Survey not found'}), 404
+
+        # Only owner can add collaborators
+        owner_id = str(survey.get('ownerUserId') or survey.get('user_id') or '')
+        if owner_id != user_id and user.get('role') != 'admin':
+            return jsonify({'error': 'Access denied'}), 403
+
+        # Cannot add yourself
+        if collaborator_id == user_id:
+            return jsonify({'error': 'You already own this survey'}), 400
+
+        # Verify the target user exists
+        try:
+            target_user = db.users.find_one({'_id': ObjectId(collaborator_id)})
+        except Exception:
+            target_user = None
+        if not target_user:
+            return jsonify({'error': 'Target user not found'}), 404
+
+        # Add to shared_with (addToSet = no duplicates)
+        db.surveys.update_one(
+            {'_id': survey['_id']},
+            {'$addToSet': {'shared_with': collaborator_id}}
+        )
+
+        return jsonify({
+            'message': f'{target_user.get("name", target_user.get("email"))} added as collaborator',
+            'collaborator': {
+                'id': collaborator_id,
+                'name': target_user.get('name', ''),
+                'email': target_user.get('email', ''),
+            }
+        })
+
+    except Exception as e:
+        return jsonify({'error': f'Failed to add collaborator: {str(e)}'}), 500
+
+
+@survey_bp.route('/<survey_id>/collaborators/<collaborator_id>', methods=['DELETE'])
+@requireAuth
+def remove_collaborator(survey_id, collaborator_id):
+    """Remove a user from a survey's shared_with list."""
+    try:
+        user = g.current_user
+        user_id = str(user['_id'])
+
+        # Find survey
+        survey = (
+            db.surveys.find_one({'id': survey_id}) or
+            db.surveys.find_one({'_id': survey_id}) or
+            db.surveys.find_one({'short_id': survey_id})
+        )
+        if not survey:
+            try:
+                survey = db.surveys.find_one({'_id': ObjectId(survey_id)})
+            except Exception:
+                pass
+        if not survey:
+            return jsonify({'error': 'Survey not found'}), 404
+
+        # Only owner can remove collaborators
+        owner_id = str(survey.get('ownerUserId') or survey.get('user_id') or '')
+        if owner_id != user_id and user.get('role') != 'admin':
+            return jsonify({'error': 'Access denied'}), 403
+
+        db.surveys.update_one(
+            {'_id': survey['_id']},
+            {'$pull': {'shared_with': collaborator_id}}
+        )
+
+        return jsonify({'message': 'Collaborator removed successfully'})
+
+    except Exception as e:
+        return jsonify({'error': f'Failed to remove collaborator: {str(e)}'}), 500

@@ -136,6 +136,14 @@ const SurveyEditor: React.FC = () => {
   const [isRefining, setIsRefining] = useState(false);
   const [isGeneratingOptions, setIsGeneratingOptions] = useState(false);
 
+  // Collaborator state
+  const [collaboratorEmail, setCollaboratorEmail] = useState('');
+  const [collaboratorLookup, setCollaboratorLookup] = useState<{id: string; name: string; email: string} | null>(null);
+  const [collaboratorLookupError, setCollaboratorLookupError] = useState('');
+  const [collaboratorLookupLoading, setCollaboratorLookupLoading] = useState(false);
+  const [collaborators, setCollaborators] = useState<{id: string; name: string; email: string}[]>([]);
+  const [collaboratorAdding, setCollaboratorAdding] = useState(false);
+
   const animConfig = survey?.animation || DEFAULT_ANIMATION;
   const updateAnimation = (field: keyof AnimationConfig, value: AnimationConfig[keyof AnimationConfig]) => {
     if (!survey) return;
@@ -171,8 +179,94 @@ const SurveyEditor: React.FC = () => {
     fetchSurvey();
   }, [id, apiBaseUrl]);
 
+  // Load collaborators when settings modal opens
+  const openSettings = useCallback(async () => {
+    setShowSettings(true);
+    setCollaboratorEmail('');
+    setCollaboratorLookup(null);
+    setCollaboratorLookupError('');
+    if (!id) return;
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${apiBaseUrl}/api/surveys/${id}/collaborators`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCollaborators(data.collaborators || []);
+      }
+    } catch { /* silent */ }
+  }, [id, apiBaseUrl]);
+
+  // Look up a user by email
+  const handleLookupEmail = useCallback(async () => {
+    const email = collaboratorEmail.trim().toLowerCase();
+    if (!email) return;
+    setCollaboratorLookupLoading(true);
+    setCollaboratorLookup(null);
+    setCollaboratorLookupError('');
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${apiBaseUrl}/api/surveys/user-lookup?email=${encodeURIComponent(email)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok || !data.found) {
+        setCollaboratorLookupError(data.message || 'No account found with that email');
+      } else if (data.user.id === user?.id) {
+        setCollaboratorLookupError("That's your own account");
+      } else if (collaborators.some(c => c.id === data.user.id)) {
+        setCollaboratorLookupError('Already added as a collaborator');
+      } else {
+        setCollaboratorLookup(data.user);
+      }
+    } catch {
+      setCollaboratorLookupError('Lookup failed, please try again');
+    } finally {
+      setCollaboratorLookupLoading(false);
+    }
+  }, [collaboratorEmail, apiBaseUrl, collaborators, user?.id]);
+
+  // Add the looked-up user as a collaborator
+  const handleAddCollaborator = useCallback(async () => {
+    if (!collaboratorLookup || !id) return;
+    setCollaboratorAdding(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${apiBaseUrl}/api/surveys/${id}/collaborators`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ user_id: collaboratorLookup.id }),
+      });
+      if (res.ok) {
+        setCollaborators(prev => [...prev, collaboratorLookup]);
+        setCollaboratorLookup(null);
+        setCollaboratorEmail('');
+      } else {
+        const data = await res.json();
+        setCollaboratorLookupError(data.error || 'Failed to add collaborator');
+      }
+    } catch {
+      setCollaboratorLookupError('Failed to add collaborator');
+    } finally {
+      setCollaboratorAdding(false);
+    }
+  }, [collaboratorLookup, id, apiBaseUrl]);
+
+  // Remove a collaborator
+  const handleRemoveCollaborator = useCallback(async (collaboratorId: string) => {
+    if (!id) return;
+    try {
+      const token = localStorage.getItem('auth_token');
+      await fetch(`${apiBaseUrl}/api/surveys/${id}/collaborators/${collaboratorId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setCollaborators(prev => prev.filter(c => c.id !== collaboratorId));
+    } catch { /* silent */ }
+  }, [id, apiBaseUrl]);
+
   const handleSave = useCallback(async () => {
-    if (!survey) return;
     setIsSaving(true);
     setSaveStatus('saving');
     try {
@@ -404,7 +498,7 @@ const SurveyEditor: React.FC = () => {
           </div>
           <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
             <button
-              onClick={() => setShowSettings(true)}
+              onClick={() => openSettings()}
               className="flex items-center gap-1 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             >
               <Settings size={12} /> <span className="hidden sm:inline">Settings</span>
@@ -440,11 +534,11 @@ const SurveyEditor: React.FC = () => {
       {showSettings && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => setShowSettings(false)}>
           <div
-            className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 animate-in"
+            className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 animate-in max-h-[90vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
             style={{ animation: 'editorModalIn 0.25s ease-out' }}
           >
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
               <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                 <Settings size={15} /> Survey Settings
               </h3>
@@ -452,7 +546,7 @@ const SurveyEditor: React.FC = () => {
                 <X size={16} />
               </button>
             </div>
-            <div className="px-6 py-5">
+            <div className="px-6 py-5 overflow-y-auto flex-1">
               <label className="block text-xs font-medium text-gray-500 mb-2 flex items-center gap-1.5">
                 <Grid3X3 size={12} /> Choose a Template
               </label>
@@ -486,6 +580,79 @@ const SurveyEditor: React.FC = () => {
                     />
                   </button>
                 </div>
+              </div>
+
+              {/* ── Collaborators ── */}
+              <div className="mt-5 pt-5 border-t border-gray-100">
+                <p className="text-xs font-semibold text-gray-700 mb-1 flex items-center gap-1.5">
+                  <Share2 size={12} /> Share with another account
+                </p>
+                <p className="text-[11px] text-gray-400 mb-3">
+                  Add a registered user by their email — this survey will appear in their dashboard too.
+                </p>
+
+                {/* Email input + lookup */}
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={collaboratorEmail}
+                    onChange={e => { setCollaboratorEmail(e.target.value); setCollaboratorLookup(null); setCollaboratorLookupError(''); }}
+                    onKeyDown={e => e.key === 'Enter' && handleLookupEmail()}
+                    placeholder="Enter their email address"
+                    className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-400"
+                  />
+                  <button
+                    onClick={handleLookupEmail}
+                    disabled={collaboratorLookupLoading || !collaboratorEmail.trim()}
+                    className="px-3 py-2 bg-gray-900 text-white text-xs rounded-lg hover:bg-gray-700 disabled:bg-gray-300 transition-colors"
+                  >
+                    {collaboratorLookupLoading ? '...' : 'Find'}
+                  </button>
+                </div>
+
+                {/* Error */}
+                {collaboratorLookupError && (
+                  <p className="mt-2 text-[11px] text-red-500">{collaboratorLookupError}</p>
+                )}
+
+                {/* Found user card */}
+                {collaboratorLookup && (
+                  <div className="mt-2 flex items-center justify-between px-3 py-2.5 bg-green-50 border border-green-200 rounded-lg">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-800">{collaboratorLookup.name || collaboratorLookup.email}</p>
+                      <p className="text-[11px] text-gray-500">{collaboratorLookup.email}</p>
+                    </div>
+                    <button
+                      onClick={handleAddCollaborator}
+                      disabled={collaboratorAdding}
+                      className="px-3 py-1.5 bg-green-600 text-white text-[11px] font-semibold rounded-lg hover:bg-green-700 disabled:bg-gray-300 transition-colors"
+                    >
+                      {collaboratorAdding ? 'Adding...' : '+ Add'}
+                    </button>
+                  </div>
+                )}
+
+                {/* Current collaborators list */}
+                {collaborators.length > 0 && (
+                  <div className="mt-3 space-y-1.5">
+                    <p className="text-[11px] text-gray-400 font-medium">Shared with:</p>
+                    {collaborators.map(c => (
+                      <div key={c.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg">
+                        <div>
+                          <p className="text-xs font-medium text-gray-800">{c.name || c.email}</p>
+                          <p className="text-[11px] text-gray-400">{c.email}</p>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveCollaborator(c.id)}
+                          className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                          title="Remove"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
