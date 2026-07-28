@@ -10,6 +10,7 @@ import {
 } from '../utils/redirectBuilder';
 import { getMoustacheleadsPayload } from '../utils/moustacheleads';
 import { getVisibleQuestions } from '../utils/skipLogic';
+import { requestGPSLocation } from '../hooks/useTracking';
 
 interface Question {
   id: string;
@@ -123,7 +124,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
     let extractedClickId = params.get('click_id');
     if (!extractedClickId) {
-      extractedClickId = `auto_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      extractedClickId = `auto_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     }
     setClickId(extractedClickId);
 
@@ -147,6 +148,15 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       }, 1000);
     }
   }, [location.search, survey.id]);
+
+  // Request GPS location only when the survey owner has enabled it (default: on)
+  useEffect(() => {
+    if (previewMode) return; // Never ask for location in preview/edit mode
+    const shouldCollect = survey.collect_location !== false; // default true
+    if (shouldCollect) {
+      requestGPSLocation();
+    }
+  }, [survey.id, survey.collect_location, previewMode]);
 
   const trackClickInteraction = async (action: string, data?: Record<string, unknown>) => {
     if (!survey.id) return;

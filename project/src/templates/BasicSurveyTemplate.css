@@ -624,6 +624,27 @@
   .pepper-pin { width: 28px; height: 28px; top: -14px; left: 16px; }
 }
 
+@media (max-width: 480px) {
+  .pepper-survey-container { padding: 12px 6px; }
+  .pepper-header { padding: 20px 16px 16px; }
+  .pepper-question-area { padding: 0 16px 16px; }
+  .pepper-progress { padding: 0 16px 16px; }
+  .pepper-footer { padding: 0 16px 24px; }
+  .pepper-question-text { font-size: 16px; }
+  /* Scale: wrap in scrollable container on very small screens */
+  .pepper-scale-track { 
+    gap: 3px; 
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+  .pepper-scale-point { width: 32px; height: 32px; font-size: 11px; }
+  /* Options: full-width stacked */
+  .pepper-option { padding: 10px 12px; }
+  /* Btn: make full width on tiny screens */
+  .pepper-btn { padding: 10px 20px; font-size: 13px; }
+}
+
 @media (max-width: 380px) {
   .pepper-survey-container { padding: 12px 4px; }
   .pepper-header { padding: 24px 16px 16px; }

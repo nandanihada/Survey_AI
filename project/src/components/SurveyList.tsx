@@ -288,7 +288,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2 flex-wrap mt-2 sm:mt-0 sm:flex-shrink-0">
                     <button
                       onClick={() => navigate(`/dashboard/edit/${survey.id}`)}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
@@ -299,7 +299,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                       title="Edit Survey"
                     >
                       <Edit size={13} />
-                      Edit
+                      <span className="hidden sm:inline">Edit</span>
                     </button>
                     <button
                       onClick={() => {
@@ -314,7 +314,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                       title="Open Live Survey Link"
                     >
                       <Eye size={13} />
-                      Open / Live Link
+                      <span className="hidden sm:inline">Open / Live Link</span>
                     </button>
                     <button
                       onClick={() => navigate(`/dashboard?tab=email&survey_id=${survey.id}`)}
@@ -326,7 +326,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                       title="Configure Email Triggers"
                     >
                       <Mail size={13} />
-                      Email
+                      <span className="hidden sm:inline">Email</span>
                     </button>
                     <button
                       onClick={() => navigate(`/dashboard/responses/${survey.id}`)}
@@ -338,7 +338,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                       title="View Responses"
                     >
                       <BarChart3 size={13} />
-                      Responses
+                      <span className="hidden sm:inline">Responses</span>
                     </button>
                     {isAdmin && survey.prompt && (
                       <button
@@ -351,7 +351,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                         title="View original prompt"
                       >
                         <FileText size={13} />
-                        Prompt
+                        <span className="hidden sm:inline">Prompt</span>
                       </button>
                     )}
                     <button
@@ -386,7 +386,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                       title="Delete Survey"
                     >
                       <Trash2 size={13} />
-                      Delete
+                      <span className="hidden sm:inline">Delete</span>
                     </button>
                   </div>
                   {/* Prompt reveal row */}

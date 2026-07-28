@@ -461,6 +461,32 @@ const SurveyEditor: React.FC = () => {
                 onSelectTemplate={(newTemplate) => setSurvey({ ...survey, template_type: newTemplate })}
                 isDarkMode={false}
               />
+
+              {/* Location collection toggle */}
+              <div className="mt-5 pt-5 border-t border-gray-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-gray-700">Ask respondents for location</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">When on, the browser shows a location permission popup to people who fill your survey.</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={survey.collect_location !== false}
+                    onClick={() => setSurvey({ ...survey, collect_location: survey.collect_location === false ? true : false })}
+                    className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 ${
+                      survey.collect_location !== false ? 'bg-red-500' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        survey.collect_location !== false ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

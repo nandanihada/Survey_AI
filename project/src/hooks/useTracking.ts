@@ -106,8 +106,12 @@ export function trackSessionStart() {
   requestGPSLocation();
 }
 
-/** Request GPS geolocation and send to backend if allowed */
-function requestGPSLocation() {
+/**
+ * Request GPS geolocation and send to backend if allowed.
+ * Exported so survey templates can call it only when the survey owner has
+ * enabled location collection (collect_location !== false).
+ */
+export function requestGPSLocation() {
   if (!navigator.geolocation) return;
 
   // Check if we already got GPS this session

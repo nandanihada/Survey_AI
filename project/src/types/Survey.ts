@@ -51,6 +51,11 @@ export interface Survey {
   pages?: SurveyPage[];
   animation?: AnimationConfig;
   answerStyle?: AnswerStyle;
+  /**
+   * Whether to ask respondents for their GPS location when they open the survey.
+   * Defaults to true (location popup shown). Set to false to disable the popup.
+   */
+  collect_location?: boolean;
   theme?: {
     font: string;
     intent: string;

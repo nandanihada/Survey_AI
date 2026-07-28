@@ -61,8 +61,26 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
   const [showClarification, setShowClarification] = useState(false);
   const [clarificationNeeds, setClarificationNeeds] = useState<ClarificationNeedsType | null>(null);
 
+  const [collectLocation, setCollectLocation] = useState(true);
   const [wizardStep, setWizardStep] = useState(-1);
   const [wizardAnswers, setWizardAnswers] = useState<Record<number, string>>({});
+
+  const handleToggleLocation = async (newValue: boolean) => {
+    setCollectLocation(newValue);
+    if (generatedSurvey?.survey_id) {
+      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const apiBase = isLocal ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+      try {
+        await fetch(`${apiBase}/survey/${generatedSurvey.survey_id}/edit`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ collect_location: newValue }),
+        });
+      } catch {
+        // silent — non-critical
+      }
+    }
+  };
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [contextualQuestion, setContextualQuestion] = useState<{question: string; options: string[]} | null>(null);
   const [isFetchingContextual, setIsFetchingContextual] = useState(false);
@@ -419,6 +437,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
     setImagePreview([]);
     setImageContext('');
     setError('');
+    setCollectLocation(true);
   };
 
   const handleShareLink = async () => {
@@ -573,8 +592,8 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
               }
             }}
           />
-          <div className="relative z-10 flex items-center justify-between px-2.5 sm:px-3 pb-2.5 pt-0.5">
-            <div className="flex items-center gap-1.5">
+          <div className="relative z-10 flex items-center justify-between px-2.5 sm:px-3 pb-2.5 pt-0.5 gap-2">
+            <div className="flex items-center gap-1.5 overflow-x-auto flex-1 min-w-0 scrollbar-hide">
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
               <button onClick={() => fileInputRef.current?.click()} disabled={isParsingImage || imagePreview.length >= 3}
                 className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-stone-100 text-stone-400'} disabled:opacity-40`}>
@@ -743,7 +762,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
                 </button>
                 {showToneDropdown && (
                   <div
-                    className={`absolute top-full left-0 mt-1.5 rounded-xl overflow-hidden z-50 min-w-[120px] ${
+                    className={`absolute top-full right-0 sm:left-0 sm:right-auto mt-1.5 rounded-xl overflow-hidden z-50 min-w-[120px] ${
                       isDarkMode ? 'bg-slate-800 border border-slate-600' : 'bg-white border border-stone-200'
                     }`}
                     style={{
@@ -769,7 +788,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
               </div>
             </div>
             <button onClick={handleStartWizard} disabled={(!surveyTopic.trim() && !imageContext && !selectedSuggestion)}
-              className="p-2 rounded-xl bg-gradient-to-r from-red-500 to-orange-400 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-[0_4px_12px_rgba(239,68,68,0.3)] transition-all">
+              className="p-2 rounded-xl bg-gradient-to-r from-red-500 to-orange-400 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-[0_4px_12px_rgba(239,68,68,0.3)] transition-all flex-shrink-0">
               <ArrowRight size={14} />
             </button>
           </div>
@@ -1001,9 +1020,6 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
 
         {!showClarification && (
         <div className="flex items-center justify-center mt-4 sm:mt-6">
-          <button onClick={() => navigate('/dashboard/create?mode=scratch')}
-            className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl border text-xs sm:text-sm font-medium transition-all ${isDarkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-stone-300 text-stone-600 hover:bg-stone-50'
-              }`}>Start from scratch</button>
         </div>
         )}
       </div>
@@ -1160,6 +1176,33 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
               >
                 <Edit3 size={14} /> Open in Editor <ArrowRight size={14} />
               </button>
+              {/* Location collection toggle */}
+              <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-stone-50 border border-stone-200/60">
+                <div className="flex items-center gap-2">
+                  <span className="text-stone-500" style={{ fontSize: 13 }}>📍</span>
+                  <div>
+                    <p className="text-[11px] font-medium text-stone-700 leading-none">Ask respondents for location</p>
+                    <p className="text-[10px] text-stone-400 mt-0.5 leading-none">Browser location popup when survey loads</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={collectLocation}
+                  onClick={() => handleToggleLocation(!collectLocation)}
+                  className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 ${
+                    collectLocation ? 'bg-red-500' : 'bg-stone-300'
+                  }`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      collectLocation ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
               <div className="grid grid-cols-3 gap-2">
                 <button
                   onClick={() => {
