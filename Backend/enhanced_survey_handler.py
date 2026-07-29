@@ -11,6 +11,7 @@ import uuid
 # Import our custom modules
 from evaluation_engine import evaluate_responses, check_survey_has_evaluation_enabled
 from session_tracking import SurveySessionTracker, start_survey_session, track_step
+from duplicate_check import check_duplicate, enrich_response_with_duplicate_info
 from pepperads_integration import (
     build_pepperads_url, 
     get_redirect_decision, 
@@ -125,6 +126,17 @@ class EnhancedSurveyHandler:
                 "status": "submitted"
             }
             
+            # Step 5b: Duplicate detection (fingerprint-based)
+            fingerprint_raw = request_data.get("device_fingerprint")
+            duplicate_result = check_duplicate(survey_id, fingerprint_raw)
+            response_data = enrich_response_with_duplicate_info(response_data, fingerprint_raw, duplicate_result)
+
+            if duplicate_result["is_duplicate"]:
+                print(
+                    f"⚠️ [DuplicateCheck] Suspected duplicate submission for survey {survey_id} "
+                    f"(previous: {duplicate_result['previous_response_id']})"
+                )
+
             # Step 6: Check if pass/fail evaluation is enabled
             evaluation_enabled = check_survey_has_evaluation_enabled(survey_id)
             evaluation_result = None
@@ -408,6 +420,10 @@ class EnhancedSurveyHandler:
                     "session_id": session_id,
                     "steps_tracked": "all",
                     "user_info": user_info
+                },
+                "duplicate_detection": {
+                    "suspected_duplicate": duplicate_result.get("is_duplicate", False),
+                    "previous_response_id": duplicate_result.get("previous_response_id")
                 }
             }
             

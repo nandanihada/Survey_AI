@@ -11,6 +11,12 @@ import {
 import { getMoustacheleadsPayload } from '../utils/moustacheleads';
 import { getVisibleQuestions } from '../utils/skipLogic';
 import { requestGPSLocation } from '../hooks/useTracking';
+import { getApiBaseUrl } from '../utils/deploymentFix';
+import {
+  getDeviceFingerprint,
+  markSurveyComplete,
+  hasSurveyBeenCompleted
+} from '../utils/deviceFingerprint';
 
 interface Question {
   id: string;
@@ -33,6 +39,13 @@ interface RawQuestion {
   show_if?: ShowIfCondition | null;
 }
 
+// Resume session data from mid-survey redirect
+interface ResumeData {
+  session_id: string;
+  resume_index: number;
+  answers: Record<string, string | number>;
+}
+
 interface Props {
   survey: Survey;
   previewMode?: boolean;
@@ -53,6 +66,8 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const [email, setEmail] = useState<string | null>(null);
   const [trackingId, setTrackingId] = useState<string | null>(null);
   const [clickId, setClickId] = useState<string | null>(null);
+  const [resumeSessionId, setResumeSessionId] = useState<string | null>(null);
+  const [isResuming, setIsResuming] = useState(false);
 
   const normalizeType = (type: string): 'text' | 'radio' | 'range' => {
     switch (type) {
@@ -100,6 +115,8 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const [submitted, setSubmitted] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [alreadyCompleted, setAlreadyCompleted] = useState(false);
+  const [deviceFingerprint, setDeviceFingerprint] = useState<string>('');
 
   // Per-question timing tracking
   const [questionTimings, setQuestionTimings] = useState<Record<string, number>>({});
@@ -116,6 +133,37 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const apiBaseUrl = isLocalhost
     ? 'http://localhost:5000'
     : 'https://hostslice.onrender.com';
+
+  // Check for resume token on mount
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const resumeToken = params.get('resume');
+    
+    if (resumeToken && survey.id && !previewMode) {
+      setIsResuming(true);
+      // Attempt to resume session
+      fetch(`${apiBaseUrl}/api/surveys/${survey.id}/resume?token=${encodeURIComponent(resumeToken)}`)
+        .then(res => res.json())
+        .then((data: ResumeData & { error?: string }) => {
+          if (data.error) {
+            console.error('Resume error:', data.error);
+            setIsResuming(false);
+            return;
+          }
+          
+          // Restore session state
+          setResumeSessionId(data.session_id);
+          setFormData(prev => ({ ...prev, ...data.answers }));
+          setCurrentQuestionIndex(Math.min(data.resume_index, visibleQuestions.length - 1));
+          console.log(`📱 Resumed survey from question ${data.resume_index + 1}`);
+          setIsResuming(false);
+        })
+        .catch(err => {
+          console.error('Resume fetch error:', err);
+          setIsResuming(false);
+        });
+    }
+  }, [location.search, survey.id, previewMode, apiBaseUrl]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -158,6 +206,20 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     }
   }, [survey.id, survey.collect_location, previewMode]);
 
+  // ── Duplicate detection: localStorage check + fingerprint collection ────────
+  useEffect(() => {
+    if (previewMode || !survey.id) return;
+
+    // Hard check: localStorage key set on previous submission
+    if (hasSurveyBeenCompleted(survey.id)) {
+      setAlreadyCompleted(true);
+    }
+
+    // Collect device fingerprint for soft backend check
+    getDeviceFingerprint().then(fp => setDeviceFingerprint(fp));
+  }, [survey.id, previewMode]);
+  // ─────────────────────────────────────────────────────────────────────────────
+
   const trackClickInteraction = async (action: string, data?: Record<string, unknown>) => {
     if (!survey.id) return;
     try {
@@ -181,6 +243,46 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     }
   };
 
+  // Mid-survey redirect handler
+  const handleMidSurveyRedirect = useCallback(async (redirectUrl: string, redirectNodeId: string) => {
+    if (!survey.id) return;
+    
+    try {
+      // Prepare the redirect - save state and get return URL
+      const response = await fetch(`${apiBaseUrl}/api/surveys/${survey.id}/redirect/prepare`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: resumeSessionId || undefined,
+          answers: formData,
+          current_question_index: currentQuestionIndex,
+          redirect_url: redirectUrl,
+          redirect_node_id: redirectNodeId
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to prepare redirect');
+      }
+      
+      const data = await response.json();
+      console.log('📤 Mid-survey redirect prepared:', data);
+      
+      // Track the redirect
+      trackClickInteraction('mid_survey_redirect', {
+        redirect_url: redirectUrl,
+        current_question: currentQuestionIndex + 1,
+        session_id: data.session_id
+      });
+      
+      // Redirect to external URL with return link
+      window.location.href = data.final_redirect_url;
+      
+    } catch (error) {
+      console.error('Mid-survey redirect error:', error);
+    }
+  }, [survey.id, apiBaseUrl, formData, currentQuestionIndex, resumeSessionId]);
+
   const handleAnswer = (id: string, value: string | number) => {
     setFormData(prev => ({ ...prev, [id]: value }));
     trackClickInteraction('answer_selected', { questionId: id, answer: value });
@@ -194,13 +296,64 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       : formData[currentQuestion.id] !== '' && formData[currentQuestion.id] !== 0
     : false;
 
-  const handleNext = useCallback(() => {
+  // Check if current question has a redirect configured
+  const checkQuestionRedirect = useCallback(async (questionId: string, answer: string | number) => {
+    // Get the original question data from survey (not normalized)
+    const originalQuestion = (survey.questions || []).find((q: any) => q.id === questionId);
+    if (!originalQuestion?.redirect_config?.enabled) return false;
+    
+    const redirectConfig = originalQuestion.redirect_config;
+    const redirectUrl = redirectConfig.url;
+    
+    // Check if redirect condition matches
+    const condition = redirectConfig.condition || 'always';
+    if (condition !== 'always') {
+      const answerStr = String(answer).toLowerCase();
+      const conditionStr = String(condition).toLowerCase();
+      if (answerStr !== conditionStr) {
+        return false; // Condition not met, don't redirect
+      }
+    }
+    
+    if (!redirectUrl) return false;
+    
+    // Build final redirect URL with placeholders replaced
+    let finalUrl = redirectUrl
+      .replace('{click_id}', clickId || '')
+      .replace('{session_id}', resumeSessionId || `session_${Date.now()}`)
+      .replace('{answer}', encodeURIComponent(String(answer)))
+      .replace('{survey_id}', survey.id || '');
+    
+    // If resume is allowed, use the mid-survey redirect handler
+    if (redirectConfig.allow_resume !== false) {
+      await handleMidSurveyRedirect(finalUrl, `question_${questionId}`);
+    } else {
+      // Direct redirect without resume
+      trackClickInteraction('question_redirect', {
+        question_id: questionId,
+        redirect_url: finalUrl,
+        answer: answer
+      });
+      window.location.href = finalUrl;
+    }
+    
+    return true; // Redirect triggered
+  }, [survey.questions, clickId, resumeSessionId, survey.id, handleMidSurveyRedirect, trackClickInteraction]);
+
+  const handleNext = useCallback(async () => {
     if (currentQuestionIndex < visibleQuestions.length - 1 && isCurrentAnswered) {
       // Record time spent on current question
       const currentQ = visibleQuestions[currentQuestionIndex];
       if (currentQ) {
         const timeSpent = (Date.now() - questionStartTime) / 1000; // seconds
         setQuestionTimings(prev => ({ ...prev, [currentQ.id]: timeSpent }));
+        
+        // Check if this question has a redirect configured
+        const answer = formData[currentQ.id];
+        const shouldRedirect = await checkQuestionRedirect(currentQ.id, answer);
+        if (shouldRedirect) {
+          return; // Stop navigation, redirect is happening
+        }
       }
       setQuestionStartTime(Date.now());
       setCurrentQuestionIndex(prev => prev + 1);
@@ -210,7 +363,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         to_question: currentQuestionIndex + 2
       });
     }
-  }, [currentQuestionIndex, visibleQuestions.length, isCurrentAnswered, questionStartTime]);
+  }, [currentQuestionIndex, visibleQuestions, isCurrentAnswered, questionStartTime, formData, checkQuestionRedirect, trackClickInteraction]);
 
   const handlePrev = () => {
     if (currentQuestionIndex > 0) {
@@ -290,6 +443,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           username,
           tracking_id: trackingId,
           click_id: clickId,
+          device_fingerprint: deviceFingerprint || undefined,
           ...getMoustacheleadsPayload()
           // No email_triggers_met flag - backend handles triggers automatically
         }),
@@ -336,6 +490,10 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       }
 
       setSubmitted(true);
+      // Mark as complete in localStorage so the browser remembers on next visit
+      if (survey.id) {
+        markSurveyComplete(survey.id);
+      }
     } catch (error: unknown) {
       if (error instanceof Error) {
         alert(`Error: ${error.message || 'Submission failed'}`);
@@ -470,6 +628,62 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   };
 
   /* ── Main Render ── */
+  
+  // Show resuming state
+  if (isResuming) {
+    return (
+      <div className="pepper-survey-container">
+        <div className="pepper-card-wrapper">
+          <div className="pepper-card" style={{ textAlign: 'center', padding: '60px 40px' }}>
+            <div className="pepper-loading-spinner" />
+            <h2 style={{ marginTop: '20px', color: 'var(--pepper-dark)' }}>Resuming your survey...</h2>
+            <p style={{ color: 'var(--pepper-muted)', marginTop: '10px' }}>Please wait while we restore your progress.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Already completed (localStorage check) — near-zero false positive
+  if (alreadyCompleted && !previewMode) {
+    return (
+      <div className="pepper-survey-container">
+        <div style={{ maxWidth: '880px', width: '100%', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '4px' }}>
+          <div style={{ width: '28px', height: '28px', backgroundImage: 'url(/logo.png)', backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', flexShrink: 0 }} />
+          <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--pepper-dark)', fontFamily: "'Kalam', cursive" }}>
+            {survey.title || 'Survey'}
+          </h1>
+        </div>
+        <div className="pepper-card-wrapper">
+          <div className="pepper-card" style={{ textAlign: 'center', padding: '60px 40px' }}>
+            {/* Checkmark icon */}
+            <div style={{
+              width: 72, height: 72, borderRadius: '50%',
+              background: 'linear-gradient(135deg, #10b981, #059669)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 24px',
+              boxShadow: '0 4px 20px rgba(16,185,129,0.35)',
+            }}>
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+            <h2 style={{ color: 'var(--pepper-dark)', marginBottom: 12, fontSize: 22 }}>
+              You've already completed this survey
+            </h2>
+            <p style={{ color: 'var(--pepper-muted)', fontSize: 15, maxWidth: 380, margin: '0 auto' }}>
+              Our records show this survey was already filled out on this device.
+              Each person can only submit once. Thanks for your participation!
+            </p>
+          </div>
+        </div>
+        <div className="pepper-powered">
+          Powered by <a href="#">Pepperwahl</a>
+        </div>
+      </div>
+    );
+  }
+  
   return (
     <div className="pepper-survey-container">
       {/* Title + Logo — OUTSIDE the paper card */}
