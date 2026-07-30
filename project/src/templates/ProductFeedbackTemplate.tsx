@@ -43,7 +43,7 @@ const ProductFeedbackTemplate: React.FC<Props> = ({ survey, previewMode = false 
   const [submitted, setSubmitted] = useState(false);
 
   const isLocalhost = window.location.hostname === 'localhost';
-  const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+  const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);

@@ -69,7 +69,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
     setCollectLocation(newValue);
     if (generatedSurvey?.survey_id) {
       const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      const apiBase = isLocal ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+      const apiBase = isLocal ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
       try {
         await fetch(`${apiBase}/survey/${generatedSurvey.survey_id}/edit`, {
           method: 'PUT',
@@ -348,7 +348,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
         setIsFetchingContextual(true);
         try {
           const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-          const apiBase = isLocal ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+          const apiBase = isLocal ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
           const res = await fetch(`${apiBase}/api/contextual-question`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -630,7 +630,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
                       
                       try {
                         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-                        const apiBase = isLocal ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+                        const apiBase = isLocal ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
                         const res = await fetch(`${apiBase}/api/transcribe-audio`, {
                           method: 'POST',
                           body: formData,

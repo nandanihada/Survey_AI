@@ -41,7 +41,7 @@ const SurveyClarification: React.FC<ClarificationProps> = ({
     const fetchAIQuestion = async () => {
       try {
         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const apiBase = isLocal ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+        const apiBase = isLocal ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
         const res = await fetch(`${apiBase}/api/contextual-question`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

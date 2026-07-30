@@ -155,7 +155,7 @@ const SurveyEditor: React.FC = () => {
   };
 
   const isLocalhost = window.location.hostname === 'localhost';
-  const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+  const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
 
   const shareLink = id
     ? generateSurveyLink(id, user?.simpleUserId?.toString(), urlParams, user?.name || user?.email?.split('@')[0] || `user_${user?.simpleUserId}`)

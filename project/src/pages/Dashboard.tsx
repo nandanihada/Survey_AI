@@ -113,7 +113,7 @@ const Dashboard: React.FC = () => {
 
         ? 'http://localhost:5000'
 
-        : 'https://hostslice.onrender.com';
+        : 'https://surevy-pepperwahl.onrender.com';
 
       
 

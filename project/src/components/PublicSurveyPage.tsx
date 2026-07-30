@@ -73,7 +73,7 @@ const PublicSurveyPage: React.FC = () => {
   const surveyId = offerId || id || shortId;
 
   const isLocalhost = window.location.hostname === 'localhost';
-  const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+  const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
 
   // Capture Moustacheleads params on initial load (persists in sessionStorage)
   useEffect(() => {

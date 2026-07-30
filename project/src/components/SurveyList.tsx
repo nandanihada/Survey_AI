@@ -44,7 +44,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   const apiBaseUrl = isLocalhost
     ? 'http://localhost:5000'
-    : 'https://hostslice.onrender.com';
+    : 'https://surevy-pepperwahl.onrender.com';
 
   useEffect(() => {
     fetchSurveys();

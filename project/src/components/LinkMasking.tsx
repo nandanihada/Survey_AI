@@ -53,7 +53,7 @@ const LinkMasking: React.FC<LinkMaskingProps> = ({ isDarkMode }) => {
 
   const API_BASE = window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1'
     ? 'http://127.0.0.1:5000'
-    : 'https://hostslice.onrender.com';
+    : 'https://surevy-pepperwahl.onrender.com';
 
   useEffect(() => {
     loadLinks();

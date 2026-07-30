@@ -117,7 +117,7 @@ if os.getenv("FLASK_ENV") == "development":
 
 else:
 
-    BASE_URL = "https://hostslice.onrender.com"
+    BASE_URL = "https://surevy-pepperwahl.onrender.com"
 
 
 app = Flask(__name__)

@@ -36,7 +36,7 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
     const fetchSurvey = async () => {
       try {
         const isLocalhost = window.location.hostname === 'localhost';
-        const baseUrl = isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+        const baseUrl = isLocalhost ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
         const res = await fetch(`${baseUrl}/survey/${surveyId}/view`);
         if (res.ok) {
           const data = await res.json();
@@ -58,7 +58,7 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
       setError(null);
       
       const isLocalhost = window.location.hostname === 'localhost';
-      const baseUrl = isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+      const baseUrl = isLocalhost ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
       const token = localStorage.getItem('auth_token');
       
       if (!token) {
@@ -101,7 +101,7 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
 
   const getBaseUrl = () => {
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    return isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+    return isLocalhost ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
   };
 
   const deleteResponse = async (responseId: string) => {

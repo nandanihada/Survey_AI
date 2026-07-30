@@ -4,7 +4,7 @@ import { useParams } from 'react-router-dom';
 const API_BASE =
   window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? 'http://127.0.0.1:5000'
-    : 'https://hostslice.onrender.com';
+    : 'https://surevy-pepperwahl.onrender.com';
 
 export default function MaskedLinkViewer() {
   const { shortId } = useParams<{ shortId: string }>();

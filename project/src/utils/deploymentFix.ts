@@ -38,7 +38,7 @@ export const getApiBaseUrl = (): string => {
 
   // Production API URL
 
-  return 'https://hostslice.onrender.com';
+  return 'https://surevy-pepperwahl.onrender.com';
 
 };
 

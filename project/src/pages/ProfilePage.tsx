@@ -499,7 +499,7 @@ function DataExportSection() {
 
   const getBaseUrl = () => {
     const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    return isLocal ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+    return isLocal ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
   };
 
   const toggleType = (type: string) => {
@@ -590,7 +590,7 @@ function AccountDeletionSection() {
 
   const getBaseUrl = () => {
     const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    return isLocal ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+    return isLocal ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
   };
 
   // Check deletion status on mount

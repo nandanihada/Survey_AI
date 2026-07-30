@@ -77,7 +77,7 @@ const LoginPage: React.FC = () => {
         }
         await register({ email, password, name, consent: { acceptedTerms: true, prefEmails, prefAnalytics, prefPersonalization, consentDate: new Date().toISOString() }, ref_code: getStoredRefCode() || undefined });
         // Log consent acceptance
-        fetch(`${window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:5000' : 'https://hostslice.onrender.com'}/api/tracking/consent-log`, {
+        fetch(`${window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com'}/api/tracking/consent-log`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -105,7 +105,7 @@ const LoginPage: React.FC = () => {
       
       // Send Firebase token to our backend to create/login user
       const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      const apiBase = isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+      const apiBase = isLocalhost ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
       
       const response = await fetch(`${apiBase}/api/auth/firebase-login`, {
         method: 'POST',
@@ -174,7 +174,7 @@ const LoginPage: React.FC = () => {
       const idToken = await result.user.getIdToken();
       
       const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      const apiBase = isLocalhost ? 'http://localhost:5000' : 'https://hostslice.onrender.com';
+      const apiBase = isLocalhost ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
       
       const response = await fetch(`${apiBase}/api/auth/firebase-login`, {
         method: 'POST',
