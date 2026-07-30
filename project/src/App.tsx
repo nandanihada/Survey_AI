@@ -89,6 +89,7 @@ const ConfirmPage = lazyRetry(() => import('./pages/ConfirmPage'));
 // Survey components
 const SurveyEditor = lazyRetry(() => import('./components/SurveyEditor'));
 const PublicSurveyPage = lazyRetry(() => import('./components/PublicSurveyPage'));
+const SurveyRedirectTransition = lazyRetry(() => import('./pages/SurveyRedirectTransition'));
 const SurveyPreviewPage = lazyRetry(() => import('./components/SurveyPreviewPage'));
 const SurveyResponsesPage = lazyRetry(() => import('./components/SurveyResponsesPage'));
 
@@ -663,6 +664,8 @@ export default function App() {
             <Route path="/survey/:id" element={<PublicSurveyPage />} />
             <Route path="/survey" element={<PublicSurveyPage />} />
             <Route path="/s/:shortId" element={<PublicSurveyPage />} />
+            {/* Transition page shown before external redirect — always shows return link */}
+            <Route path="/survey-redirect" element={<SurveyRedirectTransition />} />
 
             {/* Protected routes */}
             <Route path="/dashboard" element={

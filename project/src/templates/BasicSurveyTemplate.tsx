@@ -115,6 +115,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const [submitted, setSubmitted] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const formRef = React.useRef<HTMLFormElement>(null);
   const [alreadyCompleted, setAlreadyCompleted] = useState(false);
   const [deviceFingerprint, setDeviceFingerprint] = useState<string>('');
 
@@ -244,11 +245,13 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   };
 
   // Mid-survey redirect handler
-  const handleMidSurveyRedirect = useCallback(async (redirectUrl: string, redirectNodeId: string) => {
+  // Saves progress, generates resume token, then redirects DIRECTLY to the external URL.
+  // The return URL is passed as a parameter in the external URL so the partner page
+  // (e.g. Moustache) can show a "Continue Survey" button to the user.
+  const handleMidSurveyRedirect = useCallback(async (redirectUrl: string, redirectNodeId: string, answer?: string) => {
     if (!survey.id) return;
     
     try {
-      // Prepare the redirect - save state and get return URL
       const response = await fetch(`${apiBaseUrl}/api/surveys/${survey.id}/redirect/prepare`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -257,31 +260,35 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           answers: formData,
           current_question_index: currentQuestionIndex,
           redirect_url: redirectUrl,
-          redirect_node_id: redirectNodeId
+          redirect_node_id: redirectNodeId,
+          expiry_hours: (survey.questions || []).find((q: any) => q.id === redirectNodeId.replace('question_', ''))?.redirect_config?.resume_expiry_hours ?? 24,
+          extra: {
+            click_id: clickId || '',
+            answer: answer || '',
+            survey_id: survey.id
+          }
         })
       });
       
-      if (!response.ok) {
-        throw new Error('Failed to prepare redirect');
-      }
+      if (!response.ok) throw new Error('Failed to prepare redirect');
       
       const data = await response.json();
-      console.log('📤 Mid-survey redirect prepared:', data);
       
-      // Track the redirect
       trackClickInteraction('mid_survey_redirect', {
         redirect_url: redirectUrl,
         current_question: currentQuestionIndex + 1,
         session_id: data.session_id
       });
       
-      // Redirect to external URL with return link
+      // Redirect DIRECTLY to the final external URL (no transition page).
+      // The backend already embedded return_url as a query param in final_redirect_url
+      // so the partner page (Moustache, etc.) receives it and can show a return button.
       window.location.href = data.final_redirect_url;
       
     } catch (error) {
       console.error('Mid-survey redirect error:', error);
     }
-  }, [survey.id, apiBaseUrl, formData, currentQuestionIndex, resumeSessionId]);
+  }, [survey.id, apiBaseUrl, formData, currentQuestionIndex, resumeSessionId, clickId, trackClickInteraction]);
 
   const handleAnswer = (id: string, value: string | number) => {
     setFormData(prev => ({ ...prev, [id]: value }));
@@ -326,7 +333,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     
     // If resume is allowed, use the mid-survey redirect handler
     if (redirectConfig.allow_resume !== false) {
-      await handleMidSurveyRedirect(finalUrl, `question_${questionId}`);
+      await handleMidSurveyRedirect(finalUrl, `question_${questionId}`, String(answer));
     } else {
       // Direct redirect without resume
       trackClickInteraction('question_redirect', {
@@ -341,20 +348,38 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   }, [survey.questions, clickId, resumeSessionId, survey.id, handleMidSurveyRedirect, trackClickInteraction]);
 
   const handleNext = useCallback(async () => {
-    if (currentQuestionIndex < visibleQuestions.length - 1 && isCurrentAnswered) {
+    if (!isCurrentAnswered) return;
+
+    const currentQ = visibleQuestions[currentQuestionIndex];
+    if (currentQ) {
       // Record time spent on current question
-      const currentQ = visibleQuestions[currentQuestionIndex];
-      if (currentQ) {
-        const timeSpent = (Date.now() - questionStartTime) / 1000; // seconds
-        setQuestionTimings(prev => ({ ...prev, [currentQ.id]: timeSpent }));
-        
-        // Check if this question has a redirect configured
-        const answer = formData[currentQ.id];
-        const shouldRedirect = await checkQuestionRedirect(currentQ.id, answer);
-        if (shouldRedirect) {
-          return; // Stop navigation, redirect is happening
+      const timeSpent = (Date.now() - questionStartTime) / 1000;
+      setQuestionTimings(prev => ({ ...prev, [currentQ.id]: timeSpent }));
+
+      const answer = formData[currentQ.id];
+
+      // Check redirect first
+      const shouldRedirect = await checkQuestionRedirect(currentQ.id, answer);
+      if (shouldRedirect) return;
+
+      // Check end_here
+      const originalQ = (survey.questions || []).find((q: any) => q.id === currentQ.id);
+      if (originalQ?.end_here?.enabled) {
+        const endCondition = originalQ.end_here.condition || 'always';
+        const shouldEnd = endCondition === 'always' ||
+          String(answer).toLowerCase() === String(endCondition).toLowerCase();
+        if (shouldEnd) {
+          // Trigger the form submit directly — ends the survey now
+          if (formRef.current) {
+            formRef.current.requestSubmit();
+          }
+          return;
         }
       }
+    }
+
+    // Normal navigation
+    if (currentQuestionIndex < visibleQuestions.length - 1) {
       setQuestionStartTime(Date.now());
       setCurrentQuestionIndex(prev => prev + 1);
       trackClickInteraction('question_navigation', {
@@ -363,7 +388,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         to_question: currentQuestionIndex + 2
       });
     }
-  }, [currentQuestionIndex, visibleQuestions, isCurrentAnswered, questionStartTime, formData, checkQuestionRedirect, trackClickInteraction]);
+  }, [currentQuestionIndex, visibleQuestions, isCurrentAnswered, questionStartTime, formData, checkQuestionRedirect, trackClickInteraction, survey.questions]);
 
   const handlePrev = () => {
     if (currentQuestionIndex > 0) {
@@ -397,8 +422,10 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Only validate visible questions (skip logic hides some)
-    const unanswered = visibleQuestions.find(q => {
+    // Only validate questions up to and including the current visible question
+    // (end_here may have stopped us before all questions were answered)
+    const questionsToValidate = visibleQuestions.slice(0, currentQuestionIndex + 1);
+    const unanswered = questionsToValidate.find(q => {
       const val = formData[q.id];
       if (q.type === 'range') {
         return val === undefined || val === '';
@@ -713,7 +740,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         </div>
 
         {/* Questions */}
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} ref={formRef}>
           <AnimatePresence mode="wait">
             {visibleQuestions.map((q, i) => renderQuestion(q, i))}
           </AnimatePresence>

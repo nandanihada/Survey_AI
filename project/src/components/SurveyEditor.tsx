@@ -5,8 +5,9 @@ import TemplateSelector from './TemplateSelector';
 import type { Survey, Question, AnimationConfig } from '../types/Survey';
 import { generateSurveyLink, type SurveyLinkParams } from '../utils/surveyLinkUtils';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, Save, ArrowLeft, Grid3X3, Copy, CheckCircle, Settings, ExternalLink, Share2, Trash2, X, ChevronUp, ChevronDown, Zap, Sparkles, RefreshCw } from 'lucide-react';
+import { Plus, Save, ArrowLeft, Grid3X3, Copy, CheckCircle, Settings, ExternalLink, Share2, Trash2, X, ChevronUp, ChevronDown, Zap, Sparkles, RefreshCw, GitBranch } from 'lucide-react';
 import './SurveyEditor.css';
+import { BranchFlowEditor, SimpleBranchingRules } from './branching';
 
 const QUESTION_TYPES = [
   { value: 'multiple_choice', label: 'Multiple Choice', icon: '☰' },
@@ -130,6 +131,9 @@ const SurveyEditor: React.FC = () => {
   const [urlParams] = useState<SurveyLinkParams>({});
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
+  const [showBranchingEditor, setShowBranchingEditor] = useState(false);
+  const [branchingViewMode, setBranchingViewMode] = useState<'simple' | 'flow'>('simple');
+  const [flowRefreshKey, setFlowRefreshKey] = useState(0);
   const [showSharePopup, setShowSharePopup] = useState(false);
   const [shareLinkRevealed, setShareLinkRevealed] = useState(false);
   const [showAnimationPanel, setShowAnimationPanel] = useState(false);
@@ -502,6 +506,12 @@ const SurveyEditor: React.FC = () => {
               className="flex items-center gap-1 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             >
               <Settings size={12} /> <span className="hidden sm:inline">Settings</span>
+            </button>
+            <button
+              onClick={() => setShowBranchingEditor(true)}
+              className="flex items-center gap-1 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs text-purple-600 border border-purple-200 rounded-lg hover:bg-purple-50 transition-colors"
+            >
+              <GitBranch size={12} /> <span className="hidden sm:inline">Branching</span>
             </button>
             <button
               onClick={() => { setShareLinkRevealed(false); setShowSharePopup(true); setTimeout(() => setShareLinkRevealed(true), 1800); }}
@@ -1385,6 +1395,71 @@ const SurveyEditor: React.FC = () => {
         }`}>
           {saveStatus === 'saving' && <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />}
           <span className="font-medium">{saveMessage}</span>
+        </div>
+      )}
+
+      {/* ── Branching Editor Modal ── */}
+      {showBranchingEditor && survey && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-2xl shadow-2xl w-[95vw] max-w-6xl h-[90vh] flex flex-col overflow-hidden">
+            {/* Modal Header with View Toggle */}
+            <div className="flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-purple-50 to-indigo-50">
+              <div className="flex items-center gap-4">
+                <GitBranch className="text-purple-600" size={24} />
+                <h2 className="text-xl font-bold text-gray-800">Branching Logic</h2>
+              </div>
+              
+              {/* View Mode Toggle */}
+              <div className="flex items-center gap-2 bg-white rounded-lg p-1 border shadow-sm">
+                <button
+                  onClick={() => setBranchingViewMode('simple')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    branchingViewMode === 'simple' 
+                      ? 'bg-purple-600 text-white shadow' 
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  📋 Simple Table
+                </button>
+                <button
+                  onClick={() => setBranchingViewMode('flow')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    branchingViewMode === 'flow' 
+                      ? 'bg-purple-600 text-white shadow' 
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  🔀 Flow Diagram
+                </button>
+              </div>
+              
+              <button
+                onClick={() => setShowBranchingEditor(false)}
+                className="p-2 rounded-full hover:bg-gray-200 transition-colors"
+              >
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
+            
+            {/* Content Area */}
+            <div className="flex-1 overflow-auto p-4" style={branchingViewMode === 'flow' ? { padding: 0, overflow: 'hidden' } : {}}>
+              {branchingViewMode === 'simple' ? (
+                <SimpleBranchingRules
+                  surveyId={survey.id || id || ''}
+                  onClose={() => setShowBranchingEditor(false)}
+                  onRulesSaved={() => setFlowRefreshKey(k => k + 1)}
+                />
+              ) : (
+                <BranchFlowEditor
+                  surveyId={survey.id || id || ''}
+                  questions={survey.questions}
+                  onClose={() => setShowBranchingEditor(false)}
+                  onSwitchToSimple={() => setBranchingViewMode('simple')}
+                  refreshKey={flowRefreshKey}
+                />
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
