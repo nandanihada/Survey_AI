@@ -268,12 +268,37 @@ const MailInviteTab: React.FC<MailInviteTabProps> = ({ surveyId, surveyTitle, se
         </div>
         {/* Recipients */}
         <div>
-          <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: '#374151' }}>Recipients <span style={{ color: '#9ca3af', fontWeight: 400 }}>(one per line or comma)</span></p>
-          <textarea value={mailEmails} onChange={e => setMailEmails(e.target.value)}
-            placeholder={"alice@example.com\nbob@example.com"}
-            rows={3}
-            style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#374151', resize: 'none', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
-          />
+          {(() => {
+            // Extract all valid emails using regex — works regardless of separator
+            const emailRegex = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
+            const parsed = mailEmails.match(emailRegex) || [];
+            const count = parsed.length;
+            return (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: '#374151' }}>
+                    Recipients <span style={{ color: '#9ca3af', fontWeight: 400 }}>(any format — commas, spaces, newlines, or no separator)</span>
+                  </p>
+                  {count > 0 && (
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#10b981', background: '#f0fdf4', padding: '2px 8px', borderRadius: 20, border: '1px solid #bbf7d0' }}>
+                      {count} detected
+                    </span>
+                  )}
+                </div>
+                <textarea value={mailEmails}
+                  onChange={e => setMailEmails(e.target.value)}
+                  onBlur={e => {
+                    // On blur: extract all emails and reformat one per line
+                    const emails = e.target.value.match(emailRegex) || [];
+                    if (emails.length > 0) setMailEmails(emails.join('\n'));
+                  }}
+                  placeholder={"Paste in any format:\nalice@x.com bob@x.combob@y.comalice@z.com"}
+                  rows={4}
+                  style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#374151', resize: 'none', outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace' }}
+                />
+              </>
+            );
+          })()}
         </div>
         {/* Personal message */}
         <div>
@@ -295,7 +320,7 @@ const MailInviteTab: React.FC<MailInviteTabProps> = ({ surveyId, surveyTitle, se
         {/* Send button — uses Gmail API if Google token available, else mailto fallback */}
         <button disabled={mailSending || !mailEmails.trim()}
           onClick={async () => {
-            const rawEmails = mailEmails.split(/[\n,]+/).map(e => e.trim()).filter(Boolean);
+            const rawEmails = mailEmails.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g) || [];
             if (!rawEmails.length) return;
             setMailSending(true);
             setMailResult(null);
