@@ -10,6 +10,14 @@ import { LOGO_BASE64 } from '../utils/logoBase64';
 import './SurveyEditor.css';
 import { BranchFlowEditor, SimpleBranchingRules } from './branching';
 
+// ── Branching summary for a single question ──────────────────────────────────
+interface QuestionBranchInfo {
+  hasRedirect: boolean;
+  hasEndHere: boolean;
+  hasCondition: boolean;   // show_if (conditional display)
+}
+type BranchMap = Record<string, QuestionBranchInfo>; // keyed by question id
+
 const QUESTION_TYPES = [
   { value: 'multiple_choice', label: 'Multiple Choice', icon: '☰' },
   { value: 'short_answer', label: 'Short Answer', icon: '✎' },
@@ -472,6 +480,21 @@ const SurveyEditor: React.FC = () => {
   const [showBranchingEditor, setShowBranchingEditor] = useState(false);
   const [branchingViewMode, setBranchingViewMode] = useState<'simple' | 'flow'>('simple');
   const [flowRefreshKey, setFlowRefreshKey] = useState(0);
+  const [branchMap, setBranchMap] = useState<BranchMap>({});
+  // When opening branching modal, optionally scroll/focus to a specific question row
+  const [branchFocusQuestionId, setBranchFocusQuestionId] = useState<string | null>(null);
+
+  // Auto-open branching if ?openBranching=1 is in the URL (from "View →" in creation result)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('openBranching') === '1') {
+      setShowBranchingEditor(true);
+      setBranchingViewMode('simple');
+      // Clean the URL param without a page reload
+      const clean = window.location.pathname;
+      window.history.replaceState({}, '', clean);
+    }
+  }, []);
   const [showSharePopup, setShowSharePopup] = useState(false);
   const [shareLinkRevealed, setShareLinkRevealed] = useState(false);
   const [showAnimationPanel, setShowAnimationPanel] = useState(false);
@@ -524,6 +547,31 @@ const SurveyEditor: React.FC = () => {
     };
     fetchSurvey();
   }, [id, apiBaseUrl]);
+
+  // ── Fetch branching rules in background to build indicator map ──────────────
+  const fetchBranchMap = useCallback(async () => {
+    if (!id) return;
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/surveys/${id}/branching-rules`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const map: BranchMap = {};
+      for (const rule of (data.rules || [])) {
+        map[rule.id] = {
+          hasRedirect: !!rule.redirect_enabled,
+          hasEndHere: !!rule.end_here_enabled,
+          hasCondition: !rule.always_show && !!rule.depends_on,
+        };
+      }
+      setBranchMap(map);
+    } catch {
+      // silent — indicators are a nice-to-have, don't break the editor
+    }
+  }, [id, apiBaseUrl]);
+
+  useEffect(() => {
+    fetchBranchMap();
+  }, [fetchBranchMap]);
 
   // Load collaborators when settings modal opens
   const openSettings = useCallback(async () => {
@@ -1309,6 +1357,8 @@ const SurveyEditor: React.FC = () => {
           <div className="flex-1 overflow-y-auto py-1 flex md:flex-col flex-row md:overflow-x-hidden overflow-x-auto">
             {(survey.questions || []).map((q, index) => {
               const qTypeIcon = QUESTION_TYPES.find(t => t.value === q.type)?.icon || '✎';
+              const bInfo = branchMap[q.id];
+              const hasBranch = bInfo && (bInfo.hasRedirect || bInfo.hasEndHere || bInfo.hasCondition);
               return (
                 <button
                   key={q.id || index}
@@ -1328,10 +1378,44 @@ const SurveyEditor: React.FC = () => {
                     <p className={`text-sm truncate ${index === activeQuestionIndex ? 'text-gray-900 font-medium' : 'text-gray-600'}`}>
                       {q.question || 'Untitled'}
                     </p>
-                    <span className="text-[10px] text-gray-400 flex items-center gap-1 mt-0.5">
-                      {qTypeIcon} {QUESTION_TYPES.find(t => t.value === q.type)?.label || q.type}
-                    </span>
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                        {qTypeIcon} {QUESTION_TYPES.find(t => t.value === q.type)?.label || q.type}
+                      </span>
+                      {/* ── Branch indicators ── */}
+                      {bInfo?.hasCondition && (
+                        <span
+                          title="Conditional display — this question only shows based on a previous answer"
+                          onClick={e => { e.stopPropagation(); setBranchFocusQuestionId(q.id); setShowBranchingEditor(true); setBranchingViewMode('simple'); }}
+                          className="branch-indicator branch-indicator--condition"
+                        >
+                          ⤷ Conditional
+                        </span>
+                      )}
+                      {bInfo?.hasRedirect && (
+                        <span
+                          title="Redirect — user is sent to an external URL after answering"
+                          onClick={e => { e.stopPropagation(); setBranchFocusQuestionId(q.id); setShowBranchingEditor(true); setBranchingViewMode('simple'); }}
+                          className="branch-indicator branch-indicator--redirect"
+                        >
+                          ↗ Redirect
+                        </span>
+                      )}
+                      {bInfo?.hasEndHere && (
+                        <span
+                          title="End survey — survey stops after this question"
+                          onClick={e => { e.stopPropagation(); setBranchFocusQuestionId(q.id); setShowBranchingEditor(true); setBranchingViewMode('simple'); }}
+                          className="branch-indicator branch-indicator--end"
+                        >
+                          ⊡ Ends
+                        </span>
+                      )}
+                    </div>
                   </div>
+                  {/* Right-side dot if any branching is set */}
+                  {hasBranch && (
+                    <span className="branch-dot flex-shrink-0" title="Has branching rules" />
+                  )}
                 </button>
               );
             })}
@@ -1394,6 +1478,53 @@ const SurveyEditor: React.FC = () => {
                       of {survey.questions.length} · {typeIcon} {QUESTION_TYPES.find(t => t.value === activeQ.type)?.label}
                     </span>
                   </div>
+
+                  {/* ── Branching status badges (center paper card) ── */}
+                  {(() => {
+                    const bInfo = branchMap[activeQ.id];
+                    if (!bInfo || (!bInfo.hasRedirect && !bInfo.hasEndHere && !bInfo.hasCondition)) {
+                      return (
+                        <button
+                          onClick={() => { setBranchFocusQuestionId(activeQ.id); setShowBranchingEditor(true); setBranchingViewMode('simple'); }}
+                          className="branch-card-btn branch-card-btn--none"
+                          title="No branching set — click to configure"
+                        >
+                          <GitBranch size={11} /> No branching
+                        </button>
+                      );
+                    }
+                    return (
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {bInfo.hasCondition && (
+                          <button
+                            onClick={() => { setBranchFocusQuestionId(activeQ.id); setShowBranchingEditor(true); setBranchingViewMode('simple'); }}
+                            className="branch-card-btn branch-card-btn--condition"
+                            title="Conditional — click to edit"
+                          >
+                            ⤷ Conditional
+                          </button>
+                        )}
+                        {bInfo.hasRedirect && (
+                          <button
+                            onClick={() => { setBranchFocusQuestionId(activeQ.id); setShowBranchingEditor(true); setBranchingViewMode('simple'); }}
+                            className="branch-card-btn branch-card-btn--redirect"
+                            title="Redirects after answer — click to edit"
+                          >
+                            ↗ Redirect
+                          </button>
+                        )}
+                        {bInfo.hasEndHere && (
+                          <button
+                            onClick={() => { setBranchFocusQuestionId(activeQ.id); setShowBranchingEditor(true); setBranchingViewMode('simple'); }}
+                            className="branch-card-btn branch-card-btn--end"
+                            title="Ends survey here — click to edit"
+                          >
+                            ⊡ Ends Survey
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Editable question text */}
@@ -1793,7 +1924,7 @@ const SurveyEditor: React.FC = () => {
               </div>
               
               <button
-                onClick={() => setShowBranchingEditor(false)}
+                onClick={() => { setShowBranchingEditor(false); setBranchFocusQuestionId(null); }}
                 className="p-2 rounded-full hover:bg-gray-200 transition-colors"
               >
                 <X size={20} className="text-gray-500" />
@@ -1805,8 +1936,9 @@ const SurveyEditor: React.FC = () => {
               {branchingViewMode === 'simple' ? (
                 <SimpleBranchingRules
                   surveyId={survey.id || id || ''}
-                  onClose={() => setShowBranchingEditor(false)}
-                  onRulesSaved={() => setFlowRefreshKey(k => k + 1)}
+                  onClose={() => { setShowBranchingEditor(false); setBranchFocusQuestionId(null); }}
+                  onRulesSaved={() => { setFlowRefreshKey(k => k + 1); fetchBranchMap(); }}
+                  focusQuestionId={branchFocusQuestionId}
                 />
               ) : (
                 <BranchFlowEditor

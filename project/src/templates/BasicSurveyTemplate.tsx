@@ -245,10 +245,9 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   };
 
   // Mid-survey redirect handler
-  // Saves progress, generates resume token, then redirects DIRECTLY to the external URL.
-  // The return URL is passed as a parameter in the external URL so the partner page
-  // (e.g. Moustache) can show a "Continue Survey" button to the user.
-  const handleMidSurveyRedirect = useCallback(async (redirectUrl: string, redirectNodeId: string, answer?: string) => {
+  // Saves progress, generates resume token, then redirects to the external URL.
+  // open_in_new_tab = true (default) opens in new tab so survey stays open.
+  const handleMidSurveyRedirect = useCallback(async (redirectUrl: string, redirectNodeId: string, answer?: string, openInNewTab: boolean = true) => {
     if (!survey.id) return;
     
     try {
@@ -277,16 +276,23 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       trackClickInteraction('mid_survey_redirect', {
         redirect_url: redirectUrl,
         current_question: currentQuestionIndex + 1,
-        session_id: data.session_id
+        session_id: data.session_id,
+        open_in_new_tab: openInNewTab,
       });
-      
-      // Redirect DIRECTLY to the final external URL (no transition page).
-      // The backend already embedded return_url as a query param in final_redirect_url
-      // so the partner page (Moustache, etc.) receives it and can show a return button.
-      window.location.href = data.final_redirect_url;
+
+      // Open in new tab (default) so the survey stays open in the current tab.
+      // open_in_new_tab=false navigates the current tab away.
+      if (openInNewTab) {
+        window.open(data.final_redirect_url, '_blank', 'noopener,noreferrer');
+      } else {
+        window.location.href = data.final_redirect_url;
+      }
       
     } catch (error) {
       console.error('Mid-survey redirect error:', error);
+      // Fallback
+      if (openInNewTab) window.open(redirectUrl, '_blank', 'noopener,noreferrer');
+      else window.location.href = redirectUrl;
     }
   }, [survey.id, apiBaseUrl, formData, currentQuestionIndex, resumeSessionId, clickId, trackClickInteraction]);
 
@@ -307,6 +313,41 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const checkQuestionRedirect = useCallback(async (questionId: string, answer: string | number) => {
     // Get the original question data from survey (not normalized)
     const originalQuestion = (survey.questions || []).find((q: any) => q.id === questionId);
+    if (!originalQuestion) return false;
+
+    // ── Multi-redirect support (redirect_configs array) ──────────────────
+    // When a question has condition-based redirects (e.g. Yes→url1, No→url2),
+    // they are stored as redirect_configs array. Check each in order.
+    const multiConfigs: any[] = (originalQuestion as any).redirect_configs || [];
+    if (multiConfigs.length > 1) {
+      // Find the first config whose condition matches the answer
+      const answerStr = String(answer).toLowerCase();
+      const matched = multiConfigs.find((cfg: any) => {
+        if (!cfg?.enabled || !cfg?.url) return false;
+        const cond = String(cfg.condition || 'always').toLowerCase();
+        return cond === 'always' || cond === answerStr;
+      });
+      if (matched) {
+        let finalUrl = matched.url
+          .replace('{click_id}', clickId || '')
+          .replace('{session_id}', resumeSessionId || `session_${Date.now()}`)
+          .replace('{answer}', encodeURIComponent(String(answer)))
+          .replace('{survey_id}', survey.id || '');
+        const openInNewTab = matched.open_in_new_tab !== false; // default true
+        if (matched.allow_resume !== false) {
+          await handleMidSurveyRedirect(finalUrl, `question_${questionId}`, String(answer), openInNewTab);
+        } else {
+          trackClickInteraction('question_redirect', { question_id: questionId, redirect_url: finalUrl, answer });
+          if (openInNewTab) window.open(finalUrl, '_blank', 'noopener,noreferrer');
+          else window.location.href = finalUrl;
+        }
+        return true;
+      }
+      // No condition matched — no redirect
+      return false;
+    }
+
+    // ── Single redirect (legacy redirect_config) ──────────────────────────
     if (!originalQuestion?.redirect_config?.enabled) return false;
     
     const redirectConfig = originalQuestion.redirect_config;
@@ -332,16 +373,17 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       .replace('{survey_id}', survey.id || '');
     
     // If resume is allowed, use the mid-survey redirect handler
+    const openInNewTab = (redirectConfig as any).open_in_new_tab !== false; // default true
     if (redirectConfig.allow_resume !== false) {
-      await handleMidSurveyRedirect(finalUrl, `question_${questionId}`, String(answer));
+      await handleMidSurveyRedirect(finalUrl, `question_${questionId}`, String(answer), openInNewTab);
     } else {
-      // Direct redirect without resume
       trackClickInteraction('question_redirect', {
         question_id: questionId,
         redirect_url: finalUrl,
         answer: answer
       });
-      window.location.href = finalUrl;
+      if (openInNewTab) window.open(finalUrl, '_blank', 'noopener,noreferrer');
+      else window.location.href = finalUrl;
     }
     
     return true; // Redirect triggered
@@ -369,7 +411,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         const shouldEnd = endCondition === 'always' ||
           String(answer).toLowerCase() === String(endCondition).toLowerCase();
         if (shouldEnd) {
-          // Trigger the form submit directly � ends the survey now
+          // Trigger the form submit directly � ends the survey now
           if (formRef.current) {
             formRef.current.requestSubmit();
           }
@@ -671,7 +713,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     );
   }
 
-  // Already completed (localStorage check) � near-zero false positive
+  // Already completed (localStorage check) � near-zero false positive
   if (alreadyCompleted && !previewMode) {
     return (
       <div className="pepper-survey-container">
@@ -713,7 +755,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   
   return (
     <div className="pepper-survey-container">
-      {/* Title + Logo � OUTSIDE the paper card */}
+      {/* Title + Logo � OUTSIDE the paper card */}
       <div style={{ maxWidth: '880px', width: '100%', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '4px' }}>
         <div style={{ width: '28px', height: '28px', backgroundImage: 'url(/logo.png)', backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', flexShrink: 0 }} />
         <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--pepper-dark)', fontFamily: "'Kalam', cursive" }}>
@@ -722,7 +764,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       </div>
 
       <div className="pepper-card-wrapper">
-        {/* Clip � just above the paper card top edge */}
+        {/* Clip � just above the paper card top edge */}
         <div style={{ position: 'absolute', top: '-18px', left: '30px', zIndex: 20, width: '36px', height: '36px', transform: 'rotate(-20deg)', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))' }}>
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="36" height="36">
             <path fill="#2D2520" d="M288.6 76.8C344.8 20.6 436 20.6 492.2 76.8C548.4 133 548.4 224.2 492.2 280.4L328.2 444.4C293.8 478.8 238.1 478.8 203.7 444.4C169.3 410 169.3 354.3 203.7 319.9L356.5 167.3C369 154.8 389.3 154.8 401.8 167.3C414.3 179.8 414.3 200.1 401.8 212.6L249 365.3C239.6 374.7 239.6 389.9 249 399.2C258.4 408.5 273.6 408.6 282.9 399.2L446.9 235.2C478.1 204 478.1 153.3 446.9 122.1C415.7 90.9 365 90.9 333.8 122.1L169.8 286.1C116.7 339.2 116.7 425.3 169.8 478.4C222.9 531.5 309 531.5 362.1 478.4L492.3 348.3C504.8 335.8 525.1 335.8 537.6 348.3C550.1 360.8 550.1 381.1 537.6 393.6L407.4 523.6C329.3 601.7 202.7 601.7 124.6 523.6C46.5 445.5 46.5 318.9 124.6 240.8L288.6 76.8z"/>
@@ -926,7 +968,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
               <img src="/logo.png" alt="PepperWahl" style={{ width: 32, height: 32, borderRadius: 8 }} />
               <div style={{ textAlign: 'left' }}>
                 <span style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#fff' }}>Create your own in 2 minutes</span>
-                <span style={{ display: 'block', fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>Powered by PepperWahl � Free</span>
+                <span style={{ display: 'block', fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>Powered by PepperWahl � Free</span>
               </div>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="9 18 15 12 9 6" />

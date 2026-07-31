@@ -22,6 +22,7 @@ interface SurveyData {
   theme: { font: string; intent: string; colors: { primary: string; background: string; text: string } };
   prompt: string;
   animationSpeed: number;
+  has_prompt_branching?: boolean;
 }
 
 interface SurveyFormProps {
@@ -1176,6 +1177,40 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
               >
                 <Edit3 size={14} /> Open in Editor <ArrowRight size={14} />
               </button>
+
+              {/* ── Branching applied banner ── */}
+              {generatedSurvey?.has_prompt_branching && (
+                <div style={{
+                  background: 'linear-gradient(135deg, #f3e8ff 0%, #ede9fe 100%)',
+                  border: '1px solid #ddd6fe',
+                  borderRadius: 12,
+                  padding: '10px 14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                }}>
+                  <span style={{ fontSize: 18, flexShrink: 0 }}>🔀</span>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#6d28d9', fontFamily: "'Outfit', sans-serif" }}>
+                      Branching rules applied from your prompt
+                    </p>
+                    <p style={{ margin: '2px 0 0', fontSize: 11, color: '#8b5cf6', fontFamily: "'Outfit', sans-serif" }}>
+                      Redirects and end-survey rules are already set. Open the editor → Branching to review.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => window.open(`/dashboard/edit/${generatedSurvey?.survey_id}?openBranching=1`, '_blank')}
+                    style={{
+                      flexShrink: 0, padding: '5px 10px', borderRadius: 8,
+                      background: '#7c3aed', color: '#fff', border: 'none',
+                      fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                      fontFamily: "'Outfit', sans-serif",
+                    }}
+                  >
+                    View →
+                  </button>
+                </div>
+              )}
               {/* Location collection toggle */}
               <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-stone-50 border border-stone-200/60">
                 <div className="flex items-center gap-2">

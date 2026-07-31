@@ -849,3 +849,104 @@
   font-weight: 500;
   color: #94a3b8;
 }
+
+/* ── Focus highlight — row opened via branch indicator click ── */
+.sbr-table tbody tr[data-focused="true"],
+.sbr-table tr.focus-highlight {
+  animation: sbrFocusFlash 1.2s ease-out;
+}
+
+@keyframes sbrFocusFlash {
+  0%   { background: #f3e8ff; }
+  40%  { background: #ede9fe; }
+  100% { background: inherit; }
+}
+
+/* ── Per-answer multi-redirect UI ──────────────────────────────────────── */
+
+.multi-redirect-section {
+  margin-top: 8px;
+}
+
+.multi-redirect-desc {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0 0 12px;
+}
+
+.multi-redirect-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.multi-redirect-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.multi-redirect-row .url-input {
+  flex: 1;
+  font-size: 12px;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  background: #fff;
+}
+
+.multi-redirect-row.active .url-input {
+  border-color: #a78bfa;
+  box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.15);
+}
+
+.multi-redirect-row .url-input:focus {
+  outline: none;
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
+}
+
+.multi-redirect-answer-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.multi-redirect-answer-badge.always {
+  background: #fef3c7;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.multi-redirect-divider {
+  font-size: 10px;
+  color: #94a3b8;
+  text-align: center;
+  letter-spacing: 0.5px;
+  padding: 4px 0;
+  position: relative;
+}
+
+.multi-redirect-divider::before,
+.multi-redirect-divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 28%;
+  height: 1px;
+  background: #e2e8f0;
+}
+
+.multi-redirect-divider::before { left: 0; }
+.multi-redirect-divider::after  { right: 0; }

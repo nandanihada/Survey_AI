@@ -34,6 +34,230 @@ RESUME_TOKEN_SECRET = "branch_flow_resume_secret_key_2024"
 
 
 # ═══════════════════════════════════════════════════════
+#  PROMPT-BASED BRANCHING EXTRACTION
+# ═══════════════════════════════════════════════════════
+
+def parse_branching_instructions_from_prompt(prompt: str, questions: list) -> list:
+    """
+    Uses GPT to extract redirect/end-survey rules from the user's free-text prompt.
+
+    Detects patterns like:
+      - "redirect to https://x.com after question 3 if they answer Yes"
+      - "if user says No on Q5 send them to https://y.com"
+      - "end the survey after question 4 if they answer Bad"
+      - "end survey at Q2 for anyone who answers No"
+      - Multiple instructions with multiple URLs in one prompt
+
+    Returns a list of rule dicts to apply to questions:
+      [
+        {
+          "question_ref": "q3",   # id or 1-based number string e.g. "3"
+          "type": "redirect",     # "redirect" | "end"
+          "url": "https://...",   # only for redirect
+          "condition": "always" | "<answer value>",
+        },
+        ...
+      ]
+    Returns [] if no branching instructions found.
+    """
+    api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("AI_API_KEY", "")
+    if not api_key:
+        return []
+
+    # Build a compact question list to give GPT context
+    q_summary = []
+    for i, q in enumerate(questions):
+        q_summary.append(f"Q{i+1} (id={q.get('id', f'q{i+1}')}, type={q.get('type','text')}): {q.get('question','')[:80]}")
+    q_list_text = "\n".join(q_summary)
+
+    extraction_prompt = f"""You are a survey branching rules extractor.
+
+The user wrote this survey creation prompt:
+\"\"\"{prompt}\"\"\"
+
+The generated survey has these questions:
+{q_list_text}
+
+Your task: Extract any redirect or end-survey instructions from the prompt.
+
+Look for patterns like:
+- "redirect to [URL] after question N"
+- "if they answer [X] on question N, send them to [URL]"
+- "end the survey after question N if they answer [X]"
+- "stop survey at question N for [answer]"
+- Multiple URLs / multiple rules in one prompt
+
+For each instruction found, return a JSON object with:
+{{
+  "question_ref": "N",        // 1-based question number as a string, e.g. "3"
+  "type": "redirect",         // "redirect" or "end"
+  "url": "https://...",       // only for type=redirect, else omit
+  "condition": "always"       // "always" OR the specific answer value (e.g. "Yes", "No", "Bad")
+}}
+
+Rules:
+- If no URL or end instruction exists in the prompt, return an empty array []
+- If a question number is mentioned as "question 3", "Q3", "3rd question", map it to "3"
+- If no condition is specified (always redirect), use "always"
+- Extract ALL instructions, not just the first one
+- Only extract instructions that have a clear question reference
+
+Return ONLY a JSON array. No explanation. No markdown.
+Examples:
+[] 
+[{{"question_ref":"3","type":"redirect","url":"https://offer.com","condition":"Yes"}}]
+[{{"question_ref":"5","type":"end","condition":"No"}},{{"question_ref":"2","type":"redirect","url":"https://x.com","condition":"always"}}]
+"""
+
+    try:
+        resp = http_requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            timeout=20,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "gpt-4o-mini",
+                "messages": [{"role": "user", "content": extraction_prompt}],
+                "temperature": 0.1,
+                "max_tokens": 600
+            }
+        )
+
+        if resp.status_code != 200:
+            print(f"⚠️ Branching extraction API error: {resp.status_code}")
+            return []
+
+        content = resp.json()["choices"][0]["message"]["content"].strip()
+        # Strip markdown if present
+        if content.startswith("```"):
+            content = content.split("```")[1]
+            if content.startswith("json"):
+                content = content[4:]
+        content = content.strip()
+
+        rules = json.loads(content)
+        if not isinstance(rules, list):
+            return []
+
+        print(f"✅ Extracted {len(rules)} branching instruction(s) from prompt")
+        return rules
+
+    except Exception as e:
+        print(f"⚠️ parse_branching_instructions_from_prompt error: {e}")
+        return []
+
+
+def apply_prompt_branching_rules(survey_id: str, questions: list, branching_rules: list) -> list:
+    """
+    Apply extracted branching rules to the questions list and save to DB.
+
+    branching_rules: output of parse_branching_instructions_from_prompt()
+    Returns the updated questions list.
+    """
+    if not branching_rules:
+        return questions
+
+    # Build a map: "1" → index 0, "2" → index 1, also "q1" → index 0
+    ref_map = {}
+    for i, q in enumerate(questions):
+        ref_map[str(i + 1)] = i                   # "3" → 2
+        ref_map[q.get("id", f"q{i+1}")] = i       # "q3" → 2
+
+    updated = [dict(q) for q in questions]
+    applied = 0
+
+    # Group rules by question index so we can handle multiple redirects on the same question
+    from collections import defaultdict
+    rules_by_idx: dict = defaultdict(list)
+
+    for rule in branching_rules:
+        ref = str(rule.get("question_ref", "")).strip().lower().lstrip("q")
+        idx = ref_map.get(ref)
+        if idx is None:
+            print(f"⚠️ Could not find question for ref '{ref}', skipping rule")
+            continue
+        rules_by_idx[idx].append(rule)
+
+    for idx, idx_rules in rules_by_idx.items():
+        redirect_rules = [r for r in idx_rules if r.get("type") == "redirect" and r.get("url")]
+        end_rules     = [r for r in idx_rules if r.get("type") == "end"]
+
+        # ── Handle redirects ───────────────────────────────────────────────
+        if redirect_rules:
+            # Build the multi-config array (supports condition-based branching per answer)
+            configs = []
+            for r in redirect_rules:
+                condition = r.get("condition", "always") or "always"
+                configs.append({
+                    "enabled": True,
+                    "url": r.get("url", ""),
+                    "condition": condition,
+                    "color": "#f59e0b",
+                    "allow_resume": True,
+                    "resume_expiry_hours": 24,
+                })
+
+            # Primary redirect_config = first rule (for backward compat with old code)
+            updated[idx]["redirect_config"] = configs[0]
+
+            # Multi-redirect: store all as redirect_configs array
+            updated[idx]["redirect_configs"] = configs
+
+            # Clear stray show_if
+            updated[idx]["show_if"] = None
+
+            urls_summary = ", ".join(f"{c['condition']}→{c['url'][:30]}" for c in configs)
+            print(f"✅ Applied {len(configs)} redirect rule(s) on Q{idx+1}: {urls_summary}")
+            applied += len(configs)
+
+        # ── Handle end-survey ──────────────────────────────────────────────
+        if end_rules:
+            r = end_rules[0]  # only one end rule makes sense per question
+            condition = r.get("condition", "always") or "always"
+            updated[idx]["end_here"] = {
+                "enabled": True,
+                "condition": condition,
+            }
+            updated[idx]["show_if"] = None
+            print(f"✅ Applied end-survey rule: Q{idx+1} (condition: {condition})")
+            applied += 1
+
+    if applied > 0:
+        # Also clean up any questions that have a broken show_if
+        # (depends_on is null/empty — these were AI suggestions that didn't resolve)
+        for q in updated:
+            si = q.get("show_if")
+            if isinstance(si, dict) and not si.get("depends_on"):
+                q["show_if"] = None
+
+        # Persist to DB
+        db.surveys.update_one(
+            {"$or": [{"_id": survey_id}, {"id": survey_id}]},
+            {"$set": {"questions": updated, "has_prompt_branching": True}}
+        )
+        # Regenerate the simple flow so the diagram is immediately correct
+        survey_doc = db.surveys.find_one({"$or": [{"_id": survey_id}, {"id": survey_id}]})
+        if survey_doc:
+            survey_doc["questions"] = updated
+            try:
+                flow_config = generate_flow_from_survey(survey_doc, flow_type="simple")
+                db.branch_flow_configs.replace_one(
+                    {"survey_id": survey_id, "flow_type": "simple"},
+                    flow_config,
+                    upsert=True
+                )
+                print(f"✅ Flow diagram regenerated after prompt branching")
+            except Exception as fe:
+                print(f"⚠️ Flow regeneration failed: {fe}")
+
+        print(f"✅ Applied {applied} branching rule(s) from prompt to survey {survey_id}")
+
+    return updated
+
+
+# ═══════════════════════════════════════════════════════
 #  AI-POWERED BRANCH SUGGESTION
 # ═══════════════════════════════════════════════════════
 
@@ -264,11 +488,19 @@ def get_branching_rules(survey_id):
                 show_if = q.get("show_if")
                 if not isinstance(show_if, dict):
                     show_if = None
+                # Also treat show_if with missing/empty depends_on as null (broken AI suggestion)
+                if show_if and not show_if.get("depends_on"):
+                    show_if = None
                 
                 # redirect_config must be a dict or None — guard against null/other
                 redirect_config = q.get("redirect_config")
                 if not isinstance(redirect_config, dict):
                     redirect_config = {}
+
+                # redirect_configs (multi-condition array) — expose for the UI
+                redirect_configs = q.get("redirect_configs")
+                if not isinstance(redirect_configs, list):
+                    redirect_configs = []
                 
                 rule = {
                     "index": i,
@@ -282,11 +514,13 @@ def get_branching_rules(survey_id):
                     "condition": show_if.get("condition", "equals") if show_if else None,
                     "value": show_if.get("value") if show_if else None,
                     # Redirect settings
-                    "redirect_enabled": bool(redirect_config.get("enabled", False)),
+                    "redirect_enabled": bool(redirect_config.get("enabled", False)) or len(redirect_configs) > 0,
                     "redirect_url": redirect_config.get("url") or None,
                     "redirect_condition": redirect_config.get("condition") or "always",
                     "redirect_color": redirect_config.get("color") or "#f59e0b",
                     "allow_resume": redirect_config.get("allow_resume", True) is not False,
+                    # Multi-redirect configs (for condition-branched redirects like Yes→url1, No→url2)
+                    "redirect_configs": redirect_configs,
                     # End here settings
                     "end_here_enabled": bool((q.get("end_here") or {}).get("enabled", False)),
                     "end_here_condition": (q.get("end_here") or {}).get("condition", "always")
@@ -360,16 +594,26 @@ def update_branching_rules(survey_id):
                 
                 # Update redirect config
                 if rule.get("redirect_enabled") and rule.get("redirect_url"):
-                    questions[q_index]["redirect_config"] = {
-                        "enabled": True,
-                        "url": rule.get("redirect_url"),
-                        "condition": rule.get("redirect_condition", "always"),
-                        "color": rule.get("redirect_color", "#f59e0b"),
-                        "allow_resume": rule.get("allow_resume", True),
-                        "resume_expiry_hours": rule.get("resume_expiry_hours", 24)
-                    }
+                    # Check if there are multi-condition configs
+                    multi = rule.get("redirect_configs", [])
+                    if multi and len(multi) > 1:
+                        # Save all configs; keep primary for backward compat
+                        questions[q_index]["redirect_configs"] = multi
+                        questions[q_index]["redirect_config"] = multi[0]
+                    else:
+                        questions[q_index]["redirect_config"] = {
+                            "enabled": True,
+                            "url": rule.get("redirect_url"),
+                            "condition": rule.get("redirect_condition", "always"),
+                            "color": rule.get("redirect_color", "#f59e0b"),
+                            "allow_resume": rule.get("allow_resume", True),
+                            "resume_expiry_hours": rule.get("resume_expiry_hours", 24),
+                            "open_in_new_tab": rule.get("open_in_new_tab", True),
+                        }
+                        questions[q_index]["redirect_configs"] = None
                 else:
                     questions[q_index]["redirect_config"] = None
+                    questions[q_index]["redirect_configs"] = None
 
                 # Update end_here config
                 if rule.get("end_here_enabled"):

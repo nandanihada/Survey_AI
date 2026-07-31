@@ -16,6 +16,16 @@ import {
 } from 'lucide-react';
 import './SimpleBranchingRules.css';
 
+interface RedirectConfig {
+  enabled: boolean;
+  url: string;
+  condition: string;
+  color: string;
+  allow_resume: boolean;
+  resume_expiry_hours?: number;
+  open_in_new_tab?: boolean;  // default true
+}
+
 interface BranchingRule {
   index: number;
   id: string;
@@ -34,18 +44,23 @@ interface BranchingRule {
   redirect_color: string;
   allow_resume: boolean;
   resume_expiry_hours: number;
+  // Multi-condition redirects (e.g. Yes→url1, No→url2)
+  redirect_configs: RedirectConfig[];
   // End here settings
   end_here_enabled: boolean;
-  end_here_condition: string;  // 'always' or specific answer value
+  end_here_condition: string;
+  // Redirect tab behaviour
+  open_in_new_tab: boolean;  // true = new tab (default), false = same tab
 }
 
 interface Props {
   surveyId: string;
   onClose?: () => void;
   onRulesSaved?: () => void;  // Called after successful save — triggers flow diagram refresh
+  focusQuestionId?: string | null;  // If set, auto-expand this question row on mount
 }
 
-const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved }) => {
+const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved, focusQuestionId }) => {
   const baseUrl = getApiBaseUrl();
   
   const [rules, setRules] = useState<BranchingRule[]>([]);
@@ -56,6 +71,8 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
   const [hasChanges, setHasChanges] = useState(false);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const rulesRef = React.useRef<BranchingRule[]>([]);
+  // Ref for the focused row so we can scroll to it
+  const focusRowRef = React.useRef<HTMLTableRowElement | null>(null);
 
   // Keep ref in sync so we can save on unmount
   useEffect(() => {
@@ -77,8 +94,10 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
           redirect_color: r.redirect_color || '#f59e0b',
           allow_resume: r.allow_resume !== false,
           resume_expiry_hours: r.resume_expiry_hours ?? 24,
+          redirect_configs: r.redirect_configs || [],
           end_here_enabled: r.end_here_enabled || false,
-          end_here_condition: r.end_here_condition || 'always'
+          end_here_condition: r.end_here_condition || 'always',
+          open_in_new_tab: r.open_in_new_tab !== false,
         }));
         setRules(rulesWithRedirect);
       } else {
@@ -95,6 +114,20 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
   useEffect(() => {
     if (surveyId) fetchRules();
   }, [surveyId, fetchRules]);
+
+  // Auto-expand and scroll to the focused question row after rules load
+  useEffect(() => {
+    if (!loading && focusQuestionId && rules.length > 0) {
+      const idx = rules.findIndex(r => r.id === focusQuestionId);
+      if (idx !== -1) {
+        setExpandedRow(idx);
+        // Give DOM a tick to render the expanded row, then scroll
+        setTimeout(() => {
+          focusRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 80);
+      }
+    }
+  }, [loading, focusQuestionId, rules]);
 
   // Save rules (also used for auto-save)
   const saveRules = useCallback(async (rulesToSave?: BranchingRule[]) => {
@@ -368,7 +401,9 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
               
               return (
                 <React.Fragment key={rule.id}>
-                  <tr className={`${rule.always_show ? 'always-show' : 'conditional'} ${isExpanded ? 'expanded' : ''}`}>
+                  <tr className={`${rule.always_show ? 'always-show' : 'conditional'} ${isExpanded ? 'expanded' : ''} ${rule.id === focusQuestionId ? 'focus-highlight' : ''}`}
+                    ref={rule.id === focusQuestionId ? (el => { focusRowRef.current = el; }) : undefined}
+                  >
                     <td className="col-num">{index + 1}</td>
                     
                     <td className="col-question">
@@ -476,141 +511,280 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
                             <Link size={18} />
                             <h4>Redirect After This Question</h4>
                           </div>
-                          
-                          <div className="redirect-toggle">
-                            <label className="checkbox-label highlight">
-                              <input
-                                type="checkbox"
-                                checked={rule.redirect_enabled}
-                                onChange={(e) => updateRule(index, 'redirect_enabled', e.target.checked)}
-                              />
-                              Send user to an external URL after they answer this question
-                            </label>
-                          </div>
-                          
-                          {rule.redirect_enabled && (
-                            <div className="redirect-fields">
 
-                              {/* URL input */}
-                              <div className="field-row">
-                                <label>Redirect URL <span style={{color:'#94a3b8',fontWeight:400}}>(where to send the user)</span></label>
-                                <input
-                                  type="text"
-                                  value={rule.redirect_url || ''}
-                                  onChange={(e) => updateRule(index, 'redirect_url', e.target.value)}
-                                  placeholder="https://moustache.com/offer?click_id={click_id}&return_url={return_url}"
-                                  className="url-input"
-                                />
+                          {/* ── Per-answer redirect table (questions with options) ── */}
+                          {currentAnswerOptions.length > 0 ? (
+                            <div className="multi-redirect-section">
+                              <p className="multi-redirect-desc">
+                                Set a different redirect URL for each answer. Leave blank to not redirect for that answer.
+                              </p>
+                              <div className="multi-redirect-rows">
+                                {/* "Any answer" row — always redirect regardless */}
+                                <div className={`multi-redirect-row ${rule.redirect_condition === 'always' && rule.redirect_enabled ? 'active' : ''}`}>
+                                  <span className="multi-redirect-answer-badge always">Always</span>
+                                  <input
+                                    type="text"
+                                    className="url-input"
+                                    placeholder="Redirect URL for any answer (leave blank to use per-answer rules)"
+                                    value={rule.redirect_condition === 'always' && rule.redirect_enabled ? (rule.redirect_url || '') : ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      if (val) {
+                                        updateRule(index, 'redirect_enabled', true);
+                                        updateRule(index, 'redirect_url', val);
+                                        updateRule(index, 'redirect_condition', 'always');
+                                        // Clear per-answer configs when "always" is set
+                                        updateRule(index, 'redirect_configs', []);
+                                      } else {
+                                        updateRule(index, 'redirect_enabled', false);
+                                        updateRule(index, 'redirect_url', null);
+                                      }
+                                    }}
+                                  />
+                                </div>
+
+                                <div className="multi-redirect-divider">— or set per answer —</div>
+
+                                {/* One row per answer option */}
+                                {currentAnswerOptions.map((opt) => {
+                                  // Find existing config for this answer from redirect_configs array
+                                  const existingCfg = (rule.redirect_configs || []).find(
+                                    (c: RedirectConfig) => c.condition?.toLowerCase() === opt.toLowerCase()
+                                  );
+                                  const urlVal = existingCfg?.url || (
+                                    rule.redirect_enabled && rule.redirect_condition?.toLowerCase() === opt.toLowerCase()
+                                      ? rule.redirect_url || ''
+                                      : ''
+                                  );
+                                  return (
+                                    <div key={opt} className={`multi-redirect-row ${urlVal ? 'active' : ''}`}>
+                                      <span className="multi-redirect-answer-badge">{opt}</span>
+                                      <input
+                                        type="text"
+                                        className="url-input"
+                                        placeholder={`Redirect URL when answer is "${opt}"`}
+                                        value={urlVal}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          // Build updated redirect_configs array
+                                          const existing: RedirectConfig[] = [...(rule.redirect_configs || [])];
+                                          const cfgIdx = existing.findIndex(
+                                            (c: RedirectConfig) => c.condition?.toLowerCase() === opt.toLowerCase()
+                                          );
+                                          if (val) {
+                                            const newCfg: RedirectConfig = {
+                                              enabled: true, url: val, condition: opt,
+                                              color: '#f59e0b', allow_resume: true, resume_expiry_hours: 24,
+                                            };
+                                            if (cfgIdx >= 0) existing[cfgIdx] = newCfg;
+                                            else existing.push(newCfg);
+                                          } else {
+                                            if (cfgIdx >= 0) existing.splice(cfgIdx, 1);
+                                          }
+                                          const hasAny = existing.length > 0;
+                                          updateRule(index, 'redirect_configs', existing);
+                                          updateRule(index, 'redirect_enabled', hasAny);
+                                          if (hasAny) {
+                                            // Primary = first entry (for backward compat)
+                                            updateRule(index, 'redirect_url', existing[0].url);
+                                            updateRule(index, 'redirect_condition', existing[0].condition);
+                                          }
+                                        }}
+                                      />
+                                    </div>
+                                  );
+                                })}
                               </div>
 
-                              {/* Color picker */}
-                              <div className="field-row field-row-inline">
-                                <label>Node color in flow diagram:</label>
-                                <div className="color-picker-row">
-                                  {['#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#10b981','#3b82f6','#f97316'].map(c => (
-                                    <button
-                                      key={c}
-                                      className={`color-swatch ${rule.redirect_color === c ? 'selected' : ''}`}
-                                      style={{ background: c }}
-                                      onClick={() => updateRule(index, 'redirect_color', c)}
-                                      title={c}
+                              {/* Placeholders hint */}
+                              <div className="placeholder-help" style={{ marginTop: 12 }}>
+                                <strong>Placeholders:</strong>
+                                <code>{'{click_id}'}</code>
+                                <code>{'{answer}'}</code>
+                                <code>{'{return_url}'}</code>
+                                <code>{'{session_id}'}</code>
+                              </div>
+
+                              {/* Resume toggle — shared across all redirects */}
+                              {rule.redirect_enabled && (
+                                <div className="resume-section" style={{ marginTop: 12 }}>
+                                  <label className="checkbox-label">
+                                    <input
+                                      type="checkbox"
+                                      checked={rule.allow_resume}
+                                      onChange={(e) => updateRule(index, 'allow_resume', e.target.checked)}
                                     />
-                                  ))}
-                                  <input
-                                    type="color"
-                                    value={rule.redirect_color || '#f59e0b'}
-                                    onChange={(e) => updateRule(index, 'redirect_color', e.target.value)}
-                                    className="color-input-custom"
-                                    title="Custom color"
-                                  />
-                                </div>
-                              </div>
-
-                              {/* Placeholders */}
-                              <div className="placeholder-help">
-                                <strong>Placeholders (auto-filled per user):</strong>
-                                <code title="User's tracking ID">{'{click_id}'}</code>
-                                <code title="User's answer to this question">{'{answer}'}</code>
-                                <code title="The return link — put this in your URL so the partner page can show a Continue button">{'{return_url}'}</code>
-                                <code title="Session ID">{'{session_id}'}</code>
-                              </div>
-
-                              {/* Redirect condition */}
-                              {currentAnswerOptions.length > 0 && (
-                                <div className="field-row">
-                                  <label>Redirect when answer is:</label>
-                                  <select
-                                    value={rule.redirect_condition || 'always'}
-                                    onChange={(e) => updateRule(index, 'redirect_condition', e.target.value)}
-                                    className="sbr-select"
-                                  >
-                                    <option value="always">Any answer (always redirect)</option>
-                                    {currentAnswerOptions.map((opt) => (
-                                      <option key={opt} value={opt}>Only if answer is "{opt}"</option>
-                                    ))}
-                                  </select>
-                                </div>
-                              )}
-
-                              {/* Resume / return link section */}
-                              <div className="resume-section">
-                                <label className="checkbox-label">
-                                  <input
-                                    type="checkbox"
-                                    checked={rule.allow_resume}
-                                    onChange={(e) => updateRule(index, 'allow_resume', e.target.checked)}
-                                  />
-                                  <span>Allow user to return and continue the survey after the redirect</span>
-                                </label>
-
-                                {rule.allow_resume && (
-                                  <div className="resume-explanation">
-                                    <div className="resume-how-row">
-                                      <span className="resume-step">1</span>
-                                      <span>When the user is redirected, a unique <strong>return link</strong> is automatically added to your redirect URL as the <code>{'{return_url}'}</code> value.</span>
-                                    </div>
-                                    <div className="resume-how-row">
-                                      <span className="resume-step">2</span>
-                                      <span>The partner page (e.g. Moustache) reads <code>return_url</code> from the URL and shows a <strong>"Continue Survey"</strong> button to the user.</span>
-                                    </div>
-                                    <div className="resume-how-row">
-                                      <span className="resume-step">3</span>
-                                      <span>User clicks it → lands back on the next question with all previous answers saved.</span>
-                                    </div>
-
-                                    <div className="resume-url-example">
-                                      <div className="resume-url-label">
-                                        <strong>What the return link looks like (per user, generated at runtime):</strong>
-                                      </div>
-                                      <code className="resume-url-value">
-                                        https://survey.pepperwahl.com/survey/{surveyId}?resume=TOKEN&q={index + 2}
-                                      </code>
-                                      <p className="resume-url-note">
-                                        ⚠️ This link is unique per user and only generated when they actually take the survey — you cannot use it at setup time. Add <code>{'{return_url}'}</code> to your redirect URL above and it gets filled in automatically.
-                                      </p>
-                                    </div>
-
-                                    <div className="resume-expiry-row">
-                                      <span>⏱️ Return link expires after:</span>
-                                      <select
-                                        value={rule.resume_expiry_hours || 24}
-                                        onChange={(e) => updateRule(index, 'resume_expiry_hours', Number(e.target.value))}
-                                        className="sbr-select expiry-select"
+                                    <span>Allow user to return and continue the survey after redirect</span>
+                                  </label>
+                                  {/* Open tab behaviour */}
+                                  <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>Open redirect in:</span>
+                                    <div style={{ display: 'flex', gap: 6 }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => updateRule(index, 'open_in_new_tab', true)}
+                                        style={{
+                                          padding: '4px 12px', borderRadius: 8, border: '1.5px solid',
+                                          fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                          borderColor: rule.open_in_new_tab !== false ? '#7c3aed' : '#e2e8f0',
+                                          background: rule.open_in_new_tab !== false ? '#ede9fe' : '#f8fafc',
+                                          color: rule.open_in_new_tab !== false ? '#7c3aed' : '#94a3b8',
+                                        }}
                                       >
-                                        <option value={1}>1 hour</option>
-                                        <option value={6}>6 hours</option>
-                                        <option value={24}>24 hours</option>
-                                        <option value={72}>3 days</option>
-                                        <option value={168}>7 days</option>
-                                        <option value={720}>30 days</option>
-                                        <option value={0}>Never expires</option>
-                                      </select>
+                                        New Tab (default)
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => updateRule(index, 'open_in_new_tab', false)}
+                                        style={{
+                                          padding: '4px 12px', borderRadius: 8, border: '1.5px solid',
+                                          fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                          borderColor: rule.open_in_new_tab === false ? '#7c3aed' : '#e2e8f0',
+                                          background: rule.open_in_new_tab === false ? '#ede9fe' : '#f8fafc',
+                                          color: rule.open_in_new_tab === false ? '#7c3aed' : '#94a3b8',
+                                        }}
+                                      >
+                                        Same Tab
+                                      </button>
                                     </div>
                                   </div>
-                                )}
+                                  {/* Return URL preview — only shown in Same Tab mode */}
+                                  {rule.open_in_new_tab === false && rule.allow_resume && (
+                                    <div style={{
+                                      marginTop: 12, padding: '12px 14px',
+                                      background: '#f0fdf4', border: '1px solid #bbf7d0',
+                                      borderRadius: 10,
+                                    }}>
+                                      <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: '#15803d', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        🔗 Return URL
+                                        <span style={{ fontWeight: 400, color: '#6b7280', fontSize: 10, background: '#e2e8f0', padding: '1px 6px', borderRadius: 10 }}>example format — not a real link</span>
+                                      </p>
+                                      <div style={{
+                                        fontSize: 11, color: '#047857',
+                                        background: '#dcfce7', padding: '8px 10px',
+                                        borderRadius: 6, lineHeight: 1.7,
+                                        fontFamily: 'monospace',
+                                      }}>
+                                        <span style={{ color: '#6b7280' }}>survey.pepperwahl.com</span>
+                                        <span style={{ color: '#047857' }}>/survey/{surveyId}</span>
+                                        <span style={{ color: '#0284c7' }}>?resume=</span>
+                                        <span style={{ background: '#fef9c3', color: '#92400e', padding: '0 3px', borderRadius: 3 }}>{'<token>'}</span>
+                                        <span style={{ color: '#0284c7' }}>&q={index + 2}</span>
+                                      </div>
+                                      <p style={{ margin: '8px 0 0', fontSize: 11, color: '#6b7280', lineHeight: 1.5 }}>
+                                        When a user hits the redirect, the backend generates a real token for their session and appends this as <code style={{ background: '#f1f5f9', padding: '1px 5px', borderRadius: 4 }}>?return_url=...</code> to your partner URL automatically. Your partner copies it from their browser and shares it to bring the user back to Q{index + 2}.
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            /* ── Single redirect for questions without options ── */
+                            <>
+                              <div className="redirect-toggle">
+                                <label className="checkbox-label highlight">
+                                  <input
+                                    type="checkbox"
+                                    checked={rule.redirect_enabled}
+                                    onChange={(e) => updateRule(index, 'redirect_enabled', e.target.checked)}
+                                  />
+                                  Send user to an external URL after they answer this question
+                                </label>
                               </div>
 
-                            </div>
+                              {rule.redirect_enabled && (
+                                <div className="redirect-fields">
+                                  <div className="field-row">
+                                    <label>Redirect URL</label>
+                                    <input
+                                      type="text"
+                                      value={rule.redirect_url || ''}
+                                      onChange={(e) => updateRule(index, 'redirect_url', e.target.value)}
+                                      placeholder="https://example.com/offer?click_id={click_id}&return_url={return_url}"
+                                      className="url-input"
+                                    />
+                                  </div>
+                                  <div className="placeholder-help">
+                                    <strong>Placeholders:</strong>
+                                    <code>{'{click_id}'}</code>
+                                    <code>{'{answer}'}</code>
+                                    <code>{'{return_url}'}</code>
+                                    <code>{'{session_id}'}</code>
+                                  </div>
+                                  <div className="resume-section">
+                                    <label className="checkbox-label">
+                                      <input
+                                        type="checkbox"
+                                        checked={rule.allow_resume}
+                                        onChange={(e) => updateRule(index, 'allow_resume', e.target.checked)}
+                                      />
+                                      <span>Allow user to return and continue the survey after the redirect</span>
+                                    </label>
+                                    {/* Return URL preview — shown when Same Tab is selected so owner knows what to share */}
+                                    {rule.open_in_new_tab === false && rule.allow_resume && (
+                                      <div style={{
+                                        marginTop: 12, padding: '12px 14px',
+                                        background: '#f0fdf4', border: '1px solid #bbf7d0',
+                                        borderRadius: 10,
+                                      }}>
+                                        <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: '#15803d', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                          🔗 Return URL
+                                          <span style={{ fontWeight: 400, color: '#6b7280', fontSize: 10, background: '#e2e8f0', padding: '1px 6px', borderRadius: 10 }}>example format — not a real link</span>
+                                        </p>
+                                        <div style={{
+                                          fontSize: 11, color: '#047857',
+                                          background: '#dcfce7', padding: '8px 10px',
+                                          borderRadius: 6, lineHeight: 1.7,
+                                          fontFamily: 'monospace',
+                                        }}>
+                                          <span style={{ color: '#6b7280' }}>survey.pepperwahl.com</span>
+                                          <span style={{ color: '#047857' }}>/survey/{surveyId}</span>
+                                          <span style={{ color: '#0284c7' }}>?resume=</span>
+                                          <span style={{ background: '#fef9c3', color: '#92400e', padding: '0 3px', borderRadius: 3 }}>{'<token>'}</span>
+                                          <span style={{ color: '#0284c7' }}>&q={index + 2}</span>
+                                        </div>
+                                        <p style={{ margin: '8px 0 0', fontSize: 11, color: '#6b7280', lineHeight: 1.5 }}>
+                                          When a user hits the redirect, the backend generates a real token for their session and appends this as <code style={{ background: '#f1f5f9', padding: '1px 5px', borderRadius: 4 }}>?return_url=...</code> to your partner URL automatically. Your partner copies it from their browser and shares it to bring the user back to Q{index + 2}.
+                                        </p>
+                                      </div>
+                                    )}
+                                    {/* Open tab behaviour */}
+                                    <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+                                      <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>Open redirect in:</span>
+                                      <div style={{ display: 'flex', gap: 6 }}>
+                                        <button
+                                          type="button"
+                                          onClick={() => updateRule(index, 'open_in_new_tab', true)}
+                                          style={{
+                                            padding: '4px 12px', borderRadius: 8, border: '1.5px solid',
+                                            fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                            borderColor: rule.open_in_new_tab !== false ? '#7c3aed' : '#e2e8f0',
+                                            background: rule.open_in_new_tab !== false ? '#ede9fe' : '#f8fafc',
+                                            color: rule.open_in_new_tab !== false ? '#7c3aed' : '#94a3b8',
+                                          }}
+                                        >
+                                          New Tab (default)
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => updateRule(index, 'open_in_new_tab', false)}
+                                          style={{
+                                            padding: '4px 12px', borderRadius: 8, border: '1.5px solid',
+                                            fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                            borderColor: rule.open_in_new_tab === false ? '#7c3aed' : '#e2e8f0',
+                                            background: rule.open_in_new_tab === false ? '#ede9fe' : '#f8fafc',
+                                            color: rule.open_in_new_tab === false ? '#7c3aed' : '#94a3b8',
+                                          }}
+                                        >
+                                          Same Tab
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </>
                           )}
 
                           {/* ── End Survey Here section ── */}

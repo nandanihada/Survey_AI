@@ -408,9 +408,8 @@ try:
     from user_tracking_api import user_tracking_bp, setup_tracking_indexes
     from redirect_rules_api import redirect_rules_bp
     from referral_api import referral_bp, setup_referral_indexes
-    from branch_flow_api import branch_flow_bp
-    from survey_invite_api import survey_invite_bp
-    # Register blueprints
+    from branch_flow_api import branch_flow_bp, parse_branching_instructions_from_prompt, apply_prompt_branching_rules
+    from survey_invite_api import survey_invite_bp    # Register blueprints
 
     print("Registering blueprints...")
 
@@ -2331,6 +2330,18 @@ def generate_survey():
 
             db["surveys"].insert_one(survey_data)
 
+            # ── Extract and apply any branching instructions from the prompt ──
+            # e.g. "redirect to https://x.com after Q3 if Yes" or "end after Q5 if No"
+            branching_instructions = []
+            try:
+                branching_instructions = parse_branching_instructions_from_prompt(prompt, questions)
+                if branching_instructions:
+                    questions = apply_prompt_branching_rules(survey_id, questions, branching_instructions)
+                    print(f"✅ Prompt-based branching rules applied: {len(branching_instructions)} rule(s)")
+            except Exception as branch_err:
+                # Non-fatal — survey is already saved, just log the error
+                print(f"⚠️ Prompt branching extraction failed (non-fatal): {branch_err}")
+
             print(f"\n=== SURVEY GENERATION SUCCESS ===")
 
             print(f"Survey ID: {survey_id}")
@@ -2348,6 +2359,7 @@ def generate_survey():
                 "questions": questions,
                 "template_type": template_type,
                 "theme": complete_theme,
+                "has_prompt_branching": bool(branching_instructions),
             }
 
             print(f"Response data structure: {list(response_data.keys())}")
