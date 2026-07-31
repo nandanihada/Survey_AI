@@ -409,6 +409,7 @@ try:
     from redirect_rules_api import redirect_rules_bp
     from referral_api import referral_bp, setup_referral_indexes
     from branch_flow_api import branch_flow_bp
+    from survey_invite_api import survey_invite_bp
     # Register blueprints
 
     print("Registering blueprints...")
@@ -443,6 +444,7 @@ try:
     app.register_blueprint(redirect_rules_bp, url_prefix="/api")
     app.register_blueprint(referral_bp)
     app.register_blueprint(branch_flow_bp)  # Branch flow API routes
+    app.register_blueprint(survey_invite_bp)  # Survey invite via email
 
     # Setup tracking TTL indexes for 15-day auto-delete
     setup_tracking_indexes()

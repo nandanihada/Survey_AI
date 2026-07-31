@@ -5,7 +5,7 @@ import TemplateSelector from './TemplateSelector';
 import type { Survey, Question, AnimationConfig } from '../types/Survey';
 import { generateSurveyLink, type SurveyLinkParams } from '../utils/surveyLinkUtils';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, Save, ArrowLeft, Grid3X3, Copy, CheckCircle, Settings, ExternalLink, Share2, Trash2, X, ChevronUp, ChevronDown, Zap, Sparkles, RefreshCw, GitBranch } from 'lucide-react';
+import { Plus, Save, ArrowLeft, Grid3X3, Copy, CheckCircle, Settings, ExternalLink, Share2, Trash2, X, ChevronUp, ChevronDown, Zap, Sparkles, RefreshCw, GitBranch, Mail, Send, Loader2 } from 'lucide-react';
 import './SurveyEditor.css';
 import { BranchFlowEditor, SimpleBranchingRules } from './branching';
 
@@ -137,6 +137,14 @@ const SurveyEditor: React.FC = () => {
   const [showSharePopup, setShowSharePopup] = useState(false);
   const [shareLinkRevealed, setShareLinkRevealed] = useState(false);
   const [showAnimationPanel, setShowAnimationPanel] = useState(false);
+
+  // Mail invite state
+  const [shareTab, setShareTab] = useState<'link' | 'mail'>('link');
+  const [mailTemplate, setMailTemplate] = useState<'minimal' | 'bold'>('minimal');
+  const [mailEmails, setMailEmails] = useState('');
+  const [mailMessage, setMailMessage] = useState('');
+  const [mailSending, setMailSending] = useState(false);
+  const [mailResult, setMailResult] = useState<{type: 'success'|'error'; text: string} | null>(null);
   const [isRefining, setIsRefining] = useState(false);
   const [isGeneratingOptions, setIsGeneratingOptions] = useState(false);
 
@@ -673,7 +681,7 @@ const SurveyEditor: React.FC = () => {
       {showSharePopup && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => setShowSharePopup(false)}>
           <div
-            className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
+            className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
             style={{ animation: 'editorModalIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)' }}
           >
@@ -735,41 +743,217 @@ const SurveyEditor: React.FC = () => {
             {/* Link revealed phase */}
             {shareLinkRevealed && (
               <div style={{ animation: 'shareReveal 0.4s ease-out' }}>
+                {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                   <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                     <Share2 size={15} /> Share Survey
                   </h3>
-                  <button onClick={() => setShowSharePopup(false)} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                  <button onClick={() => { setShowSharePopup(false); setShareTab('link'); setMailResult(null); }} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
                     <X size={16} />
                   </button>
                 </div>
-                <div className="px-6 py-5 space-y-4">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-2">Survey Link</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={shareLink}
-                        readOnly
-                        className="flex-1 border border-gray-200 rounded-lg px-3 py-2.5 text-xs bg-gray-50 truncate font-mono"
-                      />
-                      <button
-                        onClick={copyToClipboard}
-                        className="px-3 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs flex items-center gap-1.5 transition-colors"
-                      >
-                        {copied ? <><CheckCircle size={13} /> Copied</> : <><Copy size={13} /> Copy</>}
-                      </button>
-                    </div>
-                  </div>
-                  <a
-                    href={shareLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+
+                {/* Tabs */}
+                <div className="flex border-b border-gray-100 px-6 gap-1 pt-3">
+                  <button
+                    onClick={() => setShareTab('link')}
+                    className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-t-lg transition-colors ${shareTab === 'link' ? 'bg-white border border-b-white border-gray-200 text-gray-900 -mb-px' : 'text-gray-500 hover:text-gray-700'}`}
                   >
-                    <ExternalLink size={13} /> Open in New Tab
-                  </a>
+                    <ExternalLink size={12} /> Link
+                  </button>
+                  <button
+                    onClick={() => { setShareTab('mail'); setMailResult(null); }}
+                    className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-t-lg transition-colors ${shareTab === 'mail' ? 'bg-white border border-b-white border-gray-200 text-gray-900 -mb-px' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                    <Mail size={12} /> Mail
+                  </button>
                 </div>
+
+                {/* ── Tab: Link ── */}
+                {shareTab === 'link' && (
+                  <div className="px-6 py-5 space-y-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-2">Survey Link</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={shareLink}
+                          readOnly
+                          className="flex-1 border border-gray-200 rounded-lg px-3 py-2.5 text-xs bg-gray-50 truncate font-mono"
+                        />
+                        <button
+                          onClick={copyToClipboard}
+                          className="px-3 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs flex items-center gap-1.5 transition-colors"
+                        >
+                          {copied ? <><CheckCircle size={13} /> Copied</> : <><Copy size={13} /> Copy</>}
+                        </button>
+                      </div>
+                    </div>
+                    <a
+                      href={shareLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+                    >
+                      <ExternalLink size={13} /> Open in New Tab
+                    </a>
+                  </div>
+                )}
+
+                {/* ── Tab: Mail ── */}
+                {shareTab === 'mail' && (
+                  <div className="px-6 py-5 space-y-5">
+
+                    {/* Template picker */}
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wide">Choose Template</label>
+                      <div className="grid grid-cols-2 gap-3">
+
+                        {/* Template 1 – Minimal */}
+                        <button
+                          onClick={() => setMailTemplate('minimal')}
+                          className={`rounded-xl border-2 overflow-hidden transition-all text-left ${mailTemplate === 'minimal' ? 'border-red-400 ring-2 ring-red-100' : 'border-gray-200 hover:border-gray-300'}`}
+                        >
+                          {/* Preview card */}
+                          <div className="bg-[#F5F1E8] p-3">
+                            <div className="bg-white rounded-lg overflow-hidden shadow-sm">
+                              <div className="bg-gradient-to-r from-[#C4785C] to-[#A0522D] px-3 py-2 text-center">
+                                <div className="w-5 h-5 bg-white/20 rounded-full mx-auto mb-1" />
+                                <div className="h-1.5 bg-white/40 rounded w-12 mx-auto" />
+                              </div>
+                              <div className="px-3 py-2 space-y-1.5">
+                                <div className="h-2 bg-gray-800 rounded w-3/4" />
+                                <div className="h-1.5 bg-gray-300 rounded w-full" />
+                                <div className="h-1.5 bg-gray-300 rounded w-5/6" />
+                                <div className="bg-[#FFF8F5] border border-[#F0DDD5] rounded p-1.5 mt-2">
+                                  <div className="h-1.5 bg-[#C4785C] rounded w-1/2 mb-1" />
+                                  <div className="h-2 bg-gray-700 rounded w-full" />
+                                </div>
+                                <div className="flex justify-center pt-1">
+                                  <div className="h-4 bg-[#C4785C] rounded-full w-16" />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="px-3 py-2 bg-white flex items-center justify-between">
+                            <span className="text-[11px] font-semibold text-gray-700">Minimal Light</span>
+                            {mailTemplate === 'minimal' && <CheckCircle size={12} className="text-red-500" />}
+                          </div>
+                        </button>
+
+                        {/* Template 2 – Bold Dark */}
+                        <button
+                          onClick={() => setMailTemplate('bold')}
+                          className={`rounded-xl border-2 overflow-hidden transition-all text-left ${mailTemplate === 'bold' ? 'border-red-400 ring-2 ring-red-100' : 'border-gray-200 hover:border-gray-300'}`}
+                        >
+                          <div className="bg-[#1A1310] p-3">
+                            <div className="bg-[#2D2520] rounded-lg overflow-hidden shadow-sm">
+                              <div className="px-3 py-2 text-center">
+                                <div className="w-5 h-5 bg-[#3D342E] rounded-lg mx-auto mb-1" />
+                                <div className="h-2.5 bg-white rounded w-3/4 mx-auto mb-1" />
+                                <div className="h-1.5 bg-gray-600 rounded w-1/2 mx-auto" />
+                              </div>
+                              <div className="px-3 pb-2 space-y-1.5">
+                                <div className="bg-gradient-to-r from-[#C4785C] to-[#8B4A2E] rounded p-1.5">
+                                  <div className="h-1.5 bg-white/40 rounded w-1/2 mb-1" />
+                                  <div className="h-2 bg-white rounded w-full" />
+                                </div>
+                                <div className="flex justify-center pt-1">
+                                  <div className="h-4 bg-[#C4785C] rounded-full w-16" />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="px-3 py-2 bg-white flex items-center justify-between">
+                            <span className="text-[11px] font-semibold text-gray-700">Bold Dark</span>
+                            {mailTemplate === 'bold' && <CheckCircle size={12} className="text-red-500" />}
+                          </div>
+                        </button>
+
+                      </div>
+                    </div>
+
+                    {/* Recipients */}
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Recipients</label>
+                      <textarea
+                        value={mailEmails}
+                        onChange={e => setMailEmails(e.target.value)}
+                        placeholder="Enter emails, one per line or comma separated&#10;e.g. alice@example.com, bob@example.com"
+                        rows={3}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-xs text-gray-700 resize-none focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-300 transition"
+                      />
+                    </div>
+
+                    {/* Custom message */}
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">
+                        Personal Message <span className="text-gray-400 normal-case font-normal">(optional)</span>
+                      </label>
+                      <textarea
+                        value={mailMessage}
+                        onChange={e => setMailMessage(e.target.value)}
+                        placeholder="Add a short note that will appear in the email..."
+                        rows={2}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-xs text-gray-700 resize-none focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-300 transition"
+                      />
+                    </div>
+
+                    {/* Result banner */}
+                    {mailResult && (
+                      <div className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-medium ${mailResult.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-600 border border-red-200'}`}>
+                        {mailResult.type === 'success' ? <CheckCircle size={13} /> : <X size={13} />}
+                        {mailResult.text}
+                      </div>
+                    )}
+
+                    {/* Send button */}
+                    <button
+                      disabled={mailSending || !mailEmails.trim()}
+                      onClick={async () => {
+                        setMailSending(true);
+                        setMailResult(null);
+                        try {
+                          const rawEmails = mailEmails.split(/[\n,]+/).map(e => e.trim()).filter(Boolean);
+                          const token = localStorage.getItem('auth_token');
+                          const res = await fetch(`${apiBaseUrl}/api/surveys/${id}/send-invite`, {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                            },
+                            body: JSON.stringify({
+                              emails: rawEmails,
+                              template: mailTemplate,
+                              message: mailMessage,
+                              survey_link: shareLink,
+                            }),
+                          });
+                          const data = await res.json();
+                          if (res.ok && data.success) {
+                            setMailResult({ type: 'success', text: data.message });
+                            setMailEmails('');
+                            setMailMessage('');
+                          } else {
+                            setMailResult({ type: 'error', text: data.error || 'Failed to send emails' });
+                          }
+                        } catch {
+                          setMailResult({ type: 'error', text: 'Network error. Please try again.' });
+                        } finally {
+                          setMailSending(false);
+                        }
+                      }}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg text-xs font-semibold transition-colors"
+                    >
+                      {mailSending
+                        ? <><Loader2 size={13} className="animate-spin" /> Sending...</>
+                        : <><Send size={13} /> Send Invites</>
+                      }
+                    </button>
+
+                  </div>
+                )}
+
               </div>
             )}
           </div>
