@@ -6,6 +6,7 @@ import type { Survey, Question, AnimationConfig } from '../types/Survey';
 import { generateSurveyLink, type SurveyLinkParams } from '../utils/surveyLinkUtils';
 import { useAuth } from '../contexts/AuthContext';
 import { Plus, Save, ArrowLeft, Grid3X3, Copy, CheckCircle, Settings, ExternalLink, Share2, Trash2, X, ChevronUp, ChevronDown, Zap, Sparkles, RefreshCw, GitBranch, Mail, Send, Loader2 } from 'lucide-react';
+import { LOGO_BASE64 } from '../utils/logoBase64';
 import './SurveyEditor.css';
 import { BranchFlowEditor, SimpleBranchingRules } from './branching';
 
@@ -116,6 +117,318 @@ const TEMPLATE_THEMES: Record<string, EditorTheme> = {
 const getTheme = (templateType: string): EditorTheme =>
   TEMPLATE_THEMES[templateType] || TEMPLATE_THEMES.custom;
 
+// ── Standalone Mail Invite Tab (stable component identity = no remount flicker) ──
+interface MailInviteTabProps {
+  surveyId: string | undefined;
+  surveyTitle: string;
+  senderName: string;
+  shareLink: string;
+  apiBaseUrl: string;
+}
+const MailInviteTab: React.FC<MailInviteTabProps> = ({ surveyId, surveyTitle, senderName, shareLink, apiBaseUrl }) => {
+  const [mailTemplate, setMailTemplate] = useState<'minimal' | 'bold'>('minimal');
+  const [mailEmails, setMailEmails] = useState('');
+  const [mailMessage, setMailMessage] = useState('');
+  const [mailSending, setMailSending] = useState(false);
+  const [mailResult, setMailResult] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const previewLink = shareLink || '#';
+  const logoUrl = LOGO_BASE64;
+
+  const buildHtml = (tmpl: 'minimal' | 'bold', msg: string) => {
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const title = esc(surveyTitle);
+
+    // Variant colours — both paperish, just different accent tones
+    const accentColor  = tmpl === 'bold' ? '#2C3E50' : '#C4785C';
+    const headerBg     = tmpl === 'bold' ? '#2C3E50' : '#3D2B1F';
+    const ctaBg        = tmpl === 'bold' ? '#2C3E50' : '#C4785C';
+    const cardBorder   = tmpl === 'bold' ? '#CBD5E1' : '#E8DDD5';
+    const cardBg       = tmpl === 'bold' ? '#F8FAFC' : '#FBF8F5';
+
+    const msgBlock = msg.trim()
+      ? `<tr><td style="padding:0 44px 28px;">
+          <div style="border-left:3px solid ${accentColor};padding:12px 18px;background:#FAFAFA;">
+            <p style="margin:0;font-size:14px;color:#555;line-height:1.8;font-style:italic;">${esc(msg)}</p>
+          </div>
+        </td></tr>`
+      : '';
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Survey Invitation</title>
+</head>
+<body style="margin:0;padding:0;background:#EFEFEC;font-family:Georgia,'Times New Roman',serif;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#EFEFEC;padding:40px 20px;">
+<tr><td align="center">
+
+<table width="580" cellpadding="0" cellspacing="0" style="max-width:580px;background:#FFFFFF;border:1px solid #DDD8D2;">
+
+  <!-- Header bar -->
+  <tr>
+    <td style="background:${headerBg};padding:28px 44px;border-bottom:3px solid ${accentColor};">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td>
+            <img src="${logoUrl}" alt="Pepperwahl" width="36" height="36"
+                 style="display:inline-block;vertical-align:middle;border-radius:4px;margin-right:10px;" />
+            <span style="font-family:Arial,sans-serif;font-size:15px;font-weight:700;color:#FFFFFF;vertical-align:middle;letter-spacing:0.5px;">Pepperwahl</span>
+          </td>
+          <td align="right">
+            <span style="font-family:Arial,sans-serif;font-size:11px;color:rgba(255,255,255,0.55);letter-spacing:1px;text-transform:uppercase;">Survey Invitation</span>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- Greeting -->
+  <tr>
+    <td style="padding:44px 44px 20px;">
+      <p style="margin:0 0 20px;font-size:26px;font-weight:700;color:#1A1A1A;line-height:1.3;font-family:Georgia,serif;">
+        We'd love to hear<br/>your thoughts.
+      </p>
+      <p style="margin:0;font-size:15px;color:#666;line-height:1.8;font-family:Arial,sans-serif;">
+        Your feedback matters. A few minutes of your time helps us build something genuinely better for everyone.
+      </p>
+    </td>
+  </tr>
+
+  ${msgBlock}
+
+  <!-- Survey card -->
+  <tr>
+    <td style="padding:12px 44px 32px;">
+      <div style="border:1px solid ${cardBorder};background:${cardBg};padding:28px 32px;">
+        <p style="margin:0 0 6px;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:${accentColor};font-family:Arial,sans-serif;">Survey</p>
+        <p style="margin:0 0 12px;font-size:19px;font-weight:700;color:#1A1A1A;line-height:1.4;font-family:Georgia,serif;">${title}</p>
+        <p style="margin:0;font-size:13px;color:#888;font-family:Arial,sans-serif;">Takes approximately 2 minutes to complete.</p>
+      </div>
+    </td>
+  </tr>
+
+  <!-- CTA -->
+  <tr>
+    <td style="padding:0 44px 36px;">
+      <a href="${previewLink}"
+         style="display:inline-block;background:${ctaBg};color:#FFFFFF;text-decoration:none;
+                font-size:14px;font-weight:700;padding:14px 36px;
+                font-family:Arial,sans-serif;letter-spacing:0.5px;">
+        Take the Survey
+      </a>
+      <p style="margin:16px 0 0;font-size:11px;color:#AAA;font-family:Arial,sans-serif;">
+        Or copy this link: <a href="${previewLink}" style="color:${accentColor};text-decoration:none;">${previewLink}</a>
+      </p>
+    </td>
+  </tr>
+
+  <!-- Divider -->
+  <tr><td style="padding:0 44px;"><div style="height:1px;background:#E8E4DF;"></div></td></tr>
+
+  <!-- Footer -->
+  <tr>
+    <td style="padding:24px 44px;">
+      <p style="margin:0 0 4px;font-size:12px;color:#999;font-family:Arial,sans-serif;line-height:1.7;">
+        This invitation was sent via <strong style="color:#555;">Pepperwahl</strong>.
+        Thank you for taking the time.
+      </p>
+      <p style="margin:0;font-size:11px;color:#BBB;font-family:Arial,sans-serif;">
+        Team Pepperwahl &nbsp;&middot;&nbsp; pepperwahl.com
+      </p>
+    </td>
+  </tr>
+
+</table>
+
+</td></tr>
+</table>
+
+</body>
+</html>`;
+  };
+
+  return (
+    <div style={{ display: 'flex', minHeight: 480 }}>
+      {/* Left: Controls */}
+      <div style={{ flex: '0 0 300px', padding: '20px 20px 20px 24px', borderRight: '1px solid #f3f4f6', display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
+        {/* Template toggle */}
+        <div>
+          <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Template</p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {(['minimal', 'bold'] as const).map(t => (
+              <button key={t} onClick={() => setMailTemplate(t)}
+                style={{ flex: 1, padding: '8px 6px', borderRadius: 8, border: `2px solid ${mailTemplate === t ? '#ef4444' : '#e5e7eb'}`, background: mailTemplate === t ? '#fff5f5' : '#fff', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: mailTemplate === t ? '#ef4444' : '#6b7280', transition: 'all 0.15s' }}
+              >{t === 'minimal' ? 'Warm Paper' : 'Dark Slate'}</button>
+            ))}
+          </div>
+        </div>
+        {/* Recipients */}
+        <div>
+          <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: '#374151' }}>Recipients <span style={{ color: '#9ca3af', fontWeight: 400 }}>(one per line or comma)</span></p>
+          <textarea value={mailEmails} onChange={e => setMailEmails(e.target.value)}
+            placeholder={"alice@example.com\nbob@example.com"}
+            rows={3}
+            style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#374151', resize: 'none', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+          />
+        </div>
+        {/* Personal message */}
+        <div>
+          <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: '#374151' }}>Personal Message <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional — live in preview →)</span></p>
+          <textarea value={mailMessage} onChange={e => setMailMessage(e.target.value)}
+            placeholder="Type here... it shows as a quote in the email"
+            rows={3}
+            style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#374151', resize: 'none', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+          />
+        </div>
+        {/* Result */}
+        {mailResult && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: 10, fontSize: 12, fontWeight: 500, background: mailResult.type === 'success' ? '#f0fdf4' : '#fff5f5', color: mailResult.type === 'success' ? '#15803d' : '#dc2626', border: `1px solid ${mailResult.type === 'success' ? '#bbf7d0' : '#fecaca'}` }}>
+            {mailResult.type === 'success' ? <CheckCircle size={13} /> : <X size={13} />}
+            {mailResult.text}
+          </div>
+        )}
+
+        {/* Send button — uses Gmail API if Google token available, else mailto fallback */}
+        <button disabled={mailSending || !mailEmails.trim()}
+          onClick={async () => {
+            const rawEmails = mailEmails.split(/[\n,]+/).map(e => e.trim()).filter(Boolean);
+            if (!rawEmails.length) return;
+            setMailSending(true);
+            setMailResult(null);
+
+            const googleToken = localStorage.getItem('google_access_token');
+
+            if (googleToken) {
+              // ── Gmail API path: send rich HTML from user's own Gmail ──
+              const html = buildHtml(mailTemplate, mailMessage);
+              const subject = `You've been invited to take a survey: ${surveyTitle}`;
+              let sent = 0, failed = 0;
+
+              for (const email of rawEmails) {
+                // Build RFC 2822 message
+                const mime = [
+                  `To: ${email}`,
+                  `Subject: ${subject}`,
+                  `MIME-Version: 1.0`,
+                  `Content-Type: text/html; charset=UTF-8`,
+                  ``,
+                  html,
+                ].join('\r\n');
+
+                const encoded = btoa(unescape(encodeURIComponent(mime)))
+                  .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+                try {
+                  const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+                    method: 'POST',
+                    headers: {
+                      Authorization: `Bearer ${googleToken}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ raw: encoded }),
+                  });
+                  if (res.ok) sent++;
+                  else {
+                    const err = await res.json().catch(() => ({}));
+                    // Token may have expired — fall through to mailto
+                    if (res.status === 401) {
+                      localStorage.removeItem('google_access_token');
+                      setMailResult({ type: 'error', text: 'Gmail session expired. Please sign out and sign in with Google again, then retry.' });
+                      setMailSending(false);
+                      return;
+                    }
+                    if (res.status === 403) {
+                      setMailResult({ type: 'error', text: 'Gmail permission denied. Sign out, sign back in with Google, and grant Gmail access when prompted.' });
+                      setMailSending(false);
+                      return;
+                    }
+                    console.error('Gmail send error:', err);
+                    failed++;
+                  }
+                } catch { failed++; }
+              }
+
+              setMailResult({
+                type: sent > 0 ? 'success' : 'error',
+                text: sent > 0
+                  ? `✓ Sent from your Gmail to ${sent} recipient${sent > 1 ? 's' : ''}${failed > 0 ? `, ${failed} failed` : ''}`
+                  : 'Failed to send. Try signing out and back in with Google.',
+              });
+              if (sent > 0) { setMailEmails(''); setMailMessage(''); }
+
+            } else {
+              // ── Fallback: backend SMTP for non-Google users ──
+              // Same HTML template, sent from our server on their behalf
+              const controller = new AbortController();
+              const timer = setTimeout(() => controller.abort(), 15000);
+              try {
+                const token = localStorage.getItem('auth_token');
+                const res = await fetch(`${apiBaseUrl}/api/surveys/${surveyId}/send-invite`, {
+                  method: 'POST',
+                  signal: controller.signal,
+                  headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                  body: JSON.stringify({ emails: rawEmails, template: mailTemplate, message: mailMessage, survey_link: shareLink }),
+                });
+                clearTimeout(timer);
+                const data = await res.json();
+                if (res.ok && data.success) {
+                  setMailResult({ type: 'success', text: data.message });
+                  setMailEmails(''); setMailMessage('');
+                } else {
+                  setMailResult({ type: 'error', text: data.error || 'Failed to send' });
+                }
+              } catch (err: any) {
+                clearTimeout(timer);
+                if (err?.name === 'AbortError') {
+                  setMailResult({ type: 'error', text: 'Request timed out. Backend may be unavailable.' });
+                } else {
+                  setMailResult({ type: 'error', text: `Network error: ${err?.message || 'Could not reach server'}` });
+                }
+              }
+            }
+
+            setMailSending(false);
+          }}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 16px', background: mailSending || !mailEmails.trim() ? '#d1d5db' : '#ef4444', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: mailSending || !mailEmails.trim() ? 'not-allowed' : 'pointer' }}
+        >
+          {mailSending
+            ? <><Loader2 size={13} className="animate-spin" /> Sending...</>
+            : localStorage.getItem('google_access_token')
+              ? <><Send size={13} /> Send via My Gmail</>
+              : <><Send size={13} /> Send Invites</>
+          }
+        </button>
+
+        <p style={{ margin: 0, fontSize: 10, color: '#9ca3af', textAlign: 'center', lineHeight: 1.5 }}>
+          {localStorage.getItem('google_access_token')
+            ? '✓ Signed in with Google — sends HTML email directly from your account'
+            : 'Opens Gmail compose pre-filled in a new tab. Sign in with Google for silent direct sending.'}
+        </p>
+      </div>
+
+      {/* Right: Live iframe preview */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#EFEFEC', minWidth: 0 }}>
+        <div style={{ padding: '8px 14px', background: 'rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#ff5f57' }} />
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#febc2e' }} />
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#28c840' }} />
+          <span style={{ marginLeft: 8, fontSize: 10, color: '#9B9189', fontFamily: 'monospace' }}>Email Preview (live)</span>
+        </div>
+        <iframe
+          srcDoc={buildHtml(mailTemplate, mailMessage)}
+          style={{ flex: 1, border: 'none', width: '100%', minHeight: 420 }}
+          sandbox="allow-same-origin"
+          title="Email Preview"
+        />
+      </div>
+    </div>
+  );
+};
+
 const SurveyEditor: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -140,10 +453,6 @@ const SurveyEditor: React.FC = () => {
 
   // Mail invite state
   const [shareTab, setShareTab] = useState<'link' | 'mail'>('link');
-  const [mailTemplate, setMailTemplate] = useState<'minimal' | 'bold'>('minimal');
-  const [mailEmails, setMailEmails] = useState('');
-  const [mailMessage, setMailMessage] = useState('');
-  const [mailSending, setMailSending] = useState(false);
   const [mailResult, setMailResult] = useState<{type: 'success'|'error'; text: string} | null>(null);
   const [isRefining, setIsRefining] = useState(false);
   const [isGeneratingOptions, setIsGeneratingOptions] = useState(false);
@@ -679,11 +988,11 @@ const SurveyEditor: React.FC = () => {
 
       {/* ── Share Popup (floating, animated with celebration) ── */}
       {showSharePopup && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => setShowSharePopup(false)}>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowSharePopup(false)}>
           <div
-            className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden"
+            className="bg-white rounded-2xl shadow-2xl w-full flex flex-col overflow-hidden"
+            style={{ maxWidth: 960, maxHeight: '92vh', animation: 'editorModalIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)' }}
             onClick={(e) => e.stopPropagation()}
-            style={{ animation: 'editorModalIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)' }}
           >
             {/* Celebration phase */}
             {!shareLinkRevealed && (
@@ -742,9 +1051,9 @@ const SurveyEditor: React.FC = () => {
 
             {/* Link revealed phase */}
             {shareLinkRevealed && (
-              <div style={{ animation: 'shareReveal 0.4s ease-out' }}>
+              <div style={{ animation: 'shareReveal 0.4s ease-out' }} className="flex flex-col min-h-0 flex-1 overflow-hidden">
                 {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
                   <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                     <Share2 size={15} /> Share Survey
                   </h3>
@@ -752,49 +1061,33 @@ const SurveyEditor: React.FC = () => {
                     <X size={16} />
                   </button>
                 </div>
-
                 {/* Tabs */}
-                <div className="flex border-b border-gray-100 px-6 gap-1 pt-3">
-                  <button
-                    onClick={() => setShareTab('link')}
-                    className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-t-lg transition-colors ${shareTab === 'link' ? 'bg-white border border-b-white border-gray-200 text-gray-900 -mb-px' : 'text-gray-500 hover:text-gray-700'}`}
-                  >
-                    <ExternalLink size={12} /> Link
-                  </button>
-                  <button
-                    onClick={() => { setShareTab('mail'); setMailResult(null); }}
-                    className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-t-lg transition-colors ${shareTab === 'mail' ? 'bg-white border border-b-white border-gray-200 text-gray-900 -mb-px' : 'text-gray-500 hover:text-gray-700'}`}
-                  >
-                    <Mail size={12} /> Mail
-                  </button>
+                <div className="flex border-b border-gray-100 px-6 shrink-0">
+                  {(['link', 'mail'] as const).map(tab => (
+                    <button key={tab} onClick={() => { setShareTab(tab); setMailResult(null); }}
+                      className={`flex items-center gap-1.5 px-5 py-3 text-xs font-semibold border-b-2 transition-colors ${shareTab === tab ? 'border-red-500 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                    >
+                      {tab === 'link' ? <ExternalLink size={12} /> : <Mail size={12} />}
+                      {tab === 'link' ? 'Copy Link' : 'Send Mail'}
+                    </button>
+                  ))}
                 </div>
+                {/* Scrollable body */}
+                <div className="overflow-y-auto flex-1">
 
                 {/* ── Tab: Link ── */}
                 {shareTab === 'link' && (
-                  <div className="px-6 py-5 space-y-4">
+                  <div className="px-6 py-6 space-y-4">
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-2">Survey Link</label>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Survey Link</label>
                       <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={shareLink}
-                          readOnly
-                          className="flex-1 border border-gray-200 rounded-lg px-3 py-2.5 text-xs bg-gray-50 truncate font-mono"
-                        />
-                        <button
-                          onClick={copyToClipboard}
-                          className="px-3 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs flex items-center gap-1.5 transition-colors"
-                        >
-                          {copied ? <><CheckCircle size={13} /> Copied</> : <><Copy size={13} /> Copy</>}
+                        <input type="text" value={shareLink} readOnly className="flex-1 border border-gray-200 rounded-lg px-3 py-2.5 text-xs bg-gray-50 truncate font-mono" />
+                        <button onClick={copyToClipboard} className="px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs flex items-center gap-1.5 transition-colors font-medium whitespace-nowrap">
+                          {copied ? <><CheckCircle size={13} /> Copied!</> : <><Copy size={13} /> Copy</>}
                         </button>
                       </div>
                     </div>
-                    <a
-                      href={shareLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full flex items-center justify-center gap-2 px-3 py-2.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50 transition-colors"
-                    >
+                    <a href={shareLink} target="_blank" rel="noopener noreferrer" className="w-full flex items-center justify-center gap-2 px-3 py-2.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50 transition-colors">
                       <ExternalLink size={13} /> Open in New Tab
                     </a>
                   </div>
@@ -802,158 +1095,15 @@ const SurveyEditor: React.FC = () => {
 
                 {/* ── Tab: Mail ── */}
                 {shareTab === 'mail' && (
-                  <div className="px-6 py-5 space-y-5">
-
-                    {/* Template picker */}
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wide">Choose Template</label>
-                      <div className="grid grid-cols-2 gap-3">
-
-                        {/* Template 1 – Minimal */}
-                        <button
-                          onClick={() => setMailTemplate('minimal')}
-                          className={`rounded-xl border-2 overflow-hidden transition-all text-left ${mailTemplate === 'minimal' ? 'border-red-400 ring-2 ring-red-100' : 'border-gray-200 hover:border-gray-300'}`}
-                        >
-                          {/* Preview card */}
-                          <div className="bg-[#F5F1E8] p-3">
-                            <div className="bg-white rounded-lg overflow-hidden shadow-sm">
-                              <div className="bg-gradient-to-r from-[#C4785C] to-[#A0522D] px-3 py-2 text-center">
-                                <div className="w-5 h-5 bg-white/20 rounded-full mx-auto mb-1" />
-                                <div className="h-1.5 bg-white/40 rounded w-12 mx-auto" />
-                              </div>
-                              <div className="px-3 py-2 space-y-1.5">
-                                <div className="h-2 bg-gray-800 rounded w-3/4" />
-                                <div className="h-1.5 bg-gray-300 rounded w-full" />
-                                <div className="h-1.5 bg-gray-300 rounded w-5/6" />
-                                <div className="bg-[#FFF8F5] border border-[#F0DDD5] rounded p-1.5 mt-2">
-                                  <div className="h-1.5 bg-[#C4785C] rounded w-1/2 mb-1" />
-                                  <div className="h-2 bg-gray-700 rounded w-full" />
-                                </div>
-                                <div className="flex justify-center pt-1">
-                                  <div className="h-4 bg-[#C4785C] rounded-full w-16" />
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="px-3 py-2 bg-white flex items-center justify-between">
-                            <span className="text-[11px] font-semibold text-gray-700">Minimal Light</span>
-                            {mailTemplate === 'minimal' && <CheckCircle size={12} className="text-red-500" />}
-                          </div>
-                        </button>
-
-                        {/* Template 2 – Bold Dark */}
-                        <button
-                          onClick={() => setMailTemplate('bold')}
-                          className={`rounded-xl border-2 overflow-hidden transition-all text-left ${mailTemplate === 'bold' ? 'border-red-400 ring-2 ring-red-100' : 'border-gray-200 hover:border-gray-300'}`}
-                        >
-                          <div className="bg-[#1A1310] p-3">
-                            <div className="bg-[#2D2520] rounded-lg overflow-hidden shadow-sm">
-                              <div className="px-3 py-2 text-center">
-                                <div className="w-5 h-5 bg-[#3D342E] rounded-lg mx-auto mb-1" />
-                                <div className="h-2.5 bg-white rounded w-3/4 mx-auto mb-1" />
-                                <div className="h-1.5 bg-gray-600 rounded w-1/2 mx-auto" />
-                              </div>
-                              <div className="px-3 pb-2 space-y-1.5">
-                                <div className="bg-gradient-to-r from-[#C4785C] to-[#8B4A2E] rounded p-1.5">
-                                  <div className="h-1.5 bg-white/40 rounded w-1/2 mb-1" />
-                                  <div className="h-2 bg-white rounded w-full" />
-                                </div>
-                                <div className="flex justify-center pt-1">
-                                  <div className="h-4 bg-[#C4785C] rounded-full w-16" />
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="px-3 py-2 bg-white flex items-center justify-between">
-                            <span className="text-[11px] font-semibold text-gray-700">Bold Dark</span>
-                            {mailTemplate === 'bold' && <CheckCircle size={12} className="text-red-500" />}
-                          </div>
-                        </button>
-
-                      </div>
-                    </div>
-
-                    {/* Recipients */}
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Recipients</label>
-                      <textarea
-                        value={mailEmails}
-                        onChange={e => setMailEmails(e.target.value)}
-                        placeholder="Enter emails, one per line or comma separated&#10;e.g. alice@example.com, bob@example.com"
-                        rows={3}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-xs text-gray-700 resize-none focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-300 transition"
-                      />
-                    </div>
-
-                    {/* Custom message */}
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">
-                        Personal Message <span className="text-gray-400 normal-case font-normal">(optional)</span>
-                      </label>
-                      <textarea
-                        value={mailMessage}
-                        onChange={e => setMailMessage(e.target.value)}
-                        placeholder="Add a short note that will appear in the email..."
-                        rows={2}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-xs text-gray-700 resize-none focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-300 transition"
-                      />
-                    </div>
-
-                    {/* Result banner */}
-                    {mailResult && (
-                      <div className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-medium ${mailResult.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-600 border border-red-200'}`}>
-                        {mailResult.type === 'success' ? <CheckCircle size={13} /> : <X size={13} />}
-                        {mailResult.text}
-                      </div>
-                    )}
-
-                    {/* Send button */}
-                    <button
-                      disabled={mailSending || !mailEmails.trim()}
-                      onClick={async () => {
-                        setMailSending(true);
-                        setMailResult(null);
-                        try {
-                          const rawEmails = mailEmails.split(/[\n,]+/).map(e => e.trim()).filter(Boolean);
-                          const token = localStorage.getItem('auth_token');
-                          const res = await fetch(`${apiBaseUrl}/api/surveys/${id}/send-invite`, {
-                            method: 'POST',
-                            headers: {
-                              'Content-Type': 'application/json',
-                              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                            },
-                            body: JSON.stringify({
-                              emails: rawEmails,
-                              template: mailTemplate,
-                              message: mailMessage,
-                              survey_link: shareLink,
-                            }),
-                          });
-                          const data = await res.json();
-                          if (res.ok && data.success) {
-                            setMailResult({ type: 'success', text: data.message });
-                            setMailEmails('');
-                            setMailMessage('');
-                          } else {
-                            setMailResult({ type: 'error', text: data.error || 'Failed to send emails' });
-                          }
-                        } catch {
-                          setMailResult({ type: 'error', text: 'Network error. Please try again.' });
-                        } finally {
-                          setMailSending(false);
-                        }
-                      }}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg text-xs font-semibold transition-colors"
-                    >
-                      {mailSending
-                        ? <><Loader2 size={13} className="animate-spin" /> Sending...</>
-                        : <><Send size={13} /> Send Invites</>
-                      }
-                    </button>
-
-                  </div>
+                  <MailInviteTab
+                    surveyId={id}
+                    surveyTitle={survey?.prompt?.slice(0, 80) || 'Your Survey'}
+                    senderName={user?.name || user?.email?.split('@')[0] || 'Someone'}
+                    shareLink={shareLink}
+                    apiBaseUrl={apiBaseUrl}
+                  />
                 )}
-
+                </div>
               </div>
             )}
           </div>

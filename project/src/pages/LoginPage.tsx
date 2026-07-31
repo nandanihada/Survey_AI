@@ -102,6 +102,12 @@ const LoginPage: React.FC = () => {
       setError('');
       const result = await signInWithPopup(auth, googleProvider);
       const idToken = await result.user.getIdToken();
+      // Store Google OAuth access token for Gmail API use
+      const credential = result as any;
+      const googleAccessToken = credential?._tokenResponse?.oauthAccessToken || credential?.user?.accessToken;
+      if (googleAccessToken) {
+        localStorage.setItem('google_access_token', googleAccessToken);
+      }
       
       // Send Firebase token to our backend to create/login user
       const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';

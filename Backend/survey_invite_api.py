@@ -42,142 +42,123 @@ def _send_email(to_email: str, subject: str, html_body: str) -> bool:
         return False
 
 
-def _build_template_minimal(survey_title: str, survey_link: str, message: str, sender_name: str) -> str:
-    """Template 1 – clean minimal card"""
+def _build_premium_template(survey_title: str, survey_link: str, message: str, template_id: str) -> str:
+    """Paperish PepperWahl email — clean editorial style, no emojis, real logo"""
+    accent_color  = '#2C3E50' if template_id == 'bold' else '#C4785C'
+    header_bg     = '#2C3E50' if template_id == 'bold' else '#3D2B1F'
+    cta_bg        = '#2C3E50' if template_id == 'bold' else '#C4785C'
+    card_border   = '#CBD5E1' if template_id == 'bold' else '#E8DDD5'
+    card_bg       = '#F8FAFC' if template_id == 'bold' else '#FBF8F5'
+
+    msg_block = ''
+    if message:
+        msg_block = f'''<tr>
+      <td style="padding:0 44px 28px;">
+        <div style="border-left:3px solid {accent_color};padding:12px 18px;background:#FAFAFA;">
+          <p style="margin:0;font-size:14px;color:#555;line-height:1.8;font-style:italic;">{message}</p>
+        </div>
+      </td>
+    </tr>'''
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>{survey_title}</title>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Survey Invitation</title>
 </head>
-<body style="margin:0;padding:0;background:#F5F1E8;font-family:'Segoe UI',Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F1E8;padding:40px 0;">
-    <tr><td align="center">
-      <table width="580" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+<body style="margin:0;padding:0;background:#EFEFEC;font-family:Georgia,'Times New Roman',serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#EFEFEC;padding:40px 20px;">
+<tr><td align="center">
+<table width="580" cellpadding="0" cellspacing="0" style="max-width:580px;background:#FFFFFF;border:1px solid #DDD8D2;">
 
-        <!-- Header -->
+  <!-- Header -->
+  <tr>
+    <td style="background:{header_bg};padding:28px 44px;border-bottom:3px solid {accent_color};">
+      <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
-          <td style="background:linear-gradient(135deg,#C4785C 0%,#A0522D 100%);padding:36px 40px;text-align:center;">
-            <img src="{FRONTEND_URL}/logo.png" alt="Pepperwahl" width="52" height="52"
-                 style="display:block;margin:0 auto 12px;object-fit:contain;border-radius:10px;" />
-            <p style="margin:0;color:rgba(255,255,255,0.85);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;font-weight:600;">
-              Pepperwahl Surveys
-            </p>
+          <td>
+            <img src="{FRONTEND_URL}/logo.png" alt="Pepperwahl" width="36" height="36"
+                 style="display:inline-block;vertical-align:middle;border-radius:4px;margin-right:10px;" />
+            <span style="font-family:Arial,sans-serif;font-size:15px;font-weight:700;color:#FFFFFF;vertical-align:middle;letter-spacing:0.5px;">Pepperwahl</span>
+          </td>
+          <td align="right">
+            <span style="font-family:Arial,sans-serif;font-size:11px;color:rgba(255,255,255,0.55);letter-spacing:1px;text-transform:uppercase;">Survey Invitation</span>
           </td>
         </tr>
-
-        <!-- Body -->
-        <tr>
-          <td style="padding:40px 40px 32px;">
-            <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#2D2520;">
-              You've been invited!
-            </h1>
-            <p style="margin:0 0 20px;font-size:14px;color:#9B9189;line-height:1.6;">
-              {sender_name} is collecting feedback and would love to hear from you.
-            </p>
-            <div style="background:#FFF8F5;border:1px solid #F0DDD5;border-radius:10px;padding:20px 24px;margin-bottom:28px;">
-              <p style="margin:0 0 4px;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#C4785C;">Survey</p>
-              <p style="margin:0;font-size:17px;font-weight:700;color:#2D2520;">{survey_title}</p>
-            </div>
-            {f'<p style="margin:0 0 28px;font-size:14px;color:#5A5045;line-height:1.7;background:#FDFCFA;border-left:3px solid #C4785C;padding:14px 18px;border-radius:0 8px 8px 0;">{message}</p>' if message else ''}
-            <div style="text-align:center;margin-bottom:8px;">
-              <a href="{survey_link}"
-                 style="display:inline-block;background:#C4785C;color:#ffffff;text-decoration:none;
-                        font-size:15px;font-weight:700;padding:14px 40px;border-radius:50px;
-                        letter-spacing:0.3px;">
-                Take the Survey →
-              </a>
-            </div>
-            <p style="text-align:center;margin:16px 0 0;font-size:11px;color:#BDB8B2;">
-              Or paste this link: <a href="{survey_link}" style="color:#C4785C;">{survey_link}</a>
-            </p>
-          </td>
-        </tr>
-
-        <!-- Footer -->
-        <tr>
-          <td style="background:#F5F1E8;padding:20px 40px;text-align:center;border-top:1px solid #EBE8E3;">
-            <p style="margin:0;font-size:11px;color:#BDB8B2;line-height:1.7;">
-              This invite was sent via <strong>Pepperwahl</strong> · <a href="{FRONTEND_URL}" style="color:#C4785C;text-decoration:none;">pepperwahl.com</a>
-            </p>
-          </td>
-        </tr>
-
       </table>
-    </td></tr>
-  </table>
+    </td>
+  </tr>
+
+  <!-- Greeting -->
+  <tr>
+    <td style="padding:44px 44px 20px;">
+      <p style="margin:0 0 20px;font-size:26px;font-weight:700;color:#1A1A1A;line-height:1.3;font-family:Georgia,serif;">
+        We'd love to hear<br/>your thoughts.
+      </p>
+      <p style="margin:0;font-size:15px;color:#666;line-height:1.8;font-family:Arial,sans-serif;">
+        Your feedback matters. A few minutes of your time helps us build something genuinely better for everyone.
+      </p>
+    </td>
+  </tr>
+
+  <!-- Personal message -->
+  {msg_block}
+
+  <!-- Survey card -->
+  <tr>
+    <td style="padding:12px 44px 32px;">
+      <div style="border:1px solid {card_border};background:{card_bg};padding:28px 32px;">
+        <p style="margin:0 0 6px;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:{accent_color};font-family:Arial,sans-serif;">Survey</p>
+        <p style="margin:0 0 12px;font-size:19px;font-weight:700;color:#1A1A1A;line-height:1.4;font-family:Georgia,serif;">{survey_title}</p>
+        <p style="margin:0;font-size:13px;color:#888;font-family:Arial,sans-serif;">Takes approximately 2 minutes to complete.</p>
+      </div>
+    </td>
+  </tr>
+
+  <!-- CTA -->
+  <tr>
+    <td style="padding:0 44px 36px;">
+      <a href="{survey_link}"
+         style="display:inline-block;background:{cta_bg};color:#FFFFFF;text-decoration:none;
+                font-size:14px;font-weight:700;padding:14px 36px;
+                font-family:Arial,sans-serif;letter-spacing:0.5px;">
+        Take the Survey
+      </a>
+      <p style="margin:16px 0 0;font-size:11px;color:#AAA;font-family:Arial,sans-serif;">
+        Or copy this link: <a href="{survey_link}" style="color:{accent_color};text-decoration:none;">{survey_link}</a>
+      </p>
+    </td>
+  </tr>
+
+  <!-- Divider -->
+  <tr><td style="padding:0 44px;"><div style="height:1px;background:#E8E4DF;"></div></td></tr>
+
+  <!-- Footer -->
+  <tr>
+    <td style="padding:24px 44px;">
+      <p style="margin:0 0 4px;font-size:12px;color:#999;font-family:Arial,sans-serif;line-height:1.7;">
+        This invitation was sent via <strong style="color:#555;">Pepperwahl</strong>. Thank you for taking the time.
+      </p>
+      <p style="margin:0;font-size:11px;color:#BBB;font-family:Arial,sans-serif;">
+        Team Pepperwahl &nbsp;&middot;&nbsp; pepperwahl.com
+      </p>
+    </td>
+  </tr>
+
+</table>
+</td></tr>
+</table>
 </body>
 </html>"""
 
 
-def _build_template_bold(survey_title: str, survey_link: str, message: str, sender_name: str) -> str:
-    """Template 2 – bold dark hero"""
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>{survey_title}</title>
-</head>
-<body style="margin:0;padding:0;background:#1A1310;font-family:'Segoe UI',Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#1A1310;padding:40px 0;">
-    <tr><td align="center">
-      <table width="580" cellpadding="0" cellspacing="0" style="background:#2D2520;border-radius:16px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.4);">
+# Keep old function names as aliases for the route handler
+def _build_template_minimal(survey_title, survey_link, message, sender_name):
+    return _build_premium_template(survey_title, survey_link, message, 'minimal')
 
-        <!-- Hero -->
-        <tr>
-          <td style="padding:48px 40px 36px;text-align:center;">
-            <img src="{FRONTEND_URL}/logo.png" alt="Pepperwahl" width="60" height="60"
-                 style="display:block;margin:0 auto 20px;object-fit:contain;border-radius:12px;
-                        background:#3D342E;padding:8px;" />
-            <h1 style="margin:0 0 10px;font-size:28px;font-weight:800;color:#FFFFFF;letter-spacing:-0.5px;">
-              Quick Survey Invite
-            </h1>
-            <p style="margin:0;font-size:14px;color:#9B9189;line-height:1.6;">
-              {sender_name} wants your opinion
-            </p>
-          </td>
-        </tr>
-
-        <!-- Survey card -->
-        <tr>
-          <td style="padding:0 40px 32px;">
-            <div style="background:linear-gradient(135deg,#C4785C 0%,#8B4A2E 100%);
-                        border-radius:12px;padding:24px 28px;margin-bottom:28px;">
-              <p style="margin:0 0 6px;font-size:11px;font-weight:700;letter-spacing:1.5px;
-                         text-transform:uppercase;color:rgba(255,255,255,0.65);">Now taking responses</p>
-              <p style="margin:0;font-size:20px;font-weight:700;color:#FFFFFF;">{survey_title}</p>
-            </div>
-            {f'<p style="margin:0 0 28px;font-size:14px;color:#BDB8B2;line-height:1.7;padding:16px 20px;border:1px solid #3D342E;border-radius:10px;">{message}</p>' if message else ''}
-            <div style="text-align:center;">
-              <a href="{survey_link}"
-                 style="display:inline-block;background:#C4785C;color:#ffffff;text-decoration:none;
-                        font-size:15px;font-weight:700;padding:15px 44px;border-radius:50px;">
-                Start Survey
-              </a>
-            </div>
-            <p style="text-align:center;margin:18px 0 0;font-size:11px;color:#5A5045;">
-              <a href="{survey_link}" style="color:#C4785C;">{survey_link}</a>
-            </p>
-          </td>
-        </tr>
-
-        <!-- Footer -->
-        <tr>
-          <td style="background:#221C18;padding:18px 40px;text-align:center;border-top:1px solid #3D342E;">
-            <p style="margin:0;font-size:11px;color:#5A5045;line-height:1.7;">
-              Powered by <strong style="color:#C4785C;">Pepperwahl</strong> ·
-              <a href="{FRONTEND_URL}" style="color:#C4785C;text-decoration:none;">pepperwahl.com</a>
-            </p>
-          </td>
-        </tr>
-
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>"""
+def _build_template_bold(survey_title, survey_link, message, sender_name):
+    return _build_premium_template(survey_title, survey_link, message, 'bold')
 
 
 @survey_invite_bp.route('/api/surveys/<survey_id>/send-invite', methods=['POST', 'OPTIONS'])
@@ -227,7 +208,7 @@ def send_survey_invite(survey_id):
             except Exception:
                 pass
 
-        subject = f"📋 {sender_name} invited you to take a survey: {survey_title}"
+        subject = f"📋 You've been invited to take a survey: {survey_title}"
 
         sent, failed = [], []
         for email in emails:
