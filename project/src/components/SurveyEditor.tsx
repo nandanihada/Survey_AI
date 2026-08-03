@@ -1010,6 +1010,7 @@ const SurveyEditor: React.FC = () => {
             if (idx >= 0 && idx < qs.length) {
               const arr = [...qs];
               (arr[idx] as any).redirect_config = null;
+              (arr[idx] as any).redirect_configs = null;  // also clear multi-configs
               updated.questions = arr;
             }
           }
@@ -1019,6 +1020,45 @@ const SurveyEditor: React.FC = () => {
             if (idx >= 0 && idx < qs.length) {
               const arr = [...qs];
               (arr[idx] as any).end_here = null;
+              updated.questions = arr;
+            }
+          }
+
+          else if (op.type === 'chain_survey') {
+            const idx = op.index;
+            if (idx >= 0 && idx < qs.length) {
+              const arr = [...qs];
+              let surveyUrl = op.survey_url || '';
+              if (surveyUrl && !surveyUrl.startsWith('http://') && !surveyUrl.startsWith('https://')) {
+                surveyUrl = 'https://' + surveyUrl;
+              }
+              (arr[idx] as any).next_survey = {
+                enabled: true,
+                url: surveyUrl,
+                condition: op.condition || 'always',
+                mode: op.mode || 'ask',
+                message: op.message || 'Another survey is waiting for you!',
+                yes_label: 'Continue',
+                no_label: 'No thanks',
+                configs: [],
+              };
+              updated.questions = arr;
+            }
+          }
+
+          else if (op.type === 'add_pass_page' || op.type === 'add_fail_page') {
+            const idx = op.index;
+            if (idx >= 0 && idx < qs.length) {
+              const arr = [...qs];
+              const pfType = op.type === 'add_pass_page' ? 'pass' : 'fail';
+              (arr[idx] as any).pass_fail_page = {
+                enabled: true,
+                type: pfType,
+                condition: op.condition || 'always',
+                title: op.title || (pfType === 'pass' ? 'Congratulations!' : 'Sorry!'),
+                message: op.message || (pfType === 'pass' ? 'You qualify!' : 'You don\'t meet the criteria.'),
+                icon: op.icon || (pfType === 'pass' ? '✅' : '❌'),
+              };
               updated.questions = arr;
             }
           }
@@ -2158,45 +2198,48 @@ const SurveyEditor: React.FC = () => {
 
       {/* ── Branching Editor Modal ── */}
       {showBranchingEditor && survey && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-2xl shadow-2xl w-[95vw] max-w-6xl h-[90vh] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-[96vh] sm:h-[90vh] flex flex-col overflow-hidden">
             {/* Modal Header with View Toggle */}
-            <div className="flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-purple-50 to-indigo-50">
-              <div className="flex items-center gap-4">
-                <GitBranch className="text-purple-600" size={24} />
-                <h2 className="text-xl font-bold text-gray-800">Branching Logic</h2>
+            <div className="flex items-center justify-between gap-2 px-3 sm:px-6 py-3 sm:py-4 border-b bg-gradient-to-r from-purple-50 to-indigo-50">
+              {/* Title */}
+              <div className="flex items-center gap-2 min-w-0 flex-shrink-0">
+                <GitBranch className="text-purple-600 flex-shrink-0" size={18} />
+                <h2 className="text-sm sm:text-xl font-bold text-gray-800 whitespace-nowrap">Branching</h2>
               </div>
               
-              {/* View Mode Toggle */}
-              <div className="flex items-center gap-2 bg-white rounded-lg p-1 border shadow-sm">
+              {/* Center: View Mode Toggle + Close */}
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                <div className="flex items-center gap-0.5 bg-white rounded-lg p-1 border shadow-sm">
+                  <button
+                    onClick={() => setBranchingViewMode('simple')}
+                    className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-md text-[11px] sm:text-sm font-medium transition-all whitespace-nowrap ${
+                      branchingViewMode === 'simple' 
+                        ? 'bg-purple-600 text-white shadow' 
+                        : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    📋 Table
+                  </button>
+                  <button
+                    onClick={() => setBranchingViewMode('flow')}
+                    className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-md text-[11px] sm:text-sm font-medium transition-all whitespace-nowrap ${
+                      branchingViewMode === 'flow' 
+                        ? 'bg-purple-600 text-white shadow' 
+                        : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    🔀 Diagram
+                  </button>
+                </div>
+                
                 <button
-                  onClick={() => setBranchingViewMode('simple')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                    branchingViewMode === 'simple' 
-                      ? 'bg-purple-600 text-white shadow' 
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
+                  onClick={() => { setShowBranchingEditor(false); setBranchFocusQuestionId(null); }}
+                  className="p-1.5 rounded-full hover:bg-gray-200 transition-colors flex-shrink-0"
                 >
-                  📋 Simple Table
-                </button>
-                <button
-                  onClick={() => setBranchingViewMode('flow')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                    branchingViewMode === 'flow' 
-                      ? 'bg-purple-600 text-white shadow' 
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  🔀 Flow Diagram
+                  <X size={18} className="text-gray-500" />
                 </button>
               </div>
-              
-              <button
-                onClick={() => { setShowBranchingEditor(false); setBranchFocusQuestionId(null); }}
-                className="p-2 rounded-full hover:bg-gray-200 transition-colors"
-              >
-                <X size={20} className="text-gray-500" />
-              </button>
             </div>
             
             {/* Content Area */}
@@ -2266,8 +2309,11 @@ const SurveyEditor: React.FC = () => {
               'End survey after this Q if No',
               'Add redirect after this Q',
               'Add a Yes/No question after this Q',
+              'Chain next survey after this Q',
               'Delete this question',
               'Move this Q to top',
+              'Add pass page after this Q',
+              'Add fail page after this Q',
             ].map(chip => (
               <button
                 key={chip}

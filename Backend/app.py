@@ -5376,6 +5376,9 @@ AVAILABLE OPERATION TYPES (return as JSON array):
 8. remove_redirect   — {{ "type": "remove_redirect", "index": N }}
 9. remove_end        — {{ "type": "remove_end", "index": N }}
 10. reorder          — {{ "type": "reorder", "new_order": [0,2,1,3,...] }}  (0-based indices)
+11. chain_survey     — {{ "type": "chain_survey", "index": N, "survey_url": "https://...", "condition": "always|Yes|No|<answer>", "mode": "ask|inline|direct", "message": "Another survey is waiting!" }}
+12. add_pass_page  — {{ "type": "add_pass_page", "index": N, "condition": "always|<answer>", "title": "Congratulations!", "message": "You qualify!", "icon": "✅" }}
+13. add_fail_page  — {{ "type": "add_fail_page", "index": N, "condition": "always|<answer>", "title": "Sorry!", "message": "You don't meet the criteria.", "icon": "❌" }}
 
 RULES:
 - Indices are 0-based (Q1 = index 0, Q2 = index 1, etc.)
@@ -5386,6 +5389,9 @@ RULES:
 - Be flexible with phrasing: "add redirect", "redirect to", "send to", "send user to" all mean add_redirect
 - "end survey", "stop survey", "finish here" all mean end_survey  
 - "add question", "insert question", "create question" all mean add_question
+- "chain survey", "link survey", "add next survey", "after this survey go to" all mean chain_survey
+- "add pass page", "show pass result", "qualify message" all mean add_pass_page
+- "add fail page", "show fail result", "disqualify message" all mean add_fail_page
 - Return ONLY a JSON object: {{ "ops": [...], "message": "short human-readable summary of what was done" }}
 - Do NOT wrap in markdown. Return pure JSON only.
 - If you cannot understand the instruction, return {{ "ops": [], "message": "I couldn't understand that. Try: 'add redirect to https://... after Q3 if Yes' or 'end survey after Q2 if No'" }}
@@ -5422,7 +5428,7 @@ User instruction: {prompt}"""
         message = result.get("message", "Done.")
 
         # Apply redirect/end ops directly to the survey in DB so branching panel reflects immediately
-        if any(op["type"] in ("add_redirect", "end_survey", "remove_redirect", "remove_end") for op in ops):
+        if any(op["type"] in ("add_redirect", "end_survey", "remove_redirect", "remove_end", "chain_survey", "add_pass_page", "add_fail_page") for op in ops):
             survey_doc = db.surveys.find_one({"$or": [{"_id": survey_id}, {"id": survey_id}]})
             if survey_doc:
                 qs = list(survey_doc.get("questions", []))
@@ -5450,9 +5456,33 @@ User instruction: {prompt}"""
                         }
                     elif op["type"] == "remove_redirect":
                         qs[idx]["redirect_config"] = None
+                        qs[idx]["redirect_configs"] = None  # also clear multi-configs
                     elif op["type"] == "remove_end":
                         qs[idx]["end_here"] = None
-
+                    elif op["type"] == "chain_survey":
+                        survey_url = op.get("survey_url", "")
+                        if survey_url and not survey_url.startswith(("http://", "https://")):
+                            survey_url = "https://" + survey_url
+                        qs[idx]["next_survey"] = {
+                            "enabled": True,
+                            "url": survey_url,
+                            "condition": op.get("condition", "always"),
+                            "mode": op.get("mode", "ask"),
+                            "message": op.get("message", "Another survey is waiting for you!"),
+                            "yes_label": "Continue",
+                            "no_label": "No thanks",
+                            "configs": [],
+                        }
+                    elif op["type"] in ("add_pass_page", "add_fail_page"):
+                        pf_type = "pass" if op["type"] == "add_pass_page" else "fail"
+                        qs[idx]["pass_fail_page"] = {
+                            "enabled": True,
+                            "type": pf_type,
+                            "condition": op.get("condition", "always"),
+                            "title": op.get("title", "Congratulations!" if pf_type == "pass" else "Sorry!"),
+                            "message": op.get("message", "You qualify!" if pf_type == "pass" else "You don't meet the criteria."),
+                            "icon": op.get("icon", "✅" if pf_type == "pass" else "❌"),
+                        }
                 db.surveys.update_one(
                     {"$or": [{"_id": survey_id}, {"id": survey_id}]},
                     {"$set": {"questions": qs}}

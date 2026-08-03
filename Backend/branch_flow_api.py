@@ -523,7 +523,23 @@ def get_branching_rules(survey_id):
                     "redirect_configs": redirect_configs,
                     # End here settings
                     "end_here_enabled": bool((q.get("end_here") or {}).get("enabled", False)),
-                    "end_here_condition": (q.get("end_here") or {}).get("condition", "always")
+                    "end_here_condition": (q.get("end_here") or {}).get("condition", "always"),
+                    # Chain survey settings
+                    "chain_survey_enabled": bool((q.get("next_survey") or {}).get("enabled", False)),
+                    "chain_survey_url": (q.get("next_survey") or {}).get("url") or None,
+                    "chain_survey_condition": (q.get("next_survey") or {}).get("condition", "always"),
+                    "chain_survey_mode": (q.get("next_survey") or {}).get("mode", "ask"),
+                    "chain_survey_message": (q.get("next_survey") or {}).get("message", "Another survey is waiting for you!"),
+                    "chain_survey_yes_label": (q.get("next_survey") or {}).get("yes_label", "Continue"),
+                    "chain_survey_no_label": (q.get("next_survey") or {}).get("no_label", "No thanks"),
+                    "chain_survey_configs": (q.get("next_survey") or {}).get("configs", []),
+                    # Pass/Fail page
+                    "pass_fail_enabled": bool((q.get("pass_fail_page") or {}).get("enabled", False)),
+                    "pass_fail_type": (q.get("pass_fail_page") or {}).get("type") or None,
+                    "pass_fail_condition": (q.get("pass_fail_page") or {}).get("condition", "always"),
+                    "pass_fail_title": (q.get("pass_fail_page") or {}).get("title", ""),
+                    "pass_fail_message": (q.get("pass_fail_page") or {}).get("message", ""),
+                    "pass_fail_icon": (q.get("pass_fail_page") or {}).get("icon", ""),
                 }
                 rules.append(rule)
             except Exception as qe:
@@ -546,7 +562,21 @@ def get_branching_rules(survey_id):
                     "redirect_color": "#f59e0b",
                     "allow_resume": True,
                     "end_here_enabled": False,
-                    "end_here_condition": "always"
+                    "end_here_condition": "always",
+                    "chain_survey_enabled": False,
+                    "chain_survey_url": None,
+                    "chain_survey_condition": "always",
+                    "chain_survey_mode": "ask",
+                    "chain_survey_message": "Another survey is waiting for you!",
+                    "chain_survey_yes_label": "Continue",
+                    "chain_survey_no_label": "No thanks",
+                    "chain_survey_configs": [],
+                    "pass_fail_enabled": False,
+                    "pass_fail_type": None,
+                    "pass_fail_condition": "always",
+                    "pass_fail_title": "",
+                    "pass_fail_message": "",
+                    "pass_fail_icon": "",
                 })
         
         return jsonify({
@@ -613,7 +643,7 @@ def update_branching_rules(survey_id):
                         questions[q_index]["redirect_configs"] = None
                 else:
                     questions[q_index]["redirect_config"] = None
-                    questions[q_index]["redirect_configs"] = None
+                    questions[q_index]["redirect_configs"] = None  # clear multi-configs too
 
                 # Update end_here config
                 if rule.get("end_here_enabled"):
@@ -623,6 +653,41 @@ def update_branching_rules(survey_id):
                     }
                 else:
                     questions[q_index]["end_here"] = None
+
+                # Update next_survey (chain) config
+                chain_url = rule.get("chain_survey_url")
+                chain_configs = rule.get("chain_survey_configs", [])
+                if rule.get("chain_survey_enabled") and (chain_url or chain_configs):
+                    # Ensure all per-answer configs use the current top-level mode
+                    mode = rule.get("chain_survey_mode", "ask")
+                    updated_configs = [
+                        {**c, "mode": mode} for c in chain_configs
+                    ]
+                    questions[q_index]["next_survey"] = {
+                        "enabled": True,
+                        "url": chain_url,
+                        "condition": rule.get("chain_survey_condition", "always"),
+                        "mode": mode,
+                        "message": rule.get("chain_survey_message", "Another survey is waiting for you!"),
+                        "yes_label": rule.get("chain_survey_yes_label", "Continue"),
+                        "no_label": rule.get("chain_survey_no_label", "No thanks"),
+                        "configs": updated_configs,
+                    }
+                else:
+                    questions[q_index]["next_survey"] = None
+                
+                # Update pass/fail page
+                if rule.get("pass_fail_enabled") and rule.get("pass_fail_type"):
+                    questions[q_index]["pass_fail_page"] = {
+                        "enabled": True,
+                        "type": rule.get("pass_fail_type"),
+                        "condition": rule.get("pass_fail_condition", "always"),
+                        "title": rule.get("pass_fail_title", ""),
+                        "message": rule.get("pass_fail_message", ""),
+                        "icon": rule.get("pass_fail_icon", ""),
+                    }
+                else:
+                    questions[q_index]["pass_fail_page"] = None
         
         # Update survey
         db.surveys.update_one(

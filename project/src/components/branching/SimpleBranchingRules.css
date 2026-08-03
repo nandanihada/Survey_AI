@@ -950,3 +950,565 @@
 
 .multi-redirect-divider::before { left: 0; }
 .multi-redirect-divider::after  { right: 0; }
+
+
+/* ══════════════════════════════════════════════════════════════
+   Expanded Row — Tabbed Config Panel
+   ══════════════════════════════════════════════════════════════ */
+
+/* Outer card */
+.exp-panel {
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  margin: 8px 16px 16px;
+  overflow: hidden;
+}
+
+/* ── Tab bar ── */
+.exp-tab-bar {
+  display: flex;
+  gap: 0;
+  padding: 12px 16px 0;
+  background: #f8fafc;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.exp-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: none;
+  border-bottom: 3px solid transparent;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  cursor: pointer;
+  color: #64748b;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  position: relative;
+  margin-bottom: -2px;
+}
+
+.exp-tab:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+/* Active states per tab */
+.exp-tab--redirect.exp-tab--active {
+  color: #d97706;
+  border-bottom-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.exp-tab--chain.exp-tab--active {
+  color: #0369a1;
+  border-bottom-color: #0ea5e9;
+  background: #f0f9ff;
+}
+
+.exp-tab--end.exp-tab--active {
+  color: #dc2626;
+  border-bottom-color: #ef4444;
+  background: #fff5f5;
+}
+
+/* Activity dot on tabs */
+.exp-tab-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.exp-tab-dot--amber { background: #f59e0b; }
+.exp-tab-dot--teal  { background: #0ea5e9; }
+.exp-tab-dot--red   { background: #ef4444; }
+
+/* ── Tab body ── */
+.exp-tab-body {
+  padding: 20px 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Section header strips ── */
+.exp-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+.exp-section-header--amber {
+  background: #fffbeb;
+  color: #92400e;
+  border-left: 3px solid #f59e0b;
+}
+
+.exp-section-header--teal {
+  background: #f0f9ff;
+  color: #0369a1;
+  border-left: 3px solid #0ea5e9;
+}
+
+.exp-section-header--red {
+  background: #fff5f5;
+  color: #b91c1c;
+  border-left: 3px solid #ef4444;
+}
+
+/* ── Resume block (open-in / allow-resume) ── */
+.exp-resume-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  margin-top: 4px;
+}
+
+.exp-tab-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.exp-tab-toggle-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.exp-tab-toggle-group {
+  display: flex;
+  gap: 6px;
+}
+
+.exp-tab-toggle-btn {
+  padding: 4px 12px;
+  border-radius: 8px;
+  border: 1.5px solid #e2e8f0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  background: #f8fafc;
+  color: #94a3b8;
+  transition: all 0.15s;
+}
+
+.exp-tab-toggle-btn.active {
+  border-color: #7c3aed;
+  background: #ede9fe;
+  color: #7c3aed;
+}
+
+/* ── Return URL preview ── */
+.exp-return-url-preview {
+  padding: 12px 14px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+}
+
+.exp-return-url-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #15803d;
+}
+
+.exp-return-url-note-badge {
+  font-weight: 400;
+  color: #6b7280;
+  font-size: 0.65rem;
+  background: #e2e8f0;
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+.exp-return-url-code {
+  font-family: monospace;
+  font-size: 0.7rem;
+  line-height: 1.7;
+  background: #dcfce7;
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+
+.exp-ru-muted  { color: #6b7280; }
+.exp-ru-path   { color: #047857; }
+.exp-ru-param  { color: #0284c7; }
+.exp-ru-token  {
+  background: #fef9c3;
+  color: #92400e;
+  padding: 0 3px;
+  border-radius: 3px;
+}
+
+.exp-return-url-help {
+  margin: 8px 0 0;
+  font-size: 0.7rem;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.exp-return-url-help code {
+  background: #f1f5f9;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+/* ── Chain Survey body ── */
+.exp-chain-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── Chain mode buttons ── */
+.exp-mode-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.exp-mode-btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1.5px solid #e2e8f0;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: left;
+  background: #f8fafc;
+  color: #64748b;
+  transition: all 0.15s;
+}
+
+.exp-mode-btn.active {
+  border-color: #0ea5e9;
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.exp-mode-btn-desc {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 400;
+  opacity: 0.7;
+  margin-top: 2px;
+}
+
+/* ── Button label row (yes/no labels) ── */
+.exp-btn-label-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.exp-btn-label-row .url-input {
+  flex: 1;
+}
+
+/* ── End condition ── */
+.exp-end-condition {
+  margin-top: 4px;
+}
+
+.exp-end-hint {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  margin-top: 4px;
+  display: block;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE — Branching Logic
+   ══════════════════════════════════════════════════════════════ */
+
+@media (max-width: 640px) {
+
+  /* ── Main container ── */
+  .simple-branching-rules {
+    padding: 12px;
+  }
+
+  /* ── Header ── */
+  .sbr-header {
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .sbr-header h2 {
+    font-size: 1.1rem;
+  }
+
+  .sbr-header-right {
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+
+  .sbr-btn {
+    flex: 1;
+    min-width: 0;
+    justify-content: center;
+    padding: 8px 10px;
+    font-size: 0.78rem;
+  }
+
+  /* ── Help box ── */
+  .sbr-help {
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    font-size: 0.78rem;
+  }
+
+  /* ── Table wrapper ── */
+  .sbr-table-wrapper {
+    border: none;
+    border-radius: 0;
+    overflow: visible;
+    margin-bottom: 14px;
+  }
+
+  /* Hide table thead entirely */
+  .sbr-table thead {
+    display: none;
+  }
+
+  /* Make tbody/tr/td block */
+  .sbr-table,
+  .sbr-table tbody {
+    display: block;
+    width: 100%;
+  }
+
+  /* Each data row = card */
+  .sbr-table tbody tr.always-show,
+  .sbr-table tbody tr.conditional,
+  .sbr-table tbody tr.expanded {
+    display: block;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    margin-bottom: 8px;
+    padding: 12px 12px 10px;
+    position: relative;
+  }
+
+  .sbr-table tbody tr.conditional {
+    background: #fefce8;
+    border-color: #fde68a;
+  }
+
+  /* ALL cells block by default, hidden */
+  .sbr-table tbody tr td {
+    display: none;
+    padding: 0;
+    border: none;
+  }
+
+  /* ── Row 1: number + question + expand button ── */
+  .sbr-table tbody tr td.col-num {
+    display: inline-block;
+    width: 20px;
+    color: #94a3b8;
+    font-size: 0.72rem;
+    font-weight: 700;
+    vertical-align: top;
+    padding-top: 2px;
+  }
+
+  .sbr-table tbody tr td.col-question {
+    display: inline-block;
+    width: calc(100% - 54px); /* full width minus num + expand */
+    vertical-align: top;
+    padding-bottom: 8px;
+  }
+
+  .question-text {
+    font-size: 0.875rem;
+    line-height: 1.5;
+    font-weight: 600;
+    color: #1e293b;
+    word-break: normal;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .sbr-table tbody tr td.col-expand {
+    display: inline-block;
+    width: 30px;
+    text-align: right;
+    vertical-align: top;
+    padding-top: 1px;
+  }
+
+  /* ── Row 2: type + visibility + redirect — shown as inline pills ── */
+  .sbr-table tbody tr td.col-type,
+  .sbr-table tbody tr td.col-visibility,
+  .sbr-table tbody tr td.col-redirect {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 6px;
+    margin-top: 2px;
+  }
+
+  .type-badge {
+    font-size: 0.65rem;
+    padding: 2px 8px;
+    white-space: nowrap;
+  }
+
+  .toggle-label {
+    font-size: 0.68rem;
+  }
+
+  .redirect-badge {
+    font-size: 0.65rem;
+    padding: 2px 8px;
+  }
+
+  /* HIDE these on mobile */
+  .sbr-table tbody tr td.col-depends,
+  .sbr-table tbody tr td.col-answer {
+    display: none !important;
+  }
+
+  /* Expanded row spans full width below the card */
+  .sbr-table tbody tr.expanded-row {
+    display: block;
+    margin-top: -8px;
+    margin-bottom: 8px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+  }
+
+  .sbr-table tbody tr.expanded-row td {
+    display: block;
+    padding: 0;
+    border: none;
+  }
+
+  /* ── Expanded panel on mobile ── */
+  .exp-panel {
+    margin: 4px 0 10px;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+  }
+
+  .exp-tab-bar {
+    padding: 10px 10px 0;
+    gap: 2px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .exp-tab-bar::-webkit-scrollbar { display: none; }
+
+  .exp-tab {
+    padding: 6px 10px;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .exp-tab-body {
+    padding: 12px 12px 16px;
+    gap: 10px;
+  }
+
+  .exp-section-header {
+    font-size: 0.72rem;
+    padding: 6px 10px;
+  }
+
+  /* Multi-redirect rows on mobile */
+  .multi-redirect-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+
+  .multi-redirect-answer-badge {
+    min-width: 44px;
+    font-size: 10px;
+  }
+
+  .multi-redirect-row .url-input,
+  .multi-redirect-row .sbr-select {
+    width: 100%;
+    font-size: 0.78rem;
+  }
+
+  /* Mode buttons on mobile */
+  .exp-mode-buttons {
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .exp-mode-btn {
+    width: 100%;
+    padding: 9px 12px;
+    font-size: 0.75rem;
+  }
+
+  /* Resume block */
+  .exp-resume-block {
+    padding: 10px 11px;
+    gap: 8px;
+  }
+
+  .exp-tab-toggle-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  /* Field rows */
+  .field-row label {
+    font-size: 0.72rem;
+  }
+
+  .url-input,
+  .sbr-select {
+    font-size: 0.78rem;
+  }
+
+  /* Summary bar */
+  .sbr-summary {
+    gap: 10px;
+    padding: 10px 12px;
+    flex-wrap: wrap;
+    justify-content: space-around;
+  }
+
+  .summary-count {
+    font-size: 1.1rem;
+  }
+
+  .summary-label {
+    font-size: 0.62rem;
+  }
+}

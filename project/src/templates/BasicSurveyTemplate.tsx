@@ -115,6 +115,20 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const [submitted, setSubmitted] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Chain survey state — shown mid-survey or post-completion
+  const [chainSurveyPrompt, setChainSurveyPrompt] = useState<{
+    url: string;
+    mode: 'ask' | 'inline' | 'direct';
+    message: string;
+    yesLabel: string;
+    noLabel: string;
+  } | null>(null);
+  const [passFailPage, setPassFailPage] = useState<{
+    type: 'pass' | 'fail';
+    title: string;
+    message: string;
+    icon: string;
+  } | null>(null);
   const formRef = React.useRef<HTMLFormElement>(null);
   const [alreadyCompleted, setAlreadyCompleted] = useState(false);
   const [deviceFingerprint, setDeviceFingerprint] = useState<string>('');
@@ -389,6 +403,76 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     return true; // Redirect triggered
   }, [survey.questions, clickId, resumeSessionId, survey.id, handleMidSurveyRedirect, trackClickInteraction]);
 
+  // ── Check if current question has a chain-survey configured ────────────────
+  const checkChainSurvey = useCallback((questionId: string, answer: string | number): boolean => {
+    const originalQuestion = (survey.questions || []).find((q: any) => q.id === questionId);
+    const ns = (originalQuestion as any)?.next_survey;
+    if (!ns?.enabled) return false;
+
+    const answerStr = String(answer).toLowerCase();
+    let matchedUrl = '';
+    let matchedMode: 'ask' | 'inline' | 'direct' = (ns.mode as 'ask' | 'inline' | 'direct') || 'ask';
+
+    const configs: Array<{ condition: string; url: string; mode: string }> = ns.configs || [];
+    if (configs.length > 0) {
+      // Try to find a per-answer match first
+      const found = configs.find(c => c.condition?.toLowerCase() === answerStr);
+      if (found && found.url) {
+        matchedUrl = found.url;
+        // Always use top-level mode — per-answer entries don't track mode individually
+        matchedMode = (ns.mode as 'ask' | 'inline' | 'direct') || 'ask';
+      } else if (ns.url && (ns.condition === 'always' || !ns.condition)) {
+        // Fall back to "always" global URL
+        matchedUrl = ns.url;
+      } else {
+        return false;
+      }
+    } else {
+      // No per-answer configs — use global url/condition
+      if (ns.condition !== 'always' && ns.condition && ns.condition.toLowerCase() !== answerStr) return false;
+      matchedUrl = ns.url || '';
+    }
+
+    if (!matchedUrl) return false;
+
+    if (matchedMode === 'direct') {
+      // Direct: silently navigate, no prompt
+      window.location.href = matchedUrl;
+      return true;
+    }
+
+    // ask / inline — show the prompt card
+    setChainSurveyPrompt({
+      url: matchedUrl,
+      mode: matchedMode,
+      message: ns.message || 'Another survey is waiting for you!',
+      yesLabel: ns.yes_label || 'Continue',
+      noLabel: ns.no_label || 'No thanks',
+    });
+    return true;
+  }, [survey.questions]);
+
+  // ── Check if current question has a pass/fail page configured ─────────────
+  const checkPassFail = useCallback((questionId: string, answer: string | number): boolean => {
+    const originalQuestion = (survey.questions || []).find((q: any) => q.id === questionId);
+    const pf = (originalQuestion as any)?.pass_fail_page;
+    if (!pf?.enabled || !pf?.type) return false;
+
+    const condition = pf.condition || 'always';
+    if (condition !== 'always') {
+      const answerStr = String(answer).toLowerCase();
+      if (answerStr !== condition.toLowerCase()) return false;
+    }
+
+    setPassFailPage({
+      type: pf.type as 'pass' | 'fail',
+      title: pf.title || (pf.type === 'pass' ? 'Congratulations!' : 'Sorry!'),
+      message: pf.message || (pf.type === 'pass' ? 'You qualify!' : 'You don\'t meet the criteria.'),
+      icon: pf.icon || (pf.type === 'pass' ? '✅' : '❌'),
+    });
+    return true;
+  }, [survey.questions]);
+
   const handleNext = useCallback(async () => {
     if (!isCurrentAnswered) return;
 
@@ -403,6 +487,14 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       // Check redirect first
       const shouldRedirect = await checkQuestionRedirect(currentQ.id, answer);
       if (shouldRedirect) return;
+
+      // Check chain survey (mid-survey)
+      const shouldChain = checkChainSurvey(currentQ.id, answer);
+      if (shouldChain) return;
+
+      // Check pass/fail page
+      const shouldShowPassFail = checkPassFail(currentQ.id, answer);
+      if (shouldShowPassFail) return;
 
       // Check end_here
       const originalQ = (survey.questions || []).find((q: any) => q.id === currentQ.id);
@@ -430,7 +522,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         to_question: currentQuestionIndex + 2
       });
     }
-  }, [currentQuestionIndex, visibleQuestions, isCurrentAnswered, questionStartTime, formData, checkQuestionRedirect, trackClickInteraction, survey.questions]);
+  }, [currentQuestionIndex, visibleQuestions, isCurrentAnswered, questionStartTime, formData, checkQuestionRedirect, checkChainSurvey, checkPassFail, trackClickInteraction, survey.questions]);
 
   const handlePrev = () => {
     if (currentQuestionIndex > 0) {
@@ -562,6 +654,24 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       // Mark as complete in localStorage so the browser remembers on next visit
       if (survey.id) {
         markSurveyComplete(survey.id);
+      }
+
+      // Check post-completion chain survey
+      const surveyNs = (survey as any).next_survey;
+      if (surveyNs?.enabled && surveyNs?.url) {
+        if (surveyNs.mode === 'direct') {
+          setTimeout(() => { window.location.href = surveyNs.url; }, 2000);
+        } else {
+          setTimeout(() => {
+            setChainSurveyPrompt({
+              url: surveyNs.url,
+              mode: surveyNs.mode || 'ask',
+              message: surveyNs.message || 'Thank you! Another survey is waiting for you.',
+              yesLabel: surveyNs.yes_label || 'Continue',
+              noLabel: surveyNs.no_label || 'No thanks',
+            });
+          }, 2500); // small delay so the success animation runs first
+        }
       }
     } catch (error: unknown) {
       if (error instanceof Error) {
@@ -783,9 +893,79 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
         {/* Questions */}
         <form onSubmit={handleSubmit} ref={formRef}>
-          <AnimatePresence mode="wait">
-            {visibleQuestions.map((q, i) => renderQuestion(q, i))}
-          </AnimatePresence>
+          {/* ── Inline chain survey card — replaces the question area ── */}
+          {chainSurveyPrompt && chainSurveyPrompt.mode === 'inline' ? (
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ type: 'spring', stiffness: 240, damping: 22 }}
+              style={{ padding: '8px 0 16px', textAlign: 'center' }}
+            >
+              {/* Red badge */}
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                background: '#fef2f2', border: '1px solid #fecaca',
+                borderRadius: 20, padding: '4px 14px', marginBottom: 20,
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', letterSpacing: 1, fontFamily: "'Outfit', sans-serif" }}>
+                  Continue Your Journey
+                </span>
+              </div>
+
+              <div style={{ fontSize: 40, marginBottom: 16 }}>📋</div>
+
+              <h3 style={{
+                margin: '0 0 10px', fontSize: 22, fontWeight: 800,
+                color: '#111827', lineHeight: 1.3, fontFamily: "'Outfit', sans-serif",
+                letterSpacing: '-0.02em',
+              }}>
+                {chainSurveyPrompt.message}
+              </h3>
+              <p style={{
+                margin: '0 0 28px', fontSize: 14, color: '#6b7280',
+                lineHeight: 1.6, fontFamily: "'Outfit', sans-serif",
+              }}>
+                A short survey awaits — it takes just a few minutes.
+              </p>
+
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'center', maxWidth: 380, margin: '0 auto' }}>
+                <motion.button
+                  type="button"
+                  whileHover={{ scale: 1.03, y: -1 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => { window.location.href = chainSurveyPrompt.url; }}
+                  style={{
+                    flex: 1, padding: '14px 20px', borderRadius: 14, border: 'none',
+                    background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                    color: '#fff', fontWeight: 700, fontSize: 15,
+                    cursor: 'pointer', fontFamily: "'Outfit', sans-serif",
+                    boxShadow: '0 4px 16px rgba(239,68,68,0.35)',
+                  }}
+                >
+                  {chainSurveyPrompt.yesLabel} →
+                </motion.button>
+                <motion.button
+                  type="button"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setChainSurveyPrompt(null)}
+                  style={{
+                    flex: 1, padding: '14px 20px', borderRadius: 14,
+                    border: '1.5px solid #e5e7eb', background: '#f9fafb',
+                    color: '#374151', fontWeight: 600, fontSize: 15,
+                    cursor: 'pointer', fontFamily: "'Outfit', sans-serif",
+                  }}
+                >
+                  {chainSurveyPrompt.noLabel}
+                </motion.button>
+              </div>
+            </motion.div>
+          ) : (
+            <AnimatePresence mode="wait">
+              {visibleQuestions.map((q, i) => renderQuestion(q, i))}
+            </AnimatePresence>
+          )}
 
           {/* Footer Navigation */}
           {!previewMode && (
@@ -846,6 +1026,247 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       <div className="pepper-powered">
         Powered by <a href="#">Pepperwahl</a>
       </div>
+
+      {/* ── Pass/Fail Result Page ── */}
+      {passFailPage && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9996,
+            background: passFailPage.type === 'pass'
+              ? 'linear-gradient(135deg, #052e16 0%, #14532d 50%, #052e16 100%)'
+              : 'linear-gradient(135deg, #1a0505 0%, #7f1d1d 50%, #1a0505 100%)',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            padding: 24, fontFamily: "'Outfit', sans-serif",
+          }}
+        >
+          <motion.div
+            initial={{ scale: 0.85, y: 24, opacity: 0 }}
+            animate={{ scale: 1, y: 0, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 220, damping: 20, delay: 0.1 }}
+            style={{
+              background: '#fff', borderRadius: 28, width: '100%', maxWidth: 460,
+              overflow: 'hidden',
+              boxShadow: '0 32px 80px rgba(0,0,0,0.5)',
+              textAlign: 'center',
+            }}
+          >
+            {/* Top bar */}
+            <div style={{
+              height: 6,
+              background: passFailPage.type === 'pass'
+                ? 'linear-gradient(90deg, #16a34a, #4ade80, #16a34a)'
+                : 'linear-gradient(90deg, #ef4444, #f97316, #ef4444)',
+            }} />
+
+            <div style={{ padding: '44px 36px 40px' }}>
+              {/* Icon */}
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 15, delay: 0.25 }}
+                style={{ fontSize: 64, marginBottom: 20, lineHeight: 1 }}
+              >
+                {passFailPage.icon}
+              </motion.div>
+
+              {/* Badge */}
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                background: passFailPage.type === 'pass' ? '#f0fdf4' : '#fff5f5',
+                border: `1px solid ${passFailPage.type === 'pass' ? '#86efac' : '#fecaca'}`,
+                borderRadius: 20, padding: '4px 14px', marginBottom: 16,
+              }}>
+                <span style={{
+                  fontSize: 11, fontWeight: 700,
+                  color: passFailPage.type === 'pass' ? '#16a34a' : '#dc2626',
+                  textTransform: 'uppercase', letterSpacing: 1,
+                }}>
+                  {passFailPage.type === 'pass' ? 'Qualified' : 'Not Qualified'}
+                </span>
+              </div>
+
+              <h2 style={{
+                margin: '0 0 12px', fontSize: 26, fontWeight: 800,
+                color: '#111827', lineHeight: 1.3, letterSpacing: '-0.02em',
+              }}>
+                {passFailPage.title}
+              </h2>
+              <p style={{ margin: '0 0 32px', fontSize: 15, color: '#6b7280', lineHeight: 1.6 }}>
+                {passFailPage.message}
+              </p>
+
+              {/* Continue button */}
+              <motion.button
+                whileHover={{ scale: 1.02, y: -1 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setPassFailPage(null)}
+                style={{
+                  width: '100%', padding: '14px 20px', borderRadius: 14, border: 'none',
+                  background: passFailPage.type === 'pass'
+                    ? 'linear-gradient(135deg, #16a34a, #15803d)'
+                    : 'linear-gradient(135deg, #ef4444, #dc2626)',
+                  color: '#fff', fontWeight: 700, fontSize: 15,
+                  cursor: 'pointer', fontFamily: "'Outfit', sans-serif",
+                  boxShadow: passFailPage.type === 'pass'
+                    ? '0 4px 16px rgba(22,163,74,0.4)'
+                    : '0 4px 16px rgba(239,68,68,0.4)',
+                }}
+              >
+                Continue →
+              </motion.button>
+            </div>
+          </motion.div>
+
+          <p style={{ marginTop: 24, fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>
+            Powered by <span style={{ color: passFailPage.type === 'pass' ? '#4ade80' : '#ef4444', fontWeight: 600 }}>Pepperwahl</span>
+          </p>
+        </motion.div>
+      )}
+
+      {/* ── Chain Survey Prompt Card (ask overlay mode) ── */}
+      {chainSurveyPrompt && chainSurveyPrompt.mode === 'ask' && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9998,
+            background: 'linear-gradient(135deg, rgba(15,10,10,0.85) 0%, rgba(80,10,10,0.75) 100%)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 20, fontFamily: "'Outfit', sans-serif",
+          }}
+        >
+          {/* Decorative background dots */}
+          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+            {[...Array(6)].map((_, i) => (
+              <motion.div key={i}
+                initial={{ opacity: 0, scale: 0 }}
+                animate={{ opacity: 0.06, scale: 1 }}
+                transition={{ delay: i * 0.1 + 0.2 }}
+                style={{
+                  position: 'absolute',
+                  width: [300,200,400,150,250,350][i],
+                  height: [300,200,400,150,250,350][i],
+                  borderRadius: '50%',
+                  background: '#ef4444',
+                  left: ['10%','60%','30%','80%','5%','55%'][i],
+                  top: ['10%','5%','60%','50%','70%','80%'][i],
+                  transform: 'translate(-50%,-50%)',
+                }}
+              />
+            ))}
+          </div>
+
+          <motion.div
+            initial={{ scale: 0.88, y: 32, opacity: 0 }}
+            animate={{ scale: 1, y: 0, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 220, damping: 22, delay: 0.1 }}
+            style={{
+              background: '#fff', borderRadius: 28,
+              width: '100%', maxWidth: 460,
+              overflow: 'hidden',
+              boxShadow: '0 32px 80px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.1)',
+              position: 'relative',
+            }}
+          >
+            {/* Red accent top bar */}
+            <div style={{
+              height: 6,
+              background: 'linear-gradient(90deg, #ef4444 0%, #f97316 50%, #ef4444 100%)',
+            }} />
+
+            {/* Content */}
+            <div style={{ padding: '40px 36px 36px', textAlign: 'center' }}>
+              {/* Icon */}
+              <motion.div
+                initial={{ scale: 0, rotate: -20 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 18, delay: 0.25 }}
+                style={{
+                  width: 72, height: 72, borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
+                  border: '3px solid #fecaca',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  margin: '0 auto 24px', fontSize: 30,
+                }}
+              >
+                📋
+              </motion.div>
+
+              {/* Badge */}
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                background: '#fef2f2', border: '1px solid #fecaca',
+                borderRadius: 20, padding: '4px 12px', marginBottom: 16,
+              }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', animation: 'pulse 1.5s infinite' }} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', letterSpacing: 1 }}>
+                  New Survey Available
+                </span>
+              </div>
+
+              <h3 style={{
+                margin: '0 0 12px', fontSize: 24, fontWeight: 800,
+                color: '#111827', lineHeight: 1.3, letterSpacing: '-0.02em',
+              }}>
+                {chainSurveyPrompt.message}
+              </h3>
+              <p style={{ margin: '0 0 32px', fontSize: 14, color: '#6b7280', lineHeight: 1.6 }}>
+                It only takes a few minutes. Your input helps us improve.
+              </p>
+
+              {/* Buttons */}
+              <div style={{ display: 'flex', gap: 12 }}>
+                <motion.button
+                  whileHover={{ scale: 1.02, y: -1 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => { window.location.href = chainSurveyPrompt.url; }}
+                  style={{
+                    flex: 1, padding: '14px 20px', borderRadius: 14, border: 'none',
+                    background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                    color: '#fff', fontWeight: 700, fontSize: 15,
+                    cursor: 'pointer', fontFamily: "'Outfit', sans-serif",
+                    boxShadow: '0 4px 16px rgba(239,68,68,0.4)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  }}
+                >
+                  {chainSurveyPrompt.yesLabel} →
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setChainSurveyPrompt(null)}
+                  style={{
+                    flex: 1, padding: '14px 20px', borderRadius: 14,
+                    border: '1.5px solid #e5e7eb', background: '#f9fafb',
+                    color: '#374151', fontWeight: 600, fontSize: 15,
+                    cursor: 'pointer', fontFamily: "'Outfit', sans-serif",
+                  }}
+                >
+                  {chainSurveyPrompt.noLabel}
+                </motion.button>
+              </div>
+
+              {/* Subtle skip text */}
+              <button
+                onClick={() => setChainSurveyPrompt(null)}
+                style={{
+                  marginTop: 20, background: 'none', border: 'none',
+                  fontSize: 12, color: '#9ca3af', cursor: 'pointer',
+                  fontFamily: "'Outfit', sans-serif",
+                }}
+              >
+                Skip for now
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
 
       {/* Redirecting Spinner Overlay */}
       {redirecting && (
