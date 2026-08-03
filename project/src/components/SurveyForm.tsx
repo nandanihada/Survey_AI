@@ -62,7 +62,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
   const [showClarification, setShowClarification] = useState(false);
   const [clarificationNeeds, setClarificationNeeds] = useState<ClarificationNeedsType | null>(null);
 
-  const [collectLocation, setCollectLocation] = useState(true);
+  const [collectLocation, setCollectLocation] = useState(false);
   const [wizardStep, setWizardStep] = useState(-1);
   const [wizardAnswers, setWizardAnswers] = useState<Record<number, string>>({});
 
@@ -438,7 +438,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
     setImagePreview([]);
     setImageContext('');
     setError('');
-    setCollectLocation(true);
+    setCollectLocation(false);
   };
 
   const handleShareLink = async () => {
@@ -498,8 +498,8 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
     {/* Full-page Gooey Loader */}
     {isLoading && <SearchLoader message={loadingMessages[loadingPhase]} />}
 
-    <div className="flex flex-col items-center justify-center min-h-[70vh] px-3 sm:px-4 pt-6 sm:pt-10">
-      <div className="w-full max-w-[90%] sm:max-w-xl lg:max-w-2xl">
+    <div className="flex flex-col items-center justify-center min-h-[70vh] px-0 sm:px-4 pt-6 sm:pt-10">
+      <div className="w-[92vw] sm:w-full sm:max-w-xl lg:max-w-2xl">
         {/* Header */}
         <div className="text-center mb-6 sm:mb-8">
           <h1
@@ -525,7 +525,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
           </div>
         )}
 
-        <div className={`relative rounded-2xl p-1.5 sm:p-2 transition-all duration-500 overflow-visible group ${showClarification ? 'clarification-prompt-down' : ''} ${isDarkMode
+        <div className={`relative rounded-3xl sm:rounded-2xl p-0 sm:p-1.5 sm:p-2 transition-all duration-500 overflow-hidden group ${showClarification ? 'clarification-prompt-down' : ''} ${isDarkMode
             ? 'bg-gradient-to-b from-slate-800/90 to-slate-900/90 border border-slate-700/60 shadow-[0_8px_24px_rgba(0,0,0,0.3)] focus-within:shadow-[0_12px_40px_rgba(239,68,68,0.1)] focus-within:border-red-500/40'
             : 'bg-white border border-stone-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.05)] focus-within:shadow-[0_12px_40px_rgba(239,68,68,0.06)] focus-within:border-red-400/40 focus-within:ring-2 focus-within:ring-red-500/[0.04]'
           }`}>
@@ -560,9 +560,9 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
           <textarea
             value={surveyTopic} onChange={(e) => setSurveyTopic(e.target.value)}
             placeholder="Describe your survey topic or paste an image..."
-            className={`relative w-full px-3.5 sm:px-4 py-3 text-[14px] sm:text-[15px] rounded-xl resize-none border-0 focus:outline-none focus:ring-0 z-10 font-medium ${isDarkMode ? 'bg-transparent text-white placeholder-slate-500' : 'bg-transparent text-slate-800 placeholder-slate-400'
+            className={`relative w-full px-4 sm:px-3.5 pt-4 pb-2 sm:py-3 text-[15px] resize-none border-0 focus:outline-none focus:ring-0 z-10 font-medium [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${isDarkMode ? 'bg-transparent text-white placeholder-slate-400' : 'bg-transparent text-slate-800 placeholder-slate-400'
               }`}
-            rows={2}
+            rows={1}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && (surveyTopic.trim() || selectedSuggestion)) { e.preventDefault(); handleStartWizard(); } }}
             onPaste={(e) => {
               const items = e.clipboardData?.items;
@@ -593,100 +593,59 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
               }
             }}
           />
-          <div className="relative z-10 flex items-center justify-between px-2.5 sm:px-3 pb-2.5 pt-0.5 gap-2">
-            <div className="flex items-center gap-1.5 overflow-x-auto flex-1 min-w-0 scrollbar-hide">
+          <div className={`relative z-10 flex items-center justify-between px-3 sm:px-2.5 sm:px-3 pb-2 sm:pb-2.5 pt-1.5 sm:pt-0.5 gap-2 border-t sm:border-t-0 ${isDarkMode ? 'border-slate-700/50' : 'border-stone-100'}`}>
+            <div className="flex items-center gap-2 sm:gap-1.5 overflow-x-auto flex-1 min-w-0 scrollbar-hide">
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
               <button onClick={() => fileInputRef.current?.click()} disabled={isParsingImage || imagePreview.length >= 3}
-                className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-stone-100 text-stone-400'} disabled:opacity-40`}>
-                <ImagePlus size={14} />
+                className={`p-2 sm:p-1.5 rounded-xl sm:rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-stone-100 text-stone-400'} disabled:opacity-40`}>
+                <ImagePlus size={18} className="sm:hidden" />
+                <ImagePlus size={14} className="hidden sm:block" />
               </button>
-              {/* Microphone button - uses MediaRecorder + Whisper API */}
+              {/* Mic — hidden on mobile (shown on right side below) */}
               <button
                 onClick={async () => {
-                  if (isListening) {
-                    // Stop recording
-                    (window as any).__mediaRecorder?.stop();
-                    return;
-                  }
+                  if (isListening) { (window as any).__mediaRecorder?.stop(); return; }
                   try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
                     const chunks: Blob[] = [];
                     (window as any).__mediaRecorder = mediaRecorder;
                     setIsListening(true);
-
                     mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
                     mediaRecorder.onstop = async () => {
-                      stream.getTracks().forEach(t => t.stop());
-                      setIsListening(false);
+                      stream.getTracks().forEach(t => t.stop()); setIsListening(false);
                       if (chunks.length === 0) return;
-                      
                       const audioBlob = new Blob(chunks, { type: 'audio/webm' });
                       const formData = new FormData();
-                      formData.append('file', audioBlob, 'recording.webm');
-                      formData.append('model', 'whisper-1');
-                      formData.append('language', 'en');
-                      
+                      formData.append('file', audioBlob, 'recording.webm'); formData.append('model', 'whisper-1'); formData.append('language', 'en');
                       setSurveyTopic(prev => prev + (prev ? ' ' : '') + '⏳ Transcribing...');
-                      
                       try {
                         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
                         const apiBase = isLocal ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
-                        const res = await fetch(`${apiBase}/api/transcribe-audio`, {
-                          method: 'POST',
-                          body: formData,
-                        });
-                        if (res.ok) {
-                          const data = await res.json();
-                          setSurveyTopic(prev => prev.replace('⏳ Transcribing...', '').trim() + (prev.replace('⏳ Transcribing...', '').trim() ? ' ' : '') + data.text);
-                        } else {
-                          setSurveyTopic(prev => prev.replace('⏳ Transcribing...', '').trim());
-                          setError('Failed to transcribe audio. Try again.');
-                        }
-                      } catch {
-                        setSurveyTopic(prev => prev.replace('⏳ Transcribing...', '').trim());
-                        setError('Failed to transcribe. Check connection.');
-                      }
+                        const res = await fetch(`${apiBase}/api/transcribe-audio`, { method: 'POST', body: formData });
+                        if (res.ok) { const data = await res.json(); setSurveyTopic(prev => prev.replace('⏳ Transcribing...', '').trim() + (prev.replace('⏳ Transcribing...', '').trim() ? ' ' : '') + data.text); }
+                        else { setSurveyTopic(prev => prev.replace('⏳ Transcribing...', '').trim()); setError('Failed to transcribe audio. Try again.'); }
+                      } catch { setSurveyTopic(prev => prev.replace('⏳ Transcribing...', '').trim()); setError('Failed to transcribe. Check connection.'); }
                     };
-                    mediaRecorder.start(250); // collect data every 250ms for silence detection
-                    
-                    // Silence detection using AudioContext
-                    const audioCtx = new AudioContext();
-                    const source = audioCtx.createMediaStreamSource(stream);
-                    const analyser = audioCtx.createAnalyser();
-                    analyser.fftSize = 512;
-                    source.connect(analyser);
+                    mediaRecorder.start(250);
+                    const audioCtx = new AudioContext(); const source = audioCtx.createMediaStreamSource(stream);
+                    const analyser = audioCtx.createAnalyser(); analyser.fftSize = 512; source.connect(analyser);
                     const dataArray = new Uint8Array(analyser.frequencyBinCount);
-                    let silenceStart = Date.now();
-                    let hasSpeech = false;
-                    
+                    let silenceStart = Date.now(); let hasSpeech = false;
                     const checkSilence = () => {
                       if (mediaRecorder.state !== 'recording') return;
                       analyser.getByteFrequencyData(dataArray);
                       const volume = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-                      
-                      if (volume > 10) {
-                        silenceStart = Date.now();
-                        hasSpeech = true;
-                      } else if (hasSpeech && Date.now() - silenceStart > 4000) {
-                        // 4 seconds of silence after speech — auto-stop
-                        mediaRecorder.stop();
-                        audioCtx.close();
-                        return;
-                      }
+                      if (volume > 10) { silenceStart = Date.now(); hasSpeech = true; }
+                      else if (hasSpeech && Date.now() - silenceStart > 4000) { mediaRecorder.stop(); audioCtx.close(); return; }
                       requestAnimationFrame(checkSilence);
                     };
                     checkSilence();
-                    
-                    // Auto-stop after 30 seconds max
                     setTimeout(() => { if (mediaRecorder.state === 'recording') { mediaRecorder.stop(); audioCtx.close(); } }, 30000);
-                  } catch (err: any) {
-                    setIsListening(false);
-                    setError('Microphone access denied. Allow in browser settings.');
-                  }
+                  } catch { setIsListening(false); setError('Microphone access denied. Allow in browser settings.'); }
                 }}
                 title={isListening ? 'Click to stop recording' : 'Speak your prompt'}
-                className={`p-1.5 rounded-lg transition-all ${
+                className={`hidden sm:flex p-1.5 rounded-lg transition-all ${
                   isListening
                     ? 'bg-red-500 text-white animate-pulse ring-2 ring-red-300 shadow-lg'
                     : isDarkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-stone-100 text-stone-400'
@@ -704,8 +663,8 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
                   )}
                 </svg>
               </button>
-              {/* Custom Question Count Dropdown */}
-              <div className="relative" ref={qsDropdownRef}>
+              {/* Custom Question Count Dropdown — hidden on mobile (shown below box) */}
+              <div className="relative hidden sm:block" ref={qsDropdownRef}>
                 <button
                   onClick={() => setShowQsDropdown(!showQsDropdown)}
                   className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-semibold transition-all ${
@@ -744,8 +703,8 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
                   </div>
                 )}
               </div>
-              {/* Tone/Style Selector */}
-              <div className="relative" ref={toneDropdownRef}>
+              {/* Tone/Style Selector — hidden on mobile (shown below box) */}
+              <div className="relative hidden sm:block" ref={toneDropdownRef}>
                 <button
                   onClick={() => setShowToneDropdown(!showToneDropdown)}
                   className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-semibold transition-all ${
@@ -788,12 +747,117 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
                 )}
               </div>
             </div>
+            {/* Mobile-only: mic on right before send */}
+            <button
+              onClick={async () => {
+                if (isListening) { (window as any).__mediaRecorder?.stop(); return; }
+                try {
+                  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                  const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                  const chunks: Blob[] = [];
+                  (window as any).__mediaRecorder = mr;
+                  setIsListening(true);
+                  mr.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+                  mr.onstop = async () => {
+                    stream.getTracks().forEach(t => t.stop()); setIsListening(false);
+                    if (chunks.length === 0) return;
+                    const ab = new Blob(chunks, { type: 'audio/webm' });
+                    const fd = new FormData();
+                    fd.append('file', ab, 'recording.webm'); fd.append('model', 'whisper-1'); fd.append('language', 'en');
+                    setSurveyTopic(prev => prev + (prev ? ' ' : '') + '⏳ Transcribing...');
+                    try {
+                      const base = window.location.hostname === 'localhost' ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
+                      const res = await fetch(`${base}/api/transcribe-audio`, { method: 'POST', body: fd });
+                      if (res.ok) { const d = await res.json(); setSurveyTopic(prev => prev.replace('⏳ Transcribing...', '').trim() + ' ' + d.text); }
+                      else { setSurveyTopic(prev => prev.replace('⏳ Transcribing...', '').trim()); setError('Failed to transcribe.'); }
+                    } catch { setSurveyTopic(prev => prev.replace('⏳ Transcribing...', '').trim()); }
+                  };
+                  mr.start(250);
+                  const ac = new AudioContext(); const src = ac.createMediaStreamSource(stream);
+                  const an = ac.createAnalyser(); an.fftSize = 512; src.connect(an);
+                  const da = new Uint8Array(an.frequencyBinCount); let ss = Date.now(); let hs = false;
+                  const cs = () => { if (mr.state !== 'recording') return; an.getByteFrequencyData(da); const v = da.reduce((a,b)=>a+b,0)/da.length; if (v>10){ss=Date.now();hs=true;}else if(hs&&Date.now()-ss>4000){mr.stop();ac.close();return;} requestAnimationFrame(cs); };
+                  cs(); setTimeout(()=>{if(mr.state==='recording'){mr.stop();ac.close();}},30000);
+                } catch { setIsListening(false); setError('Microphone access denied.'); }
+              }}
+              title={isListening ? 'Stop' : 'Speak'}
+              className={`sm:hidden p-2 rounded-xl transition-all flex-shrink-0 ${isListening ? 'bg-red-500 text-white animate-pulse ring-2 ring-red-300' : isDarkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-stone-400 hover:bg-stone-100'}`}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                {isListening ? <rect x="6" y="6" width="12" height="12" rx="2"/> : (<><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></>)}
+              </svg>
+            </button>
             <button onClick={handleStartWizard} disabled={(!surveyTopic.trim() && !imageContext && !selectedSuggestion)}
-              className="p-2 rounded-xl bg-gradient-to-r from-red-500 to-orange-400 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-[0_4px_12px_rgba(239,68,68,0.3)] transition-all flex-shrink-0">
-              <ArrowRight size={14} />
+              className="p-2 sm:p-2 rounded-xl bg-gradient-to-r from-red-500 to-orange-400 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-[0_4px_12px_rgba(239,68,68,0.3)] active:scale-95 transition-all flex-shrink-0 flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:p-2">
+              <ArrowRight size={18} className="sm:hidden" />
+              <ArrowRight size={14} className="hidden sm:block" />
             </button>
           </div>
         </div>
+
+        {/* ── Mobile-only pills row (outside the box) ── */}
+        <div className="sm:hidden flex items-center gap-2 mt-3 flex-wrap">
+          {/* Question Count */}
+          <div className="relative" ref={qsDropdownRef}>
+            <button
+              onClick={() => setShowQsDropdown(!showQsDropdown)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-[12px] font-semibold border transition-all ${
+                showQsDropdown
+                  ? isDarkMode ? 'bg-slate-700 border-slate-500 text-white' : 'bg-stone-100 border-stone-300 text-stone-800'
+                  : isDarkMode ? 'bg-slate-800/60 border-slate-700 text-slate-300' : 'bg-white border-stone-200 text-stone-600 shadow-sm'
+              }`}
+            >
+              <Hash size={12} />
+              <span>{questionCount} Qs</span>
+              <ChevronDown size={11} className={`transition-transform ${showQsDropdown ? 'rotate-180' : ''}`} />
+            </button>
+            {showQsDropdown && (
+              <div
+                className={`absolute top-full left-0 mt-1.5 rounded-xl overflow-hidden z-50 min-w-[100px] ${isDarkMode ? 'bg-slate-800 border border-slate-600' : 'bg-white border border-stone-200'}`}
+                style={{ animation: 'sfSuggestIn 0.2s cubic-bezier(0.16,1,0.3,1)', boxShadow: isDarkMode ? '0 8px 24px rgba(0,0,0,0.4)' : '0 8px 24px rgba(0,0,0,0.1)' }}
+              >
+                {[5, 10, 15, 20, 25, 30, 50].map(n => (
+                  <button key={n} onClick={() => { setQuestionCount(n); setShowQsDropdown(false); }}
+                    className={`w-full text-left px-3 py-2 text-[12px] font-medium transition-colors ${questionCount === n ? isDarkMode ? 'bg-red-500/20 text-red-300' : 'bg-red-50 text-red-600' : isDarkMode ? 'text-slate-300 hover:bg-slate-700' : 'text-stone-600 hover:bg-stone-50'}`}>
+                    {n} Qs
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* Tone */}
+          <div className="relative" ref={toneDropdownRef}>
+            <button
+              onClick={() => setShowToneDropdown(!showToneDropdown)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-[12px] font-semibold border transition-all ${
+                showToneDropdown
+                  ? isDarkMode ? 'bg-slate-700 border-slate-500 text-white' : 'bg-stone-100 border-stone-300 text-stone-800'
+                  : isDarkMode ? 'bg-slate-800/60 border-slate-700 text-slate-300' : 'bg-white border-stone-200 text-stone-600 shadow-sm'
+              }`}
+              title="Survey tone"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+              </svg>
+              <span>{selectedTone}</span>
+              <ChevronDown size={11} className={`transition-transform ${showToneDropdown ? 'rotate-180' : ''}`} />
+            </button>
+            {showToneDropdown && (
+              <div
+                className={`absolute top-full left-0 mt-1.5 rounded-xl overflow-hidden z-50 min-w-[130px] ${isDarkMode ? 'bg-slate-800 border border-slate-600' : 'bg-white border border-stone-200'}`}
+                style={{ animation: 'sfSuggestIn 0.2s cubic-bezier(0.16,1,0.3,1)', boxShadow: isDarkMode ? '0 8px 24px rgba(0,0,0,0.4)' : '0 8px 24px rgba(0,0,0,0.1)' }}
+              >
+                {['Professional', 'Friendly', 'Casual', 'Academic', 'Direct'].map(tone => (
+                  <button key={tone} onClick={() => { setSelectedTone(tone); setShowToneDropdown(false); }}
+                    className={`w-full text-left px-3 py-2 text-[12px] font-medium transition-colors ${selectedTone === tone ? isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-50 text-purple-600' : isDarkMode ? 'text-slate-300 hover:bg-slate-700' : 'text-stone-600 hover:bg-stone-50'}`}>
+                    {tone}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
         </>
         )}
 
@@ -1211,32 +1275,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
                   </button>
                 </div>
               )}
-              {/* Location collection toggle */}
-              <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-stone-50 border border-stone-200/60">
-                <div className="flex items-center gap-2">
-                  <span className="text-stone-500" style={{ fontSize: 13 }}>📍</span>
-                  <div>
-                    <p className="text-[11px] font-medium text-stone-700 leading-none">Ask respondents for location</p>
-                    <p className="text-[10px] text-stone-400 mt-0.5 leading-none">Browser location popup when survey loads</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={collectLocation}
-                  onClick={() => handleToggleLocation(!collectLocation)}
-                  className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 ${
-                    collectLocation ? 'bg-red-500' : 'bg-stone-300'
-                  }`}
-                >
-                  <span
-                    aria-hidden="true"
-                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                      collectLocation ? 'translate-x-4' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
-              </div>
+              {/* Location collection toggle removed — off by default */}
 
               <div className="grid grid-cols-3 gap-2">
                 <button

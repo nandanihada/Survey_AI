@@ -5,7 +5,7 @@ import TemplateSelector from './TemplateSelector';
 import type { Survey, Question, AnimationConfig } from '../types/Survey';
 import { generateSurveyLink, type SurveyLinkParams } from '../utils/surveyLinkUtils';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, Save, ArrowLeft, Grid3X3, Copy, CheckCircle, Settings, ExternalLink, Share2, Trash2, X, ChevronUp, ChevronDown, Zap, Sparkles, RefreshCw, GitBranch, Mail, Send, Loader2 } from 'lucide-react';
+import { Plus, Save, ArrowLeft, Grid3X3, Copy, CheckCircle, Settings, ExternalLink, Share2, Trash2, X, ChevronUp, ChevronDown, Zap, Sparkles, RefreshCw, GitBranch, Mail, Send, Loader2, CornerDownLeft } from 'lucide-react';
 import { LOGO_BASE64 } from '../utils/logoBase64';
 import './SurveyEditor.css';
 import { BranchFlowEditor, SimpleBranchingRules } from './branching';
@@ -481,16 +481,15 @@ const SurveyEditor: React.FC = () => {
   const [branchingViewMode, setBranchingViewMode] = useState<'simple' | 'flow'>('simple');
   const [flowRefreshKey, setFlowRefreshKey] = useState(0);
   const [branchMap, setBranchMap] = useState<BranchMap>({});
+  const [mobilePanel, setMobilePanel] = useState<'questions' | 'editor' | 'settings'>('editor');
   // When opening branching modal, optionally scroll/focus to a specific question row
   const [branchFocusQuestionId, setBranchFocusQuestionId] = useState<string | null>(null);
 
-  // Auto-open branching if ?openBranching=1 is in the URL (from "View →" in creation result)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('openBranching') === '1') {
       setShowBranchingEditor(true);
       setBranchingViewMode('simple');
-      // Clean the URL param without a page reload
       const clean = window.location.pathname;
       window.history.replaceState({}, '', clean);
     }
@@ -504,6 +503,26 @@ const SurveyEditor: React.FC = () => {
   const [mailResult, setMailResult] = useState<{type: 'success'|'error'; text: string} | null>(null);
   const [isRefining, setIsRefining] = useState(false);
   const [isGeneratingOptions, setIsGeneratingOptions] = useState(false);
+
+  // ── AI Editor Assistant ──────────────────────────────────────────────────
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiMessage, setAiMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [showAiBox, setShowAiBox] = useState(false);
+  const [aiHistory, setAiHistory] = useState<Array<{
+    prompt: string;
+    result: string;
+    status: 'success' | 'error' | 'info';
+    timestamp: Date;
+  }>>([]);
+  const aiHistoryEndRef = React.useRef<HTMLDivElement>(null);
+
+  // Auto-scroll AI history to bottom when new entry added — must be AFTER aiHistory is declared
+  useEffect(() => {
+    if (aiHistoryEndRef.current) {
+      aiHistoryEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [aiHistory]);
 
   // Collaborator state
   const [collaboratorEmail, setCollaboratorEmail] = useState('');
@@ -843,6 +862,202 @@ const SurveyEditor: React.FC = () => {
     }
   };
 
+  // ── AI Editor Command Handler ────────────────────────────────────────────
+  const handleAiCommand = useCallback(async () => {
+    if (!survey || !aiPrompt.trim() || aiLoading) return;
+    setAiLoading(true);
+    setAiMessage(null);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/surveys/${survey.id || id}/ai-editor-command`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: aiPrompt.trim(),
+          active_index: activeQuestionIndex,
+          questions: survey.questions.map((q, i) => ({
+            id: q.id || `q${i+1}`,
+            question: q.question,
+            type: q.type,
+            options: q.options || [],
+          })),
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        const errMsg = err.error || 'AI command failed';
+        setAiMessage({ type: 'error', text: errMsg });
+        setAiHistory(h => [...h, { prompt: aiPrompt.trim(), result: errMsg, status: 'error', timestamp: new Date() }]);
+        return;
+      }
+
+      const { ops, message } = await res.json();
+
+      if (!ops || ops.length === 0) {
+        setAiMessage({ type: 'info', text: message || 'No changes made.' });
+        setAiHistory(h => [...h, { prompt: aiPrompt.trim(), result: message || 'No changes made.', status: 'info', timestamp: new Date() }]);
+        return;
+      }
+
+      // Apply ops to survey state
+      setSurvey(prev => {
+        if (!prev) return prev;
+        let updated = { ...prev, questions: [...prev.questions] };
+
+        for (const op of ops) {
+          const qs = updated.questions;
+
+          if (op.type === 'add_question') {
+            const newQ: Question = {
+              id: `question_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              question: op.question || 'New Question',
+              type: (op.q_type || 'short_answer') as Question['type'],
+              options: op.options || (op.q_type === 'yes_no' ? ['Yes', 'No'] : []),
+              required: false,
+            };
+            const afterIdx = op.after_index ?? -1;
+            if (afterIdx < 0 || afterIdx >= qs.length) {
+              updated.questions = [...qs, newQ];
+            } else {
+              const arr = [...qs];
+              arr.splice(afterIdx + 1, 0, newQ);
+              updated.questions = arr;
+            }
+          }
+
+          else if (op.type === 'delete_question') {
+            const idx = op.index;
+            if (idx >= 0 && idx < qs.length && qs.length > 1) {
+              updated.questions = qs.filter((_, i) => i !== idx);
+            }
+          }
+
+          else if (op.type === 'move_question') {
+            const { from_index: from, to_index: to } = op;
+            if (from >= 0 && to >= 0 && from < qs.length && to < qs.length && from !== to) {
+              const arr = [...qs];
+              const [moved] = arr.splice(from, 1);
+              arr.splice(to, 0, moved);
+              updated.questions = arr;
+            }
+          }
+
+          else if (op.type === 'reorder') {
+            const newOrder: number[] = op.new_order;
+            if (Array.isArray(newOrder) && newOrder.length === qs.length) {
+              updated.questions = newOrder.map(i => qs[i]);
+            }
+          }
+
+          else if (op.type === 'change_type') {
+            const idx = op.index;
+            if (idx >= 0 && idx < qs.length) {
+              const arr = [...qs];
+              const newType = op.new_type as Question['type'];
+              arr[idx] = {
+                ...arr[idx],
+                type: newType,
+                options: op.options || (newType === 'yes_no' ? ['Yes', 'No'] : arr[idx].options || []),
+              };
+              updated.questions = arr;
+            }
+          }
+
+          else if (op.type === 'update_text') {
+            const idx = op.index;
+            if (idx >= 0 && idx < qs.length) {
+              const arr = [...qs];
+              arr[idx] = { ...arr[idx], question: op.question };
+              updated.questions = arr;
+            }
+          }
+
+          else if (op.type === 'add_redirect') {
+            const idx = op.index;
+            if (idx >= 0 && idx < qs.length) {
+              const arr = [...qs];
+              let rawUrl = op.url || '';
+              // Auto-prepend https:// if missing protocol
+              if (rawUrl && !rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
+                rawUrl = 'https://' + rawUrl;
+              }
+              (arr[idx] as any).redirect_config = {
+                enabled: true,
+                url: rawUrl,
+                condition: op.condition || 'always',
+                color: '#f59e0b',
+                allow_resume: true,
+                resume_expiry_hours: 24,
+              };
+              updated.questions = arr;
+            }
+          }
+
+          else if (op.type === 'end_survey') {
+            const idx = op.index;
+            if (idx >= 0 && idx < qs.length) {
+              const arr = [...qs];
+              (arr[idx] as any).end_here = {
+                enabled: true,
+                condition: op.condition || 'always',
+              };
+              updated.questions = arr;
+            }
+          }
+
+          else if (op.type === 'remove_redirect') {
+            const idx = op.index;
+            if (idx >= 0 && idx < qs.length) {
+              const arr = [...qs];
+              (arr[idx] as any).redirect_config = null;
+              updated.questions = arr;
+            }
+          }
+
+          else if (op.type === 'remove_end') {
+            const idx = op.index;
+            if (idx >= 0 && idx < qs.length) {
+              const arr = [...qs];
+              (arr[idx] as any).end_here = null;
+              updated.questions = arr;
+            }
+          }
+        }
+
+        // Re-number question IDs to stay consistent
+        updated.questions = updated.questions.map((q, i) => ({
+          ...q,
+          id: q.id || `q${i+1}`,
+        }));
+
+        return updated;
+      });
+
+      // Refresh branch map for indicators
+      setTimeout(() => fetchBranchMap(), 300);
+
+      setAiMessage({ type: 'success', text: message || 'Done!' });
+      setAiHistory(h => [...h, { prompt: aiPrompt.trim(), result: message || 'Done!', status: 'success', timestamp: new Date() }]);
+      setAiPrompt('');
+
+      // Clamp active index if questions were deleted
+      setSurvey(prev => {
+        if (!prev) return prev;
+        if (activeQuestionIndex >= prev.questions.length) {
+          setActiveQuestionIndex(Math.max(0, prev.questions.length - 1));
+        }
+        return prev;
+      });
+
+    } catch (err) {
+      setAiMessage({ type: 'error', text: 'Network error. Try again.' });
+      setAiHistory(h => [...h, { prompt: aiPrompt.trim(), result: 'Network error. Try again.', status: 'error', timestamp: new Date() }]);
+    } finally {
+      setAiLoading(false);
+      setTimeout(() => setAiMessage(null), 5000);
+    }
+  }, [survey, aiPrompt, aiLoading, apiBaseUrl, id, activeQuestionIndex, fetchBranchMap]);
+
   if (isLoading) return <OptimizedLoader type="page" message="Loading survey editor..." />;
 
   if (error) {
@@ -873,7 +1088,7 @@ const SurveyEditor: React.FC = () => {
   const theme = getTheme(survey.template_type || 'custom');
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className="h-screen bg-white flex flex-col overflow-hidden">
       {/* ── Top Bar ── */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-30 shrink-0">
         <div className="px-3 sm:px-6 flex items-center justify-between h-12 sm:h-14 gap-2">
@@ -966,16 +1181,16 @@ const SurveyEditor: React.FC = () => {
                   <button
                     type="button"
                     role="switch"
-                    aria-checked={survey.collect_location !== false}
-                    onClick={() => setSurvey({ ...survey, collect_location: survey.collect_location === false ? true : false })}
+                    aria-checked={survey.collect_location === true}
+                    onClick={() => setSurvey({ ...survey, collect_location: survey.collect_location === true ? false : true })}
                     className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 ${
-                      survey.collect_location !== false ? 'bg-red-500' : 'bg-gray-200'
+                      survey.collect_location === true ? 'bg-red-500' : 'bg-gray-200'
                     }`}
                   >
                     <span
                       aria-hidden="true"
                       className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                        survey.collect_location !== false ? 'translate-x-4' : 'translate-x-0'
+                        survey.collect_location === true ? 'translate-x-4' : 'translate-x-0'
                       }`}
                     />
                   </button>
@@ -1341,11 +1556,15 @@ const SurveyEditor: React.FC = () => {
       )}
 
       {/* ── Main 3-Panel Layout ── */}
-      <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
+      <div className="flex flex-1 overflow-hidden flex-row">
 
         {/* ── Left Panel: Question List ── */}
-        <div className="w-full md:w-64 bg-white border-b md:border-b-0 md:border-r border-gray-200 flex flex-col shrink-0 max-h-[35vh] md:max-h-none">
-          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <div className={`
+          bg-white border-r border-gray-200 flex flex-col shrink-0
+          md:w-64 md:flex md:h-full
+          ${mobilePanel === 'questions' ? 'flex w-full absolute inset-0 z-10 mt-0' : 'hidden md:flex'}
+        `} style={{ top: 'auto' }}>
+          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between shrink-0">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Questions</span>
             <button
               onClick={addNewQuestion}
@@ -1354,7 +1573,7 @@ const SurveyEditor: React.FC = () => {
               <Plus size={12} /> Add
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto py-1 flex md:flex-col flex-row md:overflow-x-hidden overflow-x-auto">
+          <div className="flex-1 overflow-y-auto py-1 scrollbar-transparent">
             {(survey.questions || []).map((q, index) => {
               const qTypeIcon = QUESTION_TYPES.find(t => t.value === q.type)?.icon || '✎';
               const bInfo = branchMap[q.id];
@@ -1362,8 +1581,8 @@ const SurveyEditor: React.FC = () => {
               return (
                 <button
                   key={q.id || index}
-                  onClick={() => setActiveQuestionIndex(index)}
-                  className={`text-left px-3 md:px-4 py-2.5 md:py-3 flex items-start gap-2 md:gap-3 transition-colors border-l-3 min-w-[120px] md:min-w-0 flex-shrink-0 md:flex-shrink md:w-full ${
+                  onClick={() => { setActiveQuestionIndex(index); setMobilePanel('editor'); }}
+                  className={`text-left px-4 py-3 flex items-start gap-3 transition-colors w-full ${
                     index === activeQuestionIndex
                       ? 'bg-red-50 border-l-[3px] border-l-red-500'
                       : 'border-l-[3px] border-l-transparent hover:bg-gray-50'
@@ -1423,13 +1642,16 @@ const SurveyEditor: React.FC = () => {
         </div>
 
         {/* ── Center Panel: Paper & Pin Editor ── */}
-        <div className="flex-1 flex items-center justify-center overflow-y-auto" style={{
+        <div className={`
+          flex-1 flex items-start justify-center overflow-y-auto scrollbar-transparent
+          ${mobilePanel === 'editor' ? 'flex' : 'hidden md:flex'}
+        `} style={{
           background: theme.bg,
           fontFamily: "'Outfit', -apple-system, BlinkMacSystemFont, sans-serif",
           transition: 'background 0.4s ease',
         }}>
           {activeQ ? (
-            <div style={{ position: 'relative', maxWidth: 900, width: '100%', margin: '40px 20px' }}>
+            <div style={{ position: 'relative', maxWidth: 580, width: '100%', margin: '24px 12px 24px' }} className="sm:mx-6 sm:my-10">
               {/* Pin icon */}
               <div style={{
                 position: 'absolute', top: -22, left: 28, width: 44, height: 44, zIndex: 20,
@@ -1448,7 +1670,7 @@ const SurveyEditor: React.FC = () => {
                 position: 'relative',
                 clipPath: 'polygon(0.5% 0.8%, 3% 0.2%, 6% 1%, 9% 0.3%, 12% 0.9%, 16% 0.1%, 20% 0.7%, 24% 0.2%, 28% 1%, 32% 0.4%, 36% 0.8%, 40% 0.1%, 44% 0.6%, 48% 0.3%, 52% 0.9%, 56% 0.2%, 60% 0.7%, 64% 0.1%, 68% 0.8%, 72% 0.3%, 76% 1%, 80% 0.2%, 84% 0.6%, 88% 0.1%, 92% 0.9%, 95% 0.4%, 98% 0.8%, 100% 0.5%, 99.5% 4%, 100% 8%, 99.2% 12%, 99.8% 16%, 99.1% 20%, 99.6% 24%, 99.3% 28%, 99.9% 32%, 99.2% 36%, 99.7% 40%, 99.1% 44%, 99.5% 48%, 99.8% 52%, 99.2% 56%, 99.6% 60%, 99.1% 64%, 99.8% 68%, 99.3% 72%, 99.7% 76%, 99.1% 80%, 99.5% 84%, 99.8% 88%, 99.2% 92%, 99.6% 96%, 99.3% 100%, 96% 99.5%, 92% 99.9%, 88% 99.2%, 84% 99.7%, 80% 99.1%, 76% 99.6%, 72% 99.3%, 68% 99.8%, 64% 99.1%, 60% 99.5%, 56% 99.9%, 52% 99.2%, 48% 99.7%, 44% 99.1%, 40% 99.6%, 36% 99.3%, 32% 99.8%, 28% 99.1%, 24% 99.5%, 20% 99.9%, 16% 99.2%, 12% 99.7%, 8% 99.1%, 4% 99.6%, 1% 99.3%, 0% 99.5%, 0.5% 96%, 0% 92%, 0.8% 88%, 0.2% 84%, 0.9% 80%, 0.3% 76%, 0.7% 72%, 0.1% 68%, 0.8% 64%, 0.3% 60%, 0.6% 56%, 0.1% 52%, 0.9% 48%, 0.4% 44%, 0.7% 40%, 0.2% 36%, 0.8% 32%, 0.3% 28%, 0.6% 24%, 0.1% 20%, 0.9% 16%, 0.4% 12%, 0.7% 8%, 0.2% 4%)',
                 boxShadow: '2px 3px 8px rgba(0,0,0,0.12), 4px 6px 20px rgba(0,0,0,0.08)',
-                padding: '48px 44px 40px',
+                padding: 'clamp(20px, 5vw, 36px) clamp(16px, 4vw, 32px) clamp(18px, 4vw, 30px)',
                 transition: 'background 0.4s ease',
               }}>
                 {/* Paper texture overlay */}
@@ -1756,7 +1978,11 @@ const SurveyEditor: React.FC = () => {
 
         {/* ── Right Panel: Question Settings ── */}
         {activeQ && (
-          <div className="w-full md:w-72 bg-white border-t md:border-t-0 md:border-l border-gray-200 flex flex-col shrink-0 overflow-y-auto max-h-[40vh] md:max-h-none">
+          <div className={`
+            bg-white border-l border-gray-200 flex flex-col shrink-0 overflow-y-auto scrollbar-transparent
+            md:w-72 md:h-full
+            ${mobilePanel === 'settings' ? 'flex w-full' : 'hidden md:flex'}
+          `}>
             <div className="px-4 md:px-5 py-3 md:py-4 border-b border-gray-100">
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Question Settings</h3>
             </div>
@@ -1878,9 +2104,51 @@ const SurveyEditor: React.FC = () => {
         )}
       </div>
 
+      {/* ── Mobile Bottom Tab Bar ── */}
+      <div className="md:hidden flex items-center border-t border-gray-200 bg-white shrink-0 z-20">
+        <button
+          onClick={() => setMobilePanel('questions')}
+          className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[10px] font-semibold transition-colors ${
+            mobilePanel === 'questions' ? 'text-red-500' : 'text-gray-400'
+          }`}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+            <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+          </svg>
+          Questions
+          {mobilePanel === 'questions' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-500 rounded-t" />}
+        </button>
+        <button
+          onClick={() => setMobilePanel('editor')}
+          className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[10px] font-semibold transition-colors relative ${
+            mobilePanel === 'editor' ? 'text-red-500' : 'text-gray-400'
+          }`}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+          Editor
+          {mobilePanel === 'editor' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-500 rounded-t" />}
+        </button>
+        <button
+          onClick={() => setMobilePanel('settings')}
+          className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[10px] font-semibold transition-colors relative ${
+            mobilePanel === 'settings' ? 'text-red-500' : 'text-gray-400'
+          }`}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          Settings
+          {mobilePanel === 'settings' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-500 rounded-t" />}
+        </button>
+      </div>
+
       {/* ── Save Status Toast ── */}
       {saveStatus !== 'idle' && (
-        <div className={`fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:w-auto px-4 py-2.5 rounded-lg shadow-lg z-50 flex items-center justify-center sm:justify-start gap-2 text-sm ${
+        <div className={`fixed bottom-16 md:bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:w-auto px-4 py-2.5 rounded-lg shadow-lg z-50 flex items-center justify-center sm:justify-start gap-2 text-sm ${
           saveStatus === 'saved' ? 'bg-green-500 text-white' : saveStatus === 'error' ? 'bg-red-500 text-white' : 'bg-blue-500 text-white'
         }`}>
           {saveStatus === 'saving' && <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />}
@@ -1950,6 +2218,125 @@ const SurveyEditor: React.FC = () => {
                 />
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Floating AI Assistant FAB + Panel ── */}
+      {/* FAB button — fixed bottom-right, always visible */}
+      <button
+        className={`ai-fab ${showAiBox ? 'ai-fab--active' : ''}`}
+        onClick={() => setShowAiBox(v => !v)}
+        title="AI Assistant"
+        aria-label="Open AI Assistant"
+      >
+        {showAiBox ? (
+          <X size={20} />
+        ) : (
+          /* Wand/sparkle icon — feels like "AI magic" */
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 4V2" /><path d="M15 16v-2" /><path d="M8 9h2" /><path d="M20 9h2" />
+            <path d="M17.8 11.8 19 13" /><path d="M15 9h.01" /><path d="M17.8 6.2 19 5" />
+            <path d="m3 21 9-9" /><path d="M12.2 6.2 11 5" />
+          </svg>
+        )}
+        {/* Pulse ring when closed */}
+        {!showAiBox && <span className="ai-fab-pulse" />}
+      </button>
+
+      {/* AI panel — slides up from bottom-right above the FAB */}
+      {showAiBox && (
+        <div className="ai-fab-panel" onClick={e => e.stopPropagation()}>
+          {/* Panel header */}
+          <div className="ai-fab-panel-header">
+            <div className="ai-fab-panel-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 4V2" /><path d="M15 16v-2" /><path d="M8 9h2" /><path d="M20 9h2" />
+                <path d="M17.8 11.8 19 13" /><path d="M15 9h.01" /><path d="M17.8 6.2 19 5" />
+                <path d="m3 21 9-9" /><path d="M12.2 6.2 11 5" />
+              </svg>
+              AI Assistant
+            </div>
+            <span className="ai-fab-panel-sub">Ctrl+Enter to send</span>
+          </div>
+
+          {/* Quick chips */}
+          <div className="ai-editor-chips">
+            {[
+              'End survey after this Q if No',
+              'Add redirect after this Q',
+              'Add a Yes/No question after this Q',
+              'Delete this question',
+              'Move this Q to top',
+            ].map(chip => (
+              <button
+                key={chip}
+                className="ai-editor-chip"
+                onClick={() => setAiPrompt(chip)}
+              >
+                {chip}
+              </button>
+            ))}
+          </div>
+
+          {/* Chat history — shows past prompts and AI responses */}
+          {aiHistory.length > 0 && (
+            <div className="ai-chat-history">
+              {aiHistory.map((entry, i) => (
+                <div key={i} className="ai-chat-entry">
+                  {/* User bubble */}
+                  <div className="ai-chat-user">
+                    <span className="ai-chat-user-icon">You</span>
+                    <span className="ai-chat-user-text">{entry.prompt}</span>
+                  </div>
+                  {/* AI response bubble */}
+                  <div className={`ai-chat-ai ai-chat-ai--${entry.status}`}>
+                    <span className="ai-chat-ai-icon">✦</span>
+                    <span className="ai-chat-ai-text">{entry.result}</span>
+                  </div>
+                </div>
+              ))}
+              <div ref={aiHistoryEndRef} />
+            </div>
+          )}
+
+          {/* Result message (current, fades out) */}
+          {aiMessage && aiHistory.length === 0 && (
+            <div className={`ai-editor-message ai-editor-message--${aiMessage.type}`}>
+              {aiMessage.type === 'success' && '✓ '}
+              {aiMessage.type === 'error' && '✕ '}
+              {aiMessage.type === 'info' && 'ℹ '}
+              {aiMessage.text}
+            </div>
+          )}
+
+          {/* Input area */}
+          <div className="ai-fab-panel-input">
+            <textarea
+              className="ai-editor-textarea"
+              placeholder={`Tell AI what to do with this survey...\n"add redirect to https://x.com after Q3 if Yes"\n"end survey after Q2 if they answer No"\n"move Q4 before Q2"`}
+              value={aiPrompt}
+              onChange={e => setAiPrompt(e.target.value)}
+              rows={3}
+              autoFocus
+              onKeyDown={e => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  handleAiCommand();
+                }
+              }}
+            />
+            <button
+              className={`ai-editor-send ${aiLoading ? 'loading' : ''}`}
+              onClick={handleAiCommand}
+              disabled={aiLoading || !aiPrompt.trim()}
+              title="Send (Ctrl+Enter)"
+            >
+              {aiLoading
+                ? <RefreshCw size={14} className="spinning" />
+                : <CornerDownLeft size={14} />
+              }
+            </button>
           </div>
         </div>
       )}

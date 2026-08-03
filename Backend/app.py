@@ -5312,6 +5312,162 @@ def transcribe_audio():
 
 
 # ═══════════════════════════════════════════════════════════
+# AI EDITOR COMMAND — interprets natural language instructions
+# and returns structured operations to apply to the survey
+# ═══════════════════════════════════════════════════════════
+@app.route("/api/surveys/<survey_id>/ai-editor-command", methods=["POST", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins="*")
+def ai_editor_command(survey_id):
+    """
+    Accepts a natural language instruction and the current survey questions.
+    Returns a list of operations to apply:
+      { ops: [ { type, ... }, ... ], message: "Human-readable summary" }
+
+    Supported op types:
+      add_question     { after_index, question, type, options? }
+      delete_question  { index }
+      move_question    { from_index, to_index }
+      change_type      { index, new_type, options? }
+      update_text      { index, question }
+      add_redirect     { index, condition, url }
+      end_survey       { index, condition }
+      remove_redirect  { index }
+      remove_end       { index }
+      reorder          { new_order: [0,2,1,...] }
+    """
+    if request.method == "OPTIONS":
+        return "", 200
+
+    try:
+        data = request.get_json()
+        prompt = (data.get("prompt") or "").strip()
+        questions = data.get("questions", [])
+        active_index = data.get("active_index", 0)  # currently selected question in editor
+
+        if not prompt:
+            return jsonify({"error": "Prompt is required"}), 400
+
+        if not OPENAI_API_KEY:
+            return jsonify({"error": "AI not configured"}), 503
+
+        # Build compact question summary for GPT
+        q_summary = []
+        for i, q in enumerate(questions):
+            opts = q.get("options", [])
+            opts_str = f" [{', '.join(opts[:4])}]" if opts else ""
+            q_summary.append(f"Q{i+1} (id={q.get('id','')}, type={q.get('type','text')}): {q.get('question','')[:70]}{opts_str}")
+        q_list_text = "\n".join(q_summary)
+
+        system_prompt = f"""You are an AI assistant for a survey editor. The user gives you a natural language instruction and you return a JSON list of operations to apply to the survey.
+
+Currently active/selected question: Q{active_index + 1} (index {active_index}) — when user says "this question", "this Q", "current question", "here", they mean index {active_index}.
+
+Current survey questions:
+{q_list_text}
+
+AVAILABLE OPERATION TYPES (return as JSON array):
+1. add_question      — {{ "type": "add_question", "after_index": N, "question": "text", "q_type": "yes_no|multiple_choice|short_answer|rating|range", "options": ["A","B"] }}
+2. delete_question   — {{ "type": "delete_question", "index": N }}
+3. move_question     — {{ "type": "move_question", "from_index": N, "to_index": M }}
+4. change_type       — {{ "type": "change_type", "index": N, "new_type": "yes_no|multiple_choice|short_answer|rating|range", "options": ["A","B"] }}
+5. update_text       — {{ "type": "update_text", "index": N, "question": "new text" }}
+6. add_redirect      — {{ "type": "add_redirect", "index": N, "condition": "always|Yes|No|<answer>", "url": "https://..." }}
+7. end_survey        — {{ "type": "end_survey", "index": N, "condition": "always|Yes|No|<answer>" }}
+8. remove_redirect   — {{ "type": "remove_redirect", "index": N }}
+9. remove_end        — {{ "type": "remove_end", "index": N }}
+10. reorder          — {{ "type": "reorder", "new_order": [0,2,1,3,...] }}  (0-based indices)
+
+RULES:
+- Indices are 0-based (Q1 = index 0, Q2 = index 1, etc.)
+- For add_question, after_index=-1 means append at end
+- For redirect URLs: extract any URL from the prompt. If it looks like a domain (e.g. "google.com") prepend https://
+- For conditions: use "always" if no specific answer mentioned, otherwise use the exact answer value
+- "this question", "this Q", "current question", "here" all refer to the currently active question — use its index from the list
+- Be flexible with phrasing: "add redirect", "redirect to", "send to", "send user to" all mean add_redirect
+- "end survey", "stop survey", "finish here" all mean end_survey  
+- "add question", "insert question", "create question" all mean add_question
+- Return ONLY a JSON object: {{ "ops": [...], "message": "short human-readable summary of what was done" }}
+- Do NOT wrap in markdown. Return pure JSON only.
+- If you cannot understand the instruction, return {{ "ops": [], "message": "I couldn't understand that. Try: 'add redirect to https://... after Q3 if Yes' or 'end survey after Q2 if No'" }}
+
+User instruction: {prompt}"""
+
+        headers = {
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [{"role": "user", "content": system_prompt}],
+            "temperature": 0.1,
+            "max_tokens": 800,
+        }
+
+        resp = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers=headers, json=payload, timeout=25
+        )
+        resp.raise_for_status()
+
+        content = resp.json()["choices"][0]["message"]["content"].strip()
+        # Strip markdown fences if present
+        if content.startswith("```"):
+            content = content.split("```")[1]
+            if content.startswith("json"):
+                content = content[4:]
+        content = content.strip()
+
+        result = json.loads(content)
+        ops = result.get("ops", [])
+        message = result.get("message", "Done.")
+
+        # Apply redirect/end ops directly to the survey in DB so branching panel reflects immediately
+        if any(op["type"] in ("add_redirect", "end_survey", "remove_redirect", "remove_end") for op in ops):
+            survey_doc = db.surveys.find_one({"$or": [{"_id": survey_id}, {"id": survey_id}]})
+            if survey_doc:
+                qs = list(survey_doc.get("questions", []))
+                for op in ops:
+                    idx = op.get("index", -1)
+                    if not (0 <= idx < len(qs)):
+                        continue
+                    if op["type"] == "add_redirect":
+                        raw_url = op.get("url", "")
+                        # Auto-prepend https:// if missing protocol
+                        if raw_url and not raw_url.startswith(("http://", "https://")):
+                            raw_url = "https://" + raw_url
+                        qs[idx]["redirect_config"] = {
+                            "enabled": True,
+                            "url": raw_url,
+                            "condition": op.get("condition", "always"),
+                            "color": "#f59e0b",
+                            "allow_resume": True,
+                            "resume_expiry_hours": 24,
+                        }
+                    elif op["type"] == "end_survey":
+                        qs[idx]["end_here"] = {
+                            "enabled": True,
+                            "condition": op.get("condition", "always"),
+                        }
+                    elif op["type"] == "remove_redirect":
+                        qs[idx]["redirect_config"] = None
+                    elif op["type"] == "remove_end":
+                        qs[idx]["end_here"] = None
+
+                db.surveys.update_one(
+                    {"$or": [{"_id": survey_id}, {"id": survey_id}]},
+                    {"$set": {"questions": qs}}
+                )
+
+        return jsonify({"ops": ops, "message": message}), 200
+
+    except json.JSONDecodeError:
+        return jsonify({"error": "AI returned invalid response. Try rephrasing."}), 500
+    except Exception as e:
+        print(f"ai_editor_command error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+# ═══════════════════════════════════════════════════════════
 # AI QUESTION REFINEMENT
 # ═══════════════════════════════════════════════════════════
 @app.route("/api/refine-question", methods=["POST", "OPTIONS"])

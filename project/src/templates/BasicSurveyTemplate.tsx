@@ -201,7 +201,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   // Request GPS location only when the survey owner has enabled it (default: on)
   useEffect(() => {
     if (previewMode) return; // Never ask for location in preview/edit mode
-    const shouldCollect = survey.collect_location !== false; // default true
+    const shouldCollect = survey.collect_location === true; // default false
     if (shouldCollect) {
       requestGPSLocation();
     }
