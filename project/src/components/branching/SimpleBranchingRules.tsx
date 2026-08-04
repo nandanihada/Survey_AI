@@ -66,13 +66,25 @@ interface BranchingRule {
     url: string;
     mode: 'direct' | 'ask' | 'inline';
   }>;
-  // Pass/Fail page
-  pass_fail_enabled: boolean;
-  pass_fail_type: 'pass' | 'fail' | null;
-  pass_fail_condition: string; // 'always' | answer value
-  pass_fail_title: string;
-  pass_fail_message: string;
-  pass_fail_icon: string; // emoji
+  // Layers (result pages, spinners, chain surveys, end survey)
+  layers: Array<{
+    type: 'result_page' | 'spinner' | 'chain_survey' | 'end_survey';
+    variant?: 'pass' | 'fail';         // for result_page
+    condition: string;                  // 'always' | answer value
+    // result_page fields
+    title?: string;
+    subtitle?: string;
+    cta_text?: string;
+    // spinner fields
+    duration?: number;
+    text?: string;
+    // chain_survey fields
+    survey_url?: string;
+    chain_mode?: 'direct' | 'ask';
+    chain_message?: string;
+    chain_yes_label?: string;
+    chain_no_label?: string;
+  }>;
 }
 
 interface Props {
@@ -160,6 +172,7 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
   const [hasChanges, setHasChanges] = useState(false);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [activeConfigTab, setActiveConfigTab] = useState<Record<number, 'redirect' | 'chain' | 'end' | 'passfail'>>({});
+  const [expandedLayerIdx, setExpandedLayerIdx] = useState<Record<number, number | null>>({});
   const rulesRef = React.useRef<BranchingRule[]>([]);
   // Ref for the focused row so we can scroll to it
   const focusRowRef = React.useRef<HTMLTableRowElement | null>(null);
@@ -176,17 +189,7 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
         });
         if (!res.ok) {
           console.warn('fetchUserSurveys: non-ok response', res.status);
-          // Try fallback without auth header — some tokens may be stale
-          const res2 = await fetch(`${baseUrl}/api/surveys/public`);
-          if (!res2.ok) return;
-          const data2 = await res2.json();
-          const list2 = (data2.surveys || data2 || []).map((s: any) => {
-            const sid = s.short_id || s.id || s._id;
-            const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-            const frontendBase = isLocal ? 'http://localhost:5173' : 'https://survey.pepperwahl.com';
-            return { id: sid, title: s.title || s.prompt?.slice(0, 40) || `Survey ${sid}`, url: `${frontendBase}/survey/${sid}` };
-          });
-          setUserSurveys(list2);
+          // Silently fall through — chain picker will show "paste URL" fallback
           return;
         }
         const data = await res.json();
@@ -219,7 +222,10 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
   const fetchRules = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${baseUrl}/api/surveys/${surveyId}/branching-rules`);
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${baseUrl}/api/surveys/${surveyId}/branching-rules`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (response.ok) {
         const data = await response.json();
         const rulesWithRedirect = (data.rules || []).map((r: any) => ({
@@ -242,12 +248,7 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
           chain_survey_yes_label: r.chain_survey_yes_label || 'Continue',
           chain_survey_no_label: r.chain_survey_no_label || 'No thanks',
           chain_survey_configs: r.chain_survey_configs || [],
-          pass_fail_enabled: r.pass_fail_enabled || false,
-          pass_fail_type: r.pass_fail_type || null,
-          pass_fail_condition: r.pass_fail_condition || 'always',
-          pass_fail_title: r.pass_fail_title || '',
-          pass_fail_message: r.pass_fail_message || '',
-          pass_fail_icon: r.pass_fail_icon || '',
+          layers: r.layers || [],
         }));
         setRules(rulesWithRedirect);
       }
@@ -282,9 +283,10 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
     const data = rulesToSave || rules;
     try {
       setSaving(true);
+      const token = localStorage.getItem('auth_token');
       const response = await fetch(`${baseUrl}/api/surveys/${surveyId}/branching-rules`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ rules: data })
       });
       
@@ -312,9 +314,10 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
     return () => {
       // On unmount, auto-save silently if there are unsaved changes
       if (hasChangesRef.current && rulesRef.current.length > 0) {
+        const tok = localStorage.getItem('auth_token');
         fetch(`${baseUrl}/api/surveys/${surveyId}/branching-rules`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
           body: JSON.stringify({ rules: rulesRef.current })
         }).catch(() => {}); // Silent fail on unmount
       }
@@ -344,12 +347,7 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
           resume_expiry_hours: r.resume_expiry_hours ?? 24,
           end_here_enabled: r.end_here_enabled || false,
           end_here_condition: r.end_here_condition || 'always',
-          pass_fail_enabled: r.pass_fail_enabled || false,
-          pass_fail_type: r.pass_fail_type || null,
-          pass_fail_condition: r.pass_fail_condition || 'always',
-          pass_fail_title: r.pass_fail_title || '',
-          pass_fail_message: r.pass_fail_message || '',
-          pass_fail_icon: r.pass_fail_icon || '',
+          layers: r.layers || [],
         }));
         setRules(rulesWithRedirect);
         setHasChanges(true);
@@ -691,8 +689,8 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
                               className={`exp-tab exp-tab--passfail ${(activeConfigTab[index] ?? 'redirect') === 'passfail' ? 'exp-tab--active' : ''}`}
                               onClick={() => setActiveConfigTab(prev => ({ ...prev, [index]: 'passfail' }))}
                             >
-                              🏆 Pass / Fail
-                              {rule.pass_fail_enabled && <span className="exp-tab-dot" style={{ background: '#f59e0b' }} />}
+                              ◈ Multi Layer
+                              {(rule.layers && rule.layers.length > 0) && <span className="exp-tab-dot" style={{ background: '#8b5cf6' }} />}
                             </button>
                           </div>
 
@@ -1125,107 +1123,120 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
                             </div>
                           )}
 
-                          {/* ─── PASS/FAIL TAB ─────────────────────────────── */}
-                          {(activeConfigTab[index] ?? 'redirect') === 'passfail' && (
-                            <div className="exp-tab-body">
-                              <div className="exp-section-header" style={{ background: '#fffbeb', color: '#92400e', borderLeft: '3px solid #f59e0b' }}>
-                                🏆 Show a Pass or Fail result page after this question
-                              </div>
-
-                              <label className="checkbox-label">
-                                <input
-                                  type="checkbox"
-                                  checked={rule.pass_fail_enabled}
-                                  onChange={(e) => updateRule(index, 'pass_fail_enabled', e.target.checked)}
-                                />
-                                Show a result page after this question
-                              </label>
-
-                              {rule.pass_fail_enabled && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                  {/* Pass or Fail type */}
-                                  <div className="field-row">
-                                    <label>Page type:</label>
-                                    <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                                      {[
-                                        { value: 'pass', label: '✅ Pass', color: '#16a34a', bg: '#f0fdf4', border: '#86efac' },
-                                        { value: 'fail', label: '❌ Fail', color: '#dc2626', bg: '#fff5f5', border: '#fecaca' },
-                                      ].map(t => (
-                                        <button
-                                          key={t.value}
-                                          type="button"
-                                          onClick={() => updateRule(index, 'pass_fail_type', t.value)}
-                                          style={{
-                                            flex: 1, padding: '8px 14px', borderRadius: 8, border: `1.5px solid`,
-                                            cursor: 'pointer', fontSize: 13, fontWeight: 700,
-                                            borderColor: rule.pass_fail_type === t.value ? t.border : '#e2e8f0',
-                                            background: rule.pass_fail_type === t.value ? t.bg : '#f8fafc',
-                                            color: rule.pass_fail_type === t.value ? t.color : '#64748b',
-                                          }}
-                                        >
-                                          {t.label}
-                                        </button>
-                                      ))}
-                                    </div>
+                          {/* ─── MULTI LAYER TAB ─────────────────────────── */}
+                          {(activeConfigTab[index] ?? 'redirect') === 'passfail' && (() => {
+                            const LAYER_TYPES = [
+                              { type: 'result_page', variant: 'pass' as const, label: 'Pass Page', color: '#16a34a', bg: '#f0fdf4', border: '#86efac', icon: '✓' },
+                              { type: 'result_page', variant: 'fail' as const, label: 'Fail Page', color: '#dc2626', bg: '#fff5f5', border: '#fecaca', icon: '✗' },
+                              { type: 'spinner', variant: undefined, label: 'Spinner', color: '#6366f1', bg: '#eef2ff', border: '#c7d2fe', icon: '⟳' },
+                              { type: 'chain_survey', variant: undefined, label: 'Chain Survey', color: '#0369a1', bg: '#f0f9ff', border: '#bae6fd', icon: '→' },
+                              { type: 'end_survey', variant: undefined, label: 'End Survey', color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe', icon: '⊙' },
+                            ] as const;
+                            const getLayerDef = (layer: any) => LAYER_TYPES.find(t => t.type === layer.type && (t.type !== 'result_page' || t.variant === layer.variant)) || LAYER_TYPES[0];
+                            const getLayerSummary = (layer: any) => { if (layer.type==='result_page') return layer.title||(layer.variant==='pass'?'You qualify!':'Not this time'); if (layer.type==='spinner') return layer.text||'Verifying...'; if (layer.type==='chain_survey') return layer.chain_mode==='direct'?'Direct → survey':layer.chain_message||'Another survey waiting'; return 'Survey ends here'; };
+                            const layers = rule.layers || [];
+                            const expandedLi = expandedLayerIdx[index] ?? null;
+                            return (
+                              <div className="exp-tab-body">
+                                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
+                                  <span style={{fontSize:12,fontWeight:700,color:'#6d28d9'}}>◈ Layer Sequence</span>
+                                  <span style={{fontSize:11,color:'#94a3b8'}}>{layers.length===0?'No layers':`${layers.length} layer${layers.length>1?'s':''}`} — runs in order after answer</span>
+                                </div>
+                                {layers.length > 0 && (
+                                  <div className="ml-flow">
+                                    <div className="ml-flow-start"><div className="ml-flow-start-dot"/><span>Answer</span></div>
+                                    {layers.map((layer: any, li: number) => {
+                                      const def = getLayerDef(layer);
+                                      const isOpen = expandedLi === li;
+                                      return (
+                                        <div key={li} className="ml-flow-item">
+                                          <div className="ml-flow-connector"><div className="ml-flow-line"/><div className="ml-flow-arrow"/></div>
+                                          <div className="ml-layer-card" style={{borderColor:def.border,background:isOpen?def.bg:'#fff'}}>
+                                            <div className="ml-layer-header" onClick={()=>setExpandedLayerIdx(prev=>({...prev,[index]:isOpen?null:li}))}>
+                                              <div style={{display:'flex',alignItems:'center',gap:8,minWidth:0}}>
+                                                <span className="ml-layer-chip" style={{background:def.bg,color:def.color,borderColor:def.border}}>
+                                                  <span style={{fontWeight:800,marginRight:3}}>{def.icon}</span>{def.label}
+                                                </span>
+                                                <span className="ml-layer-summary">{getLayerSummary(layer)}</span>
+                                                {layer.condition!=='always'&&<span className="ml-layer-cond-badge">if "{layer.condition}"</span>}
+                                              </div>
+                                              <div style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
+                                                <span style={{fontSize:9,color:'#94a3b8',display:'inline-block',transition:'transform 0.15s',transform:isOpen?'rotate(180deg)':'none'}}>▼</span>
+                                                <button type="button" onClick={(e)=>{e.stopPropagation();const u=[...layers];u.splice(li,1);updateRule(index,'layers',u);}} className="ml-delete-btn">×</button>
+                                              </div>
+                                            </div>
+                                            {isOpen&&(
+                                              <div className="ml-layer-fields">
+                                                {currentAnswerOptions.length>0&&(
+                                                  <div className="field-row">
+                                                    <label>Show when answer is:</label>
+                                                    <select className="sbr-select" value={layer.condition||'always'} onChange={(e)=>{const u=[...layers];u[li]={...u[li],condition:e.target.value};updateRule(index,'layers',u);}}>
+                                                      <option value="always">Any answer</option>
+                                                      {currentAnswerOptions.map(opt=><option key={opt} value={opt}>Only if "{opt}"</option>)}
+                                                    </select>
+                                                  </div>
+                                                )}
+                                                {layer.type==='result_page'&&(<>
+                                                  <div className="field-row"><label>Title</label><input type="text" className="url-input" value={layer.title||''} onChange={(e)=>{const u=[...layers];u[li]={...u[li],title:e.target.value};updateRule(index,'layers',u);}} placeholder={layer.variant==='pass'?'You qualify!':'Not this time'}/></div>
+                                                  <div className="field-row"><label>Subtitle</label><input type="text" className="url-input" value={layer.subtitle||''} onChange={(e)=>{const u=[...layers];u[li]={...u[li],subtitle:e.target.value};updateRule(index,'layers',u);}} placeholder={layer.variant==='pass'?'You meet all requirements.':"You don't meet the criteria."}/></div>
+                                                  <div className="field-row"><label>Button label</label><input type="text" className="url-input" value={layer.cta_text||''} style={{maxWidth:180}} onChange={(e)=>{const u=[...layers];u[li]={...u[li],cta_text:e.target.value};updateRule(index,'layers',u);}} placeholder="Continue"/></div>
+                                                </>)}
+                                                {layer.type==='spinner'&&(
+                                                  <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+                                                    <div className="field-row" style={{flex:1,minWidth:140}}><label>Text shown</label><input type="text" className="url-input" value={layer.text||''} onChange={(e)=>{const u=[...layers];u[li]={...u[li],text:e.target.value};updateRule(index,'layers',u);}} placeholder="Verifying..."/></div>
+                                                    <div className="field-row" style={{width:90}}><label>Duration (s)</label><input type="number" className="url-input" min={1} max={30} value={layer.duration??3} onChange={(e)=>{const u=[...layers];u[li]={...u[li],duration:Number(e.target.value)};updateRule(index,'layers',u);}}/></div>
+                                                  </div>
+                                                )}
+                                                {layer.type==='chain_survey'&&(
+                                                  <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                                                    <div className="field-row"><label>Survey URL</label><SurveyUrlPicker value={layer.survey_url||''} surveys={userSurveys} currentSurveyId={surveyId} placeholder="Select or paste survey URL" onChange={(val)=>{const u=[...layers];u[li]={...u[li],survey_url:val};updateRule(index,'layers',u);}}/></div>
+                                                    <div style={{display:'flex',gap:6}}>
+                                                      {[{v:'ask',l:'Ask first'},{v:'direct',l:'Direct'}].map(m=>(
+                                                        <button key={m.v} type="button" className={`exp-mode-btn ${(layer.chain_mode||'ask')===m.v?'active':''}`} style={{flex:1}} onClick={()=>{const u=[...layers];u[li]={...u[li],chain_mode:m.v};updateRule(index,'layers',u);}}>
+                                                          {m.l}<span className="exp-mode-btn-desc">{m.v==='ask'?'Show Yes/No prompt':'Go straight'}</span>
+                                                        </button>
+                                                      ))}
+                                                    </div>
+                                                    {(layer.chain_mode||'ask')!=='direct'&&(<>
+                                                      <div className="field-row"><label>Prompt message</label><input type="text" className="url-input" value={layer.chain_message||''} onChange={(e)=>{const u=[...layers];u[li]={...u[li],chain_message:e.target.value};updateRule(index,'layers',u);}} placeholder="Another survey is waiting!"/></div>
+                                                      <div style={{display:'flex',gap:8}}>
+                                                        <input type="text" className="url-input" value={layer.chain_yes_label||''} onChange={(e)=>{const u=[...layers];u[li]={...u[li],chain_yes_label:e.target.value};updateRule(index,'layers',u);}} placeholder="Yes (Continue)"/>
+                                                        <input type="text" className="url-input" value={layer.chain_no_label||''} onChange={(e)=>{const u=[...layers];u[li]={...u[li],chain_no_label:e.target.value};updateRule(index,'layers',u);}} placeholder="No (No thanks)"/>
+                                                      </div>
+                                                    </>)}
+                                                  </div>
+                                                )}
+                                                {layer.type==='end_survey'&&(<p style={{margin:0,fontSize:11,color:'#7c3aed',background:'#f5f3ff',padding:'8px 10px',borderRadius:6}}>Survey terminates here. No further layers or questions will run.</p>)}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                    <div className="ml-flow-connector"><div className="ml-flow-line"/><div className="ml-flow-arrow"/></div>
+                                    <div className="ml-flow-end"><div className="ml-flow-end-dot"/><span>Next Question</span></div>
                                   </div>
-
-                                  {/* Condition */}
-                                  {currentAnswerOptions.length > 0 && (
-                                    <div className="field-row">
-                                      <label>Show when answer is:</label>
-                                      <select
-                                        value={rule.pass_fail_condition || 'always'}
-                                        onChange={(e) => updateRule(index, 'pass_fail_condition', e.target.value)}
-                                        className="sbr-select"
-                                      >
-                                        <option value="always">Any answer</option>
-                                        {currentAnswerOptions.map(opt => (
-                                          <option key={opt} value={opt}>Only if answer is "{opt}"</option>
-                                        ))}
-                                      </select>
-                                    </div>
-                                  )}
-
-                                  {/* Title */}
-                                  <div className="field-row">
-                                    <label>Title (e.g. "Congratulations!" or "Sorry, you didn't qualify")</label>
-                                    <input
-                                      type="text"
-                                      className="url-input"
-                                      value={rule.pass_fail_title || ''}
-                                      onChange={(e) => updateRule(index, 'pass_fail_title', e.target.value)}
-                                      placeholder={rule.pass_fail_type === 'fail' ? 'Sorry, you didn\'t qualify' : 'Congratulations!'}
-                                    />
-                                  </div>
-
-                                  {/* Message */}
-                                  <div className="field-row">
-                                    <label>Message</label>
-                                    <input
-                                      type="text"
-                                      className="url-input"
-                                      value={rule.pass_fail_message || ''}
-                                      onChange={(e) => updateRule(index, 'pass_fail_message', e.target.value)}
-                                      placeholder={rule.pass_fail_type === 'fail' ? 'Unfortunately you don\'t meet the criteria.' : 'You meet all the requirements!'}
-                                    />
-                                  </div>
-
-                                  {/* Icon */}
-                                  <div className="field-row">
-                                    <label>Icon emoji (optional)</label>
-                                    <input
-                                      type="text"
-                                      className="url-input"
-                                      value={rule.pass_fail_icon || ''}
-                                      onChange={(e) => updateRule(index, 'pass_fail_icon', e.target.value)}
-                                      placeholder={rule.pass_fail_type === 'fail' ? '❌' : '✅'}
-                                      style={{ maxWidth: 80 }}
-                                    />
+                                )}
+                                <div className="ml-add-row">
+                                  <span className="ml-add-label">+ Add Layer</span>
+                                  <div className="ml-add-chips">
+                                    {LAYER_TYPES.map(t=>(
+                                      <button key={`${t.type}-${t.variant||''}`} type="button" className="ml-add-chip" style={{'--chip-color':t.color,'--chip-bg':t.bg,'--chip-border':t.border} as any}
+                                        onClick={()=>{
+                                          const nl: any={type:t.type,condition:'always'};
+                                          if(t.type==='result_page'){nl.variant=t.variant;nl.title='';nl.subtitle='';nl.cta_text='Continue';}
+                                          if(t.type==='spinner'){nl.text='Verifying...';nl.duration=3;}
+                                          if(t.type==='chain_survey'){nl.survey_url='';nl.chain_mode='ask';nl.chain_message='Another survey is waiting!';nl.chain_yes_label='Continue';nl.chain_no_label='No thanks';}
+                                          updateRule(index,'layers',[...layers,nl]);
+                                          setExpandedLayerIdx(prev=>({...prev,[index]:layers.length}));
+                                        }}
+                                      ><span style={{marginRight:4}}>{t.icon}</span>{t.label}</button>
+                                    ))}
                                   </div>
                                 </div>
-                              )}
-                            </div>
-                          )}
+                              </div>
+                            );
+                          })()}
 
                         </div>
                       </td>

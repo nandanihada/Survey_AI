@@ -1512,3 +1512,199 @@
     font-size: 0.62rem;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   Multi-Layer Flow UI
+   ══════════════════════════════════════════════════════════════ */
+
+.ml-flow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 4px 0 4px 16px;
+  margin: 4px 0;
+}
+
+/* Start / End nodes */
+.ml-flow-start,
+.ml-flow-end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ml-flow-start-dot,
+.ml-flow-end-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  border: 2px solid #94a3b8;
+  flex-shrink: 0;
+}
+
+.ml-flow-end-dot {
+  background: #f1f5f9;
+}
+
+/* Connector between nodes */
+.ml-flow-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 10px;
+  gap: 0;
+  margin: 0;
+}
+
+.ml-flow-line {
+  width: 2px;
+  height: 16px;
+  background: linear-gradient(to bottom, #c7d2fe, #8b5cf6);
+  border-radius: 1px;
+}
+
+.ml-flow-arrow {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid #8b5cf6;
+}
+
+/* Each layer item */
+.ml-flow-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* Layer card */
+.ml-layer-card {
+  width: 100%;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.ml-layer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  gap: 8px;
+  user-select: none;
+}
+
+.ml-layer-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px solid;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ml-layer-summary {
+  font-size: 12px;
+  color: #475569;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.ml-layer-cond-badge {
+  font-size: 10px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  padding: 1px 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ml-delete-btn {
+  background: none;
+  border: none;
+  color: #cbd5e1;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px;
+  border-radius: 4px;
+  transition: color 0.1s, background 0.1s;
+}
+.ml-delete-btn:hover {
+  color: #ef4444;
+  background: #fee2e2;
+}
+
+/* Expanded fields area */
+.ml-layer-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 12px 14px;
+  border-top: 1px solid rgba(0,0,0,0.05);
+  margin-top: 4px;
+  padding-top: 10px;
+}
+
+/* Add layer row */
+.ml-add-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ml-add-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ml-add-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ml-add-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1.5px dashed var(--chip-border, #e2e8f0);
+  background: var(--chip-bg, #f8fafc);
+  color: var(--chip-color, #475569);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  font-family: 'Outfit', sans-serif;
+}
+
+.ml-add-chip:hover {
+  border-style: solid;
+  filter: brightness(0.97);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}

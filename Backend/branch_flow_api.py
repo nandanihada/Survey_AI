@@ -533,13 +533,8 @@ def get_branching_rules(survey_id):
                     "chain_survey_yes_label": (q.get("next_survey") or {}).get("yes_label", "Continue"),
                     "chain_survey_no_label": (q.get("next_survey") or {}).get("no_label", "No thanks"),
                     "chain_survey_configs": (q.get("next_survey") or {}).get("configs", []),
-                    # Pass/Fail page
-                    "pass_fail_enabled": bool((q.get("pass_fail_page") or {}).get("enabled", False)),
-                    "pass_fail_type": (q.get("pass_fail_page") or {}).get("type") or None,
-                    "pass_fail_condition": (q.get("pass_fail_page") or {}).get("condition", "always"),
-                    "pass_fail_title": (q.get("pass_fail_page") or {}).get("title", ""),
-                    "pass_fail_message": (q.get("pass_fail_page") or {}).get("message", ""),
-                    "pass_fail_icon": (q.get("pass_fail_page") or {}).get("icon", ""),
+                    # Layers (result pages, spinners)
+                    "layers": (q.get("layers") or []),
                 }
                 rules.append(rule)
             except Exception as qe:
@@ -571,12 +566,7 @@ def get_branching_rules(survey_id):
                     "chain_survey_yes_label": "Continue",
                     "chain_survey_no_label": "No thanks",
                     "chain_survey_configs": [],
-                    "pass_fail_enabled": False,
-                    "pass_fail_type": None,
-                    "pass_fail_condition": "always",
-                    "pass_fail_title": "",
-                    "pass_fail_message": "",
-                    "pass_fail_icon": "",
+                    "layers": [],
                 })
         
         return jsonify({
@@ -676,18 +666,12 @@ def update_branching_rules(survey_id):
                 else:
                     questions[q_index]["next_survey"] = None
                 
-                # Update pass/fail page
-                if rule.get("pass_fail_enabled") and rule.get("pass_fail_type"):
-                    questions[q_index]["pass_fail_page"] = {
-                        "enabled": True,
-                        "type": rule.get("pass_fail_type"),
-                        "condition": rule.get("pass_fail_condition", "always"),
-                        "title": rule.get("pass_fail_title", ""),
-                        "message": rule.get("pass_fail_message", ""),
-                        "icon": rule.get("pass_fail_icon", ""),
-                    }
+                # Update layers (result pages, spinners)
+                layers = rule.get("layers", [])
+                if isinstance(layers, list):
+                    questions[q_index]["layers"] = layers
                 else:
-                    questions[q_index]["pass_fail_page"] = None
+                    questions[q_index]["layers"] = []
         
         # Update survey
         db.surveys.update_one(
@@ -696,17 +680,23 @@ def update_branching_rules(survey_id):
         )
         
         # Regenerate ONLY the simple flow (AI flow is untouched)
-        survey["questions"] = questions
-        flow_config = generate_flow_from_survey(survey, flow_type="simple")
-        db.branch_flow_configs.replace_one(
-            {"survey_id": survey_id, "flow_type": "simple"},
-            flow_config,
-            upsert=True
-        )
+        try:
+            survey["questions"] = questions
+            flow_config = generate_flow_from_survey(survey, flow_type="simple")
+            db.branch_flow_configs.replace_one(
+                {"survey_id": survey_id, "flow_type": "simple"},
+                flow_config,
+                upsert=True
+            )
+        except Exception as flow_err:
+            print(f"⚠️ Flow regeneration failed (non-fatal): {flow_err}")
+            # Don't fail the whole save just because flow diagram couldn't regenerate
         
         return jsonify({"success": True, "message": "Branching rules updated"}), 200
         
     except Exception as e:
+        import traceback
+        print(f"❌ update_branching_rules error: {traceback.format_exc()}")
         return jsonify({"error": str(e)}), 500
 
 

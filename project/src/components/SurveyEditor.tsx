@@ -1222,7 +1222,21 @@ const SurveyEditor: React.FC = () => {
                     type="button"
                     role="switch"
                     aria-checked={survey.collect_location === true}
-                    onClick={() => setSurvey({ ...survey, collect_location: survey.collect_location === true ? false : true })}
+                    onClick={async () => {
+                      const newValue = survey.collect_location === true ? false : true;
+                      const updated = { ...survey, collect_location: newValue };
+                      setSurvey(updated);
+                      // Persist immediately so the survey template picks up the change
+                      try {
+                        await fetch(`${apiBaseUrl}/survey/${survey.id}/edit`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(updated),
+                        });
+                      } catch {
+                        // non-critical — user can still hit Save manually
+                      }
+                    }}
                     className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 ${
                       survey.collect_location === true ? 'bg-red-500' : 'bg-gray-200'
                     }`}

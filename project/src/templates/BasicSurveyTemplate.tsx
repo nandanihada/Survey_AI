@@ -123,12 +123,25 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     yesLabel: string;
     noLabel: string;
   } | null>(null);
-  const [passFailPage, setPassFailPage] = useState<{
-    type: 'pass' | 'fail';
-    title: string;
-    message: string;
-    icon: string;
-  } | null>(null);
+  // Layer queue state
+  const [layerQueue, setLayerQueue] = useState<Array<{
+    type: 'result_page' | 'spinner' | 'chain_survey' | 'end_survey';
+    variant?: 'pass' | 'fail';
+    title?: string;
+    subtitle?: string;
+    cta_text?: string;
+    duration?: number;
+    text?: string;
+    survey_url?: string;
+    chain_mode?: 'direct' | 'ask';
+    chain_message?: string;
+    chain_yes_label?: string;
+    chain_no_label?: string;
+  }>>([]);
+  const [activeLayer, setActiveLayer] = useState<typeof layerQueue[0] | null>(null);
+  const layerTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Keep a ref to the current queue so the Continue button doesn't use stale closure
+  const layerQueueRef = React.useRef<typeof layerQueue>([]);
   const formRef = React.useRef<HTMLFormElement>(null);
   const [alreadyCompleted, setAlreadyCompleted] = useState(false);
   const [deviceFingerprint, setDeviceFingerprint] = useState<string>('');
@@ -453,25 +466,83 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   }, [survey.questions]);
 
   // ── Check if current question has a pass/fail page configured ─────────────
-  const checkPassFail = useCallback((questionId: string, answer: string | number): boolean => {
-    const originalQuestion = (survey.questions || []).find((q: any) => q.id === questionId);
-    const pf = (originalQuestion as any)?.pass_fail_page;
-    if (!pf?.enabled || !pf?.type) return false;
+  const processNextLayer = useCallback((queue: typeof layerQueue) => {
+    if (queue.length === 0) {
+      setActiveLayer(null);
+      layerQueueRef.current = [];
+      return;
+    }
+    const [next, ...rest] = queue;
+    layerQueueRef.current = rest;  // always keep ref in sync
 
-    const condition = pf.condition || 'always';
-    if (condition !== 'always') {
-      const answerStr = String(answer).toLowerCase();
-      if (answerStr !== condition.toLowerCase()) return false;
+    // end_survey layer — terminate immediately
+    if (next.type === 'end_survey') {
+      setActiveLayer(null);
+      setLayerQueue([]);
+      layerQueueRef.current = [];
+      if (formRef.current) {
+        formRef.current.requestSubmit();
+      }
+      return;
     }
 
-    setPassFailPage({
-      type: pf.type as 'pass' | 'fail',
-      title: pf.title || (pf.type === 'pass' ? 'Congratulations!' : 'Sorry!'),
-      message: pf.message || (pf.type === 'pass' ? 'You qualify!' : 'You don\'t meet the criteria.'),
-      icon: pf.icon || (pf.type === 'pass' ? '✅' : '❌'),
+    // chain_survey layer — direct redirect or show prompt
+    if (next.type === 'chain_survey') {
+      setActiveLayer(null);
+      const url = next.survey_url || '';
+      if (!url) {
+        processNextLayer(rest);
+        return;
+      }
+      if (next.chain_mode === 'direct') {
+        window.location.href = url;
+        return;
+      }
+      setChainSurveyPrompt({
+        url,
+        mode: 'ask',
+        message: next.chain_message || 'Another survey is waiting for you!',
+        yesLabel: next.chain_yes_label || 'Continue',
+        noLabel: next.chain_no_label || 'No thanks',
+      });
+      return;
+    }
+
+    setActiveLayer(next);
+    setLayerQueue(rest);
+
+    if (next.type === 'spinner') {
+      const duration = (next.duration ?? 3) * 1000;
+      layerTimerRef.current = setTimeout(() => {
+        setActiveLayer(null);
+        processNextLayer(rest);
+      }, duration);
+    }
+  }, []);
+
+  const checkLayers = useCallback((questionId: string, answer: string | number): boolean => {
+    const originalQuestion = (survey.questions || []).find((q: any) => q.id === questionId);
+    const layers: any[] = (originalQuestion as any)?.layers || [];
+    if (layers.length === 0) return false;
+
+    const answerStr = String(answer).toLowerCase();
+    const matchedLayers = layers.filter(layer => {
+      const cond = layer.condition || 'always';
+      return cond === 'always' || cond.toLowerCase() === answerStr;
     });
+
+    if (matchedLayers.length === 0) return false;
+
+    processNextLayer(matchedLayers);
     return true;
-  }, [survey.questions]);
+  }, [survey.questions, processNextLayer]);
+
+  // Cleanup layer timer on unmount
+  useEffect(() => {
+    return () => {
+      if (layerTimerRef.current) clearTimeout(layerTimerRef.current);
+    };
+  }, []);
 
   const handleNext = useCallback(async () => {
     if (!isCurrentAnswered) return;
@@ -492,9 +563,9 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       const shouldChain = checkChainSurvey(currentQ.id, answer);
       if (shouldChain) return;
 
-      // Check pass/fail page
-      const shouldShowPassFail = checkPassFail(currentQ.id, answer);
-      if (shouldShowPassFail) return;
+      // Check layer queue (result pages, spinners)
+      const shouldShowLayer = checkLayers(currentQ.id, answer);
+      if (shouldShowLayer) return;
 
       // Check end_here
       const originalQ = (survey.questions || []).find((q: any) => q.id === currentQ.id);
@@ -522,7 +593,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         to_question: currentQuestionIndex + 2
       });
     }
-  }, [currentQuestionIndex, visibleQuestions, isCurrentAnswered, questionStartTime, formData, checkQuestionRedirect, checkChainSurvey, checkPassFail, trackClickInteraction, survey.questions]);
+  }, [currentQuestionIndex, visibleQuestions, isCurrentAnswered, questionStartTime, formData, checkQuestionRedirect, checkChainSurvey, checkLayers, processNextLayer, trackClickInteraction, survey.questions]);
 
   const handlePrev = () => {
     if (currentQuestionIndex > 0) {
@@ -1027,102 +1098,235 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         Powered by <a href="#">Pepperwahl</a>
       </div>
 
-      {/* ── Pass/Fail Result Page ── */}
-      {passFailPage && (
+      {/* ── Active Layer Renderer ── */}
+      {activeLayer && activeLayer.type === 'result_page' && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.3 }}
+          transition={{ duration: 0.4 }}
           style={{
             position: 'fixed', inset: 0, zIndex: 9996,
-            background: passFailPage.type === 'pass'
-              ? 'linear-gradient(135deg, #052e16 0%, #14532d 50%, #052e16 100%)'
-              : 'linear-gradient(135deg, #1a0505 0%, #7f1d1d 50%, #1a0505 100%)',
-            display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center',
-            padding: 24, fontFamily: "'Outfit', sans-serif",
+            fontFamily: "'Outfit', sans-serif",
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 20,
+            background: activeLayer.variant === 'pass'
+              ? 'linear-gradient(135deg, #0a1a0e 0%, #0f2d16 40%, #1a4726 100%)'
+              : 'linear-gradient(135deg, #1a0505 0%, #2d0a0a 40%, #450f0f 100%)',
+            overflow: 'hidden',
           }}
         >
+          {/* Animated background orbs */}
+          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+            <motion.div
+              animate={{ scale: [1, 1.15, 1], opacity: [0.12, 0.18, 0.12] }}
+              transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+              style={{
+                position: 'absolute', top: '-20%', right: '-10%',
+                width: 500, height: 500, borderRadius: '50%',
+                background: activeLayer.variant === 'pass' ? '#16a34a' : '#dc2626',
+                filter: 'blur(80px)',
+              }}
+            />
+            <motion.div
+              animate={{ scale: [1, 1.2, 1], opacity: [0.08, 0.14, 0.08] }}
+              transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 1.5 }}
+              style={{
+                position: 'absolute', bottom: '-15%', left: '-5%',
+                width: 400, height: 400, borderRadius: '50%',
+                background: activeLayer.variant === 'pass' ? '#4ade80' : '#f97316',
+                filter: 'blur(70px)',
+              }}
+            />
+          </div>
+
+          {/* Card */}
           <motion.div
-            initial={{ scale: 0.85, y: 24, opacity: 0 }}
+            initial={{ scale: 0.88, y: 32, opacity: 0 }}
             animate={{ scale: 1, y: 0, opacity: 1 }}
-            transition={{ type: 'spring', stiffness: 220, damping: 20, delay: 0.1 }}
+            transition={{ type: 'spring', stiffness: 200, damping: 24, delay: 0.1 }}
             style={{
-              background: '#fff', borderRadius: 28, width: '100%', maxWidth: 460,
+              position: 'relative', width: '100%', maxWidth: 460,
+              background: 'rgba(255,255,255,0.06)',
+              backdropFilter: 'blur(20px)',
+              border: `1px solid ${activeLayer.variant === 'pass' ? 'rgba(74,222,128,0.2)' : 'rgba(248,113,113,0.2)'}`,
+              borderRadius: 28,
               overflow: 'hidden',
-              boxShadow: '0 32px 80px rgba(0,0,0,0.5)',
-              textAlign: 'center',
+              boxShadow: activeLayer.variant === 'pass'
+                ? '0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(74,222,128,0.1)'
+                : '0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(248,113,113,0.1)',
             }}
           >
-            {/* Top bar */}
+            {/* Top shimmer line */}
             <div style={{
-              height: 6,
-              background: passFailPage.type === 'pass'
-                ? 'linear-gradient(90deg, #16a34a, #4ade80, #16a34a)'
-                : 'linear-gradient(90deg, #ef4444, #f97316, #ef4444)',
+              height: 2,
+              background: activeLayer.variant === 'pass'
+                ? 'linear-gradient(90deg, transparent, #4ade80, #86efac, transparent)'
+                : 'linear-gradient(90deg, transparent, #f87171, #fca5a5, transparent)',
             }} />
 
-            <div style={{ padding: '44px 36px 40px' }}>
-              {/* Icon */}
+            <div style={{ padding: '52px 40px 44px', textAlign: 'center' }}>
+              {/* Large icon with glow ring */}
               <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 15, delay: 0.25 }}
-                style={{ fontSize: 64, marginBottom: 20, lineHeight: 1 }}
+                initial={{ scale: 0, rotate: -30 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: 'spring', stiffness: 260, damping: 18, delay: 0.2 }}
+                style={{ position: 'relative', width: 96, height: 96, margin: '0 auto 32px' }}
               >
-                {passFailPage.icon}
+                <motion.div
+                  animate={{ scale: [1, 1.15, 1], opacity: [0.4, 0.7, 0.4] }}
+                  transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+                  style={{
+                    position: 'absolute', inset: -8, borderRadius: '50%',
+                    background: activeLayer.variant === 'pass'
+                      ? 'radial-gradient(circle, rgba(74,222,128,0.25) 0%, transparent 70%)'
+                      : 'radial-gradient(circle, rgba(248,113,113,0.25) 0%, transparent 70%)',
+                  }}
+                />
+                <div style={{
+                  width: 96, height: 96, borderRadius: '50%',
+                  background: activeLayer.variant === 'pass'
+                    ? 'linear-gradient(145deg, #16a34a, #15803d)'
+                    : 'linear-gradient(145deg, #dc2626, #991b1b)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: activeLayer.variant === 'pass'
+                    ? '0 12px 40px rgba(22,163,74,0.5), inset 0 1px 0 rgba(255,255,255,0.15)'
+                    : '0 12px 40px rgba(220,38,38,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
+                }}>
+                  {activeLayer.variant === 'pass' ? (
+                    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <motion.polyline points="20 6 9 17 4 12" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.5, delay: 0.35 }} />
+                    </svg>
+                  ) : (
+                    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <motion.line x1="18" y1="6" x2="6" y2="18" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.3, delay: 0.3 }} />
+                      <motion.line x1="6" y1="6" x2="18" y2="18" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.3, delay: 0.45 }} />
+                    </svg>
+                  )}
+                </div>
               </motion.div>
 
-              {/* Badge */}
-              <div style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                background: passFailPage.type === 'pass' ? '#f0fdf4' : '#fff5f5',
-                border: `1px solid ${passFailPage.type === 'pass' ? '#86efac' : '#fecaca'}`,
-                borderRadius: 20, padding: '4px 14px', marginBottom: 16,
-              }}>
-                <span style={{
-                  fontSize: 11, fontWeight: 700,
-                  color: passFailPage.type === 'pass' ? '#16a34a' : '#dc2626',
-                  textTransform: 'uppercase', letterSpacing: 1,
-                }}>
-                  {passFailPage.type === 'pass' ? 'Qualified' : 'Not Qualified'}
-                </span>
-              </div>
-
-              <h2 style={{
-                margin: '0 0 12px', fontSize: 26, fontWeight: 800,
-                color: '#111827', lineHeight: 1.3, letterSpacing: '-0.02em',
-              }}>
-                {passFailPage.title}
-              </h2>
-              <p style={{ margin: '0 0 32px', fontSize: 15, color: '#6b7280', lineHeight: 1.6 }}>
-                {passFailPage.message}
-              </p>
-
-              {/* Continue button */}
-              <motion.button
-                whileHover={{ scale: 1.02, y: -1 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setPassFailPage(null)}
+              {/* Status chip */}
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.35 }}
                 style={{
-                  width: '100%', padding: '14px 20px', borderRadius: 14, border: 'none',
-                  background: passFailPage.type === 'pass'
-                    ? 'linear-gradient(135deg, #16a34a, #15803d)'
-                    : 'linear-gradient(135deg, #ef4444, #dc2626)',
-                  color: '#fff', fontWeight: 700, fontSize: 15,
-                  cursor: 'pointer', fontFamily: "'Outfit', sans-serif",
-                  boxShadow: passFailPage.type === 'pass'
-                    ? '0 4px 16px rgba(22,163,74,0.4)'
-                    : '0 4px 16px rgba(239,68,68,0.4)',
+                  display: 'inline-flex', alignItems: 'center', gap: 7,
+                  background: activeLayer.variant === 'pass' ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
+                  border: `1px solid ${activeLayer.variant === 'pass' ? 'rgba(74,222,128,0.3)' : 'rgba(248,113,113,0.3)'}`,
+                  borderRadius: 20, padding: '5px 14px', marginBottom: 20,
                 }}
               >
-                Continue →
+                <span style={{
+                  width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+                  background: activeLayer.variant === 'pass' ? '#4ade80' : '#f87171',
+                  boxShadow: `0 0 8px ${activeLayer.variant === 'pass' ? '#4ade80' : '#f87171'}`,
+                }} />
+                <span style={{
+                  fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase',
+                  color: activeLayer.variant === 'pass' ? '#86efac' : '#fca5a5',
+                }}>
+                  {activeLayer.variant === 'pass' ? 'Qualified' : 'Not Qualified'}
+                </span>
+              </motion.div>
+
+              <motion.h2
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                style={{
+                  margin: '0 0 14px', fontSize: 30, fontWeight: 800,
+                  color: '#ffffff', lineHeight: 1.25, letterSpacing: '-0.03em',
+                  fontFamily: "'Outfit', sans-serif",
+                }}
+              >
+                {activeLayer.title || (activeLayer.variant === 'pass' ? 'You qualify!' : 'Not this time')}
+              </motion.h2>
+
+              <motion.p
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                style={{
+                  margin: '0 0 40px', fontSize: 15,
+                  color: 'rgba(255,255,255,0.55)', lineHeight: 1.65,
+                  fontFamily: "'Outfit', sans-serif",
+                }}
+              >
+                {activeLayer.subtitle || (activeLayer.variant === 'pass' ? 'You meet all the requirements.' : "Unfortunately you don't meet the criteria.")}
+              </motion.p>
+
+              <motion.button
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.58 }}
+                whileHover={{ scale: 1.03, y: -2 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => { setActiveLayer(null); processNextLayer(layerQueueRef.current); }}
+                style={{
+                  width: '100%', padding: '16px 24px', borderRadius: 14, border: 'none',
+                  background: activeLayer.variant === 'pass'
+                    ? 'linear-gradient(135deg, #16a34a, #15803d)'
+                    : 'linear-gradient(135deg, #dc2626, #991b1b)',
+                  color: '#fff', fontWeight: 700, fontSize: 16,
+                  cursor: 'pointer', fontFamily: "'Outfit', sans-serif",
+                  letterSpacing: '0.01em',
+                  boxShadow: activeLayer.variant === 'pass'
+                    ? '0 6px 24px rgba(22,163,74,0.45), inset 0 1px 0 rgba(255,255,255,0.15)'
+                    : '0 6px 24px rgba(220,38,38,0.45), inset 0 1px 0 rgba(255,255,255,0.15)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                }}
+              >
+                {activeLayer.cta_text || 'Continue'}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+                </svg>
               </motion.button>
             </div>
           </motion.div>
-
-          <p style={{ marginTop: 24, fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>
-            Powered by <span style={{ color: passFailPage.type === 'pass' ? '#4ade80' : '#ef4444', fontWeight: 600 }}>Pepperwahl</span>
+        </motion.div>
+      )}
+      {/* ── Spinner Layer ── */}
+      {activeLayer && activeLayer.type === 'spinner' && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9996,
+            background: 'rgba(255,255,255,0.97)',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            fontFamily: "'Outfit', sans-serif",
+          }}
+        >
+          {/* Dual-ring spinner */}
+          <div style={{ position: 'relative', width: 64, height: 64, marginBottom: 28 }}>
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+              style={{
+                position: 'absolute', inset: 0,
+                borderRadius: '50%',
+                border: '4px solid #f3f4f6',
+                borderTopColor: '#ef4444',
+              }}
+            />
+            <motion.div
+              animate={{ rotate: -360 }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+              style={{
+                position: 'absolute', inset: 8,
+                borderRadius: '50%',
+                border: '3px solid #fef2f2',
+                borderBottomColor: '#f97316',
+              }}
+            />
+          </div>
+          <p style={{ fontSize: 17, fontWeight: 600, color: '#1f2937', margin: '0 0 6px' }}>
+            {activeLayer.text || 'Verifying your answers...'}
+          </p>
+          <p style={{ fontSize: 13, color: '#9ca3af', margin: 0 }}>
+            Please wait
           </p>
         </motion.div>
       )}
