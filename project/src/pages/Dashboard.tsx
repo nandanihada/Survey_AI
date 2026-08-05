@@ -35,7 +35,9 @@ import {
   MoreHorizontal,
 
   AlertCircle,
-  Brain
+  Brain,
+  DollarSign,
+  ChevronRight
 } from 'lucide-react';
 
 
@@ -70,6 +72,14 @@ interface Survey {
 
 }
 
+interface SurveyEarningInfo {
+  survey_id: string;
+  earned_cents: number;    // approved
+  completions: number;
+  payout_per_completion_cents: number;
+  share_payout_enabled: boolean;
+}
+
 
 
 const Dashboard: React.FC = () => {
@@ -87,6 +97,9 @@ const Dashboard: React.FC = () => {
   const [copiedSurvey, setCopiedSurvey] = useState<string | null>(null);
 
   const [welcomeMessage, setWelcomeMessage] = useState<string | null>(null);
+  const [totalEarningsCents, setTotalEarningsCents] = useState<number | null>(null);
+  // Per-survey earnings map: survey_id → earning info
+  const [surveyEarningsMap, setSurveyEarningsMap] = useState<Record<string, SurveyEarningInfo>>({});
 
   // Check for new user welcome message
   useEffect(() => {
@@ -97,6 +110,52 @@ const Dashboard: React.FC = () => {
       // Auto-dismiss after 6 seconds
       setTimeout(() => setWelcomeMessage(null), 6000);
     }
+  }, []);
+
+  // Fetch total earnings (referral + survey sharing) + per-survey breakdown
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+    const baseUrl = window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1'
+      ? 'http://localhost:5000'
+      : 'https://surevy-pepperwahl.onrender.com';
+
+    Promise.all([
+      fetch(`${baseUrl}/api/partner/summary`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`${baseUrl}/api/partner/survey-earnings`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([summary, surveyEarnings]) => {
+      let total = 0;
+      if (summary) {
+        total += (summary.balance_available_cents || 0) + (summary.balance_pending_cents || 0);
+      }
+      if (surveyEarnings?.totals) {
+        total += (surveyEarnings.totals.earned_cents || 0);
+      }
+      setTotalEarningsCents(total);
+
+      // Build per-survey earnings map from owned_surveys
+      if (surveyEarnings?.owned_surveys) {
+        const map: Record<string, SurveyEarningInfo> = {};
+        // Get share data for completion counts
+        const shareMap: Record<string, { earned_cents: number; completions: number }> = {};
+        (surveyEarnings.share_rows || []).forEach((r: any) => {
+          shareMap[r.survey_id] = { earned_cents: r.earned_cents || 0, completions: r.completions || 0 };
+        });
+        surveyEarnings.owned_surveys.forEach((row: any) => {
+          const shareData = shareMap[row.survey_id] || { earned_cents: 0, completions: 0 };
+          map[row.survey_id] = {
+            survey_id: row.survey_id,
+            earned_cents: shareData.earned_cents,
+            completions: shareData.completions,
+            payout_per_completion_cents: row.payout_per_completion_cents || 0,
+            share_payout_enabled: row.share_payout_enabled || false,
+          };
+        });
+        setSurveyEarningsMap(map);
+      }
+    });
   }, []);
 
 
@@ -444,6 +503,19 @@ const Dashboard: React.FC = () => {
 
               </button>
 
+              {totalEarningsCents !== null && (
+                <button
+                  onClick={() => navigate('/refer?tab=earnings')}
+                  className="inline-flex items-center px-5 py-3 bg-green-50 text-green-700 font-semibold rounded-xl hover:bg-green-100 transition-all duration-200 border border-green-200"
+                  title="View My Earnings"
+                >
+                  <DollarSign size={18} className="mr-1.5 text-green-600" />
+                  {totalEarningsCents > 0
+                    ? `€${(totalEarningsCents / 100).toFixed(2)} Earned`
+                    : 'My Earnings'}
+                </button>
+              )}
+
               <button
 
                 onClick={() => navigate('/dashboard/create')}
@@ -720,7 +792,7 @@ const Dashboard: React.FC = () => {
 
                     {/* Action Buttons */}
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-wrap">
 
                       <button
 
@@ -799,6 +871,32 @@ const Dashboard: React.FC = () => {
                       )}
 
                     </div>
+
+                    {/* Per-survey earnings badge — shown if payout is configured */}
+                    {(() => {
+                      const sid = survey.short_id || survey.id || survey._id || '';
+                      const earningInfo = surveyEarningsMap[sid];
+                      if (!earningInfo) return null;
+                      return (
+                        <button
+                          onClick={() => navigate('/refer?tab=earnings')}
+                          className="mt-3 w-full flex items-center justify-between px-3 py-2 rounded-lg border transition-colors group
+                            bg-green-50 border-green-100 hover:bg-green-100 hover:border-green-200"
+                        >
+                          <div className="flex items-center gap-2">
+                            <DollarSign size={14} className="text-green-600" />
+                            <span className="text-xs font-semibold text-green-700">
+                              {earningInfo.completions > 0
+                                ? `${earningInfo.completions} completion${earningInfo.completions > 1 ? 's' : ''} · ${earningInfo.earned_cents > 0 ? `€${(earningInfo.earned_cents / 100).toFixed(2)} earned` : earningInfo.payout_per_completion_cents > 0 ? `€${(earningInfo.payout_per_completion_cents / 100).toFixed(2)}/completion` : 'Earning active'}`
+                                : earningInfo.share_payout_enabled && earningInfo.payout_per_completion_cents > 0
+                                  ? `Earning active · €${(earningInfo.payout_per_completion_cents / 100).toFixed(2)} per completion`
+                                  : null}
+                            </span>
+                          </div>
+                          <ChevronRight size={14} className="text-green-400 group-hover:translate-x-0.5 transition-transform" />
+                        </button>
+                      );
+                    })()}
 
                     {/* Prompt reveal */}
                     {survey.prompt && (

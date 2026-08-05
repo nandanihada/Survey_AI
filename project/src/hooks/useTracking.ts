@@ -162,9 +162,8 @@ export function getStoredRefCode(): string | null {
 /** Track session start */
 export function trackSessionStart() {
   sendTrackingEvent('session-start', {});
-
-  // Request GPS location (user will see a permission popup once)
-  requestGPSLocation();
+  // GPS location is requested only by survey templates when collect_location is enabled.
+  // Do NOT call requestGPSLocation() here — that would show the popup on every page.
 }
 
 /**
@@ -173,28 +172,9 @@ export function trackSessionStart() {
  * enabled location collection (collect_location !== false).
  */
 export function requestGPSLocation() {
-  if (!navigator.geolocation) return;
-
-  // Check if we already got GPS this session
-  if (sessionStorage.getItem('tracking_gps_sent')) return;
-
-  navigator.geolocation.getCurrentPosition(
-    (position) => {
-      // User allowed - send precise GPS location
-      sessionStorage.setItem('tracking_gps_sent', '1');
-      sendTrackingEvent('geo-update', {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        accuracy: position.coords.accuracy,
-        source: 'gps'
-      });
-    },
-    () => {
-      // User denied or error - that's fine, IP-based will be used
-      sessionStorage.setItem('tracking_gps_sent', '1');
-    },
-    { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
-  );
+  // GPS location collection is globally disabled.
+  // To re-enable, restore the navigator.geolocation.getCurrentPosition call here.
+  return;
 }
 
 /** Track login event (call after successful login) */

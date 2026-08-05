@@ -181,6 +181,24 @@ class EnhancedSurveyHandler:
             except Exception as db_error:
                 print(f"❌ Database error: {db_error}")
                 return self._error_response(f"Database error: {str(db_error)}", 500)
+
+            # Step 8b: Record share completion earnings
+            # Every response on a sharing-enabled survey counts as a completion
+            # — whether the respondent came via a share link (?sharer=) or directly.
+            # The survey owner earns the payout for each response.
+            try:
+                from survey_sharing_api import _record_completion_for_response
+                _record_completion_for_response(
+                    survey=survey,
+                    survey_id=survey_id,
+                    response_id=response_id,
+                    session_id=session_id,
+                    device_fingerprint=request_data.get("device_fingerprint", ""),
+                    ip=request_data.get("ip_address") or request.environ.get('REMOTE_ADDR', ''),
+                )
+            except Exception as sharing_err:
+                # Non-critical — log and continue
+                print(f"ℹ️ Share completion recording skipped: {sharing_err}")
             
             # Step 9: Update click tracking with submission status
             submission_data = {

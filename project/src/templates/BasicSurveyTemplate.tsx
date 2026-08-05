@@ -1262,7 +1262,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
                 transition={{ delay: 0.58 }}
                 whileHover={{ scale: 1.03, y: -2 }}
                 whileTap={{ scale: 0.97 }}
-                onClick={() => { setActiveLayer(null); processNextLayer(layerQueueRef.current); }}
+                onClick={() => { setActiveLayer(null); processNextLayer(layerQueue); }}
                 style={{
                   width: '100%', padding: '16px 24px', borderRadius: 14, border: 'none',
                   background: activeLayer.variant === 'pass'

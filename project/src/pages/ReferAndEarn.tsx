@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Gift, Copy, Check, ExternalLink, X,
   Info, BarChart2, RefreshCw, AlertCircle, Loader2,
-  CreditCard, Wallet
+  CreditCard, Wallet, Share2, ChevronDown, ChevronRight,
+  Video, Users, MousePointerClick, CreditCard as PlanIcon
 } from 'lucide-react';
 import Navigation from '../components/Navigation';
 import { useAuth } from '../contexts/AuthContext';
@@ -48,6 +49,34 @@ interface PaymentMethods {
   bank?: { account_name: string; account_number: string; ifsc: string; bank_name: string };
   paypal?: { email: string };
   crypto?: { wallet_address: string; network: string };
+}
+
+interface EarningsConfig {
+  click_cents: number;
+  signup_cents: number;
+  monthly_sub_cents: number;
+  annual_sub_cents: number;
+  video_bonus_cents: number;
+  video_bonus_label: string;
+  video_bonus_description: string;
+  survey_share_description: string;
+  signup_description: string;
+  plan_description: string;
+  click_description: string;
+}
+
+interface SurveyEarningRow {
+  survey_id: string;
+  survey_title: string;
+  type: 'owned' | 'shared';
+  response_count: number | null;
+  share_payout_enabled: boolean;
+  payout_per_completion_cents: number;
+  clicks: number;
+  completions: number;
+  earned_cents: number;
+  pending_cents: number;
+  latest_at: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -269,6 +298,7 @@ function InfoPage({ onJoin }: { onJoin: () => void }) {
               </p>
               <div className="space-y-2.5 border-t pw-rule pt-5">
                 {[
+                  ['Clicks',        `€${(clicks * 0.02).toFixed(2)}`],
                   ['Clicks',        `€${(clicks * 0.02).toFixed(2)}`],
                   ['Signups',       `€${(signups * 0.70).toFixed(2)}`],
                   ['Monthly plans', `€${(monthlySubs * 4.00).toFixed(2)}`],
@@ -702,6 +732,459 @@ function ShareMessage({ link }: { link: string }) {
   );
 }
 
+// ─── Ways to Earn Modal ───────────────────────────────────────────────────────
+function WaysToEarnModal({ onClose, baseUrl }: { onClose: () => void; baseUrl: string }) {
+  const [cfg, setCfg] = useState<EarningsConfig | null>(null);
+  const [expanded, setExpanded] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch(`${baseUrl}/api/earnings-config`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d && setCfg(d))
+      .catch(() => {});
+  }, [baseUrl]);
+
+  const ways = cfg
+    ? [
+        {
+          icon: Video,
+          color: 'text-purple-600',
+          bg: 'bg-purple-50',
+          title: cfg.video_bonus_label || 'Create a video about Pepperwahl',
+          amount: fmtEur(cfg.video_bonus_cents),
+          amountLabel: 'one-time bonus',
+          description: cfg.video_bonus_description,
+        },
+        {
+          icon: Share2,
+          color: 'text-blue-600',
+          bg: 'bg-blue-50',
+          title: 'Share surveys & earn per completion',
+          amount: 'Variable',
+          amountLabel: 'per completion (set by admin)',
+          description: cfg.survey_share_description,
+        },
+        {
+          icon: Users,
+          color: 'text-green-600',
+          bg: 'bg-green-50',
+          title: 'Refer new users to sign up',
+          amount: fmtEur(cfg.signup_cents),
+          amountLabel: 'per confirmed signup',
+          description: cfg.signup_description,
+        },
+        {
+          icon: PlanIcon,
+          color: 'text-orange-600',
+          bg: 'bg-orange-50',
+          title: 'Your referred user subscribes',
+          amount: `${fmtEur(cfg.monthly_sub_cents)}/mo or ${fmtEur(cfg.annual_sub_cents)} annual`,
+          amountLabel: 'recurring while active',
+          description: cfg.plan_description,
+        },
+        {
+          icon: MousePointerClick,
+          color: 'text-red-600',
+          bg: 'bg-red-50',
+          title: 'Clicks on your referral link',
+          amount: fmtEur(cfg.click_cents),
+          amountLabel: 'per unique daily click',
+          description: cfg.click_description,
+        },
+      ]
+    : [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <Gift size={18} className="text-red-500" />
+            <h3 className="text-base font-bold text-gray-900">Ways to Earn</h3>
+          </div>
+          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 overflow-y-auto flex-1 space-y-2">
+          {!cfg && (
+            <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-gray-400" /></div>
+          )}
+          {ways.map((w, i) => {
+            const Icon = w.icon;
+            const open = expanded === i;
+            return (
+              <button
+                key={i}
+                onClick={() => setExpanded(open ? null : i)}
+                className="w-full text-left border border-gray-200 rounded-xl overflow-hidden hover:border-gray-300 transition-colors"
+              >
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${w.bg} shrink-0`}>
+                    <Icon size={17} className={w.color} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{w.title}</p>
+                    <p className="text-xs text-gray-500">
+                      <span className="font-bold text-gray-800">{w.amount}</span>
+                      {' '}{w.amountLabel}
+                    </p>
+                  </div>
+                  {open
+                    ? <ChevronDown size={16} className="text-gray-400 shrink-0" />
+                    : <ChevronRight size={16} className="text-gray-400 shrink-0" />}
+                </div>
+                {open && w.description && (
+                  <div className="px-4 pb-3 pt-0 text-xs text-gray-500 leading-relaxed border-t border-gray-100 bg-gray-50">
+                    {w.description}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 text-[11px] text-gray-400">
+          Rates are set by the Pepperwahl admin team and may change. Earnings are subject to review.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Survey Earnings Section ──────────────────────────────────────────────────
+const SurveyEarningsSection = forwardRef<
+  { switchToReports: () => void },
+  { baseUrl: string }
+>(function SurveyEarningsSection({ baseUrl }, ref) {
+  const [ownedRows, setOwnedRows]   = useState<SurveyEarningRow[]>([]);
+  const [shareRows, setShareRows]   = useState<SurveyEarningRow[]>([]);
+  const [totals, setTotals]         = useState({ clicks: 0, completions: 0, earned_cents: 0, pending_cents: 0, total_responses: 0 });
+  const [loading, setLoading]       = useState(true);
+  const [tab, setTab]               = useState<'surveys' | 'reports'>('surveys');
+  const [copiedId, setCopiedId]     = useState<string | null>(null);
+  const [linkCache, setLinkCache]   = useState<Record<string, string>>({});
+  const token = localStorage.getItem('auth_token');
+
+  // Expose switchToReports so EarningsPanel can trigger it from the balance card
+  useImperativeHandle(ref, () => ({
+    switchToReports: () => {
+      setTab('reports');
+      // Scroll the section into view
+      setTimeout(() => {
+        const el = document.getElementById('survey-earnings-section');
+        el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
+    }
+  }));
+
+  const load = () => {
+    setLoading(true);
+    fetch(`${baseUrl}/api/partner/survey-earnings`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    })
+      .then(r => r.ok ? r.json() : { owned_surveys: [], share_rows: [], totals: {} })
+      .then(d => {
+        setOwnedRows(d.owned_surveys || []);
+        setShareRows(d.share_rows || d.rows || []);
+        setTotals(d.totals || {});
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, [baseUrl, token]);
+
+  const copyLink = async (surveyId: string) => {
+    let link = linkCache[surveyId];
+    if (!link) {
+      try {
+        const res = await fetch(`${baseUrl}/api/surveys/${surveyId}/share-link`, {
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        });
+        if (res.ok) {
+          const d = await res.json();
+          link = d.share_link;
+          setLinkCache(prev => ({ ...prev, [surveyId]: link }));
+        }
+      } catch { /* ignore */ }
+    }
+    if (link) {
+      navigator.clipboard.writeText(link);
+      setCopiedId(surveyId);
+      setTimeout(() => setCopiedId(null), 2000);
+    }
+  };
+
+  const shareEarnings = totals.earned_cents + totals.pending_cents;
+
+  // Build a lookup from shareRows for quick merge
+  const shareByIdMap: Record<string, SurveyEarningRow> = {};
+  shareRows.forEach(r => { shareByIdMap[r.survey_id] = r; });
+
+  // Earnings Report = surveys where sharing is Active (enabled) OR already has activity
+  // This way a newly-enabled survey appears immediately, not only after someone clicks
+  const reportRows = ownedRows.filter(row =>
+    row.share_payout_enabled ||
+    (shareByIdMap[row.survey_id] && (
+      (shareByIdMap[row.survey_id].clicks ?? 0) > 0 ||
+      (shareByIdMap[row.survey_id].completions ?? 0) > 0
+    ))
+  );
+
+  return (
+    <div className="space-y-0" id="survey-earnings-section">
+      {/* ── Tab header ───────────────────────────────────────────────────── */}
+      <div className="bg-white rounded-t-2xl border border-gray-200 border-b-0 px-6 pt-5 pb-0">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Share2 size={16} className="text-blue-500" />
+            <h3 className="text-sm font-semibold text-gray-900">Survey Activity & Earnings</h3>
+          </div>
+          {shareEarnings > 0 && (
+            <div className="text-right">
+              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Share earnings</p>
+              <p className="text-base font-bold text-gray-900">{fmtEur(shareEarnings)}</p>
+              {totals.pending_cents > 0 && (
+                <p className="text-[10px] text-orange-500">{fmtEur(totals.pending_cents)} pending review</p>
+              )}
+            </div>
+          )}
+        </div>
+        {/* Tabs */}
+        <div className="flex gap-1 -mb-px">
+          <button
+            onClick={() => setTab('surveys')}
+            className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+              tab === 'surveys'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            My Surveys
+            <span className="ml-1.5 text-[10px] font-bold text-gray-400">({ownedRows.length})</span>
+          </button>
+          <button
+            onClick={() => setTab('reports')}
+            className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+              tab === 'reports'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Earnings Report
+            {reportRows.length > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-blue-500 text-white">
+                {reportRows.length}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Tab content ──────────────────────────────────────────────────── */}
+      <div className="bg-white rounded-b-2xl border border-gray-200 border-t overflow-hidden">
+        {loading ? (
+          <div className="flex justify-center py-10"><Loader2 size={18} className="animate-spin text-gray-400" /></div>
+        ) : (
+          <>
+            {/* ─ Tab 1: My Surveys ──────────────────────────────────────── */}
+            {tab === 'surveys' && (
+              ownedRows.length === 0 ? (
+                <div className="py-10 text-center">
+                  <Share2 size={32} className="mx-auto text-gray-200 mb-3" />
+                  <p className="text-sm text-gray-500 font-medium">No surveys yet</p>
+                  <p className="text-xs text-gray-400 mt-1">Create a survey from your dashboard.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider bg-gray-50 border-b border-gray-100">
+                        <th className="px-5 py-3 text-left">Survey</th>
+                        <th className="px-4 py-3 text-center">Responses</th>
+                        <th className="px-4 py-3 text-center">Sharing</th>
+                        <th className="px-4 py-3 text-center">Payout / Completion</th>
+                        <th className="px-4 py-3 text-center">Copy Share Link</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {ownedRows.map(row => (
+                        <tr key={row.survey_id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-5 py-3">
+                            <div className="font-medium text-gray-900 max-w-[220px] truncate">{row.survey_title}</div>
+                            <div className="text-[11px] font-mono text-gray-400 mt-0.5 select-all cursor-text">{row.survey_id}</div>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="text-xl font-bold text-gray-800">{row.response_count ?? 0}</span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {row.share_payout_enabled
+                              ? <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700">Active</span>
+                              : <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-400">Off</span>}
+                          </td>
+                          <td className="px-4 py-3 text-center text-xs">
+                            {row.payout_per_completion_cents > 0
+                              ? <span className="font-bold text-green-700 text-sm">{fmtEur(row.payout_per_completion_cents)}</span>
+                              : <span className="text-gray-300">Not set by admin</span>}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              onClick={() => copyLink(row.survey_id)}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                                copiedId === row.survey_id
+                                  ? 'bg-green-100 text-green-700'
+                                  : 'bg-gray-100 hover:bg-blue-50 hover:text-blue-700 text-gray-700'
+                              }`}
+                            >
+                              {copiedId === row.survey_id ? <Check size={13} /> : <Copy size={13} />}
+                              {copiedId === row.survey_id ? 'Copied!' : 'Copy Link'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-gray-200 bg-gray-50 text-xs font-bold text-gray-600">
+                        <td className="px-5 py-3">Total</td>
+                        <td className="px-4 py-3 text-center text-gray-800">{totals.total_responses}</td>
+                        <td colSpan={3} />
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )
+            )}
+
+            {/* ─ Tab 2: Earnings Report ─────────────────────────────────── */}
+            {tab === 'reports' && (
+              reportRows.length === 0 ? (
+                <div className="py-12 text-center px-6">
+                  <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <Share2 size={26} className="text-gray-300" />
+                  </div>
+                  <p className="text-sm font-semibold text-gray-600 mb-1">No active earning surveys yet</p>
+                  <p className="text-xs text-gray-400 leading-relaxed max-w-xs mx-auto">
+                    Admin needs to enable sharing payout on your surveys first.
+                    Once enabled, they'll appear here automatically.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  {/* Summary bar */}
+                  <div className="grid grid-cols-3 divide-x divide-gray-100 border-b border-gray-100">
+                    {[
+                      { label: 'Total Responses',      value: totals.total_responses,         color: 'text-blue-600' },
+                      { label: 'Completions Credited',  value: totals.completions,             color: 'text-indigo-600' },
+                      { label: 'Total Earned',          value: fmtEur(totals.earned_cents),    color: 'text-green-600' },
+                    ].map(({ label, value, color }) => (
+                      <div key={label} className="px-5 py-4">
+                        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">{label}</p>
+                        <p className={`text-xl font-bold ${color}`}>{value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider bg-gray-50 border-b border-gray-100">
+                        <th className="px-5 py-3 text-left">Survey</th>
+                        <th className="px-4 py-3 text-center">Responses</th>
+                        <th className="px-4 py-3 text-center">Completions Credited</th>
+                        <th className="px-4 py-3 text-center">Payout Each</th>
+                        <th className="px-4 py-3 text-right">Earned</th>
+                        <th className="px-4 py-3 text-right">Admin Reverted</th>
+                        <th className="px-4 py-3 text-left">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {reportRows.map(row => {
+                        const sh = shareByIdMap[row.survey_id];
+                        const completions = sh?.completions ?? 0;
+                        const earned      = sh?.earned_cents ?? 0;
+                        const pending     = sh?.pending_cents ?? 0;
+                        const latestAt    = sh?.latest_at ?? null;
+                        return (
+                        <tr key={row.survey_id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-5 py-3">
+                            <div className="font-medium text-gray-900 max-w-[200px] truncate">{row.survey_title}</div>
+                            <div className="text-[11px] font-mono text-gray-400 mt-0.5">{row.survey_id}</div>
+                            {latestAt && (
+                              <div className="text-[10px] text-gray-300 mt-0.5">Last activity: {timeAgo(latestAt)}</div>
+                            )}
+                          </td>
+                          {/* Total responses submitted to this survey */}
+                          <td className="px-4 py-3 text-center">
+                            <span className="text-lg font-bold text-gray-800">{row.response_count ?? 0}</span>
+                          </td>
+                          {/* Completions that have been credited (pending or approved) */}
+                          <td className="px-4 py-3 text-center font-bold text-gray-700">
+                            {completions > 0 ? completions : <span className="text-gray-300">0</span>}
+                          </td>
+                          <td className="px-4 py-3 text-center text-xs">
+                            {row.payout_per_completion_cents > 0
+                              ? <span className="font-bold text-green-700">{fmtEur(row.payout_per_completion_cents)}</span>
+                              : <span className="text-gray-300">—</span>}
+                          </td>
+                        <td className="px-4 py-3 text-right text-xs font-semibold">
+                            {earned > 0
+                              ? <span className="text-green-700">{fmtEur(earned)}</span>
+                              : <span className="text-gray-300">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-right text-xs">
+                            {pending > 0
+                              ? <span className="font-semibold text-orange-500">{fmtEur(pending)}</span>
+                              : <span className="text-gray-300">—</span>}
+                          </td>
+                          <td className="px-4 py-3">
+                            {pending > 0 ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-50 text-orange-600 border border-orange-100">
+                                ⏳ In review
+                              </span>
+                            ) : earned > 0 ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-700 border border-green-100">
+                                ✓ Added to balance
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-600 border border-blue-100">
+                                🟢 Active — waiting for responses
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-gray-200 bg-gray-50 text-xs font-bold text-gray-600">
+                        <td className="px-5 py-3">Totals</td>
+                        <td className="px-4 py-3 text-center text-gray-800">{totals.total_responses}</td>
+                        <td className="px-4 py-3 text-center text-gray-800">{totals.completions}</td>
+                        <td />
+                        <td className="px-4 py-3 text-right text-green-700">{fmtEur(totals.earned_cents)}</td>
+                        <td className="px-4 py-3 text-right text-orange-500">
+                          {totals.pending_cents > 0 ? fmtEur(totals.pending_cents) : '—'}
+                        </td>
+                        <td />
+                      </tr>
+                    </tfoot>
+                  </table>
+                  <div className="px-5 py-3 bg-green-50 border-t border-green-100 text-[11px] text-green-700">
+                    ✓ Earnings are added to your Available to Withdraw balance instantly. Admin can revert individual completions if needed.
+                  </div>
+                </div>
+              )
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+});
+
 // ─── Earnings Panel (authenticated) ──────────────────────────────────────────
 function EarningsPanel() {
   const baseUrl = getApiBaseUrl();
@@ -715,6 +1198,9 @@ function EarningsPanel() {
   const [payoutId, setPayoutId] = useState<string | null>(null);
   const [isPromoter, setIsPromoter] = useState<boolean | null>(null); // null = unknown
   const [savedPaymentMethods, setSavedPaymentMethods] = useState<PaymentMethods>({});
+  const [showWaysModal, setShowWaysModal] = useState(false);
+  const [surveyEarningsCents, setSurveyEarningsCents] = useState<number>(0);
+  const surveyReportRef = useRef<{ switchToReports: () => void } | null>(null);
 
   useEffect(() => { load(); }, []);
 
@@ -756,6 +1242,13 @@ function EarningsPanel() {
         // Load saved payment methods
         const pmRes = await authFetch(`${baseUrl}/api/partner/payment-methods`).catch(() => null);
         if (pmRes?.ok) setSavedPaymentMethods(await pmRes.json());
+
+        // Load survey earnings total for the balance card
+        const seRes = await authFetch(`${baseUrl}/api/partner/survey-earnings`).catch(() => null);
+        if (seRes?.ok) {
+          const seData = await seRes.json();
+          setSurveyEarningsCents(seData?.totals?.earned_cents ?? 0);
+        }
       } else {
         // Any other error — show join gate rather than infinite spinner
         setIsPromoter(false);
@@ -874,6 +1367,49 @@ function EarningsPanel() {
         <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
           <AlertCircle size={14} /> {error}
         </div>
+      )}
+
+      {/* Ways to Earn button */}
+      <div className="flex justify-end">
+        <button
+          onClick={() => setShowWaysModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:border-gray-300 shadow-sm transition-colors"
+        >
+          <Gift size={15} className="text-red-500" />
+          Ways to Earn
+          <ChevronRight size={14} className="text-gray-400" />
+        </button>
+      </div>
+
+      {showWaysModal && (
+        <WaysToEarnModal onClose={() => setShowWaysModal(false)} baseUrl={baseUrl} />
+      )}
+
+      {/* Survey earnings balance card — click to jump to Earnings Report */}
+      {surveyEarningsCents > 0 && (
+        <button
+          onClick={() => surveyReportRef.current?.switchToReports()}
+          className="w-full text-left bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-5 hover:from-green-100 hover:to-emerald-100 transition-colors group"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                <Share2 size={18} className="text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Survey Earnings</p>
+                <p className="text-xs text-gray-500">From responses on your active surveys</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <p className="text-2xl font-bold text-green-700">{fmtEur(surveyEarningsCents)}</p>
+                <p className="text-[10px] text-green-600 font-semibold uppercase tracking-wider">Earned</p>
+              </div>
+              <ChevronRight size={18} className="text-green-400 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </div>
+        </button>
       )}
 
       {/* Link + balance */}
@@ -1026,6 +1562,9 @@ function EarningsPanel() {
         </div>
       </div>
 
+      {/* Survey sharing earnings */}
+      <SurveyEarningsSection baseUrl={baseUrl} ref={surveyReportRef} />
+
       {/* Payout history */}
       <PayoutHistory baseUrl={baseUrl} />
     </div>
@@ -1037,6 +1576,23 @@ export default function ReferAndEarn() {
   const { authenticated } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState<'info' | 'earnings'>('info');
+  const baseUrl = getApiBaseUrl();
+  const [earningsCfg, setEarningsCfg] = useState<EarningsConfig | null>(null);
+
+  useEffect(() => {
+    fetch(`${baseUrl}/api/earnings-config`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d && setEarningsCfg(d))
+      .catch(() => {});
+  }, [baseUrl]);
+
+  // Auto-switch to earnings tab if ?tab=earnings is in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tab') === 'earnings' && authenticated) {
+      setTab('earnings');
+    }
+  }, [authenticated]);
 
   const tabs = [
     { id: 'info'     as const, label: 'How it works', icon: Info     },
@@ -1088,7 +1644,10 @@ export default function ReferAndEarn() {
                 Refer &amp; Earn
               </h1>
               <p className="text-sm mt-0.5" style={{ color: tab === 'info' ? '#8a8078' : '#6b7280' }}>
-                €0.02 session · €0.70 signup · €4.00/mo · €40.00 annual
+                {earningsCfg
+                  ? `${fmtEur(earningsCfg.click_cents)} click · ${fmtEur(earningsCfg.signup_cents)} signup · ${fmtEur(earningsCfg.monthly_sub_cents)}/mo · ${fmtEur(earningsCfg.annual_sub_cents)} annual`
+                  : '€0.02 session · €0.70 signup · €4.00/mo · €40.00 annual'
+                }
               </p>
             </div>
             {tab === 'earnings' && authenticated && (

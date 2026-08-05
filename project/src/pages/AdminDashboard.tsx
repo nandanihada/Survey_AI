@@ -12,7 +12,9 @@ import TrackingTab from '../components/admin/TrackingTab';
 import ContactSubmissionsTab from '../components/admin/ContactSubmissionsTab';
 import DeletionRequestsTab from '../components/admin/DeletionRequestsTab';
 import ReferralTab from '../components/admin/ReferralTab';
-import { Bell, Filter, Save, Edit2, X, Check, ToggleLeft, ToggleRight, Eye, EyeOff, Play, RotateCcw, AlertCircle, Activity, Mail, AlertTriangle, Gift } from 'lucide-react';
+import EarningsConfigTab from '../components/admin/EarningsConfigTab';
+import SurveyReportTab from '../components/admin/SurveyReportTab';
+import { Bell, Filter, Save, Edit2, X, Check, ToggleLeft, ToggleRight, Eye, EyeOff, Play, RotateCcw, AlertCircle, Activity, Mail, AlertTriangle, Gift, DollarSign, FileBarChart } from 'lucide-react';
 import { getApiBaseUrl } from '../utils/deploymentFix';
 
 interface User {
@@ -89,7 +91,7 @@ const AdminDashboard: React.FC = () => {
   const [surveys, setSurveys] = useState<any[]>([]);
   const [filters, setFilters] = useState<Filter[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking' | 'tracking' | 'contacts' | 'deletions' | 'referrals'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking' | 'tracking' | 'contacts' | 'deletions' | 'referrals' | 'earnings-config' | 'survey-report'>('users');
   const [showNotifModal, setShowNotifModal] = useState(false);
   
   // Filter management states
@@ -544,6 +546,26 @@ const AdminDashboard: React.FC = () => {
                   }`}
                 >
                   <Gift size={14} /> Referrals
+                </button>
+                <button
+                  onClick={() => setActiveTab('earnings-config')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center gap-1 ${
+                    activeTab === 'earnings-config'
+                      ? 'border-indigo-600 text-indigo-700'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <DollarSign size={14} /> Earnings Config
+                </button>
+                <button
+                  onClick={() => setActiveTab('survey-report')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center gap-1 ${
+                    activeTab === 'survey-report'
+                      ? 'border-teal-600 text-teal-700'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <FileBarChart size={14} /> Survey Report
                 </button>
               </nav>
             </div>
@@ -1128,6 +1150,16 @@ const AdminDashboard: React.FC = () => {
                 {/* Referrals Tab */}
                 {activeTab === 'referrals' && (
                   <ReferralTab />
+                )}
+
+                {/* Earnings Config Tab */}
+                {activeTab === 'earnings-config' && (
+                  <EarningsConfigTab />
+                )}
+
+                {/* Survey Combined Report Tab */}
+                {activeTab === 'survey-report' && (
+                  <SurveyReportTab />
                 )}
               </>
             )}

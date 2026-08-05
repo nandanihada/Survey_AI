@@ -135,6 +135,27 @@ function LegacyDashboard() {
   const [showPreviewWidget, setShowPreviewWidget] = useState(false);
   const [autoPreviewEnabled, setAutoPreviewEnabled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [totalEarningsCents, setTotalEarningsCents] = useState<number | null>(null);
+
+  // Fetch earnings total for header badge
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+    const baseUrl = window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1'
+      ? 'http://localhost:5000'
+      : 'https://surevy-pepperwahl.onrender.com';
+    Promise.all([
+      fetch(`${baseUrl}/api/partner/summary`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`${baseUrl}/api/partner/survey-earnings`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([summary, surveyEarnings]) => {
+      let total = 0;
+      if (summary) total += (summary.balance_available_cents || 0) + (summary.balance_pending_cents || 0);
+      if (surveyEarnings?.totals) total += (surveyEarnings.totals.earned_cents || 0);
+      setTotalEarningsCents(total);
+    });
+  }, []);
 
   // Update activeTab when URL changes
   useEffect(() => {
@@ -341,6 +362,29 @@ function LegacyDashboard() {
             </div>
 
             <div className="hidden md:flex items-center gap-3">
+              {/* Earnings badge */}
+              {totalEarningsCents !== null && (
+                <button
+                  onClick={() => navigate('/refer?tab=earnings')}
+                  title="My Earnings — click to view"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                    totalEarningsCents > 0
+                      ? isDarkMode
+                        ? 'bg-green-500/20 text-green-300 border border-green-500/30 hover:bg-green-500/30'
+                        : 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100'
+                      : isDarkMode
+                        ? 'bg-slate-700/60 text-slate-400 border border-slate-600 hover:bg-slate-700'
+                        : 'bg-stone-50 text-stone-500 border border-stone-200 hover:bg-stone-100'
+                  }`}
+                >
+                  <span>💰</span>
+                  <span>
+                    {totalEarningsCents > 0
+                      ? `€${(totalEarningsCents / 100).toFixed(2)}`
+                      : 'Earnings'}
+                  </span>
+                </button>
+              )}
               <button
                 onClick={() => {
                   import('./hooks/useTracking').then(m => m.trackPricingClick('dashboard_header_upgrade', '', 'Upgrade'));

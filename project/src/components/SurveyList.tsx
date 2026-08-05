@@ -23,7 +23,9 @@ interface SurveyListProps {
 }
 
 interface Survey {
-  id: string;
+  _id?: string;
+  id?: string;
+  short_id?: string;
   title?: string;
   prompt?: string;
   created_at?: string;
@@ -34,6 +36,10 @@ interface Survey {
   shared_with?: string[];
 }
 
+// Resolve the best usable ID for a survey — prefers short_id, then id, then _id
+const getSurveyId = (survey: Survey): string =>
+  survey.short_id || survey.id || survey._id || '';
+
 const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew }) => {
   const navigate = useNavigate();
   const { isAdmin, user } = useAuth();
@@ -41,6 +47,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [showPromptId, setShowPromptId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   const apiBaseUrl = isLocalhost
     ? 'http://localhost:5000'
@@ -207,6 +214,17 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
   const inputBase = `pl-9 pr-3 py-2 border rounded-lg text-sm transition-colors focus:ring-2 focus:ring-red-500/20 focus:border-red-500`;
   const cardBase = `rounded-xl border p-5 transition-all duration-200 hover:shadow-sm`;
 
+  // Filter surveys by search query — matches title, prompt, short_id, or _id
+  const filteredSurveys = searchQuery.trim()
+    ? surveys.filter(s => {
+        const q = searchQuery.toLowerCase();
+        const title = (s.title || s.prompt || '').toLowerCase();
+        const shortId = (s.short_id || '').toLowerCase();
+        const mongoId = (s._id || s.id || '').toLowerCase();
+        return title.includes(q) || shortId.includes(q) || mongoId.includes(q);
+      })
+    : surveys;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -223,7 +241,9 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
               <Search size={16} className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-stone-400'}`} />
               <input
                 type="text"
-                placeholder="Search surveys..."
+                placeholder="Search by name or survey ID..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
                 className={`w-full ${inputBase} ${isDarkMode ? 'bg-slate-700/50 border-slate-600 text-white placeholder-slate-400' : 'bg-stone-50 border-stone-300 placeholder-stone-500'}`}
               />
             </div>
@@ -260,22 +280,31 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                 Create Your First Survey
               </button>
             </div>
+          ) : filteredSurveys.length === 0 ? (
+            <div className="text-center py-12">
+              <Search size={40} className="mx-auto mb-4 text-gray-300" />
+              <p className="text-gray-500 text-base mb-1">No surveys match "<span className="font-semibold">{searchQuery}</span>"</p>
+              <p className="text-gray-400 text-sm">Try searching by title or survey ID</p>
+            </div>
           ) : (
-            surveys.map((survey) => (
+            filteredSurveys.map((survey) => {
+              const surveyId = getSurveyId(survey);
+              const promptKey = surveyId;
+              return (
               <div
-                key={survey.id}
+                key={surveyId || survey._id}
                 className={`${cardBase} ${isDarkMode ? 'bg-slate-800/50 border-slate-700 hover:border-slate-600' : 'bg-white border-stone-200 hover:border-stone-300'}`}
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                       <h3 className={`text-sm sm:text-base font-medium truncate ${isDarkMode ? 'text-white' : 'text-stone-800'}`} title={survey.title || 'Untitled Survey'}>
                         {generateShortTitle(survey.title || 'Untitled Survey')}
                       </h3>
                       <span className={`px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium flex-shrink-0 ${statusBadge(getStatus(survey))}`}>
                         {getStatus(survey)}
                       </span>
-                      {/* Shared-with-me badge — visible to the collaborator, not the owner */}
+                      {/* Shared-with-me badge */}
                       {user?.id && survey.ownerUserId && survey.ownerUserId !== user.id && (
                         <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium flex-shrink-0 bg-blue-100 text-blue-700">
                           Shared with me
@@ -292,14 +321,25 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                         {getResponseCount(survey)} responses
                       </span>
                       <span className={`px-2 py-0.5 rounded-full text-[10px] sm:text-xs ${isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-stone-100 text-stone-600'}`}>
-                        {survey.template_type || 'Unknown'}
+                        {survey.template_type || 'custom'}
                       </span>
+                      {/* Survey ID badge — always visible */}
+                      {surveyId && (
+                        <span
+                          className={`flex items-center gap-1 px-2 py-0.5 rounded font-mono text-[10px] select-all cursor-text ${
+                            isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-gray-100 text-gray-500 border border-gray-200'
+                          }`}
+                          title="Survey ID — click to select"
+                        >
+                          ID: {surveyId}
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap mt-2 sm:mt-0 sm:flex-shrink-0">
                     <button
-                      onClick={() => navigate(`/dashboard/edit/${survey.id}`)}
+                      onClick={() => navigate(`/dashboard/edit/${surveyId}`)}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                         isDarkMode
                           ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
@@ -312,7 +352,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                     </button>
                     <button
                       onClick={() => {
-                        const liveLink = `${window.location.origin}/survey?offer_id=${survey.id}`;
+                        const liveLink = `${window.location.origin}/s/${surveyId}`;
                         window.open(liveLink, '_blank');
                       }}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
@@ -326,7 +366,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                       <span className="hidden sm:inline">Open / Live Link</span>
                     </button>
                     <button
-                      onClick={() => navigate(`/dashboard?tab=email&survey_id=${survey.id}`)}
+                      onClick={() => navigate(`/dashboard?tab=email&survey_id=${surveyId}`)}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                         isDarkMode
                           ? 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20'
@@ -338,7 +378,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                       <span className="hidden sm:inline">Email</span>
                     </button>
                     <button
-                      onClick={() => navigate(`/dashboard/responses/${survey.id}`)}
+                      onClick={() => navigate(`/dashboard/responses/${surveyId}`)}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                         isDarkMode
                           ? 'bg-green-500/10 text-green-400 hover:bg-green-500/20'
@@ -351,9 +391,9 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                     </button>
                     {isAdmin && survey.prompt && (
                       <button
-                        onClick={() => setShowPromptId(showPromptId === survey.id ? null : survey.id)}
+                        onClick={() => setShowPromptId(showPromptId === promptKey ? null : promptKey)}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                          showPromptId === survey.id
+                          showPromptId === promptKey
                             ? isDarkMode ? 'bg-violet-500/30 text-violet-200' : 'bg-violet-100 text-violet-700'
                             : isDarkMode ? 'bg-violet-500/20 text-violet-300 hover:bg-violet-500/30' : 'bg-violet-50 text-violet-600 hover:bg-violet-100'
                         }`}
@@ -373,12 +413,12 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                         try {
                           const token = localStorage.getItem('auth_token');
                           const baseUrl = getApiBaseUrl();
-                          const res = await fetch(`${baseUrl}/api/surveys/${survey.id}`, {
+                          const res = await fetch(`${baseUrl}/api/surveys/${surveyId}`, {
                             method: 'DELETE',
                             headers: { 'Authorization': `Bearer ${token}` }
                           });
                           if (res.ok) {
-                            window.location.reload();
+                            setSurveys(prev => prev.filter(s => getSurveyId(s) !== surveyId));
                           } else {
                             const err = await res.json();
                             alert(`Failed to delete: ${err.error || 'Unknown error'}`);
@@ -398,8 +438,8 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                       <span className="hidden sm:inline">Delete</span>
                     </button>
                   </div>
-                  {/* Prompt reveal row */}
-                  {isAdmin && survey.prompt && showPromptId === survey.id && (
+                  {/* Prompt reveal modal */}
+                  {isAdmin && survey.prompt && showPromptId === promptKey && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowPromptId(null)}>
                       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
                       <div className="relative bg-white rounded-2xl shadow-xl max-w-lg w-full p-6" onClick={e => e.stopPropagation()}>
@@ -415,7 +455,8 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                   )}
                 </div>
               </div>
-            ))
+              );
+            })
           )}
         </div>
       )}
