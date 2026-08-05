@@ -410,7 +410,10 @@ try:
     from referral_api import referral_bp, setup_referral_indexes
     from branch_flow_api import branch_flow_bp, parse_branching_instructions_from_prompt, apply_prompt_branching_rules
     from survey_invite_api import survey_invite_bp
-    from survey_sharing_api import survey_sharing_bp, setup_sharing_indexes    # Register blueprints
+    from survey_sharing_api import survey_sharing_bp, setup_sharing_indexes
+    from location_control_api import location_bp    # Location control admin API
+
+    # Register blueprints
 
     print("Registering blueprints...")
 
@@ -446,6 +449,7 @@ try:
     app.register_blueprint(branch_flow_bp)  # Branch flow API routes
     app.register_blueprint(survey_invite_bp)  # Survey invite via email
     app.register_blueprint(survey_sharing_bp)  # Survey sharing earnings
+    app.register_blueprint(location_bp)          # Location control at /api/admin/location
 
     # Setup tracking TTL indexes for 15-day auto-delete
     setup_tracking_indexes()
@@ -5579,6 +5583,74 @@ Rules:
     except Exception as e:
         print(f"Error in refine-question: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+# ═══════════════════════════════════════════════════════════
+# IMAGE UPLOAD  — survey question / option images
+# Files are saved to Backend/uploads/ and served as static
+# URLs so they work correctly on live deployments.
+# ═══════════════════════════════════════════════════════════
+
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+os.makedirs(UPLOAD_DIR, exist_ok=True)  # create folder if it doesn't exist
+
+ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
+MAX_UPLOAD_SIZE_MB = 5
+
+
+def _allowed_image(filename: str) -> bool:
+    return (
+        '.' in filename
+        and filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
+    )
+
+
+@app.route('/api/upload-image', methods=['POST', 'OPTIONS'])
+def upload_survey_image():
+    """
+    Upload an image from the survey editor.
+    Returns a permanent public URL that works on live deployments.
+    Accepts multipart/form-data with field name 'image'.
+    """
+    if request.method == 'OPTIONS':
+        return '', 204
+
+    if 'image' not in request.files:
+        return jsonify({'error': 'No image file in request'}), 400
+
+    file = request.files['image']
+
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+
+    if not _allowed_image(file.filename):
+        return jsonify({'error': f'File type not allowed. Use: {", ".join(ALLOWED_IMAGE_EXTENSIONS)}'}), 400
+
+    # Check file size (read into memory to validate, then save)
+    file_bytes = file.read()
+    size_mb = len(file_bytes) / (1024 * 1024)
+    if size_mb > MAX_UPLOAD_SIZE_MB:
+        return jsonify({'error': f'File too large. Maximum size is {MAX_UPLOAD_SIZE_MB}MB'}), 413
+
+    # Generate a unique filename to avoid collisions
+    ext = file.filename.rsplit('.', 1)[1].lower()
+    unique_name = f"{uuid.uuid4().hex}.{ext}"
+    save_path = os.path.join(UPLOAD_DIR, unique_name)
+
+    with open(save_path, 'wb') as f:
+        f.write(file_bytes)
+
+    # Build absolute public URL using the request host
+    # On Render this will be https://surevy-pepperwahl.onrender.com/uploads/<name>
+    public_url = f"{request.scheme}://{request.host}/uploads/{unique_name}"
+
+    return jsonify({'url': public_url, 'filename': unique_name}), 200
+
+
+@app.route('/uploads/<path:filename>')
+def serve_uploaded_image(filename):
+    """Serve uploaded survey images"""
+    return send_from_directory(UPLOAD_DIR, filename)
 
 
 # ═══════════════════════════════════════════════════════════

@@ -6,9 +6,10 @@ import type { Survey } from '../types/Survey';
 import { buildRedirectUrl, createSessionContext } from '../utils/redirectBuilder';
 import { getQuestionVariants, getAnswerVariants } from '../utils/animationConfig';
 import { getMoustacheleadsPayload } from '../utils/moustacheleads';
+import { QuestionImage, wrapOptionLabel } from '../utils/questionImages';
 
-interface Question { id: string; question: string; questionDescription?: string; answerDescription?: string; type: 'text' | 'radio' | 'range'; options?: string[]; }
-interface RawQuestion { id: string; question: string; questionDescription?: string; answerDescription?: string; type: string; options?: string[]; }
+interface Question { id: string; question: string; questionDescription?: string; answerDescription?: string; type: 'text' | 'radio' | 'range'; options?: string[]; questionImage?: string; questionImagePosition?: 'above' | 'below'; optionImages?: Record<string, string>; optionImageMode?: 'with-text' | 'replace-text'; }
+interface RawQuestion { id: string; question: string; questionDescription?: string; answerDescription?: string; type: string; options?: string[]; questionImage?: string; questionImagePosition?: 'above' | 'below'; optionImages?: Record<string, string>; optionImageMode?: 'with-text' | 'replace-text'; }
 interface Props { survey: Survey; previewMode?: boolean; }
 
 const TrainingFeedbackTemplate: React.FC<Props> = ({ survey, previewMode = false }) => {
@@ -30,6 +31,8 @@ const TrainingFeedbackTemplate: React.FC<Props> = ({ survey, previewMode = false
   const normalizedQuestions: Question[] = (survey.questions || []).map((q: RawQuestion, i) => ({
     id: q.id || `q${i}`, question: q.question, questionDescription: q.questionDescription,
     answerDescription: q.answerDescription, type: normalizeType(q.type), options: q.options || [],
+    questionImage: q.questionImage, questionImagePosition: q.questionImagePosition,
+    optionImages: q.optionImages, optionImageMode: q.optionImageMode,
   }));
 
   const [formData, setFormData] = useState<Record<string, string | number>>(() => {
@@ -100,12 +103,14 @@ const TrainingFeedbackTemplate: React.FC<Props> = ({ survey, previewMode = false
     return (
       <div key={q.id} className="tf-lined-area">
         <div className="tf-q-label">📝 Question {idx + 1}</div>
+        <QuestionImage q={q} position="above" />
         {!previewMode ? (
           <motion.h2 className="tf-q-text" variants={qVariants} initial="initial" animate="animate" exit="exit">{q.question}</motion.h2>
         ) : (
           <h2 className="tf-q-text">{q.question}</h2>
         )}
         {q.questionDescription && <p className="tf-q-sub">{q.questionDescription}</p>}
+        <QuestionImage q={q} position="below" />
         {q.type === 'radio' && (
           <div className="tf-radio-list">
             {q.options?.map((opt, i) => {
@@ -115,9 +120,9 @@ const TrainingFeedbackTemplate: React.FC<Props> = ({ survey, previewMode = false
                 <input type="radio" name={q.id} checked={formData[q.id] === opt} onChange={() => handleAnswer(q.id, opt)} />
                 <span className="tf-radio-circle" />
                 {!previewMode ? (
-                  <motion.span className="tf-radio-text" variants={aVariants} initial="initial" animate="animate">{opt}</motion.span>
+                  <motion.span className="tf-radio-text" variants={aVariants} initial="initial" animate="animate">{wrapOptionLabel(opt, opt, q)}</motion.span>
                 ) : (
-                  <span className="tf-radio-text">{opt}</span>
+                  <span className="tf-radio-text">{wrapOptionLabel(opt, opt, q)}</span>
                 )}
               </label>
               );

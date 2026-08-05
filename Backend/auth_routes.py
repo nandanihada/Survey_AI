@@ -255,7 +255,8 @@ def login():
                 'email': user['email'],
                 'name': user['name'],
                 'simpleUserId': user.get('simpleUserId', 0),
-                'role': user['role']
+                'role': user['role'],
+                'location_feature_enabled': bool(user.get('location_feature_enabled', False)),
             }
         })
         
@@ -357,7 +358,8 @@ def check_auth():
                 'email': user['email'],
                 'name': user['name'],
                 'simpleUserId': user.get('simpleUserId', 0),
-                'role': user['role']
+                'role': user['role'],
+                'location_feature_enabled': bool(user.get('location_feature_enabled', False)),
             } if user else None
         })
         
@@ -446,7 +448,8 @@ def firebase_login():
                     'name': existing_user.get('name', name),
                     'role': existing_user.get('role', 'basic'),
                     'simpleUserId': existing_user.get('simpleUserId', 0),
-                    'status': existing_user.get('status', 'approved')
+                    'status': existing_user.get('status', 'approved'),
+                    'location_feature_enabled': bool(existing_user.get('location_feature_enabled', False)),
                 }
             })
         else:
@@ -497,7 +500,8 @@ def firebase_login():
                     'name': user_data['name'],
                     'role': user_data['role'],
                     'simpleUserId': user_data['simpleUserId'],
-                    'status': user_data['status']
+                    'status': user_data['status'],
+                    'location_feature_enabled': False,  # new users start with it off
                 }
             })
     

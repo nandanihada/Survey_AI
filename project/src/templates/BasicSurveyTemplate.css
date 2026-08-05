@@ -824,6 +824,50 @@
 }
 
 
+/* ── Question Images ── */
+.pepper-question-image {
+  width: 100%;
+  max-height: 280px;
+  object-fit: cover;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  border: 1px solid var(--pepper-border);
+  display: block;
+}
+.pepper-question-image--below {
+  margin-bottom: 0;
+  margin-top: 4px;
+}
+
+/* Option: image replacing the text label */
+.pepper-option--image-only {
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 10px 14px;
+}
+.pepper-option-image-replace {
+  width: 100%;
+  max-height: 120px;
+  object-fit: contain;
+  border-radius: 8px;
+  display: block;
+}
+
+/* Option: image alongside the text label */
+.pepper-option-label--img {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pepper-option-image-inline {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+  border: 1px solid var(--pepper-border);
+}
+
 /* Resume Loading State */
 .pepper-loading-spinner {
   width: 50px;

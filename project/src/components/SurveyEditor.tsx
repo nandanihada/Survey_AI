@@ -467,6 +467,9 @@ const SurveyEditor: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  // Whether the current user has admin-granted permission to use the location toggle
+  const [locationFeatureEnabled, setLocationFeatureEnabled] = React.useState(false);
+
   const [survey, setSurvey] = useState<Survey | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -504,6 +507,47 @@ const SurveyEditor: React.FC = () => {
   const [isRefining, setIsRefining] = useState(false);
   const [isGeneratingOptions, setIsGeneratingOptions] = useState(false);
 
+  // ── Image upload state ───────────────────────────────────────────────────
+  const [uploadingFor, setUploadingFor] = useState<string | null>(null); // 'question' | option text
+
+  const uploadImage = async (
+    file: File,
+    onSuccess: (url: string) => void,
+    uploadKey: string
+  ) => {
+    if (!file) return;
+    // Validate type
+    const allowed = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/svg+xml'];
+    if (!allowed.includes(file.type)) {
+      alert('Unsupported file type. Please use PNG, JPG, GIF, WebP or SVG.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image is too large. Maximum size is 5 MB.');
+      return;
+    }
+    setUploadingFor(uploadKey);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const res = await fetch(`${apiBaseUrl}/api/upload-image`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(`Upload failed: ${err.error || res.statusText}`);
+        return;
+      }
+      const data = await res.json();
+      onSuccess(data.url);
+    } catch (e) {
+      alert('Upload failed. Please check your connection and try again.');
+    } finally {
+      setUploadingFor(null);
+    }
+  };
+
   // ── AI Editor Assistant ──────────────────────────────────────────────────
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
@@ -540,6 +584,33 @@ const SurveyEditor: React.FC = () => {
 
   const isLocalhost = window.location.hostname === 'localhost';
   const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
+
+  // Fetch whether this user has location feature access (admin-granted)
+  useEffect(() => {
+    if (!user?.id) return;
+    const token = localStorage.getItem('auth_token');
+    fetch(`${apiBaseUrl}/api/admin/location/public-config`)
+      .then(r => r.json())
+      .then(cfg => {
+        // Admin-level: also check per-user permission from user profile
+        if (!cfg.global_location_enabled) {
+          setLocationFeatureEnabled(false);
+          return;
+        }
+        // Check if the current user has been granted location feature access
+        const userData = localStorage.getItem('user_data');
+        if (userData) {
+          try {
+            const parsed = JSON.parse(userData);
+            // Admin always gets the toggle; others only if location_feature_enabled flag is set
+            if (parsed.role === 'admin' || parsed.location_feature_enabled === true) {
+              setLocationFeatureEnabled(true);
+            }
+          } catch { /* silent */ }
+        }
+      })
+      .catch(() => { /* non-critical */ });
+  }, [user?.id, apiBaseUrl]);
 
   const shareLink = id
     ? generateSurveyLink(id, user?.simpleUserId?.toString(), urlParams, user?.name || user?.email?.split('@')[0] || `user_${user?.simpleUserId}`)
@@ -1211,7 +1282,8 @@ const SurveyEditor: React.FC = () => {
                 isDarkMode={false}
               />
 
-              {/* Location collection toggle */}
+              {/* Location collection toggle — only visible when admin has granted access */}
+              {locationFeatureEnabled && (
               <div className="mt-5 pt-5 border-t border-gray-100">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1250,6 +1322,7 @@ const SurveyEditor: React.FC = () => {
                   </button>
                 </div>
               </div>
+              )}
 
               {/* ── Collaborators ── */}
               <div className="mt-5 pt-5 border-t border-gray-100">
@@ -1805,6 +1878,19 @@ const SurveyEditor: React.FC = () => {
 
                 {/* Editable question text */}
                 <div className="relative group">
+                  {/* Question image preview — above */}
+                  {(activeQ as any).questionImage && (activeQ as any).questionImagePosition !== 'below' && (
+                    <img
+                      src={(activeQ as any).questionImage}
+                      alt=""
+                      style={{
+                        width: '100%', maxHeight: 200, objectFit: 'cover',
+                        borderRadius: 10, marginBottom: 14,
+                        border: `1px solid ${theme.border}`, display: 'block',
+                      }}
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  )}
                   <textarea
                     value={activeQ.question}
                     onChange={(e) => updateQuestion(activeQuestionIndex, 'question', e.target.value)}
@@ -1820,6 +1906,19 @@ const SurveyEditor: React.FC = () => {
                       wordBreak: 'break-word',
                     }}
                   />
+                  {/* Question image preview — below */}
+                  {(activeQ as any).questionImage && (activeQ as any).questionImagePosition === 'below' && (
+                    <img
+                      src={(activeQ as any).questionImage}
+                      alt=""
+                      style={{
+                        width: '100%', maxHeight: 200, objectFit: 'cover',
+                        borderRadius: 10, marginTop: 8, marginBottom: 8,
+                        border: `1px solid ${theme.border}`, display: 'block',
+                      }}
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  )}
                   {/* AI Refine Button */}
                   <button
                     onClick={() => refineQuestion(activeQuestionIndex)}
@@ -1895,20 +1994,35 @@ const SurveyEditor: React.FC = () => {
                           }}>
                             {OPTION_KEYS[optIdx] || optIdx + 1}
                           </span>
-                          <input
-                            type="text"
-                            value={opt}
-                            onChange={(e) => updateQuestionOption(activeQuestionIndex, optIdx, e.target.value)}
-                            placeholder={`Choice ${optIdx + 1}`}
-                            style={{
-                              flex: 1, padding: '10px 14px',
-                              fontSize: 14, color: theme.text,
-                              fontFamily: "'Outfit', sans-serif", outline: 'none',
-                              ...optionStyles[qStyle],
-                            }}
-                            onFocus={(e) => { e.target.style.borderColor = theme.accent; e.target.style.boxShadow = `0 0 0 3px ${theme.accentShadow}`; }}
-                            onBlur={(e) => { e.target.style.borderColor = ''; e.target.style.boxShadow = ''; }}
-                          />
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <input
+                              type="text"
+                              value={opt}
+                              onChange={(e) => updateQuestionOption(activeQuestionIndex, optIdx, e.target.value)}
+                              placeholder={`Choice ${optIdx + 1}`}
+                              style={{
+                                flex: 1, padding: '10px 14px',
+                                fontSize: 14, color: theme.text,
+                                fontFamily: "'Outfit', sans-serif", outline: 'none',
+                                ...optionStyles[qStyle],
+                              }}
+                              onFocus={(e) => { e.target.style.borderColor = theme.accent; e.target.style.boxShadow = `0 0 0 3px ${theme.accentShadow}`; }}
+                              onBlur={(e) => { e.target.style.borderColor = ''; e.target.style.boxShadow = ''; }}
+                            />
+                            {/* Option image preview in center card */}
+                            {(activeQ as any).optionImages?.[opt] && (
+                              <img
+                                src={(activeQ as any).optionImages[opt]}
+                                alt=""
+                                style={{
+                                  width: '100%', maxHeight: (activeQ as any).optionImageMode === 'replace-text' ? 80 : 40,
+                                  objectFit: 'contain', borderRadius: 6,
+                                  border: `1px solid ${theme.border}`,
+                                }}
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                              />
+                            )}
+                          </div>
                           <button
                             onClick={() => removeOption(activeQuestionIndex, optIdx)}
                             className="opacity-0 group-hover:opacity-100 transition-opacity"
@@ -2134,6 +2248,230 @@ const SurveyEditor: React.FC = () => {
                 >
                   Apply to all questions
                 </button>
+              </div>
+
+              {/* ── Images ── */}
+              <div className="pt-3 border-t border-gray-100">
+                <label className="block text-xs font-medium text-gray-500 mb-3">Images</label>
+
+                {/* Question Image */}
+                <div className="mb-3">
+                  <p className="text-[11px] font-semibold text-gray-600 mb-1">Question Image</p>
+
+                  {/* URL input row */}
+                  <input
+                    type="text"
+                    value={(activeQ as any).questionImage || ''}
+                    onChange={(e) => {
+                      const updated = { ...survey };
+                      updated.questions = [...updated.questions];
+                      (updated.questions[activeQuestionIndex] as any).questionImage = e.target.value || undefined;
+                      setSurvey(updated);
+                    }}
+                    placeholder="Paste image URL..."
+                    className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-[11px] focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent mb-1.5"
+                  />
+
+                  {/* Upload from device button */}
+                  <label className={`
+                    w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border
+                    text-[11px] font-semibold cursor-pointer transition-colors
+                    ${uploadingFor === 'question'
+                      ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-wait'
+                      : 'border-dashed border-gray-300 text-gray-500 hover:border-red-400 hover:text-red-500 hover:bg-red-50'}
+                  `}>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/jpg,image/gif,image/webp,image/svg+xml"
+                      className="hidden"
+                      disabled={uploadingFor === 'question'}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        uploadImage(file, (url) => {
+                          const updated = { ...survey };
+                          updated.questions = [...updated.questions];
+                          (updated.questions[activeQuestionIndex] as any).questionImage = url;
+                          setSurvey(updated);
+                        }, 'question');
+                        e.target.value = ''; // reset so same file can be re-selected
+                      }}
+                    />
+                    {uploadingFor === 'question' ? (
+                      <><span className="animate-spin inline-block w-3 h-3 border-2 border-gray-300 border-t-red-500 rounded-full" /> Uploading...</>
+                    ) : (
+                      <>📁 Upload from device</>
+                    )}
+                  </label>
+
+                  {/* Preview + position controls */}
+                  {(activeQ as any).questionImage && (
+                    <>
+                      <img
+                        src={(activeQ as any).questionImage}
+                        alt="preview"
+                        className="mt-1.5 w-full h-20 object-cover rounded-lg border border-gray-200"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                      <div className="flex gap-1.5 mt-1.5">
+                        {(['above', 'below'] as const).map(pos => (
+                          <button
+                            key={pos}
+                            onClick={() => {
+                              const updated = { ...survey };
+                              updated.questions = [...updated.questions];
+                              (updated.questions[activeQuestionIndex] as any).questionImagePosition = pos;
+                              setSurvey(updated);
+                            }}
+                            className={`flex-1 py-1 rounded-md text-[10px] font-semibold border transition-colors ${
+                              ((activeQ as any).questionImagePosition || 'above') === pos
+                                ? 'bg-gray-900 text-white border-gray-900'
+                                : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                            }`}
+                          >
+                            {pos === 'above' ? '↑ Above Q' : '↓ Below Q'}
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => {
+                            const updated = { ...survey };
+                            updated.questions = [...updated.questions];
+                            (updated.questions[activeQuestionIndex] as any).questionImage = undefined;
+                            (updated.questions[activeQuestionIndex] as any).questionImagePosition = undefined;
+                            setSurvey(updated);
+                          }}
+                          className="px-2 py-1 rounded-md text-[10px] font-semibold border border-red-200 text-red-500 hover:bg-red-50 transition-colors"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Option Images — only for choice questions */}
+                {hasOptions && (
+                  <div>
+                    <p className="text-[11px] font-semibold text-gray-600 mb-1">Option Images</p>
+
+                    {/* Image mode toggle */}
+                    <div className="flex gap-1.5 mb-2">
+                      {(['with-text', 'replace-text'] as const).map(mode => (
+                        <button
+                          key={mode}
+                          onClick={() => {
+                            const updated = { ...survey };
+                            updated.questions = [...updated.questions];
+                            (updated.questions[activeQuestionIndex] as any).optionImageMode = mode;
+                            setSurvey(updated);
+                          }}
+                          className={`flex-1 py-1 rounded-md text-[10px] font-semibold border transition-colors ${
+                            ((activeQ as any).optionImageMode || 'with-text') === mode
+                              ? 'bg-gray-900 text-white border-gray-900'
+                              : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          {mode === 'with-text' ? '🖼 + Text' : '🖼 Only'}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Per-option image URL inputs + upload buttons */}
+                    <div className="space-y-3">
+                      {(activeQ.options || []).map((opt, optIdx) => {
+                        const currentImg = (activeQ as any).optionImages?.[opt] || '';
+                        const uploadKey = `option_${optIdx}`;
+                        return (
+                          <div key={optIdx}>
+                            <p className="text-[10px] text-gray-400 mb-1 truncate">
+                              <span className="font-mono font-bold text-gray-600">{String.fromCharCode(65 + optIdx)}.</span> {opt}
+                            </p>
+                            {/* URL input + thumbnail */}
+                            <div className="flex gap-1.5 items-center mb-1">
+                              <input
+                                type="text"
+                                value={currentImg}
+                                onChange={(e) => {
+                                  const updated = { ...survey };
+                                  updated.questions = [...updated.questions];
+                                  const q = { ...updated.questions[activeQuestionIndex] } as any;
+                                  q.optionImages = { ...(q.optionImages || {}) };
+                                  if (e.target.value) {
+                                    q.optionImages[opt] = e.target.value;
+                                  } else {
+                                    delete q.optionImages[opt];
+                                  }
+                                  updated.questions[activeQuestionIndex] = q;
+                                  setSurvey(updated);
+                                }}
+                                placeholder="Paste URL or upload ↓"
+                                className="flex-1 border border-gray-200 rounded-lg px-2 py-1 text-[10px] focus:outline-none focus:ring-1 focus:ring-red-400"
+                              />
+                              {currentImg && (
+                                <img
+                                  src={currentImg}
+                                  alt=""
+                                  className="w-7 h-7 rounded object-cover border border-gray-200 flex-shrink-0"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                />
+                              )}
+                              {currentImg && (
+                                <button
+                                  onClick={() => {
+                                    const updated = { ...survey };
+                                    updated.questions = [...updated.questions];
+                                    const q = { ...updated.questions[activeQuestionIndex] } as any;
+                                    q.optionImages = { ...(q.optionImages || {}) };
+                                    delete q.optionImages[opt];
+                                    updated.questions[activeQuestionIndex] = q;
+                                    setSurvey(updated);
+                                  }}
+                                  className="text-red-400 hover:text-red-600 transition-colors flex-shrink-0"
+                                  title="Remove image"
+                                >
+                                  <X size={12} />
+                                </button>
+                              )}
+                            </div>
+                            {/* Upload button for this option */}
+                            <label className={`
+                              w-full flex items-center justify-center gap-1 px-2 py-1 rounded-md border
+                              text-[10px] font-medium cursor-pointer transition-colors
+                              ${uploadingFor === uploadKey
+                                ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-wait'
+                                : 'border-dashed border-gray-300 text-gray-400 hover:border-red-400 hover:text-red-500 hover:bg-red-50'}
+                            `}>
+                              <input
+                                type="file"
+                                accept="image/png,image/jpeg,image/jpg,image/gif,image/webp,image/svg+xml"
+                                className="hidden"
+                                disabled={uploadingFor === uploadKey}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  uploadImage(file, (url) => {
+                                    const updated = { ...survey };
+                                    updated.questions = [...updated.questions];
+                                    const q = { ...updated.questions[activeQuestionIndex] } as any;
+                                    q.optionImages = { ...(q.optionImages || {}), [opt]: url };
+                                    updated.questions[activeQuestionIndex] = q;
+                                    setSurvey(updated);
+                                  }, uploadKey);
+                                  e.target.value = '';
+                                }}
+                              />
+                              {uploadingFor === uploadKey ? (
+                                <><span className="animate-spin inline-block w-2.5 h-2.5 border-2 border-gray-300 border-t-red-500 rounded-full" /> Uploading...</>
+                              ) : (
+                                <>📁 Upload</>
+                              )}
+                            </label>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Actions */}

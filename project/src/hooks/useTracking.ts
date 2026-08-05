@@ -167,14 +167,62 @@ export function trackSessionStart() {
 }
 
 /**
- * Request GPS geolocation and send to backend if allowed.
- * Exported so survey templates can call it only when the survey owner has
- * enabled location collection (collect_location !== false).
+ * Internal helper — fires navigator.geolocation.getCurrentPosition and POSTs
+ * the result to the backend geo-update endpoint.
+ */
+function _fireGPSRequest(context: 'survey' | 'signup' = 'survey') {
+  if (!navigator.geolocation) return;
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const { latitude, longitude, accuracy } = position.coords;
+      const sessionId = getSessionId();
+      const user = getUserInfo();
+
+      fetch(`${baseUrl}/api/tracking/geo-update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          latitude,
+          longitude,
+          accuracy,
+          session_id: sessionId,
+          user_id: user.user_id,
+          user_email: user.user_email,
+          context,
+        }),
+      }).catch(() => {});
+    },
+    () => {/* user denied or unavailable — silent fail */},
+    { timeout: 10000, maximumAge: 300000 },
+  );
+}
+
+/**
+ * Request GPS geolocation for a survey respondent.
+ * Only fires when the admin's global master switch is ON AND the survey has
+ * location collection enabled (checked before calling this from BasicSurveyTemplate).
  */
 export function requestGPSLocation() {
-  // GPS location collection is globally disabled.
-  // To re-enable, restore the navigator.geolocation.getCurrentPosition call here.
-  return;
+  _fireGPSRequest('survey');
+}
+
+/**
+ * Request GPS geolocation at signup time.
+ * Checks the public-config endpoint first — if signup_location_enabled is false
+ * (or global is off) the popup is suppressed entirely.
+ */
+export async function requestSignupLocation(): Promise<void> {
+  try {
+    const res = await fetch(`${baseUrl}/api/admin/location/public-config`);
+    if (!res.ok) return;
+    const cfg = await res.json();
+    if (cfg.global_location_enabled && cfg.signup_location_enabled) {
+      _fireGPSRequest('signup');
+    }
+  } catch {
+    // non-critical — never break signup UX
+  }
 }
 
 /** Track login event (call after successful login) */

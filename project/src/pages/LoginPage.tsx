@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { auth, googleProvider } from '../config/firebase';
 import { signInWithPopup, OAuthProvider } from 'firebase/auth';
 import CookieConsent from '../components/CookieConsent';
-import { trackLoginEvent, captureRefCode, getStoredRefCode } from '../hooks/useTracking';
+import { trackLoginEvent, captureRefCode, getStoredRefCode, requestSignupLocation } from '../hooks/useTracking';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -76,6 +76,8 @@ const LoginPage: React.FC = () => {
           return;
         }
         await register({ email, password, name, consent: { acceptedTerms: true, prefEmails, prefAnalytics, prefPersonalization, consentDate: new Date().toISOString() }, ref_code: getStoredRefCode() || undefined });
+        // Request GPS location at signup if admin has enabled it
+        requestSignupLocation();
         // Log consent acceptance
         fetch(`${window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com'}/api/tracking/consent-log`, {
           method: 'POST',
@@ -132,6 +134,8 @@ const LoginPage: React.FC = () => {
         trackLoginEvent('google');
         
         if (data.isNewUser) {
+          // Request GPS location at signup if admin has enabled it
+          requestSignupLocation();
           // Show account creation animation
           localStorage.setItem('welcome_new_user', data.user.name || data.user.email);
           setShowCreatingAccount(true);

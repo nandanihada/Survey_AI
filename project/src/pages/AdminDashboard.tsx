@@ -14,6 +14,7 @@ import DeletionRequestsTab from '../components/admin/DeletionRequestsTab';
 import ReferralTab from '../components/admin/ReferralTab';
 import EarningsConfigTab from '../components/admin/EarningsConfigTab';
 import SurveyReportTab from '../components/admin/SurveyReportTab';
+import LocationControlTab from '../components/admin/LocationControlTab';
 import { Bell, Filter, Save, Edit2, X, Check, ToggleLeft, ToggleRight, Eye, EyeOff, Play, RotateCcw, AlertCircle, Activity, Mail, AlertTriangle, Gift, DollarSign, FileBarChart } from 'lucide-react';
 import { getApiBaseUrl } from '../utils/deploymentFix';
 
@@ -91,7 +92,7 @@ const AdminDashboard: React.FC = () => {
   const [surveys, setSurveys] = useState<any[]>([]);
   const [filters, setFilters] = useState<Filter[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking' | 'tracking' | 'contacts' | 'deletions' | 'referrals' | 'earnings-config' | 'survey-report'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking' | 'tracking' | 'contacts' | 'deletions' | 'referrals' | 'earnings-config' | 'survey-report' | 'location-control'>('users');
   const [showNotifModal, setShowNotifModal] = useState(false);
   
   // Filter management states
@@ -566,6 +567,16 @@ const AdminDashboard: React.FC = () => {
                   }`}
                 >
                   <FileBarChart size={14} /> Survey Report
+                </button>
+                <button
+                  onClick={() => setActiveTab('location-control')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center gap-1 ${
+                    activeTab === 'location-control'
+                      ? 'border-blue-600 text-blue-700'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  📍 Location
                 </button>
               </nav>
             </div>
@@ -1160,6 +1171,11 @@ const AdminDashboard: React.FC = () => {
                 {/* Survey Combined Report Tab */}
                 {activeTab === 'survey-report' && (
                   <SurveyReportTab />
+                )}
+
+                {/* Location Control Tab */}
+                {activeTab === 'location-control' && (
+                  <LocationControlTab />
                 )}
               </>
             )}

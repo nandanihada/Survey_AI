@@ -9,6 +9,7 @@ import {
 } from '../utils/redirectBuilder';
 import { getQuestionVariants, getAnswerVariants } from '../utils/animationConfig';
 import { getMoustacheleadsPayload } from '../utils/moustacheleads';
+import { QuestionImage, wrapOptionLabel } from '../utils/questionImages';
 
 interface Question {
   id: string;
@@ -17,6 +18,10 @@ interface Question {
   answerDescription?: string;
   type: 'text' | 'radio' | 'range';
   options?: string[];
+  questionImage?: string;
+  questionImagePosition?: 'above' | 'below';
+  optionImages?: Record<string, string>;
+  optionImageMode?: 'with-text' | 'replace-text';
 }
 
 interface RawQuestion {
@@ -26,6 +31,10 @@ interface RawQuestion {
   answerDescription?: string;
   type: string;
   options?: string[];
+  questionImage?: string;
+  questionImagePosition?: 'above' | 'below';
+  optionImages?: Record<string, string>;
+  optionImageMode?: 'with-text' | 'replace-text';
 }
 
 interface Props {
@@ -71,6 +80,10 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
     answerDescription: q.answerDescription,
     type: normalizeType(q.type),
     options: q.options || [],
+    questionImage: q.questionImage,
+    questionImagePosition: q.questionImagePosition,
+    optionImages: q.optionImages,
+    optionImageMode: q.optionImageMode,
   }));
 
   const [formData, setFormData] = useState<Record<string, string | number>>(() => {
@@ -269,9 +282,9 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
         >
           <span className="cf-option-key">{OPTION_KEYS[i] || i + 1}</span>
           {!previewMode ? (
-            <motion.span className="cf-option-label" variants={aVariants} initial="initial" animate="animate">{option}</motion.span>
+            <motion.span className="cf-option-label" variants={aVariants} initial="initial" animate="animate">{wrapOptionLabel(option, option, question)}</motion.span>
           ) : (
-            <span className="cf-option-label">{option}</span>
+            <span className="cf-option-label">{wrapOptionLabel(option, option, question)}</span>
           )}
         </div>
         );
@@ -324,12 +337,14 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
           <span className="cf-num-badge">{idx + 1}</span>
           Question {idx + 1}
         </div>
+        <QuestionImage q={q} position="above" />
         {!previewMode ? (
           <motion.h3 className="cf-question-text" variants={qVariants} initial="initial" animate="animate" exit="exit">{q.question}</motion.h3>
         ) : (
           <h3 className="cf-question-text">{q.question}</h3>
         )}
         {q.questionDescription && <p className="cf-question-desc">{q.questionDescription}</p>}
+        <QuestionImage q={q} position="below" />
         {q.answerDescription && <div className="cf-answer-hint">{q.answerDescription}</div>}
         {q.type === 'radio' && renderRadioOptions(q)}
         {q.type === 'text' && renderTextInput(q)}

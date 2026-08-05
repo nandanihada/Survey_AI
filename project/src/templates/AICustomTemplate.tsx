@@ -7,6 +7,7 @@ import {
   buildRedirectUrl, 
   createSessionContext
 } from '../utils/redirectBuilder';
+import { QuestionImage, wrapOptionLabel } from '../utils/questionImages';
 
 interface Question {
   id: string;
@@ -15,6 +16,10 @@ interface Question {
   answerDescription?: string;
   type: 'text' | 'radio' | 'range';
   options?: string[];
+  questionImage?: string;
+  questionImagePosition?: 'above' | 'below';
+  optionImages?: Record<string, string>;
+  optionImageMode?: 'with-text' | 'replace-text';
 }
 
 interface RawQuestion {
@@ -24,6 +29,10 @@ interface RawQuestion {
   answerDescription?: string;
   type: string;
   options?: string[];
+  questionImage?: string;
+  questionImagePosition?: 'above' | 'below';
+  optionImages?: Record<string, string>;
+  optionImageMode?: 'with-text' | 'replace-text';
 }
 
 interface Props {
@@ -69,6 +78,10 @@ const AICustomTemplate: React.FC<Props> = ({
     answerDescription: q.answerDescription,
     type: normalizeType(q.type),
     options: q.options || [],
+    questionImage: q.questionImage,
+    questionImagePosition: q.questionImagePosition,
+    optionImages: q.optionImages,
+    optionImageMode: q.optionImageMode,
   }));
 
   const [formData, setFormData] = useState<Record<string, string | number>>(() => {
@@ -332,6 +345,7 @@ const AICustomTemplate: React.FC<Props> = ({
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.5 }}
           >
+            <QuestionImage q={question} position="above" />
             <span className="question-number">{index + 1}</span>
             {editMode ? (
               <input
@@ -392,7 +406,7 @@ const AICustomTemplate: React.FC<Props> = ({
                     whileTap={{ scale: 0.98 }}
                   >
                     <div className="radio-indicator" />
-                    <span>{option}</span>
+                    <span>{wrapOptionLabel(option, option, question)}</span>
                   </motion.div>
                 ))}
               </div>

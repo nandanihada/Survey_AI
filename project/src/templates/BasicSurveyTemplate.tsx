@@ -27,6 +27,10 @@ interface Question {
   options?: string[];
   answerStyle?: string;
   show_if?: ShowIfCondition | null;
+  questionImage?: string;
+  questionImagePosition?: 'above' | 'below';
+  optionImages?: Record<string, string>;
+  optionImageMode?: 'with-text' | 'replace-text';
 }
 
 interface RawQuestion {
@@ -37,6 +41,10 @@ interface RawQuestion {
   type: string;
   options?: string[];
   show_if?: ShowIfCondition | null;
+  questionImage?: string;
+  questionImagePosition?: 'above' | 'below';
+  optionImages?: Record<string, string>;
+  optionImageMode?: 'with-text' | 'replace-text';
 }
 
 // Resume session data from mid-survey redirect
@@ -94,6 +102,10 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     options: q.options || [],
     answerStyle: (q as any).answerStyle || undefined,
     show_if: q.show_if || null,
+    questionImage: q.questionImage,
+    questionImagePosition: q.questionImagePosition,
+    optionImages: q.optionImages,
+    optionImageMode: q.optionImageMode,
   }));
 
   const [formData, setFormData] = useState<Record<string, string | number>>(() => {
@@ -225,13 +237,32 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     }
   }, [location.search, survey.id]);
 
-  // Request GPS location only when the survey owner has enabled it (default: on)
+  // Request GPS location only when global setting AND survey-level flag are both enabled
   useEffect(() => {
     if (previewMode) return; // Never ask for location in preview/edit mode
-    const shouldCollect = survey.collect_location === true; // default false
-    if (shouldCollect) {
-      requestGPSLocation();
-    }
+
+    const checkAndRequestLocation = async () => {
+      // First check survey-level flag (fast path — no network call if off)
+      if (!survey.collect_location) return;
+
+      // Then verify admin's global master switch
+      try {
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const cfgBase = isLocalhost ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
+        const res = await fetch(`${cfgBase}/api/admin/location/public-config`);
+        if (!res.ok) return;
+        const cfg = await res.json();
+
+        // Fire only when global is ON, AND either all_surveys flag or per-survey flag is set
+        if (cfg.global_location_enabled && (cfg.all_surveys_location_enabled || survey.collect_location === true)) {
+          requestGPSLocation();
+        }
+      } catch {
+        // non-critical — degrade gracefully
+      }
+    };
+
+    checkAndRequestLocation();
   }, [survey.id, survey.collect_location, previewMode]);
 
   // -- Duplicate detection: localStorage check + fingerprint collection --------
@@ -767,17 +798,36 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     <div className={`pepper-options pepper-style-${getStyleForQuestion(question)}`}>
       {question.options?.map((option, i) => {
         const aVariants = getAnswerVariants(survey.animation, i);
+        const optImg = question.optionImages?.[option];
+        const replaceText = question.optionImageMode === 'replace-text';
         return (
           <div
             key={i}
-            className={`pepper-option ${formData[question.id] === option ? 'selected' : ''}`}
+            className={`pepper-option ${formData[question.id] === option ? 'selected' : ''} ${optImg && replaceText ? 'pepper-option--image-only' : ''}`}
             onClick={() => handleAnswer(question.id, option)}
           >
             <span className="pepper-option-key">{OPTION_KEYS[i] || i + 1}</span>
-            {!previewMode ? (
-              <motion.span className="pepper-option-label" variants={aVariants} initial="initial" animate="animate">{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</motion.span>
+            {optImg && replaceText ? (
+              /* Image replaces the text label entirely */
+              <img src={optImg} alt={option} className="pepper-option-image-replace" />
+            ) : optImg ? (
+              /* Image shown alongside text */
+              <span className="pepper-option-label pepper-option-label--img">
+                <img src={optImg} alt="" className="pepper-option-image-inline" />
+                {!previewMode ? (
+                  <motion.span variants={aVariants} initial="initial" animate="animate">
+                    {option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}
+                  </motion.span>
+                ) : (
+                  <span>{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</span>
+                )}
+              </span>
             ) : (
-              <span className="pepper-option-label">{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</span>
+              !previewMode ? (
+                <motion.span className="pepper-option-label" variants={aVariants} initial="initial" animate="animate">{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</motion.span>
+              ) : (
+                <span className="pepper-option-label">{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</span>
+              )
             )}
           </div>
         );
@@ -835,6 +885,15 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           Question {index + 1} of {visibleQuestions.length}
         </div>
 
+        {/* Question image — above position (default) */}
+        {question.questionImage && question.questionImagePosition !== 'below' && (
+          <img
+            src={question.questionImage}
+            alt=""
+            className="pepper-question-image"
+          />
+        )}
+
         {!previewMode ? (
           <motion.h2 className="pepper-question-text" variants={qVariants} initial="initial" animate="animate" exit="exit">
             {question.question}
@@ -862,6 +921,15 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
         {question.questionDescription && (
           <p className="pepper-question-desc">{question.questionDescription}</p>
+        )}
+
+        {/* Question image — below position */}
+        {question.questionImage && question.questionImagePosition === 'below' && (
+          <img
+            src={question.questionImage}
+            alt=""
+            className="pepper-question-image pepper-question-image--below"
+          />
         )}
 
         <div className="pepper-question-separator"></div>

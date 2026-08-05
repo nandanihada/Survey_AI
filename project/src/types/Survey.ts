@@ -19,6 +19,14 @@ export interface Question {
     maxLength?: number;
     pattern?: string;
   };
+  /** URL of an image shown with the question text */
+  questionImage?: string;
+  /** Whether the question image appears above or below the question text. Defaults to 'above'. */
+  questionImagePosition?: 'above' | 'below';
+  /** Map of option text → image URL for per-option images */
+  optionImages?: Record<string, string>;
+  /** How option images are displayed: alongside the label or replacing it entirely */
+  optionImageMode?: 'with-text' | 'replace-text';
 }
 
 export interface SurveyPage {

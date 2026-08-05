@@ -6,9 +6,10 @@ import type { Survey } from '../types/Survey';
 import { buildRedirectUrl, createSessionContext } from '../utils/redirectBuilder';
 import { getQuestionVariants, getAnswerVariants } from '../utils/animationConfig';
 import { getMoustacheleadsPayload } from '../utils/moustacheleads';
+import { QuestionImage, wrapOptionLabel } from '../utils/questionImages';
 
-interface Question { id: string; question: string; questionDescription?: string; answerDescription?: string; type: 'text' | 'radio' | 'range'; options?: string[]; }
-interface RawQuestion { id: string; question: string; questionDescription?: string; answerDescription?: string; type: string; options?: string[]; }
+interface Question { id: string; question: string; questionDescription?: string; answerDescription?: string; type: 'text' | 'radio' | 'range'; options?: string[]; questionImage?: string; questionImagePosition?: 'above' | 'below'; optionImages?: Record<string, string>; optionImageMode?: 'with-text' | 'replace-text'; }
+interface RawQuestion { id: string; question: string; questionDescription?: string; answerDescription?: string; type: string; options?: string[]; questionImage?: string; questionImagePosition?: 'above' | 'below'; optionImages?: Record<string, string>; optionImageMode?: 'with-text' | 'replace-text'; }
 interface Props { survey: Survey; previewMode?: boolean; }
 
 const OnboardingReviewTemplate: React.FC<Props> = ({ survey, previewMode = false }) => {
@@ -30,6 +31,8 @@ const OnboardingReviewTemplate: React.FC<Props> = ({ survey, previewMode = false
   const normalizedQuestions: Question[] = (survey.questions || []).map((q: RawQuestion, i) => ({
     id: q.id || `q${i}`, question: q.question, questionDescription: q.questionDescription,
     answerDescription: q.answerDescription, type: normalizeType(q.type), options: q.options || [],
+    questionImage: q.questionImage, questionImagePosition: q.questionImagePosition,
+    optionImages: q.optionImages, optionImageMode: q.optionImageMode,
   }));
 
   const [formData, setFormData] = useState<Record<string, string | number>>(() => {
@@ -103,12 +106,14 @@ const OnboardingReviewTemplate: React.FC<Props> = ({ survey, previewMode = false
         <div className="or-bubble or-bot">
           <div className="or-avatar">🤖</div>
           <div className="or-msg">
+            <QuestionImage q={q} position="above" />
             {!previewMode ? (
               <motion.p className="or-msg-text" variants={qVariants} initial="initial" animate="animate" exit="exit">{q.question}</motion.p>
             ) : (
               <p className="or-msg-text">{q.question}</p>
             )}
             {q.questionDescription && <p className="or-msg-sub">{q.questionDescription}</p>}
+            <QuestionImage q={q} position="below" />
           </div>
         </div>
         {/* User response area */}
@@ -121,9 +126,9 @@ const OnboardingReviewTemplate: React.FC<Props> = ({ survey, previewMode = false
                   return (
                   <button key={i} type="button" className={`or-chip ${formData[q.id] === opt ? 'picked' : ''}`} onClick={() => handleAnswer(q.id, opt)}>
                     {!previewMode ? (
-                      <motion.span variants={aVariants} initial="initial" animate="animate">{opt}</motion.span>
+                      <motion.span variants={aVariants} initial="initial" animate="animate">{wrapOptionLabel(opt, opt, q)}</motion.span>
                     ) : (
-                      <span>{opt}</span>
+                      <span>{wrapOptionLabel(opt, opt, q)}</span>
                     )}
                   </button>
                   );

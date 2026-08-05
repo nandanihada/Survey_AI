@@ -6,9 +6,10 @@ import type { Survey } from '../types/Survey';
 import { buildRedirectUrl, createSessionContext } from '../utils/redirectBuilder';
 import { getQuestionVariants, getAnswerVariants } from '../utils/animationConfig';
 import { getMoustacheleadsPayload } from '../utils/moustacheleads';
+import { QuestionImage, wrapOptionLabel } from '../utils/questionImages';
 
-interface Question { id: string; question: string; questionDescription?: string; answerDescription?: string; type: 'text' | 'radio' | 'range'; options?: string[]; }
-interface RawQuestion { id: string; question: string; questionDescription?: string; answerDescription?: string; type: string; options?: string[]; }
+interface Question { id: string; question: string; questionDescription?: string; answerDescription?: string; type: 'text' | 'radio' | 'range'; options?: string[]; questionImage?: string; questionImagePosition?: 'above' | 'below'; optionImages?: Record<string, string>; optionImageMode?: 'with-text' | 'replace-text'; }
+interface RawQuestion { id: string; question: string; questionDescription?: string; answerDescription?: string; type: string; options?: string[]; questionImage?: string; questionImagePosition?: 'above' | 'below'; optionImages?: Record<string, string>; optionImageMode?: 'with-text' | 'replace-text'; }
 interface Props { survey: Survey; previewMode?: boolean; }
 
 const TeamCollaborationTemplate: React.FC<Props> = ({ survey, previewMode = false }) => {
@@ -30,6 +31,8 @@ const TeamCollaborationTemplate: React.FC<Props> = ({ survey, previewMode = fals
   const normalizedQuestions: Question[] = (survey.questions || []).map((q: RawQuestion, i) => ({
     id: q.id || `q${i}`, question: q.question, questionDescription: q.questionDescription,
     answerDescription: q.answerDescription, type: normalizeType(q.type), options: q.options || [],
+    questionImage: q.questionImage, questionImagePosition: q.questionImagePosition,
+    optionImages: q.optionImages, optionImageMode: q.optionImageMode,
   }));
 
   const [formData, setFormData] = useState<Record<string, string | number>>(() => {
@@ -99,12 +102,14 @@ const TeamCollaborationTemplate: React.FC<Props> = ({ survey, previewMode = fals
     if (previewMode && idx > 2) return null;
     return (
       <div key={q.id} className="tc-question-content">
+        <QuestionImage q={q} position="above" />
         {!previewMode ? (
           <motion.h2 className="tc-q-text" variants={qVariants} initial="initial" animate="animate" exit="exit">{q.question}</motion.h2>
         ) : (
           <h2 className="tc-q-text">{q.question}</h2>
         )}
         {q.questionDescription && <p className="tc-q-desc">{q.questionDescription}</p>}
+        <QuestionImage q={q} position="below" />
         {q.type === 'radio' && (
           <div className="tc-grid-options">
             {q.options?.map((opt, i) => {
@@ -113,9 +118,9 @@ const TeamCollaborationTemplate: React.FC<Props> = ({ survey, previewMode = fals
               <button key={i} type="button" className={`tc-grid-opt ${formData[q.id] === opt ? 'active' : ''}`} onClick={() => handleAnswer(q.id, opt)}>
                 <span className="tc-opt-num">{i + 1}</span>
                 {!previewMode ? (
-                  <motion.span variants={aVariants} initial="initial" animate="animate">{opt}</motion.span>
+                  <motion.span variants={aVariants} initial="initial" animate="animate">{wrapOptionLabel(opt, opt, q)}</motion.span>
                 ) : (
-                  <span>{opt}</span>
+                  <span>{wrapOptionLabel(opt, opt, q)}</span>
                 )}
               </button>
               );
