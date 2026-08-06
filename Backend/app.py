@@ -74,6 +74,24 @@ from auth_middleware import requireAuth
 from smart_prompt_builder import build_generation_request
 from pii_stripper import strip_pii_from_prompt
 
+
+def find_survey(survey_id: str):
+    """Find a survey by short_id, id, or _id (including ObjectId). Covers all ID formats."""
+    survey = db["surveys"].find_one({"$or": [
+        {"short_id": survey_id},
+        {"id": survey_id},
+        {"_id": survey_id},
+    ]})
+    if survey:
+        return survey
+    # Last resort: try ObjectId
+    if len(survey_id) == 24:
+        try:
+            survey = db["surveys"].find_one({"_id": ObjectId(survey_id)})
+        except Exception:
+            pass
+    return survey
+
 from flask import g
 
 # Import enhanced survey handler
@@ -175,29 +193,7 @@ def get_survey_details(survey_id):
 
         print(f"DEBUG: is_short_id: {is_short_id}")
 
-        # Build query to find survey by ID
-
-        query = {"$or": [{"_id": survey_id}, {"id": survey_id}]}
-
-        print(f"DEBUG: query: {query}")
-
-        # If it's not a short ID, try to convert from UUID string to ObjectId if needed
-
-        if not is_short_id and len(survey_id) == 24:
-
-            try:
-
-                query["$or"].append({"_id": ObjectId(survey_id)})
-
-                print(f"DEBUG: Added ObjectId to query")
-
-            except:
-
-                pass  # Not a valid ObjectId, continue with original query
-
-        print(f"Looking for survey with query: {query}")
-
-        survey = db["surveys"].find_one(query)
+        survey = find_survey(survey_id)
 
         print(f"DEBUG: survey result: {survey}")
 
@@ -2444,35 +2440,11 @@ def submit_public_response(survey_id):
 
         is_short_id = is_valid_short_id(survey_id, 5)
 
-        # Build query to find survey by ID
-
-        query = {"$or": [{"_id": survey_id}, {"id": survey_id}]}
-
-        # If it's not a short ID, try to convert from UUID string to ObjectId if needed
-
-        if not is_short_id and len(survey_id) == 24:
-
-            try:
-
-                query["$or"].append({"_id": ObjectId(survey_id)})
-
-            except:
-
-                pass  # Not a valid ObjectId, continue with original query
-
-        print(f"Looking for survey with query: {query}")
-
-        survey = db["surveys"].find_one(query)
+        survey = find_survey(survey_id)
 
         if not survey:
 
             print(f"ERROR: Survey {survey_id} not found in database")
-
-            # Let's see what surveys exist
-
-            all_surveys = list(db["surveys"].find({}, {"_id": 1, "id": 1, "prompt": 1}))
-
-            print(f"Available surveys: {all_surveys}")
 
             return jsonify({"error": "Survey not found"}), 404
 
@@ -3025,35 +2997,11 @@ def view_survey(survey_id):
 
         is_short_id = is_valid_short_id(survey_id, 5)
 
-        # Build query to find survey by ID
-
-        query = {"$or": [{"_id": survey_id}, {"id": survey_id}]}
-
-        # If it's not a short ID, try to convert from UUID string to ObjectId if needed
-
-        if not is_short_id and len(survey_id) == 24:
-
-            try:
-
-                query["$or"].append({"_id": ObjectId(survey_id)})
-
-            except:
-
-                pass  # Not a valid ObjectId, continue with original query
-
-        print(f"Looking for survey with query: {query}")
-
-        survey = db["surveys"].find_one(query)
+        survey = find_survey(survey_id)
 
         if not survey:
 
             print(f"ERROR: Survey {survey_id} not found in database")
-
-            # Let's see what surveys exist
-
-            all_surveys = list(db["surveys"].find({}, {"_id": 1, "id": 1, "prompt": 1}))
-
-            print(f"Available surveys: {all_surveys}")
 
             return jsonify({"error": "Survey not found"}), 404
 
@@ -3370,27 +3318,17 @@ def edit_survey(survey_id):
 
         is_short_id = is_valid_short_id(survey_id, 5)
 
-        # Build query to find survey by ID
+        survey = find_survey(survey_id)
 
-        query = {"$or": [{"_id": survey_id}, {"id": survey_id}]}
+        if not survey:
 
-        # If it's not a short ID, try to convert from UUID string to ObjectId if needed
+            return jsonify({"error": "Survey not found"}), 404
 
-        if not is_short_id and len(survey_id) == 24:
-
-            try:
-
-                query["$or"].append({"_id": ObjectId(survey_id)})
-
-            except:
-
-                pass  # Not a valid ObjectId, continue with original query
-
-        print(f"Update query: {query}")
+        actual_id = survey["_id"]
 
         print(f"Update data: {update_data}")
 
-        result = db["surveys"].update_one(query, {"$set": update_data})
+        result = db["surveys"].update_one({"_id": actual_id}, {"$set": update_data})
 
         print(
             f"Update result: matched={result.matched_count}, modified={result.modified_count}"
@@ -3398,15 +3336,7 @@ def edit_survey(survey_id):
 
         if result.matched_count == 0:
 
-            # Try one more time with just the ID fields in case of any query issues
-
-            alt_query = {"$or": [{"_id": survey_id}, {"id": survey_id}]}
-
-            result = db["surveys"].update_one(alt_query, {"$set": update_data})
-
-            if result.matched_count == 0:
-
-                return jsonify({"error": "Survey not found"}), 404
+            return jsonify({"error": "Survey not found"}), 404
 
         return jsonify(
             {
