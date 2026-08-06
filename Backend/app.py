@@ -5659,16 +5659,19 @@ def serve_icons(filename):
 @app.errorhandler(404)
 def catch_all(e):
     """Serve index.html for all unmatched routes (SPA fallback)"""
-    # Only serve index.html for non-API routes
-    if request.path.startswith('/api/') or request.path.startswith('/admin/') or request.path.startswith('/survey/') or request.path.startswith('/postback-handler/'):
+    # Only block API/backend routes — everything else gets the SPA
+    if (request.path.startswith('/api/')
+            or request.path.startswith('/admin/')
+            or request.path.startswith('/postback-handler/')):
         return jsonify({"error": "Not found"}), 404
-    
+
     index_path = os.path.join(DIST_DIR, 'index.html')
     if os.path.exists(index_path):
         return send_from_directory(DIST_DIR, 'index.html')
     return jsonify({"error": "Not found"}), 404
 
 @app.route('/s/<path:rest>')
+@app.route('/survey/<path:survey_path>')
 @app.route('/login')
 @app.route('/signup')
 @app.route('/dashboard')
