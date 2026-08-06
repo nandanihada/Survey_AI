@@ -169,6 +169,15 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
   const [saving, setSaving] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [message, setMessage] = useState<{type: 'success'|'error'|'info', text: string} | null>(null);
+  // Track if component is still mounted before setting any message
+  const isMountedRef = React.useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
+  const safeSetMessage = React.useCallback((msg: {type: 'success'|'error'|'info', text: string} | null) => {
+    if (isMountedRef.current) setMessage(msg);
+  }, []);
   const [hasChanges, setHasChanges] = useState(false);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [activeConfigTab, setActiveConfigTab] = useState<Record<number, 'redirect' | 'chain' | 'end' | 'passfail'>>({});
@@ -251,10 +260,13 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
           layers: r.layers || [],
         }));
         setRules(rulesWithRedirect);
+      } else {
+        // Non-ok response — show error but don't crash
+        console.error('fetchRules non-ok:', response.status);
       }
     } catch (error) {
+      // Only log — don't show a red error banner on initial load
       console.error('Failed to fetch rules:', error);
-      setMessage({ type: 'error', text: 'Network error' });
     } finally {
       setLoading(false);
     }
@@ -263,6 +275,11 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
   useEffect(() => {
     if (surveyId) fetchRules();
   }, [surveyId, fetchRules]);
+
+  // Clear any stale message whenever surveyId changes (new survey opened)
+  useEffect(() => {
+    safeSetMessage(null);
+  }, [surveyId, safeSetMessage]);
 
   // Auto-expand and scroll to the focused question row after rules load
   useEffect(() => {
@@ -291,14 +308,14 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
       });
       
       if (response.ok) {
-        setMessage({ type: 'success', text: 'Branching rules saved!' });
+        safeSetMessage({ type: 'success', text: 'Branching rules saved!' });
         setHasChanges(false);
-        onRulesSaved?.();  // notify parent to refresh flow diagram
+        onRulesSaved?.();
       } else {
-        setMessage({ type: 'error', text: 'Failed to save' });
+        safeSetMessage({ type: 'error', text: 'Failed to save' });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Network error' });
+      safeSetMessage({ type: 'error', text: 'Network error' });
     } finally {
       setSaving(false);
     }
@@ -351,12 +368,12 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
         }));
         setRules(rulesWithRedirect);
         setHasChanges(true);
-        setMessage({ type: 'success', text: 'AI suggestions applied! Review and save.' });
+        safeSetMessage({ type: 'success', text: 'AI suggestions applied! Review and save.' });
       } else {
-        setMessage({ type: 'error', text: 'AI suggestion failed' });
+        safeSetMessage({ type: 'error', text: 'AI suggestion failed' });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Network error' });
+      safeSetMessage({ type: 'error', text: 'Network error' });
     } finally {
       setAiLoading(false);
     }
@@ -438,10 +455,10 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
   // Clear message after delay
   useEffect(() => {
     if (message) {
-      const timer = setTimeout(() => setMessage(null), 4000);
+      const timer = setTimeout(() => safeSetMessage(null), 4000);
       return () => clearTimeout(timer);
     }
-  }, [message]);
+  }, [message, safeSetMessage]);
 
   if (loading) {
     return (
@@ -1167,14 +1184,21 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
                                             </div>
                                             {isOpen&&(
                                               <div className="ml-layer-fields">
-                                                {currentAnswerOptions.length>0&&(
+                                                {/* Condition selector only on the FIRST layer.
+                                                    Layers 2+ always run after the previous layer — no answer check needed. */}
+                                                {li === 0 && currentAnswerOptions.length > 0 && (
                                                   <div className="field-row">
-                                                    <label>Show when answer is:</label>
+                                                    <label>Trigger when answer is:</label>
                                                     <select className="sbr-select" value={layer.condition||'always'} onChange={(e)=>{const u=[...layers];u[li]={...u[li],condition:e.target.value};updateRule(index,'layers',u);}}>
                                                       <option value="always">Any answer</option>
                                                       {currentAnswerOptions.map(opt=><option key={opt} value={opt}>Only if "{opt}"</option>)}
                                                     </select>
                                                   </div>
+                                                )}
+                                                {li > 0 && (
+                                                  <p style={{margin:'0 0 8px',fontSize:11,color:'#6366f1',background:'#eef2ff',padding:'6px 10px',borderRadius:6}}>
+                                                    ↳ Runs automatically after the previous layer completes
+                                                  </p>
                                                 )}
                                                 {layer.type==='result_page'&&(<>
                                                   <div className="field-row"><label>Title</label><input type="text" className="url-input" value={layer.title||''} onChange={(e)=>{const u=[...layers];u[li]={...u[li],title:e.target.value};updateRule(index,'layers',u);}} placeholder={layer.variant==='pass'?'You qualify!':'Not this time'}/></div>

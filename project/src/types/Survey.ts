@@ -13,6 +13,10 @@ export interface Question {
   options?: string[];
   required?: boolean;
   answerStyle?: string;
+  /** Allow selecting multiple options (checkbox mode) for multiple_choice questions */
+  allowMultiple?: boolean;
+  /** Delay in milliseconds before this question appears after the previous one */
+  questionDelay?: number;
   show_if?: ShowIfCondition | null;
   validation?: {
     minLength?: number;

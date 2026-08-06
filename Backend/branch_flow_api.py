@@ -33,6 +33,24 @@ ALLOWED_ORIGINS = [
 RESUME_TOKEN_SECRET = "branch_flow_resume_secret_key_2024"
 
 
+def find_survey_by_any_id(survey_id: str):
+    """Find a survey by short_id, id field, or ObjectId — covers all ID formats."""
+    # Try string fields first (fastest, most common)
+    survey = db.surveys.find_one({"$or": [
+        {"short_id": survey_id},
+        {"id": survey_id},
+        {"_id": survey_id},
+    ]})
+    if survey:
+        return survey
+    # Try ObjectId as last resort
+    try:
+        survey = db.surveys.find_one({"_id": ObjectId(survey_id)})
+    except Exception:
+        pass
+    return survey
+
+
 # ═══════════════════════════════════════════════════════
 #  PROMPT-BASED BRANCHING EXTRACTION
 # ═══════════════════════════════════════════════════════
@@ -469,7 +487,7 @@ def get_branching_rules(survey_id):
         return '', 200
     
     try:
-        survey = db.surveys.find_one({"$or": [{"_id": survey_id}, {"id": survey_id}]})
+        survey = find_survey_by_any_id(survey_id)
         if not survey:
             return jsonify({"error": "Survey not found"}), 404
         
@@ -592,10 +610,12 @@ def update_branching_rules(survey_id):
         data = request.get_json()
         rules = data.get("rules", [])
         
-        survey = db.surveys.find_one({"$or": [{"_id": survey_id}, {"id": survey_id}]})
+        survey = find_survey_by_any_id(survey_id)
         if not survey:
             return jsonify({"error": "Survey not found"}), 404
         
+        # Use the real _id for all MongoDB operations
+        actual_id = survey["_id"]
         questions = survey.get("questions", [])
         
         # Apply rules to questions
@@ -673,18 +693,18 @@ def update_branching_rules(survey_id):
                 else:
                     questions[q_index]["layers"] = []
         
-        # Update survey
+        # Update survey using the real _id (guarantees correct document is updated)
         db.surveys.update_one(
-            {"$or": [{"_id": survey_id}, {"id": survey_id}]},
+            {"_id": actual_id},
             {"$set": {"questions": questions, "updated_at": datetime.now(timezone.utc).isoformat()}}
         )
-        
+
         # Regenerate ONLY the simple flow (AI flow is untouched)
         try:
             survey["questions"] = questions
             flow_config = generate_flow_from_survey(survey, flow_type="simple")
             db.branch_flow_configs.replace_one(
-                {"survey_id": survey_id, "flow_type": "simple"},
+                {"survey_id": str(actual_id)},
                 flow_config,
                 upsert=True
             )

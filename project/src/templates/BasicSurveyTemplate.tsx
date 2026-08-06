@@ -26,6 +26,8 @@ interface Question {
   type: 'text' | 'radio' | 'range';
   options?: string[];
   answerStyle?: string;
+  allowMultiple?: boolean;
+  questionDelay?: number;
   show_if?: ShowIfCondition | null;
   questionImage?: string;
   questionImagePosition?: 'above' | 'below';
@@ -40,6 +42,8 @@ interface RawQuestion {
   answerDescription?: string;
   type: string;
   options?: string[];
+  allowMultiple?: boolean;
+  questionDelay?: number;
   show_if?: ShowIfCondition | null;
   questionImage?: string;
   questionImagePosition?: 'above' | 'below';
@@ -101,6 +105,8 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     type: normalizeType(q.type),
     options: q.options || [],
     answerStyle: (q as any).answerStyle || undefined,
+    allowMultiple: q.allowMultiple || false,
+    questionDelay: q.questionDelay || 0,
     show_if: q.show_if || null,
     questionImage: q.questionImage,
     questionImagePosition: q.questionImagePosition,
@@ -127,6 +133,8 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const [submitted, setSubmitted] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [transitionCountdown, setTransitionCountdown] = useState(0);
   // Chain survey state — shown mid-survey or post-completion
   const [chainSurveyPrompt, setChainSurveyPrompt] = useState<{
     url: string;
@@ -354,17 +362,30 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     }
   }, [survey.id, apiBaseUrl, formData, currentQuestionIndex, resumeSessionId, clickId, trackClickInteraction]);
 
-  const handleAnswer = (id: string, value: string | number) => {
-    setFormData(prev => ({ ...prev, [id]: value }));
+  const handleAnswer = (id: string, value: string | number, isMultiple?: boolean) => {
+    if (isMultiple) {
+      // Toggle the option in a comma-separated string
+      setFormData(prev => {
+        const current = prev[id] ? String(prev[id]).split(',') : [];
+        const strVal = String(value);
+        const next = current.includes(strVal)
+          ? current.filter(v => v !== strVal)
+          : [...current, strVal];
+        return { ...prev, [id]: next.join(',') };
+      });
+    } else {
+      setFormData(prev => ({ ...prev, [id]: value }));
+    }
     trackClickInteraction('answer_selected', { questionId: id, answer: value });
-    // Email triggers are now backend-only - no frontend checking needed
   };
 
   const currentQuestion = visibleQuestions[currentQuestionIndex];
   const isCurrentAnswered = currentQuestion
-    ? currentQuestion.type === 'range' 
+    ? currentQuestion.type === 'range'
       ? formData[currentQuestion.id] !== undefined && formData[currentQuestion.id] !== ''
-      : formData[currentQuestion.id] !== '' && formData[currentQuestion.id] !== 0
+      : currentQuestion.allowMultiple
+        ? !!(formData[currentQuestion.id] && String(formData[currentQuestion.id]).length > 0)
+        : formData[currentQuestion.id] !== '' && formData[currentQuestion.id] !== 0
     : false;
 
   // Check if current question has a redirect configured
@@ -497,59 +518,78 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   }, [survey.questions]);
 
   // ── Check if current question has a pass/fail page configured ─────────────
+  // Use a ref so processNextLayer never has stale closure over itself
+  const processNextLayerRef = React.useRef<(queue: typeof layerQueue) => void>(() => {});
+
   const processNextLayer = useCallback((queue: typeof layerQueue) => {
-    if (queue.length === 0) {
-      setActiveLayer(null);
-      layerQueueRef.current = [];
-      return;
-    }
-    const [next, ...rest] = queue;
-    layerQueueRef.current = rest;  // always keep ref in sync
-
-    // end_survey layer — terminate immediately
-    if (next.type === 'end_survey') {
-      setActiveLayer(null);
-      setLayerQueue([]);
-      layerQueueRef.current = [];
-      if (formRef.current) {
-        formRef.current.requestSubmit();
-      }
-      return;
-    }
-
-    // chain_survey layer — direct redirect or show prompt
-    if (next.type === 'chain_survey') {
-      setActiveLayer(null);
-      const url = next.survey_url || '';
-      if (!url) {
-        processNextLayer(rest);
-        return;
-      }
-      if (next.chain_mode === 'direct') {
-        window.location.href = url;
-        return;
-      }
-      setChainSurveyPrompt({
-        url,
-        mode: 'ask',
-        message: next.chain_message || 'Another survey is waiting for you!',
-        yesLabel: next.chain_yes_label || 'Continue',
-        noLabel: next.chain_no_label || 'No thanks',
-      });
-      return;
-    }
-
-    setActiveLayer(next);
-    setLayerQueue(rest);
-
-    if (next.type === 'spinner') {
-      const duration = (next.duration ?? 3) * 1000;
-      layerTimerRef.current = setTimeout(() => {
-        setActiveLayer(null);
-        processNextLayer(rest);
-      }, duration);
-    }
+    processNextLayerRef.current(queue);
   }, []);
+
+  // Define the actual implementation — updated whenever state setters change
+  // (state setters are stable, so this effect runs once)
+  useEffect(() => {
+    processNextLayerRef.current = (queue: typeof layerQueue) => {
+      if (queue.length === 0) {
+        setActiveLayer(null);
+        layerQueueRef.current = [];
+        setLayerQueue([]);
+        return;
+      }
+      const [next, ...rest] = queue;
+      layerQueueRef.current = rest;
+
+      // end_survey layer — terminate immediately
+      if (next.type === 'end_survey') {
+        setActiveLayer(null);
+        setLayerQueue([]);
+        layerQueueRef.current = [];
+        if (formRef.current) {
+          formRef.current.requestSubmit();
+        }
+        return;
+      }
+
+      // chain_survey layer — direct redirect or show prompt
+      if (next.type === 'chain_survey') {
+        setActiveLayer(null);
+        setLayerQueue(rest);
+        layerQueueRef.current = rest;
+        const url = next.survey_url || '';
+        if (!url) {
+          processNextLayerRef.current(rest);
+          return;
+        }
+        if (next.chain_mode === 'direct') {
+          window.location.href = url;
+          return;
+        }
+        setChainSurveyPrompt({
+          url,
+          mode: 'ask',
+          message: next.chain_message || 'Another survey is waiting for you!',
+          yesLabel: next.chain_yes_label || 'Continue',
+          noLabel: next.chain_no_label || 'No thanks',
+        });
+        return;
+      }
+
+      // result_page or spinner — show it
+      setActiveLayer(next);
+      setLayerQueue(rest);
+      layerQueueRef.current = rest;
+
+      if (next.type === 'spinner') {
+        const duration = (next.duration ?? 3) * 1000;
+        // Clear any existing timer before setting a new one
+        if (layerTimerRef.current) clearTimeout(layerTimerRef.current);
+        layerTimerRef.current = setTimeout(() => {
+          layerTimerRef.current = null;
+          setActiveLayer(null);
+          processNextLayerRef.current(rest);
+        }, duration);
+      }
+    };
+  }); // No deps — runs every render to always stay fresh
 
   const checkLayers = useCallback((questionId: string, answer: string | number): boolean => {
     const originalQuestion = (survey.questions || []).find((q: any) => q.id === questionId);
@@ -557,13 +597,23 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     if (layers.length === 0) return false;
 
     const answerStr = String(answer).toLowerCase();
-    const matchedLayers = layers.filter(layer => {
-      const cond = layer.condition || 'always';
-      return cond === 'always' || cond.toLowerCase() === answerStr;
-    });
 
-    if (matchedLayers.length === 0) return false;
+    // Only the FIRST layer checks the answer condition.
+    // All subsequent layers run automatically in sequence regardless of answer.
+    const firstLayer = layers[0];
+    const firstCond = (firstLayer?.condition || 'always').toLowerCase();
+    const firstMatches = firstCond === 'always' || firstCond === answerStr;
 
+    if (!firstMatches) return false;
+
+    // All layers run — but strip condition from layers 2+ so runtime never re-checks
+    const matchedLayers = layers.map((layer, i) =>
+      i === 0 ? layer : { ...layer, condition: 'always' }
+    );
+
+    // Sync the ref before processing so it's always fresh
+    layerQueueRef.current = matchedLayers;
+    setLayerQueue(matchedLayers);
     processNextLayer(matchedLayers);
     return true;
   }, [survey.questions, processNextLayer]);
@@ -616,13 +666,39 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
     // Normal navigation
     if (currentQuestionIndex < visibleQuestions.length - 1) {
-      setQuestionStartTime(Date.now());
-      setCurrentQuestionIndex(prev => prev + 1);
+      const nextQ = visibleQuestions[currentQuestionIndex + 1];
+      const delay = (nextQ as any)?.questionDelay || 0;
+
       trackClickInteraction('question_navigation', {
         action: 'next',
         from_question: currentQuestionIndex + 1,
         to_question: currentQuestionIndex + 2
       });
+
+      if (delay > 0) {
+        // Lock navigation immediately so user can't double-click
+        setIsTransitioning(true);
+        setTransitionCountdown(Math.ceil(delay / 1000));
+
+        // Tick the countdown every second
+        let remaining = Math.ceil(delay / 1000);
+        const ticker = setInterval(() => {
+          remaining -= 1;
+          setTransitionCountdown(remaining);
+          if (remaining <= 0) clearInterval(ticker);
+        }, 1000);
+
+        setTimeout(() => {
+          clearInterval(ticker);
+          setIsTransitioning(false);
+          setTransitionCountdown(0);
+          setQuestionStartTime(Date.now());
+          setCurrentQuestionIndex(prev => prev + 1);
+        }, delay);
+      } else {
+        setQuestionStartTime(Date.now());
+        setCurrentQuestionIndex(prev => prev + 1);
+      }
     }
   }, [currentQuestionIndex, visibleQuestions, isCurrentAnswered, questionStartTime, formData, checkQuestionRedirect, checkChainSurvey, checkLayers, processNextLayer, trackClickInteraction, survey.questions]);
 
@@ -794,56 +870,90 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
   const getStyleForQuestion = (question: Question) => question.answerStyle || answerStyle;
 
-  const renderRadioOptions = (question: Question) => (
-    <div className={`pepper-options pepper-style-${getStyleForQuestion(question)}`}>
-      {question.options?.map((option, i) => {
-        const aVariants = getAnswerVariants(survey.animation, i);
-        const optImg = question.optionImages?.[option];
-        const replaceText = question.optionImageMode === 'replace-text';
-        return (
-          <div
-            key={i}
-            className={`pepper-option ${formData[question.id] === option ? 'selected' : ''} ${optImg && replaceText ? 'pepper-option--image-only' : ''}`}
-            onClick={() => handleAnswer(question.id, option)}
-          >
-            <span className="pepper-option-key">{OPTION_KEYS[i] || i + 1}</span>
-            {optImg && replaceText ? (
-              /* Image replaces the text label entirely */
-              <img src={optImg} alt={option} className="pepper-option-image-replace" />
-            ) : optImg ? (
-              /* Image shown alongside text */
-              <span className="pepper-option-label pepper-option-label--img">
-                <img src={optImg} alt="" className="pepper-option-image-inline" />
-                {!previewMode ? (
-                  <motion.span variants={aVariants} initial="initial" animate="animate">
-                    {option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}
-                  </motion.span>
-                ) : (
-                  <span>{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</span>
-                )}
-              </span>
-            ) : (
-              !previewMode ? (
-                <motion.span className="pepper-option-label" variants={aVariants} initial="initial" animate="animate">{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</motion.span>
-              ) : (
-                <span className="pepper-option-label">{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</span>
-              )
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
+  const renderRadioOptions = (question: Question) => {
+    const isMultiple = question.allowMultiple;
+    const selectedValues = isMultiple && formData[question.id]
+      ? String(formData[question.id]).split(',')
+      : [];
 
-  const renderTextInput = (question: Question) => (
-    <textarea
-      value={formData[question.id] as string}
-      onChange={(e) => handleAnswer(question.id, e.target.value)}
-      placeholder="Type your answer here..."
-      className={`pepper-textarea pepper-textarea-${getStyleForQuestion(question)}`}
-      rows={4}
-    />
-  );
+    return (
+      <div className={`pepper-options pepper-style-${getStyleForQuestion(question)} ${isMultiple ? 'pepper-options--multi' : ''}`}>
+        {question.options?.map((option, i) => {
+          const aVariants = getAnswerVariants(survey.animation, i);
+          const optImg = question.optionImages?.[option];
+          const replaceText = question.optionImageMode === 'replace-text';
+          const isSelected = isMultiple
+            ? selectedValues.includes(option)
+            : formData[question.id] === option;
+
+          return (
+            <div
+              key={i}
+              className={`pepper-option ${isSelected ? 'selected' : ''} ${isMultiple ? 'pepper-option--checkbox' : ''} ${optImg && replaceText ? 'pepper-option--image-only' : ''}`}
+              onClick={() => handleAnswer(question.id, option, isMultiple)}
+            >
+              {isMultiple ? (
+                <span className={`pepper-checkbox ${isSelected ? 'pepper-checkbox--checked' : ''}`}>
+                  {isSelected && (
+                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                      <path d="M1 4L3.5 6.5L9 1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                </span>
+              ) : (
+                <span className="pepper-option-key">{OPTION_KEYS[i] || i + 1}</span>
+              )}
+              {optImg && replaceText ? (
+                <img src={optImg} alt={option} className="pepper-option-image-replace" />
+              ) : optImg ? (
+                <span className="pepper-option-label pepper-option-label--img">
+                  <img src={optImg} alt="" className="pepper-option-image-inline" />
+                  {!previewMode ? (
+                    <motion.span variants={aVariants} initial="initial" animate="animate">
+                      {option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}
+                    </motion.span>
+                  ) : (
+                    <span>{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</span>
+                  )}
+                </span>
+              ) : (
+                !previewMode ? (
+                  <motion.span className="pepper-option-label" variants={aVariants} initial="initial" animate="animate">{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</motion.span>
+                ) : (
+                  <span className="pepper-option-label">{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</span>
+                )
+              )}
+            </div>
+          );
+        })}
+        {isMultiple && (
+          <p className="pepper-multi-hint">Select all that apply</p>
+        )}
+      </div>
+    );
+  };
+
+  const renderTextInput = (question: Question) => {
+    const style = getStyleForQuestion(question);
+    return (
+      <textarea
+        value={formData[question.id] as string || ''}
+        onChange={(e) => {
+          handleAnswer(question.id, e.target.value);
+          // Auto-grow
+          e.target.style.height = 'auto';
+          e.target.style.height = `${e.target.scrollHeight}px`;
+        }}
+        onFocus={(e) => {
+          e.target.style.height = 'auto';
+          e.target.style.height = `${e.target.scrollHeight}px`;
+        }}
+        placeholder="Type your answer here..."
+        className={`pepper-textarea pepper-textarea-${style}`}
+        rows={1}
+      />
+    );
+  };
 
   const renderScale = (question: Question) => {
     // Determine scale range: use 10 for rating questions
@@ -1114,8 +1224,9 @@ const BasicSurveyTemplate: React.FC<Props> = ({
                   type="button"
                   className="pepper-btn pepper-btn-back"
                   onClick={handlePrev}
+                  disabled={isTransitioning}
                 >
-                  <span className="arrow">?</span> Back
+                  <span className="arrow">←</span> Back
                 </button>
               ) : (
                 <div />
@@ -1126,15 +1237,22 @@ const BasicSurveyTemplate: React.FC<Props> = ({
                   type="button"
                   className="pepper-btn pepper-btn-next"
                   onClick={handleNext}
-                  disabled={!isCurrentAnswered}
+                  disabled={!isCurrentAnswered || isTransitioning}
                 >
-                  Next <span className="arrow">?</span>
+                  {isTransitioning ? (
+                    <>
+                      <span className="pepper-transition-spinner" />
+                      {transitionCountdown > 0 ? `${transitionCountdown}s` : '…'}
+                    </>
+                  ) : (
+                    <>Next <span className="arrow">→</span></>
+                  )}
                 </button>
               ) : (
                 <button
                   type="submit"
                   className="pepper-btn pepper-btn-submit"
-                  disabled={!isCurrentAnswered}
+                  disabled={!isCurrentAnswered || isTransitioning}
                 >
                   Submit
                 </button>
@@ -1330,7 +1448,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
                 transition={{ delay: 0.58 }}
                 whileHover={{ scale: 1.03, y: -2 }}
                 whileTap={{ scale: 0.97 }}
-                onClick={() => { setActiveLayer(null); processNextLayer(layerQueue); }}
+                onClick={() => { setActiveLayer(null); processNextLayer(layerQueueRef.current); }}
                 style={{
                   width: '100%', padding: '16px 24px', borderRadius: 14, border: 'none',
                   background: activeLayer.variant === 'pass'

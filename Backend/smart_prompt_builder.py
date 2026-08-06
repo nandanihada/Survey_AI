@@ -190,10 +190,15 @@ def build_system_prompt(
     final_question_count: int,
     audience: str = None,
     data_collection: str = "anonymous",
+    raw_prompt: str = "",
 ) -> str:
     """
     Builds the complete AI system prompt with all rules.
     """
+    # Check if the original prompt is detailed enough to warrant descriptions
+    prompt_word_count = len(raw_prompt.split()) if raw_prompt else 0
+    generate_descriptions = prompt_word_count > 50
+
     user_questions = parsed["user_questions"] + parsed["image_questions"]
     user_q_count = len(user_questions)
     questions_to_generate = max(0, final_question_count - user_q_count)
@@ -279,6 +284,23 @@ YOU MUST:
     else:
         tone_instruction = tone_map.get(parsed["tone"], tone_map["professional"])
 
+    # Description generation rule (>50 word prompt)
+    description_instruction = ""
+    if generate_descriptions:
+        description_instruction = f"""
+QUESTION DESCRIPTIONS — REQUIRED (prompt was {prompt_word_count} words):
+Since the user provided a detailed prompt (more than 50 words), you MUST populate the "questionDescription" field for EVERY question.
+- Use the extra context from the prompt to write a 1–2 sentence description that clarifies WHY this question is being asked or provides helpful context to the respondent.
+- The description should feel natural and add value — do NOT just rephrase the question.
+- Keep each description under 40 words.
+- NEVER leave "questionDescription" as null or empty when the prompt is detailed.
+"""
+    else:
+        description_instruction = """
+QUESTION DESCRIPTIONS:
+The user's prompt was brief. Set "questionDescription" to null for all questions unless a specific question clearly benefits from a short clarification.
+"""
+
     # Question type distribution
     type_instruction = ""
     if parsed["mentioned_types"]:
@@ -359,6 +381,7 @@ TONE: {tone_instruction}
 {language_instruction}
 {audience_context}
 {data_collection_context}
+{description_instruction}
 {type_instruction}
 {user_q_section}
 
@@ -431,7 +454,9 @@ Each question object:
 {{
   "id": "q1",
   "text": "Question text here",
+  "questionDescription": "A brief 1–2 sentence description providing context or clarification for the respondent. Set to null if not needed.",
   "type": "multiple_choice" | "rating" | "yes_no" | "short_answer" | "scale",
+  "allowMultiple": false,  // set to true ONLY for multiple_choice questions where selecting multiple answers makes sense (e.g. "Which of the following apply?", "Select all that apply", "What are your top concerns?")
   "options": ["A", "B", "C", "D"],  // only for multiple_choice and yes_no
   "required": true,
   "show_if": null | {{"depends_on": "q3", "condition": "equals", "value": "Yes"}}
@@ -491,7 +516,7 @@ def build_generation_request(
     final_count = calculate_question_count(parsed, question_count_from_dropdown)
 
     # Build the system prompt
-    system_prompt = build_system_prompt(parsed, final_count, audience, data_collection)
+    system_prompt = build_system_prompt(parsed, final_count, audience, data_collection, raw_prompt=prompt)
 
     return {
         "system_prompt": system_prompt,

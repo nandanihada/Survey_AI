@@ -338,27 +338,45 @@
 /* ── Textarea ── */
 .pepper-textarea {
   width: 100%;
-  min-height: 120px;
-  padding: 16px;
-  border: 1px solid var(--pepper-border);
-  border-radius: 10px;
+  min-height: 36px;
+  max-height: 300px;
+  padding: 8px 0;
+  border: none;
+  border-bottom: 2px solid var(--pepper-border);
+  border-radius: 0;
   font-family: 'Outfit', sans-serif;
   font-size: 15px;
   color: var(--pepper-text);
-  background: var(--pepper-paper-inner);
-  resize: vertical;
-  transition: all 0.3s ease;
+  background: transparent;
+  resize: none;
+  transition: border-color 0.25s ease;
   line-height: 1.6;
-  box-shadow: inset 0 1px 3px rgba(139, 90, 43, 0.06);
+  box-shadow: none;
+  overflow: hidden;
 }
 
 .pepper-textarea:focus {
   outline: none;
-  border-color: var(--pepper-red);
-  box-shadow: 0 0 0 3px rgba(196, 120, 92, 0.1);
+  border-bottom-color: var(--pepper-red);
 }
 
-.pepper-textarea::placeholder { color: #7a6e65; }
+.pepper-textarea::placeholder { color: #b0a89f; }
+
+/* Classic box style textarea override */
+.pepper-textarea-classic {
+  min-height: 100px;
+  padding: 14px 16px;
+  border: 1px solid var(--pepper-border) !important;
+  border-radius: 10px !important;
+  background: var(--pepper-paper-inner) !important;
+  resize: vertical;
+  overflow: auto;
+  box-shadow: inset 0 1px 3px rgba(139, 90, 43, 0.06) !important;
+}
+.pepper-textarea-classic:focus {
+  border-color: var(--pepper-red) !important;
+  box-shadow: 0 0 0 3px rgba(196, 120, 92, 0.1) !important;
+}
 
 /* ── Scale ── */
 .pepper-scale { padding: 16px 0; }
@@ -477,6 +495,22 @@
 }
 
 .pepper-btn-next:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+/* Transition spinner inside Next button */
+.pepper-transition-spinner {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: pepper-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes pepper-spin {
+  to { transform: rotate(360deg); }
+}
 
 .pepper-btn-submit {
   padding: 16px 40px;
@@ -706,9 +740,52 @@
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
+  min-height: 36px !important;
+  padding: 8px 0 !important;
+  resize: none;
 }
 .pepper-textarea-underline:focus {
   border-bottom-color: var(--pepper-red) !important;
+}
+
+/* ── Multi-select (checkbox) mode ── */
+.pepper-options--multi { gap: 6px; }
+
+.pepper-option--checkbox {
+  user-select: none;
+}
+
+.pepper-checkbox {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  border: 2px solid var(--pepper-border);
+  background: var(--pepper-cream);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  color: white;
+}
+
+.pepper-checkbox--checked {
+  background: var(--pepper-red);
+  border-color: var(--pepper-red);
+}
+
+.pepper-option--checkbox.selected .pepper-checkbox {
+  background: var(--pepper-red);
+  border-color: var(--pepper-red);
+  box-shadow: 0 2px 6px rgba(196, 120, 92, 0.3);
+}
+
+.pepper-multi-hint {
+  font-size: 11px;
+  color: var(--pepper-text-lighter);
+  margin-top: 4px;
+  padding-left: 2px;
+  font-style: italic;
 }
 
 /* 3. Card — distinct floating cards with colored left border and depth */

@@ -2052,6 +2052,8 @@ def generate_survey():
                                     "options": q.get("options", []),
                                     "required": q.get("required", True),
                                     "show_if": q.get("show_if", None),
+                                    "questionDescription": q.get("questionDescription") or None,
+                                    "allowMultiple": q.get("allowMultiple", False),
                                 }
                                 if question_obj["question"]:
                                     questions.append(question_obj)

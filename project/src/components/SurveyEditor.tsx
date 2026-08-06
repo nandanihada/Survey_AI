@@ -2176,6 +2176,36 @@ const SurveyEditor: React.FC = () => {
                 </div>
               </div>
 
+              {/* Multi-select toggle — only for multiple_choice */}
+              {activeQ.type === 'multiple_choice' && (
+                <div className="pt-3 border-t border-gray-100">
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Multiple Selection</span>
+                      <p className="text-[10px] text-gray-400 mt-0.5">Allow selecting more than one answer</p>
+                    </div>
+                    <div
+                      onClick={() => {
+                        const updated = { ...survey };
+                        updated.questions = [...updated.questions];
+                        updated.questions[activeQuestionIndex] = {
+                          ...updated.questions[activeQuestionIndex],
+                          allowMultiple: !(activeQ as any).allowMultiple
+                        };
+                        setSurvey(updated);
+                      }}
+                      className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer shrink-0 ${
+                        (activeQ as any).allowMultiple ? 'bg-red-500' : 'bg-gray-300'
+                      }`}
+                    >
+                      <div className={`absolute top-[3px] w-3.5 h-3.5 bg-white rounded-full shadow transition-transform ${
+                        (activeQ as any).allowMultiple ? 'translate-x-[18px]' : 'translate-x-[3px]'
+                      }`} />
+                    </div>
+                  </label>
+                </div>
+              )}
+
               {/* Reorder */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-2">Reorder</label>
@@ -2472,6 +2502,38 @@ const SurveyEditor: React.FC = () => {
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Question Delay */}
+              <div className="pt-3 border-t border-gray-100">
+                <label className="block text-xs font-medium text-gray-500 mb-1">
+                  Appear After Delay
+                  <span className="ml-1 text-gray-400 font-normal normal-case">
+                    ({(activeQ as any).questionDelay ? `${(activeQ as any).questionDelay / 1000}s` : 'instant'})
+                  </span>
+                </label>
+                <p className="text-[10px] text-gray-400 mb-2">Wait before showing this question</p>
+                <input
+                  type="range"
+                  min={0}
+                  max={10000}
+                  step={500}
+                  value={(activeQ as any).questionDelay ?? 0}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    const updated = { ...survey };
+                    updated.questions = [...updated.questions];
+                    updated.questions[activeQuestionIndex] = {
+                      ...updated.questions[activeQuestionIndex],
+                      questionDelay: val
+                    } as any;
+                    setSurvey(updated);
+                  }}
+                  className="w-full accent-orange-500"
+                />
+                <div className="flex justify-between text-[10px] text-gray-400 mt-1">
+                  <span>Instant</span><span>10s</span>
+                </div>
               </div>
 
               {/* Actions */}
