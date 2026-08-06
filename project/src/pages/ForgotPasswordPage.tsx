@@ -30,7 +30,7 @@ const ForgotPasswordPage: React.FC = () => {
         setError(data.error || 'Something went wrong');
       }
     } catch {
-      setError('Network error. Please try again.');
+      setError('Failed. Please try again.');
     } finally {
       setLoading(false);
     }

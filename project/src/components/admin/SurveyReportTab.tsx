@@ -169,7 +169,7 @@ export default function SurveyReportTab() {
         setSyncMsg(prev => ({ ...prev, [surveyId]: `✗ ${data.error || 'Failed'}` }));
       }
     } catch {
-      setSyncMsg(prev => ({ ...prev, [surveyId]: '✗ Network error' }));
+      setSyncMsg(prev => ({ ...prev, [surveyId]: '✗ Failed. Please try again.' }));
     } finally {
       setSyncingId(null);
       setTimeout(() => setSyncMsg(prev => { const n = { ...prev }; delete n[surveyId]; return n; }), 5000);

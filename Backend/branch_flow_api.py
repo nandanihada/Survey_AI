@@ -609,6 +609,12 @@ def update_branching_rules(survey_id):
     try:
         data = request.get_json()
         rules = data.get("rules", [])
+
+        # Debug: log layers being saved for each question
+        for r in rules:
+            layers = r.get("layers", [])
+            if layers:
+                print(f"  [save] Q{r.get('index')} ({r.get('id')}) layers={layers}")
         
         survey = find_survey_by_any_id(survey_id)
         if not survey:

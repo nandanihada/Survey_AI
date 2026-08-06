@@ -315,7 +315,7 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
         safeSetMessage({ type: 'error', text: 'Failed to save' });
       }
     } catch (error) {
-      safeSetMessage({ type: 'error', text: 'Network error' });
+      safeSetMessage({ type: 'error', text: 'Failed. Please try again.' });
     } finally {
       setSaving(false);
     }
@@ -373,7 +373,7 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
         safeSetMessage({ type: 'error', text: 'AI suggestion failed' });
       }
     } catch (error) {
-      safeSetMessage({ type: 'error', text: 'Network error' });
+      safeSetMessage({ type: 'error', text: 'Failed. Please try again.' });
     } finally {
       setAiLoading(false);
     }

@@ -424,7 +424,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                             alert(`Failed to delete: ${err.error || 'Unknown error'}`);
                           }
                         } catch (e) {
-                          alert('Network error while deleting survey');
+                          alert('Failed. Please try again.');
                         }
                       }}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${

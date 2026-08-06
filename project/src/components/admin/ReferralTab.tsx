@@ -120,7 +120,7 @@ function PayoutsView() {
       const res = await authFetch(`${base}/api/admin/referrals/payouts`);
       if (res.ok) setPayouts(await res.json());
       else setError('Failed to load payouts');
-    } catch { setError('Network error'); }
+    } catch { console.error('loadPayouts network error'); setError('Failed to load payouts'); }
     finally { setLoading(false); }
   };
 
@@ -144,7 +144,7 @@ function PayoutsView() {
         const d = await res.json().catch(() => ({}));
         setError(d.error || 'Failed to mark paid');
       }
-    } catch { setError('Network error'); }
+    } catch { setError('Failed. Please try again.'); }
     finally { setMarkingId(null); }
   };
 
@@ -413,7 +413,7 @@ function PromotersListView() {
       const res = await authFetch(`${base}/api/admin/referrals/promoters`);
       if (res.ok) setPromoters(await res.json());
       else setError('Failed to load promoters');
-    } catch { setError('Network error'); }
+    } catch { console.error('loadPromoters network error'); setError('Failed to load promoters'); }
     finally { setLoading(false); }
   };
 
@@ -590,7 +590,7 @@ function AdminView() {
         const d = await res.json().catch(() => ({}));
         setMsg(d.error || 'Reverse failed');
       }
-    } catch { setMsg('Network error'); }
+    } catch { setMsg('Failed. Please try again.'); }
     finally { setWorking(null); }
   };
 
@@ -609,7 +609,7 @@ function AdminView() {
         setMsg(`Reversed ${d.reversed_count} flagged events`);
         setTimeout(() => setMsg(null), 3000);
       }
-    } catch { setMsg('Network error'); }
+    } catch { setMsg('Failed. Please try again.'); }
     finally { setWorking(null); }
   };
 
@@ -829,7 +829,7 @@ function PromoterView() {
         const res = await authFetch(`${base}/api/admin/referrals/promoter-view/${selected}`);
         if (res.ok) setData(await res.json());
         else { const d = await res.json().catch(() => ({})); setError(d.error || 'Failed to load'); }
-      } catch { setError('Network error'); }
+      } catch { console.error('promoter-view network error'); setError('Failed to load'); }
       finally { setLoading(false); }
     })();
   }, [selected]);

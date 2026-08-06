@@ -13,6 +13,20 @@ Handles:
 
 import re
 import json
+import random
+
+GENERATION_ANGLES = [
+    "Focus on pain points and frustrations — what is broken or missing",
+    "Focus on positive outcomes and success factors — what is working well",
+    "Focus on comparisons — how this compares to alternatives or competitors",
+    "Focus on behavioral patterns — what people actually do vs. what they say",
+    "Focus on priorities and trade-offs — what matters most when choices must be made",
+    "Focus on barriers and blockers — what prevents action or adoption",
+    "Focus on future expectations — what respondents want or expect next",
+    "Focus on trust and confidence — how reliable or credible the subject feels",
+    "Focus on frequency and recency — how often and how recently things happen",
+    "Focus on the gap between expectation and reality",
+]
 
 
 def parse_user_prompt(prompt_text: str, image_context: str = "") -> dict:
@@ -206,28 +220,22 @@ def build_system_prompt(
     # Build user questions section
     user_q_section = ""
     raw_image_text = parsed.get("raw_image_text", "")
-    
+
     if user_questions:
         if user_q_count >= final_question_count:
-            user_q_section = f"""
-USER-PROVIDED QUESTIONS (INCLUDE ALL VERBATIM — DO NOT REPHRASE OR SKIP ANY):
+            user_q_section = f"""USER-PROVIDED QUESTIONS (INCLUDE ALL VERBATIM — DO NOT REPHRASE OR SKIP ANY):
 {chr(10).join(f'  {i+1}. {q}' for i, q in enumerate(user_questions))}
 
 You MUST include ALL {user_q_count} questions above exactly as written. Do NOT generate any additional questions.
-The total survey will have exactly {user_q_count} questions.
-"""
+The total survey will have exactly {user_q_count} questions."""
         else:
-            user_q_section = f"""
-USER-PROVIDED QUESTIONS (INCLUDE VERBATIM — DO NOT REPHRASE):
+            user_q_section = f"""USER-PROVIDED QUESTIONS (INCLUDE VERBATIM — DO NOT REPHRASE):
 {chr(10).join(f'  {i+1}. {q}' for i, q in enumerate(user_questions))}
 
 You must include ALL {user_q_count} questions above exactly as written.
-Generate {questions_to_generate} additional questions to reach the total of {final_question_count}.
-"""
+Generate {questions_to_generate} additional questions to reach the total of {final_question_count}."""
     elif raw_image_text:
-        # We have image content — pass it with very explicit instructions
-        user_q_section = f"""
-IMAGE CONTENT — THE USER UPLOADED A SURVEY IMAGE. REPRODUCE IT EXACTLY:
+        user_q_section = f"""IMAGE CONTENT — THE USER UPLOADED A SURVEY IMAGE. REPRODUCE IT EXACTLY:
 ---
 {raw_image_text}
 ---
@@ -240,235 +248,210 @@ YOU MUST:
 5. If the text shows [multiple_choice] tag, set type to "multiple_choice" and copy all listed options.
 6. If the text shows [short_answer] tag, set type to "short_answer" with empty options.
 7. If the text shows [yes_no] tag, set type to "yes_no" with options ["Yes", "No"].
-8. The final survey should have exactly {final_question_count} questions total. If image has fewer, add relevant ones. If image has more, include all from image.
-"""
+8. The final survey should have exactly {final_question_count} questions total. If image has fewer, add relevant ones. If image has more, include all from image."""
+    else:
+        user_q_section = "(none — generate all questions from scratch)"
 
-    # Audience context
-    audience_context = ""
-    if audience:
-        audience_map = {
-            "customers": "The respondents are customers/clients of a product or service.",
-            "employees": "The respondents are employees within an organization.",
-            "students": "The respondents are students or learners.",
-            "users": "The respondents are website visitors or app users.",
-            "general_public": "The respondents are general public with varied backgrounds.",
-        }
-        audience_context = f"\nAUDIENCE: {audience_map.get(audience, audience)}"
-
-    # Data collection context
-    data_collection_context = ""
-    if data_collection == "full_details":
-        data_collection_context = "\nDATA COLLECTION: Include fields for Name, Email, and Phone but do NOT place them at positions 1, 2, or 3. Scatter them randomly among the middle questions (positions 4-8 or later). Never group them together consecutively."
-    elif data_collection == "email_only":
-        data_collection_context = "\nDATA COLLECTION: Include an Email field but do NOT place it at position 1 or 2. Put it somewhere in the middle of the survey (position 4 or later)."
-    elif data_collection == "anonymous":
-        data_collection_context = "\nDATA COLLECTION: Survey is anonymous. Do NOT ask for name, email, or phone."
+    # Audience string
+    audience_map = {
+        "customers": "Customers / clients of a product or service",
+        "employees": "Employees within an organization",
+        "students": "Students or learners",
+        "users": "Website visitors or app users",
+        "general_public": "General public — varied backgrounds",
+    }
+    audience_str = audience_map.get(audience, audience) if audience else "Not specified — infer from topic"
 
     # Tone instruction
-    tone_map = {
+    tone_label = parsed.get("tone_label", "")
+    tone_label_map = {
+        "Professional": "Use clear, professional but approachable language. Business-appropriate, neutral, and concise. Suitable for corporate surveys.",
+        "Friendly": "Use warm, conversational, and welcoming language. Make respondents feel comfortable sharing honest feedback. Approachable but still respectful.",
+        "Casual": "Use relaxed, informal language. Feel free to use emojis, slang, and a fun tone. Like talking to a friend. Keep it light and engaging.",
+        "Academic": "Use precise, structured, research-grade language. Formal phrasing suitable for universities, research papers, and institutional assessments.",
+        "Direct": "Use short, no-fluff, straight-to-the-point language. Minimal wording, maximum clarity. No pleasantries — just ask what you need to know.",
+    }
+    tone_fallback_map = {
         "casual": "Use friendly, relaxed, conversational language. Feel free to use emojis and informal phrasing. Keep it fun and approachable.",
         "formal": "Use formal, precise, academic language. Structured and research-appropriate. Suitable for institutional or scholarly contexts.",
         "professional": "Use clear, professional but approachable language. Business-appropriate, neutral, and concise.",
     }
-    # Check for specific tone label from wizard
-    tone_label = parsed.get("tone_label", "")
     if tone_label:
-        tone_label_map = {
-            "Professional": "Use clear, professional but approachable language. Business-appropriate, neutral, and concise. Suitable for corporate surveys.",
-            "Friendly": "Use warm, conversational, and welcoming language. Make respondents feel comfortable sharing honest feedback. Approachable but still respectful.",
-            "Casual": "Use relaxed, informal language. Feel free to use emojis, slang, and a fun tone. Like talking to a friend. Keep it light and engaging.",
-            "Academic": "Use precise, structured, research-grade language. Formal phrasing suitable for universities, research papers, and institutional assessments.",
-            "Direct": "Use short, no-fluff, straight-to-the-point language. Minimal wording, maximum clarity. No pleasantries — just ask what you need to know.",
-        }
-        tone_instruction = tone_label_map.get(tone_label, tone_map.get(parsed["tone"], tone_map["professional"]))
+        tone_instruction = tone_label_map.get(tone_label, tone_fallback_map.get(parsed.get("tone", "professional"), tone_fallback_map["professional"]))
     else:
-        tone_instruction = tone_map.get(parsed["tone"], tone_map["professional"])
+        tone_instruction = tone_fallback_map.get(parsed.get("tone", "professional"), tone_fallback_map["professional"])
 
-    # Description generation rule (>50 word prompt)
-    description_instruction = ""
+    # Description rule
+    # Extract key phrases from the raw prompt to anchor descriptions
+    # Take up to 8 meaningful words (skip short stop words) as phrase anchors
+    stop_words = {'a','an','the','and','or','but','in','on','at','to','for','of','with',
+                  'is','are','was','were','be','been','being','have','has','had','do','does',
+                  'did','will','would','could','should','may','might','shall','can','this',
+                  'that','these','those','it','its','i','we','my','our','your','their',
+                  'create','generate','make','build','survey','about','please','give','me'}
+    prompt_words = [w.strip('.,!?:;()[]"\'') for w in raw_prompt.lower().split()]
+    key_phrases = [w for w in prompt_words if len(w) > 4 and w not in stop_words][:10]
+    phrase_anchor_str = ', '.join(f'"{p}"' for p in key_phrases) if key_phrases else '(none extracted)'
+
     if generate_descriptions:
-        description_instruction = f"""
-QUESTION DESCRIPTIONS — REQUIRED (prompt was {prompt_word_count} words):
-Since the user provided a detailed prompt (more than 50 words), you MUST populate the "questionDescription" field for EVERY question.
-- Use the extra context from the prompt to write a 1–2 sentence description that clarifies WHY this question is being asked or provides helpful context to the respondent.
-- The description should feel natural and add value — do NOT just rephrase the question.
-- Keep each description under 40 words.
-- NEVER leave "questionDescription" as null or empty when the prompt is detailed.
-"""
+        description_rule = (
+            f"REQUIRED — prompt was {prompt_word_count} words (>50). "
+            "Populate \"questionDescription\" for EVERY question with 1–2 sentences explaining WHY it is being asked. "
+            f"IMPORTANT: Echo the user's own language — use actual words and phrases from their prompt such as {phrase_anchor_str}. "
+            "The description should feel like the survey creator wrote it personally, not generic AI filler. "
+            "Connect each question back to the specific goal stated in the brief. "
+            "Keep each under 40 words. NEVER leave null when prompt is detailed."
+        )
     else:
-        description_instruction = """
-QUESTION DESCRIPTIONS:
-The user's prompt was brief. Set "questionDescription" to null for all questions unless a specific question clearly benefits from a short clarification.
-"""
+        description_rule = (
+            "OPTIONAL — prompt was brief (<50 words). "
+            "Set \"questionDescription\" to null unless a question clearly benefits from a short clarification."
+        )
 
-    # Question type distribution
-    type_instruction = ""
-    if parsed["mentioned_types"]:
-        types_str = ', '.join(parsed['mentioned_types'])
+    # Data collection rule
+    if data_collection == "full_details":
+        data_collection_rule = (
+            "Include fields for Name, Email, and Phone. "
+            "Do NOT place them at positions 1–3. Scatter among positions 4–8. Never group consecutively."
+        )
+    elif data_collection == "email_only":
+        data_collection_rule = (
+            "Include one Email field. Do NOT place it at position 1 or 2. Insert it at position 4 or later."
+        )
+    else:
+        data_collection_rule = (
+            "Survey is anonymous. Do NOT ask for name, email, or phone number."
+        )
+
+    # Random angle
+    random_angle = random.choice(GENERATION_ANGLES)
+
+    # Question type instruction
+    if parsed.get("mentioned_types"):
+        types_str = ', '.join(parsed["mentioned_types"])
         if len(parsed["mentioned_types"]) == 1:
             the_type = parsed["mentioned_types"][0]
-            # Build type-specific enforcement
             if the_type == "multiple_choice":
-                type_instruction = f"""
-QUESTION TYPES — STRICT REQUIREMENT:
-ALL {final_question_count} questions MUST be multiple_choice ONLY.
-Every single question must have exactly 4 answer options (A, B, C, D).
-Do NOT include any rating scales, open text, yes/no, or any other type. ONLY multiple choice.
-"""
+                type_instruction = (
+                    f"ALL {final_question_count} questions MUST be multiple_choice ONLY with exactly 4 options each. "
+                    "Do NOT use any other type."
+                )
             elif the_type == "rating":
-                type_instruction = f"""
-QUESTION TYPES — STRICT REQUIREMENT:
-ALL {final_question_count} questions MUST be rating scale ONLY.
-Every single question must be answerable on a 1-10 numeric scale.
-Do NOT include any multiple choice, open text, yes/no, or any other type. ONLY rating (1-10 scale).
-Set type to "rating" for every question. No options array needed.
-"""
+                type_instruction = (
+                    f"ALL {final_question_count} questions MUST be rating type (1–10 scale) ONLY. "
+                    "Do NOT use any other type. No options array needed."
+                )
             elif the_type == "short_answer":
-                type_instruction = f"""
-QUESTION TYPES — STRICT REQUIREMENT:
-ALL {final_question_count} questions MUST be short_answer (open text) ONLY.
-Every single question must be answered with free-form text.
-Do NOT include any multiple choice, rating scales, yes/no, or any other type. ONLY open-ended text.
-Set type to "short_answer" for every question. No options array needed.
-"""
+                type_instruction = (
+                    f"ALL {final_question_count} questions MUST be short_answer (open text) ONLY. "
+                    "Do NOT use any other type."
+                )
             elif the_type == "yes_no":
-                type_instruction = f"""
-QUESTION TYPES — STRICT REQUIREMENT:
-ALL {final_question_count} questions MUST be yes_no ONLY.
-Every single question must have exactly 2 options: ["Yes", "No"].
-Do NOT include any multiple choice, rating scales, open text, or any other type. ONLY yes/no.
-"""
+                type_instruction = (
+                    f"ALL {final_question_count} questions MUST be yes_no ONLY with options [\"Yes\", \"No\"]. "
+                    "Do NOT use any other type."
+                )
             else:
-                type_instruction = f"""
-QUESTION TYPES — STRICT REQUIREMENT:
-ALL questions MUST be {types_str} type ONLY. Do NOT use any other question type.
-"""
+                type_instruction = f"ALL questions MUST be {types_str} type ONLY."
         else:
-            # Multiple types mentioned — only use those
-            type_instruction = f"""
-QUESTION TYPES — STRICT REQUIREMENT:
-ONLY use these question types: {types_str}. Do NOT use any other type.
-Distribute questions evenly among the allowed types.
-"""
+            type_instruction = (
+                f"ONLY use these question types: {types_str}. "
+                "Do NOT use any other type. Distribute questions evenly among the allowed types."
+            )
     else:
-        type_instruction = """
-QUESTION TYPE DISTRIBUTION (for generated questions):
-- Multiple Choice: ~30% (4 options A-D)
-- Rating (1-10 scale): ~20%
-- Yes/No: ~15%
-- Short Answer (open text): ~20%
-- Opinion Scale: ~15%
-"""
+        type_instruction = (
+            "Use a variety of types: multiple_choice (~25%), multi_select (~10%), "
+            "rating (~15%), yes_no (~15%), short_answer (~15%), likert (~10%), "
+            "ranking (~5%), dropdown (~5%). "
+            "Never let more than 2 consecutive questions share the same type."
+        )
 
     # Language instruction
     language_instruction = ""
     if parsed.get("language", "english") != "english":
         lang_map = {
-            "hindi": "LANGUAGE: Generate the ENTIRE survey in Hindi (हिंदी). All question text and answer options must be in Hindi using Devanagari script.",
-            "hinglish": "LANGUAGE: Generate the ENTIRE survey in Hinglish (Hindi written in English/Roman script). Example: 'Aap kitne satisfied hain hamare product se?' — Mix Hindi words with English script. Do NOT use Devanagari. Do NOT use pure English.",
-            "spanish": "LANGUAGE: Generate the ENTIRE survey in Spanish (Español). All question text and answer options must be in Spanish.",
-            "french": "LANGUAGE: Generate the ENTIRE survey in French (Français). All question text and answer options must be in French.",
-            "arabic": "LANGUAGE: Generate the ENTIRE survey in Arabic (العربية). All question text and answer options must be in Arabic.",
-            "cjk": "LANGUAGE: Generate the ENTIRE survey in the same language as the user's prompt. All question text and answer options must be in that language.",
+            "hindi": "Generate the ENTIRE survey in Hindi (हिंदी). All question text and answer options must be in Hindi using Devanagari script.",
+            "hinglish": "Generate the ENTIRE survey in Hinglish (Hindi written in English/Roman script). Example: 'Aap kitne satisfied hain hamare product se?' — Mix Hindi words with English script. Do NOT use Devanagari. Do NOT use pure English.",
+            "spanish": "Generate the ENTIRE survey in Spanish (Español). All question text and answer options must be in Spanish.",
+            "french": "Generate the ENTIRE survey in French (Français). All question text and answer options must be in French.",
+            "arabic": "Generate the ENTIRE survey in Arabic (العربية). All question text and answer options must be in Arabic.",
+            "cjk": "Generate the ENTIRE survey in the same language as the user's prompt. All question text and answer options must be in that language.",
         }
-        language_instruction = lang_map.get(parsed["language"], "")
+        language_instruction = f"LANGUAGE: {lang_map.get(parsed['language'], '')}"
 
-    system_prompt = f"""You are an expert survey designer. Generate a high-quality survey following these exact rules.
+    system_prompt = f"""You are an expert survey designer with 15+ years of experience. Generate a precise, non-generic survey.
 
-TOPIC: {parsed["topic"]}
-TOTAL QUESTIONS REQUIRED: {final_question_count}
-TONE: {tone_instruction}
-{language_instruction}
-{audience_context}
-{data_collection_context}
-{description_instruction}
-{type_instruction}
+=== INPUT CONTEXT ===
+Topic/Brief: {parsed["topic"]}
+Target Audience: {audience_str}
+Tone: {tone_instruction}
+Number of Questions: {final_question_count}
+Collect Respondent Details: {data_collection}
+Include Descriptions: {generate_descriptions}
+
+=== STEP 1: INTERNAL ANALYSIS (do this silently before writing) ===
+Before generating questions, determine:
+- Who exactly is answering? (their role, background, context)
+- What decision or insight will this survey data be used for?
+- What domain-specific vocabulary, categories, or scales are implied?
+  e.g. "software engineers" → real certifications like "AWS Certified Solutions Architect"
+  NEVER use generic buckets like "High School / Undergraduate / Graduate" unless audience is explicitly general public.
+- Pick a fresh ANGLE for this specific generation — choose one from:
+  {random_angle}
+  Use this angle to decide WHICH aspects of the topic to probe most deeply.
+
+=== STEP 2: GENERATION RULES (strict — follow all) ===
+1. GROUNDING: Every question and every answer option must be traceable to the brief or audience. No filler.
+2. NO GENERIC OPTIONS: Use real, domain-specific terms. Never vague catch-alls.
+3. NO DUPLICATES: No two questions test the same underlying idea.
+4. TYPE VARIETY: Never let more than 2 consecutive questions share the same type.
+5. PHRASING VARIETY: Do not reuse the same sentence template more than twice.
+6. LOGICAL ORDER: Screening/context → core topic → demographic/closing.
+7. DESCRIPTIONS: {description_rule}
+8. RESPONDENT DETAILS: {data_collection_rule}
+
+=== FEW-SHOT EXAMPLE ===
+BAD (never produce this):
+{{"text": "What is your qualification?", "type": "multiple_choice", "options": ["High School", "Undergraduate", "Graduate"]}}
+
+GOOD (produce this style):
+{{"text": "What is your highest relevant technical qualification?",
+ "questionDescription": "Helps us understand the educational background across our engineering team.",
+ "type": "multiple_choice",
+ "options": ["B.Tech/B.E. Computer Science or related", "M.Tech/M.S. Computer Science", "Professional cert (AWS/Azure/GCP)", "Self-taught / Bootcamp", "PhD in technical field"]}}
+
+=== USER-PROVIDED QUESTIONS ===
 {user_q_section}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CRITICAL RULES:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+=== OUTPUT FORMAT (strict JSON array only — no markdown, no backticks, no commentary) ===
+[
+  {{
+    "id": "q1",
+    "text": "Question text",
+    "questionDescription": "1-2 sentence context (null if Include Descriptions is false)",
+    "type": "multiple_choice | multi_select | yes_no | short_answer | rating | likert | ranking | dropdown | numeric",
+    "allowMultiple": false,
+    "options": ["option1", "option2"],
+    "required": true,
+    "show_if": null
+  }}
+]
 
-0. NEVER USE THE RAW PROMPT AS A QUESTION:
-   - The user's prompt is INSTRUCTIONS for you, NOT a survey question
-   - NEVER copy the user's prompt text into any question field
-   - If the prompt contains multiple topics/questions separated by commas or "and", break them into SEPARATE clean questions
-   - Transform messy prompts into proper, concise survey questions
+TYPE GUIDE:
+- multiple_choice: single-select from options (radio buttons). For most questions, add "Other (please specify)" as the final option so respondents can write their own answer if none fit.
+- multi_select: select all that apply (checkboxes) — set allowMultiple: true. Always add "Other (please specify)" as the final option.
+- yes_no: binary Yes/No question — do NOT add Other
+- short_answer: free text response
+- rating: numeric 1-10 scale
+- likert: agreement scale — options MUST be exactly: ["Strongly Agree", "Agree", "Neutral", "Disagree", "Strongly Disagree"]
+- ranking: rank items in order — provide 3-6 items as options
+- dropdown: single select shown as dropdown — use for long option lists (5+ items). Add "Other (please specify)" if applicable.
+- numeric: number input — add "min" and "max" fields if relevant
 
-1. QUESTION TYPE MATCHING:
-   - "What did you enjoy?" / "What would you improve?" / "What do you think about..." / "Describe..." / "Explain..." / "Tell us..." / "Share your thoughts..." = short_answer (NOT rating)
-   - "How satisfied are you?" / "How would you rate..." / "How likely..." / "On a scale of..." / "To what extent..." = rating (1-10)
-   - "Do you..." / "Have you..." / "Would you..." / "Is this..." / "Are you..." = yes_no
-   - "Which..." / "What is your preferred..." / "Select..." / "Choose..." = multiple_choice
-   - Rating questions must ONLY ask things that can be answered with a NUMBER
-   - If a question asks "what" or "why" or requests an opinion/description, it MUST be short_answer
-   - If a question asks "how much" or "how likely" or "to what extent", it should be rating
-   - ALWAYS match the question TYPE to the question WORDING — never mismatch
+{type_instruction}
+{language_instruction}
 
-2. REGENERATION RULE:
-   - Each time you generate, create FRESH and UNIQUE questions
-   - Do NOT repeat questions from any previous generation
-   - Explore different angles, perspectives, and aspects of the topic
-   - Use varied question structures and phrasings
-   - If regenerating, assume the user wants DIFFERENT questions, not the same ones reworded
-
-2. SKIP LOGIC (MOST IMPORTANT):
-   - For every Yes/No question, check if any following question assumes "Yes"
-   - If it does, add a show_if condition to that follow-up question
-   - For "Do you use/have X?" questions, ALL follow-ups about X must be gated
-   - For rating questions: if score is low (1-4), show "what can we improve?"
-     If score is high (8-10), show "what did you enjoy?"
-   - NEVER generate a question that contradicts a possible answer to a previous one
-
-2. QUESTION QUALITY:
-   - Each question must be answerable and unambiguous
-   - No double-barreled questions (asking two things at once)
-   - No leading questions (don't suggest the answer)
-   - Keep questions under 25 words
-   - Multiple choice options must be mutually exclusive
-   - Include "Other" option where appropriate
-
-3. QUESTION FLOW:
-   - Start with easy/demographic questions
-   - Move to opinion/rating questions in the middle
-   - End with open-ended/suggestion questions
-   - Group related questions together
-   - Dependent questions must come right after their parent
-
-4. DEDUPLICATION:
-   - No two questions should ask essentially the same thing
-   - Each question must add unique value to the survey
-
-5. PATH COMPLETENESS:
-   - Every respondent path must feel complete
-   - If you gate 2 questions behind a "Yes", also provide 1-2 alternative
-     questions for the "No" path so all paths have roughly equal length
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-OUTPUT FORMAT (JSON):
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Return ONLY a valid JSON array. No markdown, no explanation, no backticks.
-
-Each question object:
-{{
-  "id": "q1",
-  "text": "Question text here",
-  "questionDescription": "A brief 1–2 sentence description providing context or clarification for the respondent. Set to null if not needed.",
-  "type": "multiple_choice" | "rating" | "yes_no" | "short_answer" | "scale",
-  "allowMultiple": false,  // set to true ONLY for multiple_choice questions where selecting multiple answers makes sense (e.g. "Which of the following apply?", "Select all that apply", "What are your top concerns?")
-  "options": ["A", "B", "C", "D"],  // only for multiple_choice and yes_no
-  "required": true,
-  "show_if": null | {{"depends_on": "q3", "condition": "equals", "value": "Yes"}}
-}}
-
-For show_if conditions:
-- "condition" can be: "equals", "not_equals", "greater_than", "less_than"
-- "value" is the answer value that triggers this question
-- Set to null if question always shows
-
-Generate exactly {final_question_count} questions total. Return valid JSON only.
-"""
+Generate exactly {final_question_count} questions. Return valid JSON array only."""
 
     return system_prompt
 
@@ -518,9 +501,14 @@ def build_generation_request(
     # Build the system prompt
     system_prompt = build_system_prompt(parsed, final_count, audience, data_collection, raw_prompt=prompt)
 
+    # Generate a short survey title from the topic
+    topic_words = parsed["topic"].split()
+    survey_title = " ".join(topic_words[:7]) if len(topic_words) > 7 else parsed["topic"]
+
     return {
         "system_prompt": system_prompt,
         "final_question_count": final_count,
         "parsed": parsed,
         "user_questions_count": len(parsed["user_questions"]) + len(parsed["image_questions"]),
+        "survey_title": survey_title,
     }

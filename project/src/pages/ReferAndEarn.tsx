@@ -433,7 +433,7 @@ function PaymentMethodsCard({ baseUrl, onSaved }: { baseUrl: string; onSaved?: (
       } else {
         setMsg(data.error || 'Save failed'); setMsgErr(true);
       }
-    } catch { setMsg('Network error'); setMsgErr(true); }
+    } catch { setMsg('Failed. Please try again.'); setMsgErr(true); }
     finally { setSaving(false); }
   };
 
@@ -1276,7 +1276,7 @@ function EarningsPanel() {
         setError(err.error || 'Failed to join program');
       }
     } catch {
-      setError('Network error while joining — please try again');
+      setError('Failed. Please try again.');
     } finally {
       setJoining(false);
     }
@@ -1296,7 +1296,7 @@ function EarningsPanel() {
         setPayoutMsg(data.error || 'Payout request failed');
       }
     } catch {
-      setPayoutMsg('Network error — please try again');
+      setPayoutMsg('Failed. Please try again.');
     }
   };
 

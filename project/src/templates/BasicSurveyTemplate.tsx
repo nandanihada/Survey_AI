@@ -23,7 +23,7 @@ interface Question {
   question: string;
   questionDescription?: string;
   answerDescription?: string;
-  type: 'text' | 'radio' | 'range';
+  type: 'text' | 'radio' | 'range' | 'ranking' | 'dropdown';
   options?: string[];
   answerStyle?: string;
   allowMultiple?: boolean;
@@ -33,6 +33,9 @@ interface Question {
   questionImagePosition?: 'above' | 'below';
   optionImages?: Record<string, string>;
   optionImageMode?: 'with-text' | 'replace-text';
+  rawType?: string;
+  numericMin?: number;
+  numericMax?: number;
 }
 
 interface RawQuestion {
@@ -81,13 +84,23 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const [resumeSessionId, setResumeSessionId] = useState<string | null>(null);
   const [isResuming, setIsResuming] = useState(false);
 
-  const normalizeType = (type: string): 'text' | 'radio' | 'range' => {
+  const normalizeType = (type: string): 'text' | 'radio' | 'range' | 'ranking' | 'dropdown' => {
     switch (type) {
       case 'multiple_choice':
       case 'yes_no':
         return 'radio';
+      case 'multi_select':
+        return 'radio';  // handled by allowMultiple
+      case 'likert':
+        return 'radio';  // rendered as special radio
+      case 'ranking':
+        return 'ranking';  // new render type
+      case 'dropdown':
+        return 'dropdown';  // new render type
       case 'short_answer':
         return 'text';
+      case 'numeric':
+        return 'text';  // rendered as number input
       case 'rating':
       case 'opinion_scale':
       case 'scale':
@@ -112,6 +125,9 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     questionImagePosition: q.questionImagePosition,
     optionImages: q.optionImages,
     optionImageMode: q.optionImageMode,
+    rawType: (q as any).rawType || q.type,
+    numericMin: (q as any).numericMin,
+    numericMax: (q as any).numericMax,
   }));
 
   const [formData, setFormData] = useState<Record<string, string | number>>(() => {
@@ -385,7 +401,9 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       ? formData[currentQuestion.id] !== undefined && formData[currentQuestion.id] !== ''
       : currentQuestion.allowMultiple
         ? !!(formData[currentQuestion.id] && String(formData[currentQuestion.id]).length > 0)
-        : formData[currentQuestion.id] !== '' && formData[currentQuestion.id] !== 0
+        : currentQuestion.type === 'ranking'
+          ? String(formData[currentQuestion.id] || '').includes('|||')
+          : formData[currentQuestion.id] !== '' && formData[currentQuestion.id] !== 0 && formData[currentQuestion.id] !== undefined
     : false;
 
   // Check if current question has a redirect configured
@@ -766,7 +784,15 @@ const BasicSurveyTemplate: React.FC<Props> = ({
             responses[q.id] = val;
           } else {
             if (val !== 0) {
-              responses[q.id] = val;
+              // If "Other" was selected and they typed custom text, submit that text instead
+              const otherKey = `${q.id}__other_text`;
+              const otherText = formData[otherKey] as string;
+              const isOtherSelected = String(val).toLowerCase().startsWith('other');
+              if (isOtherSelected && otherText && otherText.trim()) {
+                responses[q.id] = `Other: ${otherText.trim()}`;
+              } else {
+                responses[q.id] = val;
+              }
             }
           }
         }
@@ -873,12 +899,18 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const renderRadioOptions = (question: Question) => {
     const isMultiple = question.allowMultiple;
     const selectedValues = isMultiple && formData[question.id]
-      ? String(formData[question.id]).split(',')
+      ? String(formData[question.id]).split(',').filter(Boolean)
       : [];
+
+    // Detect "Other" option — any option whose text starts with "Other"
+    const options = question.options || [];
+    const otherIdx = options.findIndex(o => /^other/i.test(o.trim()));
+    const hasOther = otherIdx !== -1;
+    const otherKey = `${question.id}__other_text`;
 
     return (
       <div className={`pepper-options pepper-style-${getStyleForQuestion(question)} ${isMultiple ? 'pepper-options--multi' : ''}`}>
-        {question.options?.map((option, i) => {
+        {options.map((option, i) => {
           const aVariants = getAnswerVariants(survey.animation, i);
           const optImg = question.optionImages?.[option];
           const replaceText = question.optionImageMode === 'replace-text';
@@ -887,41 +919,54 @@ const BasicSurveyTemplate: React.FC<Props> = ({
             : formData[question.id] === option;
 
           return (
-            <div
-              key={i}
-              className={`pepper-option ${isSelected ? 'selected' : ''} ${isMultiple ? 'pepper-option--checkbox' : ''} ${optImg && replaceText ? 'pepper-option--image-only' : ''}`}
-              onClick={() => handleAnswer(question.id, option, isMultiple)}
-            >
-              {isMultiple ? (
-                <span className={`pepper-checkbox ${isSelected ? 'pepper-checkbox--checked' : ''}`}>
-                  {isSelected && (
-                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                      <path d="M1 4L3.5 6.5L9 1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  )}
-                </span>
-              ) : (
-                <span className="pepper-option-key">{OPTION_KEYS[i] || i + 1}</span>
-              )}
-              {optImg && replaceText ? (
-                <img src={optImg} alt={option} className="pepper-option-image-replace" />
-              ) : optImg ? (
-                <span className="pepper-option-label pepper-option-label--img">
-                  <img src={optImg} alt="" className="pepper-option-image-inline" />
-                  {!previewMode ? (
-                    <motion.span variants={aVariants} initial="initial" animate="animate">
-                      {option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}
-                    </motion.span>
-                  ) : (
-                    <span>{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</span>
-                  )}
-                </span>
-              ) : (
-                !previewMode ? (
-                  <motion.span className="pepper-option-label" variants={aVariants} initial="initial" animate="animate">{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</motion.span>
+            <div key={i}>
+              <div
+                className={`pepper-option ${isSelected ? 'selected' : ''} ${isMultiple ? 'pepper-option--checkbox' : ''} ${optImg && replaceText ? 'pepper-option--image-only' : ''}`}
+                onClick={() => handleAnswer(question.id, option, isMultiple)}
+              >
+                {isMultiple ? (
+                  <span className={`pepper-checkbox ${isSelected ? 'pepper-checkbox--checked' : ''}`}>
+                    {isSelected && (
+                      <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                        <path d="M1 4L3.5 6.5L9 1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </span>
                 ) : (
-                  <span className="pepper-option-label">{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</span>
-                )
+                  <span className="pepper-option-key">{OPTION_KEYS[i] || i + 1}</span>
+                )}
+                {optImg && replaceText ? (
+                  <img src={optImg} alt={option} className="pepper-option-image-replace" />
+                ) : optImg ? (
+                  <span className="pepper-option-label pepper-option-label--img">
+                    <img src={optImg} alt="" className="pepper-option-image-inline" />
+                    {!previewMode ? (
+                      <motion.span variants={aVariants} initial="initial" animate="animate">
+                        {option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}
+                      </motion.span>
+                    ) : (
+                      <span>{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</span>
+                    )}
+                  </span>
+                ) : (
+                  !previewMode ? (
+                    <motion.span className="pepper-option-label" variants={aVariants} initial="initial" animate="animate">{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</motion.span>
+                  ) : (
+                    <span className="pepper-option-label">{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</span>
+                  )
+                )}
+              </div>
+              {/* "Other" text input — appears inline when Other is selected */}
+              {hasOther && i === otherIdx && isSelected && (
+                <input
+                  type="text"
+                  className="pepper-other-input"
+                  placeholder="Please specify..."
+                  value={(formData[otherKey] as string) || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, [otherKey]: e.target.value }))}
+                  onClick={(e) => e.stopPropagation()}
+                  autoFocus
+                />
               )}
             </div>
           );
@@ -980,6 +1025,95 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       </div>
     );
   };
+
+  const renderLikert = (question: Question) => {
+    const options = question.options?.length ? question.options : ['Strongly Agree', 'Agree', 'Neutral', 'Disagree', 'Strongly Disagree'];
+    return (
+      <div className="pepper-likert">
+        {options.map((opt, i) => {
+          const isSelected = formData[question.id] === opt;
+          return (
+            <div key={i} className={`pepper-likert-item ${isSelected ? 'selected' : ''}`} onClick={() => handleAnswer(question.id, opt)}>
+              <div className={`pepper-likert-dot ${isSelected ? 'active' : ''}`} />
+              <span className="pepper-likert-label">{opt}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderRanking = (question: Question) => {
+    const options = question.options || [];
+    const currentRanking: string[] = formData[question.id]
+      ? String(formData[question.id]).split('|||')
+      : [];
+
+    const moveUp = (idx: number) => {
+      if (idx === 0) return;
+      const arr = currentRanking.length === options.length ? [...currentRanking] : [...options];
+      [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+      handleAnswer(question.id, arr.join('|||'));
+    };
+    const moveDown = (idx: number) => {
+      const arr = currentRanking.length === options.length ? [...currentRanking] : [...options];
+      if (idx >= arr.length - 1) return;
+      [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
+      handleAnswer(question.id, arr.join('|||'));
+    };
+
+    const displayItems = currentRanking.length === options.length ? currentRanking : options;
+
+    return (
+      <div className="pepper-ranking">
+        <p className="pepper-ranking-hint">Drag or use arrows to rank from most to least important</p>
+        {displayItems.map((item, i) => (
+          <div key={i} className="pepper-ranking-item">
+            <span className="pepper-ranking-num">{i + 1}</span>
+            <span className="pepper-ranking-label">{item}</span>
+            <div className="pepper-ranking-controls">
+              <button type="button" onClick={() => moveUp(i)} disabled={i === 0} className="pepper-rank-btn">↑</button>
+              <button type="button" onClick={() => moveDown(i)} disabled={i === displayItems.length - 1} className="pepper-rank-btn">↓</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderDropdown = (question: Question) => (
+    <div className="pepper-dropdown-wrap">
+      <select
+        className="pepper-dropdown"
+        value={formData[question.id] as string || ''}
+        onChange={(e) => handleAnswer(question.id, e.target.value)}
+      >
+        <option value="">Select an option...</option>
+        {question.options?.map((opt, i) => (
+          <option key={i} value={opt}>{opt}</option>
+        ))}
+      </select>
+    </div>
+  );
+
+  const renderNumeric = (question: Question) => (
+    <div className="pepper-numeric-wrap">
+      <input
+        type="number"
+        className="pepper-numeric"
+        value={formData[question.id] as string || ''}
+        onChange={(e) => handleAnswer(question.id, e.target.value)}
+        min={question.numericMin}
+        max={question.numericMax}
+        placeholder={question.numericMin !== undefined && question.numericMax !== undefined
+          ? `Enter a number (${question.numericMin}–${question.numericMax})`
+          : 'Enter a number'}
+      />
+      {question.numericMin !== undefined && question.numericMax !== undefined && (
+        <span className="pepper-numeric-hint">Range: {question.numericMin} – {question.numericMax}</span>
+      )}
+    </div>
+  );
 
   const renderQuestion = (question: Question, index: number) => {
     if (!previewMode && index !== currentQuestionIndex) return null;
@@ -1048,9 +1182,13 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           <div className="pepper-answer-hint">{question.answerDescription}</div>
         )}
 
-        {question.type === 'radio' && renderRadioOptions(question)}
-        {question.type === 'text' && renderTextInput(question)}
+        {question.type === 'radio' && question.rawType === 'likert' && renderLikert(question)}
+        {question.type === 'radio' && question.rawType !== 'likert' && renderRadioOptions(question)}
+        {question.type === 'text' && question.rawType === 'numeric' && renderNumeric(question)}
+        {question.type === 'text' && question.rawType !== 'numeric' && renderTextInput(question)}
         {question.type === 'range' && renderScale(question)}
+        {question.type === 'ranking' && renderRanking(question)}
+        {question.type === 'dropdown' && renderDropdown(question)}
       </div>
     );
   };
@@ -1289,186 +1427,142 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.4 }}
+          transition={{ duration: 0.35 }}
           style={{
             position: 'fixed', inset: 0, zIndex: 9996,
             fontFamily: "'Outfit', sans-serif",
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: 20,
-            background: activeLayer.variant === 'pass'
-              ? 'linear-gradient(135deg, #0a1a0e 0%, #0f2d16 40%, #1a4726 100%)'
-              : 'linear-gradient(135deg, #1a0505 0%, #2d0a0a 40%, #450f0f 100%)',
-            overflow: 'hidden',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'space-between',
+            padding: '40px 20px 32px',
+            background: '#eef0f3',
           }}
         >
-          {/* Animated background orbs */}
-          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
-            <motion.div
-              animate={{ scale: [1, 1.15, 1], opacity: [0.12, 0.18, 0.12] }}
-              transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-              style={{
-                position: 'absolute', top: '-20%', right: '-10%',
-                width: 500, height: 500, borderRadius: '50%',
-                background: activeLayer.variant === 'pass' ? '#16a34a' : '#dc2626',
-                filter: 'blur(80px)',
-              }}
-            />
-            <motion.div
-              animate={{ scale: [1, 1.2, 1], opacity: [0.08, 0.14, 0.08] }}
-              transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 1.5 }}
-              style={{
-                position: 'absolute', bottom: '-15%', left: '-5%',
-                width: 400, height: 400, borderRadius: '50%',
-                background: activeLayer.variant === 'pass' ? '#4ade80' : '#f97316',
-                filter: 'blur(70px)',
-              }}
-            />
-          </div>
+          {/* Spacer top */}
+          <div style={{ flex: 1 }} />
 
           {/* Card */}
           <motion.div
-            initial={{ scale: 0.88, y: 32, opacity: 0 }}
+            initial={{ scale: 0.92, y: 24, opacity: 0 }}
             animate={{ scale: 1, y: 0, opacity: 1 }}
-            transition={{ type: 'spring', stiffness: 200, damping: 24, delay: 0.1 }}
+            transition={{ type: 'spring', stiffness: 220, damping: 26, delay: 0.08 }}
             style={{
-              position: 'relative', width: '100%', maxWidth: 460,
-              background: 'rgba(255,255,255,0.06)',
-              backdropFilter: 'blur(20px)',
-              border: `1px solid ${activeLayer.variant === 'pass' ? 'rgba(74,222,128,0.2)' : 'rgba(248,113,113,0.2)'}`,
-              borderRadius: 28,
-              overflow: 'hidden',
-              boxShadow: activeLayer.variant === 'pass'
-                ? '0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(74,222,128,0.1)'
-                : '0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(248,113,113,0.1)',
+              width: '100%', maxWidth: 440,
+              background: '#ffffff',
+              borderRadius: 20,
+              boxShadow: '0 4px 32px rgba(0,0,0,0.08)',
+              padding: '48px 36px 40px',
+              textAlign: 'center',
             }}
           >
-            {/* Top shimmer line */}
-            <div style={{
-              height: 2,
-              background: activeLayer.variant === 'pass'
-                ? 'linear-gradient(90deg, transparent, #4ade80, #86efac, transparent)'
-                : 'linear-gradient(90deg, transparent, #f87171, #fca5a5, transparent)',
-            }} />
+            {/* Icon tile */}
+            <motion.div
+              initial={{ scale: 0, rotate: -20 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ type: 'spring', stiffness: 280, damping: 20, delay: 0.18 }}
+              style={{
+                width: 88, height: 88, borderRadius: 20, margin: '0 auto 28px',
+                background: activeLayer.variant === 'pass' ? '#e6f4ec' : '#fce8e8',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <div style={{
+                width: 52, height: 52, borderRadius: '50%',
+                background: activeLayer.variant === 'pass' ? '#22c55e' : '#e53e3e',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: activeLayer.variant === 'pass'
+                  ? '0 4px 16px rgba(34,197,94,0.35)'
+                  : '0 4px 16px rgba(229,62,62,0.35)',
+              }}>
+                {activeLayer.variant === 'pass' ? (
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <motion.polyline points="20 6 9 17 4 12" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.45, delay: 0.3 }} />
+                  </svg>
+                ) : (
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <motion.line x1="18" y1="6" x2="6" y2="18" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.28, delay: 0.28 }} />
+                    <motion.line x1="6" y1="6" x2="18" y2="18" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.28, delay: 0.42 }} />
+                  </svg>
+                )}
+              </div>
+            </motion.div>
 
-            <div style={{ padding: '52px 40px 44px', textAlign: 'center' }}>
-              {/* Large icon with glow ring */}
-              <motion.div
-                initial={{ scale: 0, rotate: -30 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ type: 'spring', stiffness: 260, damping: 18, delay: 0.2 }}
-                style={{ position: 'relative', width: 96, height: 96, margin: '0 auto 32px' }}
-              >
-                <motion.div
-                  animate={{ scale: [1, 1.15, 1], opacity: [0.4, 0.7, 0.4] }}
-                  transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-                  style={{
-                    position: 'absolute', inset: -8, borderRadius: '50%',
-                    background: activeLayer.variant === 'pass'
-                      ? 'radial-gradient(circle, rgba(74,222,128,0.25) 0%, transparent 70%)'
-                      : 'radial-gradient(circle, rgba(248,113,113,0.25) 0%, transparent 70%)',
-                  }}
-                />
-                <div style={{
-                  width: 96, height: 96, borderRadius: '50%',
-                  background: activeLayer.variant === 'pass'
-                    ? 'linear-gradient(145deg, #16a34a, #15803d)'
-                    : 'linear-gradient(145deg, #dc2626, #991b1b)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: activeLayer.variant === 'pass'
-                    ? '0 12px 40px rgba(22,163,74,0.5), inset 0 1px 0 rgba(255,255,255,0.15)'
-                    : '0 12px 40px rgba(220,38,38,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
-                }}>
-                  {activeLayer.variant === 'pass' ? (
-                    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <motion.polyline points="20 6 9 17 4 12" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.5, delay: 0.35 }} />
-                    </svg>
-                  ) : (
-                    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <motion.line x1="18" y1="6" x2="6" y2="18" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.3, delay: 0.3 }} />
-                      <motion.line x1="6" y1="6" x2="18" y2="18" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.3, delay: 0.45 }} />
-                    </svg>
-                  )}
-                </div>
-              </motion.div>
+            {/* Title */}
+            <motion.h2
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.32 }}
+              style={{
+                margin: '0 0 12px', fontSize: 28, fontWeight: 800,
+                color: '#111827', lineHeight: 1.15, letterSpacing: '-0.01em',
+                fontFamily: "'Playfair Display', Georgia, serif",
+              }}
+            >
+              {activeLayer.title || (activeLayer.variant === 'pass' ? "You're Qualified!" : 'Not Quite Yet')}
+            </motion.h2>
 
-              {/* Status chip */}
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.35 }}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 7,
-                  background: activeLayer.variant === 'pass' ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
-                  border: `1px solid ${activeLayer.variant === 'pass' ? 'rgba(74,222,128,0.3)' : 'rgba(248,113,113,0.3)'}`,
-                  borderRadius: 20, padding: '5px 14px', marginBottom: 20,
-                }}
-              >
-                <span style={{
-                  width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-                  background: activeLayer.variant === 'pass' ? '#4ade80' : '#f87171',
-                  boxShadow: `0 0 8px ${activeLayer.variant === 'pass' ? '#4ade80' : '#f87171'}`,
-                }} />
-                <span style={{
-                  fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase',
-                  color: activeLayer.variant === 'pass' ? '#86efac' : '#fca5a5',
-                }}>
-                  {activeLayer.variant === 'pass' ? 'Qualified' : 'Not Qualified'}
-                </span>
-              </motion.div>
+            {/* Subtitle */}
+            <motion.p
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.42 }}
+              style={{
+                margin: '0 0 32px', fontSize: 14.5,
+                color: '#6b7280', lineHeight: 1.65,
+                fontFamily: "'Outfit', sans-serif",
+              }}
+            >
+              {activeLayer.subtitle || (
+                activeLayer.variant === 'pass'
+                  ? "Congratulations! You've met all the requirements for the Pepperwahl program. We're excited to have you on board."
+                  : "Unfortunately, you don't meet the current criteria for this round. Don't worry—you can try again in 30 days or explore our resources."
+              )}
+            </motion.p>
 
-              <motion.h2
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                style={{
-                  margin: '0 0 14px', fontSize: 30, fontWeight: 800,
-                  color: '#ffffff', lineHeight: 1.25, letterSpacing: '-0.03em',
-                  fontFamily: "'Outfit', sans-serif",
-                }}
-              >
-                {activeLayer.title || (activeLayer.variant === 'pass' ? 'You qualify!' : 'Not this time')}
-              </motion.h2>
+            {/* CTA button */}
+            <motion.button
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              whileHover={{ scale: 1.02, y: -1 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => { setActiveLayer(null); processNextLayer(layerQueueRef.current); }}
+              style={{
+                padding: '13px 32px',
+                borderRadius: 10, border: 'none',
+                background: activeLayer.variant === 'pass' ? '#22c55e' : '#111827',
+                color: '#fff', fontWeight: 600, fontSize: 15,
+                cursor: 'pointer', fontFamily: "'Outfit', sans-serif",
+                letterSpacing: '0.01em',
+                boxShadow: activeLayer.variant === 'pass'
+                  ? '0 4px 18px rgba(34,197,94,0.35)'
+                  : '0 4px 18px rgba(0,0,0,0.25)',
+              }}
+            >
+              {activeLayer.cta_text || (activeLayer.variant === 'pass' ? 'Get Started' : 'View Resources')}
+            </motion.button>
+          </motion.div>
 
-              <motion.p
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-                style={{
-                  margin: '0 0 40px', fontSize: 15,
-                  color: 'rgba(255,255,255,0.55)', lineHeight: 1.65,
-                  fontFamily: "'Outfit', sans-serif",
-                }}
-              >
-                {activeLayer.subtitle || (activeLayer.variant === 'pass' ? 'You meet all the requirements.' : "Unfortunately you don't meet the criteria.")}
-              </motion.p>
+          {/* Spacer bottom */}
+          <div style={{ flex: 1 }} />
 
-              <motion.button
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.58 }}
-                whileHover={{ scale: 1.03, y: -2 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => { setActiveLayer(null); processNextLayer(layerQueueRef.current); }}
-                style={{
-                  width: '100%', padding: '16px 24px', borderRadius: 14, border: 'none',
-                  background: activeLayer.variant === 'pass'
-                    ? 'linear-gradient(135deg, #16a34a, #15803d)'
-                    : 'linear-gradient(135deg, #dc2626, #991b1b)',
-                  color: '#fff', fontWeight: 700, fontSize: 16,
-                  cursor: 'pointer', fontFamily: "'Outfit', sans-serif",
-                  letterSpacing: '0.01em',
-                  boxShadow: activeLayer.variant === 'pass'
-                    ? '0 6px 24px rgba(22,163,74,0.45), inset 0 1px 0 rgba(255,255,255,0.15)'
-                    : '0 6px 24px rgba(220,38,38,0.45), inset 0 1px 0 rgba(255,255,255,0.15)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                }}
-              >
-                {activeLayer.cta_text || 'Continue'}
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
-                </svg>
-              </motion.button>
-            </div>
+          {/* Powered by Pepperwahl footer */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.6 }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              marginTop: 28,
+            }}
+          >
+            <img src="/logo.png" alt="Pepperwahl" style={{ width: 18, height: 18, borderRadius: 4, opacity: 0.65 }} />
+            <span style={{
+              fontSize: 11, fontWeight: 700, letterSpacing: 2,
+              textTransform: 'uppercase', color: '#9ca3af',
+              fontFamily: "'Outfit', sans-serif",
+            }}>
+              Powered by Pepperwahl
+            </span>
           </motion.div>
         </motion.div>
       )}

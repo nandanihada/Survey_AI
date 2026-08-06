@@ -208,7 +208,7 @@ const RedirectRulesBuilder: React.FC<Props> = ({ surveyId, questions, isDarkMode
         setMessage({ type: 'error', text: err.error || 'Failed to save' });
       }
     } catch (e) {
-      setMessage({ type: 'error', text: 'Network error' });
+      setMessage({ type: 'error', text: 'Failed. Please try again.' });
     } finally {
       setSaving(false);
     }
@@ -266,7 +266,7 @@ const RedirectRulesBuilder: React.FC<Props> = ({ surveyId, questions, isDarkMode
         setMessage({ type: 'error', text: err.error || 'Failed to save' });
       }
     } catch (e) {
-      setMessage({ type: 'error', text: 'Network error' });
+      setMessage({ type: 'error', text: 'Failed. Please try again.' });
     } finally {
       setSaving(false);
     }
@@ -365,7 +365,7 @@ const RedirectRulesBuilder: React.FC<Props> = ({ surveyId, questions, isDarkMode
       const data = await response.json();
       setS2sTestResult(data);
     } catch (e) {
-      setS2sTestResult({ success: false, error: 'Network error' });
+      setS2sTestResult({ success: false, error: 'Connection failed. Please try again.' });
     } finally {
       setS2sTesting(false);
     }

@@ -2038,21 +2038,50 @@ def generate_survey():
                             cleaned = cleaned[4:].strip()
                         
                         parsed_json = json_mod.loads(cleaned)
+                        # Handle both array and object (with questions key + optional survey_title)
+                        ai_survey_title = None
+                        if isinstance(parsed_json, dict):
+                            ai_survey_title = parsed_json.get("survey_title") or parsed_json.get("title")
+                            parsed_json = parsed_json.get("questions", [])
                         if isinstance(parsed_json, list):
                             questions = []
                             for i, q in enumerate(parsed_json):
+                                raw_type = q.get("type", "short_answer")
+                                allow_multiple = q.get("allowMultiple", False)
+
+                                # Normalize new types to existing storage types
+                                if raw_type == "multi_select":
+                                    normalized_type = "multiple_choice"
+                                    allow_multiple = True
+                                elif raw_type == "likert":
+                                    normalized_type = "multiple_choice"
+                                elif raw_type == "ranking":
+                                    normalized_type = "multiple_choice"
+                                elif raw_type == "dropdown":
+                                    normalized_type = "dropdown"  # keep as-is, frontend handles it
+                                elif raw_type == "numeric":
+                                    normalized_type = "short_answer"
+                                else:
+                                    normalized_type = raw_type
+
                                 question_obj = {
                                     "id": q.get("id", f"q{i+1}"),
                                     "question": q.get("text", ""),
-                                    "type": q.get("type", "short_answer"),
+                                    "type": normalized_type,
+                                    "rawType": raw_type,  # preserve original for frontend rendering
                                     "options": q.get("options", []),
                                     "required": q.get("required", True),
                                     "show_if": q.get("show_if", None),
                                     "questionDescription": q.get("questionDescription") or None,
-                                    "allowMultiple": q.get("allowMultiple", False),
+                                    "allowMultiple": allow_multiple,
+                                    "numericMin": q.get("min"),
+                                    "numericMax": q.get("max"),
                                 }
                                 if question_obj["question"]:
                                     questions.append(question_obj)
+                            # Store the AI-suggested title for later use if available
+                            if ai_survey_title:
+                                smart_result["ai_survey_title"] = ai_survey_title
                         else:
                             raise ValueError("Expected JSON array")
                     except (json_mod.JSONDecodeError, ValueError) as json_err:
@@ -2068,10 +2097,16 @@ def generate_survey():
                 # Post-process: ensure yes_no questions have options
                 for q in questions:
                     qtype = q.get("type", "")
+                    raw_type = q.get("rawType", qtype)
                     if qtype == "yes_no" and not q.get("options"):
                         q["options"] = ["Yes", "No"]
                     if qtype == "multiple_choice" and not q.get("options"):
-                        q["options"] = ["Option A", "Option B", "Option C", "Option D"]
+                        if raw_type == "likert":
+                            q["options"] = ["Strongly Agree", "Agree", "Neutral", "Disagree", "Strongly Disagree"]
+                        else:
+                            q["options"] = ["Option A", "Option B", "Option C", "Option D"]
+                    if qtype == "dropdown" and not q.get("options"):
+                        q["options"] = ["Option 1", "Option 2", "Option 3", "Option 4", "Option 5"]
 
                 if len(questions) >= max(3, question_count // 2):
 
@@ -2272,13 +2307,17 @@ def generate_survey():
 
                 username = f"user_{simple_user_id}"
 
-            # Generate short AI title
-            title_prompt = f"Summarize this survey topic into a short title of maximum 5-7 words. Only return the title, nothing else: {prompt}"
-            try:
-                survey_title = generate_ai_content(title_prompt, temperature=0.3, max_tokens=20)
-                survey_title = survey_title.strip().strip('"').strip("'")
-            except:
-                survey_title = " ".join(prompt.split()[:6])  # fallback if AI fails
+            # Generate a short AI title — prefer AI-suggested title from smart builder
+            ai_suggested_title = smart_result.get("ai_survey_title") if use_smart_builder else None
+            if ai_suggested_title:
+                survey_title = ai_suggested_title.strip().strip('"').strip("'")
+            else:
+                title_prompt = f"Summarize this survey topic into a short title of maximum 5-7 words. Only return the title, nothing else: {prompt}"
+                try:
+                    survey_title = generate_ai_content(title_prompt, temperature=0.3, max_tokens=20)
+                    survey_title = survey_title.strip().strip('"').strip("'")
+                except:
+                    survey_title = " ".join(prompt.split()[:6])  # fallback if AI fails
 
             survey_data = {
                 "_id": survey_id,

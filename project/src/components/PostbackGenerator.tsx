@@ -54,7 +54,7 @@ const PostbackGenerator: React.FC<PostbackGeneratorProps> = ({ isDarkMode = fals
         showMessage('Postback test failed', 'error');
       }
     } catch {
-      showMessage('Network error during test', 'error');
+      showMessage('Failed. Please try again.', 'error');
     }
   };
 

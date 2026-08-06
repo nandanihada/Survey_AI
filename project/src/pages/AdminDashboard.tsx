@@ -131,7 +131,6 @@ const AdminDashboard: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to fetch users:', error);
-      alert(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -163,7 +162,6 @@ const AdminDashboard: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to fetch surveys:', error);
-      alert(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -187,7 +185,8 @@ const AdminDashboard: React.FC = () => {
         setFilterError(`Failed to fetch filters: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error) {
-      setFilterError(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('fetchFilters network error:', error);
+      setFilterError('Failed to load filters. Please refresh to try again.');
     }
   };
 
@@ -211,7 +210,8 @@ const AdminDashboard: React.FC = () => {
         setFilterError(`Failed to initialize filters: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error) {
-      setFilterError(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('initializeFilters network error:', error);
+      setFilterError('Failed. Please try again.');
     }
   };
 
@@ -279,7 +279,8 @@ const AdminDashboard: React.FC = () => {
         setFilterError(`Failed to update filter: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error) {
-      setFilterError(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('handleSave network error:', error);
+      setFilterError('Failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -305,7 +306,8 @@ const AdminDashboard: React.FC = () => {
         setFilterError(`Failed to toggle filter: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error) {
-      setFilterError(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('handleToggle network error:', error);
+      setFilterError('Failed. Please try again.');
     }
   };
 
@@ -388,7 +390,7 @@ const AdminDashboard: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to update user role:', error);
-      alert(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      alert('Failed. Please try again.');
     }
   };
 
@@ -422,7 +424,7 @@ const AdminDashboard: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to update user status:', error);
-      alert(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      alert('Failed. Please try again.');
     }
   };
 

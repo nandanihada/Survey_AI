@@ -168,7 +168,7 @@ const BranchFlowEditor: React.FC<Props> = ({ surveyId, questions, onClose, onSwi
         setMessage({ type: 'error', text: 'Failed to load flow' });
       }
     } catch {
-      setMessage({ type: 'error', text: 'Network error loading flow' });
+      console.error('BranchFlowEditor: network error loading flow');
     } finally {
       setLoading(false);
     }
@@ -228,7 +228,7 @@ const BranchFlowEditor: React.FC<Props> = ({ surveyId, questions, onClose, onSwi
       }
       setHasChanges(false);
     } catch {
-      setMessage({ type: 'error', text: 'Network error' });
+      setMessage({ type: 'error', text: 'Failed. Please try again.' });
     } finally {
       setSaving(false);
     }
@@ -275,7 +275,7 @@ const BranchFlowEditor: React.FC<Props> = ({ surveyId, questions, onClose, onSwi
       } else {
         setMessage({ type: 'error', text: 'Failed to activate mode' });
       }
-    } catch { setMessage({ type: 'error', text: 'Network error' }); }
+    } catch { setMessage({ type: 'error', text: 'Failed. Please try again.' }); }
     finally { setActivating(false); }
   }, [baseUrl, surveyId, activeMode]);
 
@@ -358,7 +358,7 @@ const BranchFlowEditor: React.FC<Props> = ({ surveyId, questions, onClose, onSwi
         return;
       }
     } catch {
-      setMessage({ type: 'error', text: 'Network error saving end-survey rule' });
+      setMessage({ type: 'error', text: 'Failed. Please try again.' });
       return;
     }
 

@@ -249,7 +249,7 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
         setMessage({ type: 'error', text: 'Failed to save configuration' });
       }
     } catch {
-      setMessage({ type: 'error', text: 'Network error saving config' });
+      setMessage({ type: 'error', text: 'Failed. Please try again.' });
     } finally {
       if (field) {
         setUpdatingStates(prev => ({
@@ -284,7 +284,7 @@ const PassFailAdmin: React.FC<PassFailAdminProps> = ({ isDarkMode }) => {
         setMessage({ type: 'error', text: data.error || 'Failed to save' });
       }
     } catch {
-      setMessage({ type: 'error', text: 'Network error' });
+      setMessage({ type: 'error', text: 'Failed. Please try again.' });
     } finally {
       setLoading(false);
     }

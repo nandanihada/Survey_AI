@@ -90,7 +90,7 @@ const DeletionRequestsTab: React.FC = () => {
         const err = await res.json();
         alert(`Failed: ${err.error}`);
       }
-    } catch { alert('Network error'); }
+    } catch { alert('Failed. Please try again.'); }
   };
 
   const statusBadge = (status: string) => {

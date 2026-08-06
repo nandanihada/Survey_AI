@@ -446,7 +446,7 @@ const PostbackReceiver: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => 
                 }
             }
         } catch (error) {
-            setTestResult(`❌ FAILED: Network error - ${error}\n\nMake sure your Flask server is running on ${baseUrl}`);
+            setTestResult(`❌ FAILED: Could not reach server.\n\nMake sure your Flask server is running on ${baseUrl}`);
         } finally {
             setIsTestingReceiver(false);
         }

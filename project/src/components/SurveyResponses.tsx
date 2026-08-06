@@ -119,7 +119,7 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
         const err = await res.json();
         alert(`Delete failed: ${err.error || 'Unknown error'}`);
       }
-    } catch { alert('Network error'); }
+    } catch { alert('Failed. Please try again.'); }
   };
 
   const bulkDeleteResponses = async () => {
@@ -141,7 +141,7 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
         const err = await res.json();
         alert(`Bulk delete failed: ${err.error || 'Unknown error'}`);
       }
-    } catch { alert('Network error'); }
+    } catch { alert('Failed. Please try again.'); }
   };
 
   const toggleSelect = (id: string) => {

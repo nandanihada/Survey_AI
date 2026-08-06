@@ -788,6 +788,28 @@
   font-style: italic;
 }
 
+/* ── "Other" write-in input ── */
+.pepper-other-input {
+  display: block;
+  width: calc(100% - 28px);
+  margin: 4px 0 4px 28px;
+  padding: 7px 12px;
+  border: none;
+  border-bottom: 2px solid var(--pepper-red);
+  border-radius: 0;
+  background: rgba(196, 120, 92, 0.04);
+  font-family: 'Outfit', sans-serif;
+  font-size: 14px;
+  color: var(--pepper-text);
+  outline: none;
+  transition: border-color 0.2s, background 0.2s;
+}
+.pepper-other-input:focus {
+  border-bottom-color: var(--pepper-red-dark);
+  background: rgba(196, 120, 92, 0.07);
+}
+.pepper-other-input::placeholder { color: var(--pepper-text-lighter); }
+
 /* 3. Card — distinct floating cards with colored left border and depth */
 .pepper-style-card .pepper-option {
   background: #ffffff;
@@ -979,3 +1001,99 @@
   width: 14px;
   height: 14px;
 }
+
+/* ── Likert Scale ── */
+.pepper-likert {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pepper-likert-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--pepper-border);
+  background: var(--pepper-paper-inner);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.pepper-likert-item:hover { border-color: var(--pepper-red); background: rgba(196,120,92,0.04); }
+.pepper-likert-item.selected { border-color: var(--pepper-red); background: rgba(196,120,92,0.07); }
+.pepper-likert-dot {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 2px solid var(--pepper-border);
+  flex-shrink: 0; transition: all 0.2s;
+}
+.pepper-likert-dot.active { border-color: var(--pepper-red); background: var(--pepper-red); box-shadow: 0 0 0 3px rgba(196,120,92,0.15); }
+.pepper-likert-label { font-size: 14px; font-weight: 500; color: var(--pepper-text); }
+.pepper-likert-item.selected .pepper-likert-label { font-weight: 600; color: var(--pepper-dark); }
+
+/* ── Ranking ── */
+.pepper-ranking { display: flex; flex-direction: column; gap: 6px; }
+.pepper-ranking-hint { font-size: 12px; color: var(--pepper-text-lighter); margin-bottom: 6px; font-style: italic; }
+.pepper-ranking-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: 8px;
+  border: 1px solid var(--pepper-border);
+  background: var(--pepper-paper-inner);
+  transition: all 0.2s;
+}
+.pepper-ranking-num {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--pepper-red); color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; flex-shrink: 0;
+}
+.pepper-ranking-label { flex: 1; font-size: 14px; font-weight: 500; color: var(--pepper-text); }
+.pepper-ranking-controls { display: flex; gap: 4px; }
+.pepper-rank-btn {
+  width: 28px; height: 28px; border-radius: 6px;
+  border: 1px solid var(--pepper-border);
+  background: var(--pepper-cream); cursor: pointer;
+  font-size: 13px; display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s; color: var(--pepper-text-light);
+}
+.pepper-rank-btn:hover:not(:disabled) { border-color: var(--pepper-red); color: var(--pepper-red); background: rgba(196,120,92,0.06); }
+.pepper-rank-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* ── Dropdown ── */
+.pepper-dropdown-wrap { position: relative; }
+.pepper-dropdown {
+  width: 100%;
+  padding: 12px 40px 12px 16px;
+  border: 1px solid var(--pepper-border);
+  border-radius: 10px;
+  background: var(--pepper-paper-inner);
+  font-family: 'Outfit', sans-serif;
+  font-size: 15px;
+  color: var(--pepper-text);
+  appearance: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B6158' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+}
+.pepper-dropdown:focus { outline: none; border-color: var(--pepper-red); box-shadow: 0 0 0 3px rgba(196,120,92,0.1); }
+.pepper-dropdown option { padding: 8px; }
+
+/* ── Numeric Input ── */
+.pepper-numeric-wrap { display: flex; flex-direction: column; gap: 6px; }
+.pepper-numeric {
+  width: 100%; max-width: 200px;
+  padding: 12px 16px;
+  border: none;
+  border-bottom: 2px solid var(--pepper-border);
+  background: transparent;
+  font-family: 'Outfit', sans-serif;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--pepper-dark);
+  transition: border-color 0.2s;
+  text-align: center;
+}
+.pepper-numeric:focus { outline: none; border-bottom-color: var(--pepper-red); }
+.pepper-numeric::-webkit-inner-spin-button, .pepper-numeric::-webkit-outer-spin-button { opacity: 1; }
+.pepper-numeric-hint { font-size: 12px; color: var(--pepper-text-lighter); font-style: italic; }

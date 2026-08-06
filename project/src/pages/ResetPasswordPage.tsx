@@ -45,7 +45,7 @@ const ResetPasswordPage: React.FC = () => {
         setError(data.error || 'Failed to reset password');
       }
     } catch {
-      setError('Network error. Please try again.');
+      setError('Failed. Please try again.');
     } finally {
       setLoading(false);
     }

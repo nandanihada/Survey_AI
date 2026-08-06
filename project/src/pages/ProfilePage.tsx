@@ -536,7 +536,7 @@ function DataExportSection() {
         const err = await res.json();
         alert(`Export failed: ${err.error || 'Unknown error'}`);
       }
-    } catch { alert('Network error during export'); }
+    } catch { alert('Failed. Please try again.'); }
     setLoading(false);
   };
 
@@ -625,7 +625,7 @@ function AccountDeletionSection() {
       } else {
         alert(data.error || 'Failed to request deletion');
       }
-    } catch { alert('Network error'); }
+    } catch { alert('Failed. Please try again.'); }
     setLoading(false);
   };
 
@@ -640,7 +640,7 @@ function AccountDeletionSection() {
         setDeletionStatus({ has_pending_deletion: false });
         alert('Deletion cancelled. Your account is safe.');
       }
-    } catch { alert('Network error'); }
+    } catch { alert('Failed. Please try again.'); }
   };
 
   if (statusLoading) return null;

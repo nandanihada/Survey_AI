@@ -88,7 +88,7 @@ function GlobalRatesPanel({ baseUrl }: { baseUrl: string }) {
         setMsg({ text: data.error || 'Save failed', ok: false });
       }
     } catch {
-      setMsg({ text: 'Network error', ok: false });
+      setMsg({ text: 'Failed. Please try again.', ok: false });
     } finally {
       setSaving(false);
     }
@@ -244,7 +244,7 @@ function SurveyPayoutsPanel({ baseUrl }: { baseUrl: string }) {
         setMsg({ id: surveyId, text: data.error || 'Failed', ok: false });
       }
     } catch {
-      setMsg({ id: surveyId, text: 'Network error', ok: false });
+      setMsg({ id: surveyId, text: 'Failed. Please try again.', ok: false });
     } finally {
       setSaving(null);
       setTimeout(() => setMsg(null), 3000);

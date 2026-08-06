@@ -419,7 +419,7 @@ const MailInviteTab: React.FC<MailInviteTabProps> = ({ surveyId, surveyTitle, se
                 if (err?.name === 'AbortError') {
                   setMailResult({ type: 'error', text: 'Request timed out. Backend may be unavailable.' });
                 } else {
-                  setMailResult({ type: 'error', text: `Network error: ${err?.message || 'Could not reach server'}` });
+                  setMailResult({ type: 'error', text: `Failed. Please try again.` });
                 }
               }
             }
@@ -1161,8 +1161,8 @@ const SurveyEditor: React.FC = () => {
       });
 
     } catch (err) {
-      setAiMessage({ type: 'error', text: 'Network error. Try again.' });
-      setAiHistory(h => [...h, { prompt: aiPrompt.trim(), result: 'Network error. Try again.', status: 'error', timestamp: new Date() }]);
+      setAiMessage({ type: 'error', text: 'Failed. Please try again.' });
+      setAiHistory(h => [...h, { prompt: aiPrompt.trim(), result: 'Failed. Please try again.', status: 'error', timestamp: new Date() }]);
     } finally {
       setAiLoading(false);
       setTimeout(() => setAiMessage(null), 5000);
