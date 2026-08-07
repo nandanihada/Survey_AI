@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+﻿import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import './BasicSurveyTemplate.css';
@@ -23,8 +23,9 @@ interface Question {
   question: string;
   questionDescription?: string;
   answerDescription?: string;
-  type: 'text' | 'radio' | 'range' | 'ranking' | 'dropdown';
+  type: 'text' | 'radio' | 'range' | 'ranking' | 'dropdown' | 'dropdown_multi' | 'matrix' | 'list';
   options?: string[];
+  matrixColumns?: string[];
   answerStyle?: string;
   allowMultiple?: boolean;
   questionDelay?: number;
@@ -84,7 +85,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const [resumeSessionId, setResumeSessionId] = useState<string | null>(null);
   const [isResuming, setIsResuming] = useState(false);
 
-  const normalizeType = (type: string): 'text' | 'radio' | 'range' | 'ranking' | 'dropdown' => {
+  const normalizeType = (type: string): 'text' | 'radio' | 'range' | 'ranking' | 'dropdown' | 'dropdown_multi' | 'matrix' | 'list' => {
     switch (type) {
       case 'multiple_choice':
       case 'yes_no':
@@ -94,13 +95,19 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       case 'likert':
         return 'radio';  // rendered as special radio
       case 'ranking':
-        return 'ranking';  // new render type
+        return 'ranking';
       case 'dropdown':
-        return 'dropdown';  // new render type
+        return 'dropdown';
+      case 'dropdown_multi':
+        return 'dropdown_multi';
+      case 'matrix':
+        return 'matrix';
+      case 'list':
+        return 'list';
       case 'short_answer':
         return 'text';
       case 'numeric':
-        return 'text';  // rendered as number input
+        return 'text';
       case 'rating':
       case 'opinion_scale':
       case 'scale':
@@ -128,6 +135,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     rawType: (q as any).rawType || q.type,
     numericMin: (q as any).numericMin,
     numericMax: (q as any).numericMax,
+    matrixColumns: (q as any).matrixColumns || [],
   }));
 
   const [formData, setFormData] = useState<Record<string, string | number>>(() => {
@@ -197,6 +205,45 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const apiBaseUrl = isLocalhost
     ? 'http://localhost:5000'
     : 'https://surevy-pepperwahl.onrender.com';
+
+  // ── Back button admin control ────────────────────────────────────────────────
+  // Fetch once from the public platform-config endpoint
+  const [backButtonEnabled, setBackButtonEnabled] = useState<boolean>(true);
+  // When Back is disabled and user hits browser-back, show email capture UI
+  const [showBackBlocker, setShowBackBlocker] = useState(false);
+  const [blockerEmail, setBlockerEmail] = useState('');
+  const [blockerSubmitting, setBlockerSubmitting] = useState(false);
+  const [blockerSubmitted, setBlockerSubmitted] = useState(false);
+
+  useEffect(() => {
+    // Don't fetch in preview mode — show real behavior in live survey
+    if (previewMode) return;
+    const surveyId = (survey as any).short_id || survey.id;
+    if (!surveyId) return;
+    // Use the per-survey resolved endpoint (survey → user → global precedence)
+    fetch(`${apiBaseUrl}/api/admin/back-button-config/${surveyId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data && typeof data.back_button_enabled === 'boolean') {
+          setBackButtonEnabled(data.back_button_enabled);
+        }
+      })
+      .catch(() => { /* keep default (enabled) on failure */ });
+  }, [apiBaseUrl, previewMode, survey]);
+
+  // Intercept browser back button when back is disabled
+  useEffect(() => {
+    if (previewMode || backButtonEnabled) return;
+    // Push a dummy state so we detect the browser-back event
+    window.history.pushState({ surveyGuard: true }, '');
+    const handlePopState = (e: PopStateEvent) => {
+      // Re-push so pressing back again shows the blocker again
+      window.history.pushState({ surveyGuard: true }, '');
+      setShowBackBlocker(true);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [backButtonEnabled, previewMode]);
 
   // Check for resume token on mount
   useEffect(() => {
@@ -399,11 +446,20 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const isCurrentAnswered = currentQuestion
     ? currentQuestion.type === 'range'
       ? formData[currentQuestion.id] !== undefined && formData[currentQuestion.id] !== ''
-      : currentQuestion.allowMultiple
-        ? !!(formData[currentQuestion.id] && String(formData[currentQuestion.id]).length > 0)
-        : currentQuestion.type === 'ranking'
-          ? String(formData[currentQuestion.id] || '').includes('|||')
-          : formData[currentQuestion.id] !== '' && formData[currentQuestion.id] !== 0 && formData[currentQuestion.id] !== undefined
+      : currentQuestion.type === 'matrix'
+        ? (() => {
+            const rows = (currentQuestion.options || []) as string[];
+            if (rows.length === 0) return true;
+            try {
+              const ans = JSON.parse(String(formData[currentQuestion.id] || '{}')) as Record<string, string>;
+              return rows.every((r: string) => !!ans[r]);
+            } catch { return false; }
+          })()
+        : currentQuestion.allowMultiple
+          ? !!(formData[currentQuestion.id] && String(formData[currentQuestion.id]).length > 0)
+          : currentQuestion.type === 'ranking'
+            ? String(formData[currentQuestion.id] || '').includes('|||')
+            : formData[currentQuestion.id] !== '' && formData[currentQuestion.id] !== 0 && formData[currentQuestion.id] !== undefined
     : false;
 
   // Check if current question has a redirect configured
@@ -919,7 +975,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
             : formData[question.id] === option;
 
           return (
-            <div key={i}>
+            <motion.div key={i} variants={aVariants} initial="initial" animate="animate">
               <div
                 className={`pepper-option ${isSelected ? 'selected' : ''} ${isMultiple ? 'pepper-option--checkbox' : ''} ${optImg && replaceText ? 'pepper-option--image-only' : ''}`}
                 onClick={() => handleAnswer(question.id, option, isMultiple)}
@@ -940,20 +996,10 @@ const BasicSurveyTemplate: React.FC<Props> = ({
                 ) : optImg ? (
                   <span className="pepper-option-label pepper-option-label--img">
                     <img src={optImg} alt="" className="pepper-option-image-inline" />
-                    {!previewMode ? (
-                      <motion.span variants={aVariants} initial="initial" animate="animate">
-                        {option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}
-                      </motion.span>
-                    ) : (
-                      <span>{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</span>
-                    )}
+                    <span>{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</span>
                   </span>
                 ) : (
-                  !previewMode ? (
-                    <motion.span className="pepper-option-label" variants={aVariants} initial="initial" animate="animate">{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</motion.span>
-                  ) : (
-                    <span className="pepper-option-label">{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</span>
-                  )
+                  <span className="pepper-option-label">{option.replace(/^[A-Z][\:\)\.\-]\s*/i, '')}</span>
                 )}
               </div>
               {/* "Other" text input — appears inline when Other is selected */}
@@ -968,7 +1014,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
                   autoFocus
                 />
               )}
-            </div>
+            </motion.div>
           );
         })}
         {isMultiple && (
@@ -980,28 +1026,29 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
   const renderTextInput = (question: Question) => {
     const style = getStyleForQuestion(question);
+    const aVariants = getAnswerVariants(survey.animation, 0);
     return (
-      <textarea
-        value={formData[question.id] as string || ''}
-        onChange={(e) => {
-          handleAnswer(question.id, e.target.value);
-          // Auto-grow
-          e.target.style.height = 'auto';
-          e.target.style.height = `${e.target.scrollHeight}px`;
-        }}
-        onFocus={(e) => {
-          e.target.style.height = 'auto';
-          e.target.style.height = `${e.target.scrollHeight}px`;
-        }}
-        placeholder="Type your answer here..."
-        className={`pepper-textarea pepper-textarea-${style}`}
-        rows={1}
-      />
+      <motion.div variants={aVariants} initial="initial" animate="animate">
+        <textarea
+          value={formData[question.id] as string || ''}
+          onChange={(e) => {
+            handleAnswer(question.id, e.target.value);
+            e.target.style.height = 'auto';
+            e.target.style.height = `${e.target.scrollHeight}px`;
+          }}
+          onFocus={(e) => {
+            e.target.style.height = 'auto';
+            e.target.style.height = `${e.target.scrollHeight}px`;
+          }}
+          placeholder="Type your answer here..."
+          className={`pepper-textarea pepper-textarea-${style}`}
+          rows={1}
+        />
+      </motion.div>
     );
   };
 
   const renderScale = (question: Question) => {
-    // Determine scale range: use 10 for rating questions
     const scaleMax = 10;
     return (
       <div className="pepper-scale">
@@ -1010,17 +1057,23 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           <span>High</span>
         </div>
         <div className="pepper-scale-track">
-          {Array.from({ length: scaleMax }, (_, i) => i + 1).map(num => (
-            <motion.button
-              key={num}
-              type="button"
-              className={`pepper-scale-point ${formData[question.id] === num ? 'active' : ''}`}
-              onClick={() => handleAnswer(question.id, num)}
-              whileTap={{ scale: 0.9 }}
-            >
-              {num}
-            </motion.button>
-          ))}
+          {Array.from({ length: scaleMax }, (_, i) => i + 1).map(num => {
+            const aVariants = getAnswerVariants(survey.animation, num - 1);
+            return (
+              <motion.button
+                key={num}
+                type="button"
+                className={`pepper-scale-point ${formData[question.id] === num ? 'active' : ''}`}
+                onClick={() => handleAnswer(question.id, num)}
+                variants={aVariants}
+                initial="initial"
+                animate="animate"
+                whileTap={{ scale: 0.9 }}
+              >
+                {num}
+              </motion.button>
+            );
+          })}
         </div>
       </div>
     );
@@ -1031,12 +1084,20 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     return (
       <div className="pepper-likert">
         {options.map((opt, i) => {
+          const aVariants = getAnswerVariants(survey.animation, i);
           const isSelected = formData[question.id] === opt;
           return (
-            <div key={i} className={`pepper-likert-item ${isSelected ? 'selected' : ''}`} onClick={() => handleAnswer(question.id, opt)}>
+            <motion.div
+              key={i}
+              className={`pepper-likert-item ${isSelected ? 'selected' : ''}`}
+              onClick={() => handleAnswer(question.id, opt)}
+              variants={aVariants}
+              initial="initial"
+              animate="animate"
+            >
               <div className={`pepper-likert-dot ${isSelected ? 'active' : ''}`} />
               <span className="pepper-likert-label">{opt}</span>
-            </div>
+            </motion.div>
           );
         })}
       </div>
@@ -1096,6 +1157,172 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     </div>
   );
 
+  // ── Multi-select dropdown ──────────────────────────────────────────────────
+  const renderDropdownMulti = (question: Question) => {
+    const selectedValues = formData[question.id]
+      ? String(formData[question.id]).split(',').filter(Boolean)
+      : [];
+    const toggle = (opt: string) => {
+      const next = selectedValues.includes(opt)
+        ? selectedValues.filter(v => v !== opt)
+        : [...selectedValues, opt];
+      handleAnswer(question.id, next.join(','));
+    };
+    return (
+      <div className="pepper-options pepper-options--multi">
+        {question.options?.map((opt, i) => {
+          const aVariants = getAnswerVariants(survey.animation, i);
+          const isSelected = selectedValues.includes(opt);
+          return (
+            <motion.div key={i} variants={aVariants} initial="initial" animate="animate">
+              <div
+                className={`pepper-option pepper-option--checkbox ${isSelected ? 'selected' : ''}`}
+                onClick={() => toggle(opt)}
+              >
+                <span className={`pepper-checkbox ${isSelected ? 'pepper-checkbox--checked' : ''}`}>
+                  {isSelected && (
+                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                      <path d="M1 4L3.5 6.5L9 1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                </span>
+                <span className="pepper-option-label">{opt}</span>
+              </div>
+            </motion.div>
+          );
+        })}
+        <p className="pepper-multi-hint">Select all that apply</p>
+      </div>
+    );
+  };
+
+  // ── Matrix / Grid ──────────────────────────────────────────────────────────
+  const renderMatrix = (question: Question) => {
+    const rows = question.options || [];
+    const cols = question.matrixColumns || ['Option A', 'Option B', 'Option C'];
+    // Answer stored as JSON string: { "Row1": "ColA", "Row2": "ColB", ... }
+    let answers: Record<string, string> = {};
+    try { answers = JSON.parse(String(formData[question.id] || '{}')); } catch { answers = {}; }
+
+    const selectCell = (row: string, col: string) => {
+      const updated = { ...answers, [row]: col };
+      handleAnswer(question.id, JSON.stringify(updated));
+    };
+
+    return (
+      <div className="pepper-matrix-wrap" style={{ overflowX: 'auto', marginTop: 8 }}>
+        <table className="pepper-matrix" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 4px' }}>
+          <thead>
+            <tr>
+              <th style={{ width: '35%', textAlign: 'left', padding: '6px 10px', fontSize: 11, fontWeight: 600, color: 'var(--pepper-text-lighter)' }}></th>
+              {cols.map((col, ci) => (
+                <th key={ci} style={{ textAlign: 'center', padding: '6px 8px', fontSize: 11, fontWeight: 600, color: 'var(--pepper-text-lighter)' }}>{col}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, ri) => (
+              <tr key={ri} style={{ background: ri % 2 === 0 ? 'var(--pepper-paper)' : 'transparent', borderRadius: 8 }}>
+                <td style={{ padding: '10px 10px', fontSize: 13, fontWeight: 500, color: 'var(--pepper-dark)' }}>{row}</td>
+                {cols.map((col, ci) => {
+                  const isSelected = answers[row] === col;
+                  return (
+                    <td key={ci} style={{ textAlign: 'center', padding: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={() => selectCell(row, col)}
+                        style={{
+                          width: 22, height: 22, borderRadius: '50%',
+                          border: `2px solid ${isSelected ? 'var(--pepper-red)' : 'var(--pepper-border)'}`,
+                          background: isSelected ? 'var(--pepper-red)' : 'transparent',
+                          cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        {isSelected && (
+                          <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                            <path d="M1 3.5L3.5 6L8 1" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
+                      </button>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {/* Progress hint */}
+        {(() => {
+          const rows = question.options || [];
+          const answered = rows.filter(r => answers[r]).length;
+          if (answered < rows.length) {
+            return (
+              <p style={{ fontSize: 11, color: 'var(--pepper-text-lighter)', marginTop: 8, fontStyle: 'italic' }}>
+                {answered} of {rows.length} rows answered
+              </p>
+            );
+          }
+          return null;
+        })()}
+      </div>
+    );
+  };
+
+  // ── List ───────────────────────────────────────────────────────────────────
+  const renderList = (question: Question) => {
+    const items = question.options || [];
+    const selected = formData[question.id]
+      ? String(formData[question.id]).split(',').filter(Boolean)
+      : [];
+    const toggle = (item: string) => {
+      const next = selected.includes(item)
+        ? selected.filter(v => v !== item)
+        : [...selected, item];
+      handleAnswer(question.id, next.join(','));
+    };
+    return (
+      <div style={{ marginTop: 8 }}>
+        {items.map((item, i) => {
+          const aVariants = getAnswerVariants(survey.animation, i);
+          const isChecked = selected.includes(item);
+          return (
+            <motion.div key={i} variants={aVariants} initial="initial" animate="animate">
+              <div
+                onClick={() => toggle(item)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
+                  borderRadius: 10, cursor: 'pointer', marginBottom: 6,
+                  border: `1.5px solid ${isChecked ? 'var(--pepper-red)' : 'var(--pepper-border)'}`,
+                  background: isChecked ? 'var(--pepper-red-light-10, #FEF0EC)' : 'var(--pepper-paper-inner)',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <span style={{
+                  width: 20, height: 20, borderRadius: 5, flexShrink: 0,
+                  border: `2px solid ${isChecked ? 'var(--pepper-red)' : 'var(--pepper-border)'}`,
+                  background: isChecked ? 'var(--pepper-red)' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.15s',
+                }}>
+                  {isChecked && (
+                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                      <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                </span>
+                <span style={{ fontSize: 13, color: isChecked ? 'var(--pepper-red-dark, #A8624A)' : 'var(--pepper-text)', fontWeight: isChecked ? 500 : 400 }}>
+                  {i + 1}. {item}
+                </span>
+              </div>
+            </motion.div>
+          );
+        })}
+        <p className="pepper-multi-hint">Select all that apply</p>
+      </div>
+    );
+  };
+
   const renderNumeric = (question: Question) => (
     <div className="pepper-numeric-wrap">
       <input
@@ -1117,12 +1344,18 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
   const renderQuestion = (question: Question, index: number) => {
     if (!previewMode && index !== currentQuestionIndex) return null;
-    if (previewMode && index > 2) return null;
+    if (previewMode && index !== currentQuestionIndex) return null;
+
+    const isTypewriter = (survey.animation?.questionAnimation === 'typewriter');
 
     return (
-      <div
-        key={question.id}
+      <motion.div
+        key={`${question.id}-${currentQuestionIndex}`}
         className="pepper-question-area pepper-animate-question"
+        variants={qVariants}
+        initial="initial"
+        animate="animate"
+        exit="exit"
       >
         <div className="pepper-question-number">
           <span className="num-badge">{index + 1}</span>
@@ -1138,10 +1371,33 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           />
         )}
 
-        {!previewMode ? (
-          <motion.h2 className="pepper-question-text" variants={qVariants} initial="initial" animate="animate" exit="exit">
-            {question.question}
-          </motion.h2>
+        {/* Question text — typewriter gets CSS animation, others use motion */}
+        {isTypewriter ? (
+          <h2
+            key={`tw-${question.id}-${currentQuestionIndex}`}
+            className="pepper-question-text pepper-typewriter"
+            style={{
+              '--tw-chars': `${question.question.length}`,
+              '--tw-dur': `${Math.max(0.8, question.question.length * 0.045)}s`,
+            } as React.CSSProperties}
+          >
+            {editMode ? (
+              <input
+                type="text"
+                value={question.question}
+                onChange={(e) => {
+                  const updated = { ...survey };
+                  if (updated.questions[index]) {
+                    updated.questions[index].question = e.target.value;
+                    onSurveyChange?.(updated);
+                  }
+                }}
+                className="pepper-editable-input"
+              />
+            ) : (
+              question.question
+            )}
+          </h2>
         ) : (
           <h2 className="pepper-question-text">
             {editMode ? (
@@ -1189,7 +1445,10 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         {question.type === 'range' && renderScale(question)}
         {question.type === 'ranking' && renderRanking(question)}
         {question.type === 'dropdown' && renderDropdown(question)}
-      </div>
+        {question.type === 'dropdown_multi' && renderDropdownMulti(question)}
+        {question.type === 'matrix' && renderMatrix(question)}
+        {question.type === 'list' && renderList(question)}
+      </motion.div>
     );
   };
 
@@ -1252,6 +1511,141 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   
   return (
     <div className="pepper-survey-container">
+      {/* ── Browser-back blocker overlay ── */}
+      {showBackBlocker && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          background: 'rgba(45, 37, 32, 0.55)',
+          backdropFilter: 'blur(6px)',
+          WebkitBackdropFilter: 'blur(6px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '24px',
+        }}>
+          {/* Paper card */}
+          <div style={{
+            background: '#FAF8F5',
+            borderRadius: 20,
+            padding: '44px 40px 36px',
+            maxWidth: 420, width: '100%',
+            textAlign: 'center',
+            boxShadow: '0 8px 48px rgba(45,37,32,0.22), 0 2px 8px rgba(45,37,32,0.08)',
+            border: '1px solid #EBE8E3',
+            position: 'relative',
+            fontFamily: "'Outfit', -apple-system, sans-serif",
+          }}>
+            {blockerSubmitted ? (
+              <>
+                {/* Success state */}
+                <div style={{
+                  width: 56, height: 56, borderRadius: '50%',
+                  background: '#F0FDF4', border: '1.5px solid #BBF7D0',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  margin: '0 auto 20px',
+                }}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </div>
+                <h2 style={{ fontSize: 20, fontWeight: 700, color: '#2D2520', marginBottom: 8, letterSpacing: '-0.02em' }}>
+                  You're on the list
+                </h2>
+                <p style={{ fontSize: 13, color: '#9B9189', lineHeight: 1.65 }}>
+                  We'll reach out when the next opportunity opens up. Keep an eye on your inbox.
+                </p>
+              </>
+            ) : (
+              <>
+                {/* Icon — simple SVG arrow, no emoji */}
+                <div style={{
+                  width: 52, height: 52, borderRadius: '50%',
+                  background: '#FEF0EC', border: '1.5px solid #F8D5C8',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  margin: '0 auto 22px',
+                }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C4785C" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <polyline points="16 17 21 12 16 7" />
+                    <line x1="21" y1="12" x2="9" y2="12" />
+                  </svg>
+                </div>
+
+                <h2 style={{ fontSize: 20, fontWeight: 700, color: '#2D2520', marginBottom: 8, letterSpacing: '-0.02em' }}>
+                  Leaving already?
+                </h2>
+                <p style={{ fontSize: 13, color: '#9B9189', lineHeight: 1.65, marginBottom: 26 }}>
+                  Navigating back will exit the survey. Drop your email below — we'll notify you when the next opportunity opens.
+                </p>
+
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!blockerEmail.trim()) return;
+                  setBlockerSubmitting(true);
+                  try {
+                    await fetch(`${apiBaseUrl}/api/surveys/${(survey as any).short_id || survey.id}/back-exit-email`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ email: blockerEmail.trim(), survey_id: (survey as any).short_id || survey.id }),
+                    });
+                  } catch { /* silent */ }
+                  setBlockerSubmitted(true);
+                  setBlockerSubmitting(false);
+                }}>
+                  <input
+                    type="email"
+                    required
+                    value={blockerEmail}
+                    onChange={e => setBlockerEmail(e.target.value)}
+                    placeholder="your@email.com"
+                    style={{
+                      width: '100%', padding: '11px 14px', fontSize: 13,
+                      border: '1.5px solid #EBE8E3', borderRadius: 10,
+                      outline: 'none', marginBottom: 10,
+                      boxSizing: 'border-box' as const,
+                      background: '#FDFCFA', color: '#2D2520',
+                      fontFamily: 'inherit',
+                      transition: 'border-color 0.15s',
+                    }}
+                    onFocus={e => { e.target.style.borderColor = '#C4785C'; }}
+                    onBlur={e => { e.target.style.borderColor = '#EBE8E3'; }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={blockerSubmitting}
+                    style={{
+                      width: '100%', padding: '12px', fontSize: 13, fontWeight: 600,
+                      background: '#C4785C', color: '#fff',
+                      border: 'none', borderRadius: 10, cursor: 'pointer',
+                      fontFamily: 'inherit', letterSpacing: '0.01em',
+                      boxShadow: '0 2px 10px rgba(196,120,92,0.3)',
+                      marginBottom: 14,
+                      opacity: blockerSubmitting ? 0.7 : 1,
+                      transition: 'opacity 0.15s, background 0.15s',
+                    }}
+                  >
+                    {blockerSubmitting ? 'Saving…' : 'Notify me of the next opportunity'}
+                  </button>
+                </form>
+
+                <button
+                  type="button"
+                  onClick={() => setShowBackBlocker(false)}
+                  style={{
+                    background: 'none', border: 'none',
+                    color: '#C4A99A', fontSize: 12,
+                    cursor: 'pointer', fontFamily: 'inherit',
+                    letterSpacing: '0.01em',
+                    textDecoration: 'underline',
+                    textDecorationColor: '#EBE8E3',
+                    display: backButtonEnabled ? 'inline' : 'none',
+                  }}
+                >
+                  Continue the survey instead
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
       {/* Title + Logo � OUTSIDE the paper card */}
       <div style={{ maxWidth: '880px', width: '100%', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '4px' }}>
         <div style={{ width: '28px', height: '28px', backgroundImage: 'url(/logo.png)', backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', flexShrink: 0 }} />
@@ -1357,7 +1751,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           {/* Footer Navigation */}
           {!previewMode && (
             <div className="pepper-footer">
-              {currentQuestionIndex > 0 ? (
+              {currentQuestionIndex > 0 && backButtonEnabled ? (
                 <button
                   type="button"
                   className="pepper-btn pepper-btn-back"
@@ -1400,10 +1794,30 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
           {previewMode && (
             <div className="pepper-footer">
-              <div />
-              <button type="submit" className="pepper-btn pepper-btn-submit">
-                Submit
-              </button>
+              {currentQuestionIndex > 0 && backButtonEnabled !== false ? (
+                <button
+                  type="button"
+                  className="pepper-btn pepper-btn-back"
+                  onClick={handlePrev}
+                >
+                  <span className="arrow">←</span> Back
+                </button>
+              ) : (
+                <div />
+              )}
+              {currentQuestionIndex < visibleQuestions.length - 1 ? (
+                <button
+                  type="button"
+                  className="pepper-btn pepper-btn-next"
+                  onClick={() => setCurrentQuestionIndex(prev => prev + 1)}
+                >
+                  Next <span className="arrow">→</span>
+                </button>
+              ) : (
+                <button type="submit" className="pepper-btn pepper-btn-submit">
+                  Submit
+                </button>
+              )}
             </div>
           )}
 

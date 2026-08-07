@@ -491,3 +491,249 @@ def delete_notification(notification_id):
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# ─────────────────────────────────────────────────────────
+#  Platform-wide configuration (admin-only)
+#  Stored as a single document in db.platform_config
+# ─────────────────────────────────────────────────────────
+
+PLATFORM_CONFIG_ID = 'global'
+
+DEFAULT_PLATFORM_CONFIG = {
+    '_id': PLATFORM_CONFIG_ID,
+    # If False, the Back button is hidden on all survey pages and
+    # browser-back is intercepted with an email-capture fallback.
+    'back_button_enabled': True,
+    'updated_at': None,
+    'updated_by': None,
+}
+
+
+def _get_platform_config():
+    """Retrieve the singleton platform config document, creating defaults if missing."""
+    config = db.platform_config.find_one({'_id': PLATFORM_CONFIG_ID})
+    if not config:
+        db.platform_config.insert_one(dict(DEFAULT_PLATFORM_CONFIG))
+        config = dict(DEFAULT_PLATFORM_CONFIG)
+    return config
+
+
+@admin_bp.route('/platform-config', methods=['GET'])
+@requireAdmin
+def get_platform_config():
+    """Return the current platform-wide configuration."""
+    try:
+        config = _get_platform_config()
+        config.pop('_id', None)
+        return jsonify({'config': config})
+    except Exception as e:
+        return jsonify({'error': f'Failed to get platform config: {str(e)}'}), 500
+
+
+@admin_bp.route('/platform-config', methods=['PUT'])
+@requireAdmin
+def update_platform_config():
+    """Update platform-wide configuration (admin only)."""
+    try:
+        user = g.current_user
+        data = request.get_json() or {}
+
+        allowed_keys = {'back_button_enabled'}
+        update = {k: v for k, v in data.items() if k in allowed_keys}
+        if not update:
+            return jsonify({'error': 'No valid fields to update'}), 400
+
+        update['updated_at'] = datetime.utcnow().isoformat()
+        update['updated_by'] = str(user.get('email', user.get('_id', 'unknown')))
+
+        db.platform_config.update_one(
+            {'_id': PLATFORM_CONFIG_ID},
+            {'$set': update},
+            upsert=True,
+        )
+        config = _get_platform_config()
+        config.pop('_id', None)
+        return jsonify({'message': 'Platform config updated', 'config': config})
+    except Exception as e:
+        return jsonify({'error': f'Failed to update platform config: {str(e)}'}), 500
+
+
+# Public endpoint — no auth required — so the survey page can read it
+# Prefix is /api/admin but we expose it without auth for the survey renderer
+@admin_bp.route('/platform-config/public', methods=['GET'])
+def get_platform_config_public():
+    """Return safe, public-facing subset of the platform config."""
+    try:
+        config = _get_platform_config()
+        return jsonify({
+            'back_button_enabled': config.get('back_button_enabled', True),
+        })
+    except Exception as e:
+        return jsonify({'error': f'Failed to get platform config: {str(e)}'}), 500
+
+
+# ─────────────────────────────────────────────────────────
+#  Per-survey back button override (admin-only)
+# ─────────────────────────────────────────────────────────
+
+@admin_bp.route('/surveys/<survey_id>/back-button', methods=['PUT'])
+@requireAdmin
+def set_survey_back_button(survey_id):
+    """Override back-button setting for a specific survey."""
+    try:
+        data = request.get_json() or {}
+        use_global = data.get('use_global', False)
+
+        from bson import ObjectId as ObjId
+        survey = (
+            db.surveys.find_one({'short_id': survey_id}) or
+            db.surveys.find_one({'id': survey_id})
+        )
+        if not survey:
+            try:
+                survey = db.surveys.find_one({'_id': ObjId(survey_id)})
+            except Exception:
+                pass
+        if not survey:
+            return jsonify({'error': 'Survey not found'}), 404
+
+        if use_global:
+            db.surveys.update_one(
+                {'_id': survey['_id']},
+                {'$unset': {'back_button_enabled': ''}}
+            )
+            return jsonify({'message': 'Survey back button reset to global', 'back_button_enabled': None})
+
+        if 'back_button_enabled' not in data:
+            return jsonify({'error': 'back_button_enabled field required'}), 400
+
+        enabled = bool(data['back_button_enabled'])
+        db.surveys.update_one(
+            {'_id': survey['_id']},
+            {'$set': {'back_button_enabled': enabled, 'updated_at': datetime.utcnow()}}
+        )
+        return jsonify({'message': 'Survey back button updated', 'back_button_enabled': enabled})
+    except Exception as e:
+        return jsonify({'error': f'Failed to update: {str(e)}'}), 500
+
+
+# ─────────────────────────────────────────────────────────
+#  Per-user back button override (admin-only)
+# ─────────────────────────────────────────────────────────
+
+@admin_bp.route('/users/<user_id>/back-button', methods=['PUT'])
+@requireAdmin
+def set_user_back_button(user_id):
+    """Override back-button setting for a specific user (all their surveys)."""
+    try:
+        data = request.get_json() or {}
+        if 'back_button_enabled' not in data:
+            return jsonify({'error': 'back_button_enabled field required'}), 400
+
+        enabled = bool(data['back_button_enabled'])
+        use_global = data.get('use_global', False)  # True = remove override, fall back to global
+
+        from bson import ObjectId as ObjId
+        try:
+            oid = ObjId(user_id)
+        except Exception:
+            return jsonify({'error': 'Invalid user ID'}), 400
+
+        if use_global:
+            db.users.update_one({'_id': oid}, {'$unset': {'back_button_enabled': ''}})
+            return jsonify({'message': 'User back button reset to global default'})
+
+        db.users.update_one(
+            {'_id': oid},
+            {'$set': {'back_button_enabled': enabled}}
+        )
+        return jsonify({'message': 'User back button updated', 'back_button_enabled': enabled})
+    except Exception as e:
+        return jsonify({'error': f'Failed to update: {str(e)}'}), 500
+
+
+# ─────────────────────────────────────────────────────────
+#  Public endpoint — resolved back-button for a survey
+#  Precedence: survey-level > user-level > global
+# ─────────────────────────────────────────────────────────
+
+@admin_bp.route('/back-button-config/<survey_id>', methods=['GET'])
+def get_back_button_config(survey_id):
+    """
+    Return the effective back-button setting for a survey.
+    Resolution order: survey override → owner user override → global default.
+    No auth required — called by the public survey page.
+    """
+    try:
+        from bson import ObjectId as ObjId
+
+        # 1. Find the survey
+        survey = (
+            db.surveys.find_one({'short_id': survey_id}, {'back_button_enabled': 1, 'ownerUserId': 1}) or
+            db.surveys.find_one({'id': survey_id}, {'back_button_enabled': 1, 'ownerUserId': 1})
+        )
+        if not survey:
+            try:
+                survey = db.surveys.find_one(
+                    {'_id': ObjId(survey_id)},
+                    {'back_button_enabled': 1, 'ownerUserId': 1}
+                )
+            except Exception:
+                pass
+
+        # 2. Survey-level override takes highest priority
+        if survey and 'back_button_enabled' in survey:
+            return jsonify({
+                'back_button_enabled': bool(survey['back_button_enabled']),
+                'source': 'survey'
+            })
+
+        # 3. User-level override
+        if survey and survey.get('ownerUserId'):
+            try:
+                user = db.users.find_one(
+                    {'_id': ObjId(survey['ownerUserId'])},
+                    {'back_button_enabled': 1}
+                )
+                if user and 'back_button_enabled' in user:
+                    return jsonify({
+                        'back_button_enabled': bool(user['back_button_enabled']),
+                        'source': 'user'
+                    })
+            except Exception:
+                pass
+
+        # 4. Global default
+        config = _get_platform_config()
+        return jsonify({
+            'back_button_enabled': config.get('back_button_enabled', True),
+            'source': 'global'
+        })
+    except Exception as e:
+        return jsonify({'back_button_enabled': True, 'source': 'default', 'error': str(e)})
+
+
+# ─────────────────────────────────────────────────────────
+#  Back-exit email captures (admin view)
+# ─────────────────────────────────────────────────────────
+
+@admin_bp.route('/back-exits', methods=['GET'])
+@requireAdmin
+def get_back_exits():
+    """Return all back-exit email captures, most recent first."""
+    try:
+        limit = int(request.args.get('limit', 500))
+        exits = list(
+            db.back_exit_emails
+            .find({}, {'_id': 1, 'email': 1, 'survey_id': 1, 'submitted_at': 1, 'ip': 1})
+            .sort('submitted_at', -1)
+            .limit(limit)
+        )
+        for e in exits:
+            e['_id'] = str(e['_id'])
+            if e.get('submitted_at'):
+                e['submitted_at'] = e['submitted_at'].isoformat()
+        return jsonify({'exits': exits, 'total': len(exits)})
+    except Exception as ex:
+        return jsonify({'error': str(ex)}), 500

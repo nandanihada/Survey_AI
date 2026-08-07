@@ -408,6 +408,7 @@ try:
     from survey_invite_api import survey_invite_bp
     from survey_sharing_api import survey_sharing_bp, setup_sharing_indexes
     from location_control_api import location_bp    # Location control admin API
+    from plan_features_api import plan_features_bp  # Plan features config API
 
     # Register blueprints
 
@@ -426,6 +427,7 @@ try:
     app.register_blueprint(survey_bp)  # Survey routes at /api/surveys
 
     app.register_blueprint(admin_bp)  # Admin routes at /api/admin
+    app.register_blueprint(plan_features_bp)  # Plan features config at /api/admin/plan-features
 
     app.register_blueprint(response_logs_bp)
 
@@ -5527,24 +5529,76 @@ Rules:
             if question_type == "short_answer":
                 return jsonify({"options": []})
 
-            # For multiple_choice / radio - generate relevant options
-            prompt = f"""Generate 4 answer options for this survey question. The options should be realistic, relevant, and cover a good range of possible answers.
+            # Resolve how many options to generate
+            option_count = int(data.get("option_count") or 4)
+            option_count = max(2, min(10, option_count))  # clamp 2–10
+
+            # Matrix type — generate rows AND columns separately
+            if question_type == "matrix":
+                row_prompt = f"""Generate {option_count} row labels for a matrix survey question.
+
+Question: "{question_text}"
+Rules:
+- Each row label should be a short phrase (2-5 words) representing a distinct category or item
+- Rows will be rated/compared across columns
+- Return ONLY the labels, one per line, no numbering or bullets"""
+
+                col_prompt = f"""Generate 3-4 column headers for a matrix survey question about: "{question_text}"
+Rules:
+- Column headers should be short scale labels (e.g. "Very Satisfied", "Satisfied", "Neutral", "Dissatisfied")
+- Or use frequency labels, agreement labels, or quality labels depending on the topic
+- Return ONLY the column headers, one per line, no numbering"""
+
+                rows_raw = generate_ai_content(row_prompt, temperature=0.7, max_tokens=200)
+                cols_raw = generate_ai_content(col_prompt, temperature=0.7, max_tokens=100)
+
+                rows = [r.strip().strip('-').strip('•').strip() for r in rows_raw.strip().split('\n') if r.strip()][:option_count]
+                cols = [c.strip().strip('-').strip('•').strip() for c in cols_raw.strip().split('\n') if c.strip()][:4]
+
+                if len(rows) < 2:
+                    rows = [f"Item {i+1}" for i in range(option_count)]
+                if len(cols) < 2:
+                    cols = ["Strongly Agree", "Agree", "Neutral", "Disagree"]
+
+                return jsonify({"options": rows, "columns": cols})
+
+            # List type — numbered items  
+            if question_type == "list":
+                prompt = f"""Generate {option_count} items for a list-style survey question.
+
+Question: "{question_text}"
+Rules:
+- Each item should be a clear, distinct choice (3-6 words)
+- Items should cover different realistic options relevant to the question
+- Return ONLY the items, one per line, no numbering or bullets"""
+            elif question_type in ("dropdown", "dropdown_multi"):
+                prompt = f"""Generate {option_count} options for a dropdown survey question.
+
+Question: "{question_text}"
+Rules:
+- Generate exactly {option_count} options
+- Each option should be concise (1-5 words)
+- Cover a comprehensive range of possible answers
+- Return ONLY the options, one per line, no numbering or bullets"""
+            else:
+                # multiple_choice, multi_select, radio, etc.
+                prompt = f"""Generate {option_count} answer options for this survey question.
 
 Question: "{question_text}"
 Question type: {question_type}
 
 Rules:
-- Generate exactly 4 options
+- Generate exactly {option_count} options
 - Each option should be concise (2-5 words)
 - Options should be distinct and cover different perspectives
 - Return ONLY the options, one per line, no numbering or bullets"""
 
-            result = generate_ai_content(prompt, temperature=0.7, max_tokens=150)
+            result = generate_ai_content(prompt, temperature=0.7, max_tokens=250)
             options = [opt.strip().strip('-').strip('•').strip() for opt in result.strip().split('\n') if opt.strip()]
-            options = [opt for opt in options if len(opt) > 0][:4]
+            options = [opt for opt in options if len(opt) > 0][:option_count]
 
             if len(options) < 2:
-                options = ["Option 1", "Option 2", "Option 3", "Option 4"]
+                options = [f"Option {i+1}" for i in range(option_count)]
 
             return jsonify({"options": options})
 

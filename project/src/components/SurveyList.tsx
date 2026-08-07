@@ -14,7 +14,9 @@ import {
   Eye,
   Mail,
   FileText,
-  Trash2
+  Trash2,
+  Copy,
+  Loader2
 } from 'lucide-react';
 
 interface SurveyListProps {
@@ -42,12 +44,28 @@ const getSurveyId = (survey: Survey): string =>
 
 const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew }) => {
   const navigate = useNavigate();
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, user, hasFeature } = useAuth();
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [showPromptId, setShowPromptId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [cloningId, setCloningId] = useState<string | null>(null);
+  // Track which survey IDs have an unsaved local draft
+  const [localDraftIds, setLocalDraftIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    // Scan localStorage for any survey drafts
+    const drafts = new Set<string>();
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('survey_draft_')) {
+        const surveyId = key.replace('survey_draft_', '');
+        drafts.add(surveyId);
+      }
+    }
+    setLocalDraftIds(drafts);
+  }, []);
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   const apiBaseUrl = isLocalhost
     ? 'http://localhost:5000'
@@ -102,6 +120,38 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
       console.error('Error fetching surveys:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleClone = async (survey: Survey) => {
+    const surveyId = getSurveyId(survey);
+    if (!surveyId) return;
+    setCloningId(surveyId);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${apiBaseUrl}/api/surveys/${surveyId}/clone`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(`Clone failed: ${err.error || 'Unknown error'}`);
+        return;
+      }
+      const data = await res.json();
+      const newId = data.new_survey_id || getSurveyId(data.survey);
+      // Refresh the list and navigate to edit the clone
+      await fetchSurveys();
+      if (newId) {
+        navigate(`/dashboard/edit/${newId}`);
+      }
+    } catch {
+      alert('Clone failed. Please try again.');
+    } finally {
+      setCloningId(null);
     }
   };
 
@@ -304,6 +354,13 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                       <span className={`px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium flex-shrink-0 ${statusBadge(getStatus(survey))}`}>
                         {getStatus(survey)}
                       </span>
+                      {/* Local draft badge — user has unsaved changes for this survey */}
+                      {localDraftIds.has(surveyId) && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold flex-shrink-0 bg-amber-100 text-amber-700 border border-amber-200 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
+                          Draft
+                        </span>
+                      )}
                       {/* Shared-with-me badge */}
                       {user?.id && survey.ownerUserId && survey.ownerUserId !== user.id && (
                         <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium flex-shrink-0 bg-blue-100 text-blue-700">
@@ -402,6 +459,37 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                         <FileText size={13} />
                         <span className="hidden sm:inline">Prompt</span>
                       </button>
+                    )}
+                    {hasFeature('survey_clone') ? (
+                    <button
+                      onClick={() => handleClone(survey)}
+                      disabled={cloningId === surveyId}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        isDarkMode
+                          ? 'bg-teal-500/10 text-teal-400 hover:bg-teal-500/20'
+                          : 'bg-teal-50 text-teal-600 hover:bg-teal-100'
+                      } disabled:opacity-50`}
+                      title="Clone Survey (new ID, independent branching)"
+                    >
+                      {cloningId === surveyId ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : (
+                        <Copy size={13} />
+                      )}
+                      <span className="hidden sm:inline">{cloningId === surveyId ? 'Cloning…' : 'Clone'}</span>
+                    </button>
+                    ) : (
+                    <button
+                      disabled
+                      title="Clone Survey — upgrade your plan to use this feature"
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium opacity-40 cursor-not-allowed ${
+                        isDarkMode ? 'bg-slate-700 text-slate-400' : 'bg-stone-100 text-stone-400'
+                      }`}
+                    >
+                      <Copy size={13} />
+                      <span className="hidden sm:inline">Clone</span>
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </button>
                     )}
                     <button
                       onClick={async () => {

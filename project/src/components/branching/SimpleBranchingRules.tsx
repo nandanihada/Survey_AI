@@ -13,9 +13,10 @@ import { getApiBaseUrl } from '../../utils/deploymentFix';
 import {
   Sparkles, Save, RefreshCw, Eye, EyeOff,
   AlertCircle, Check, HelpCircle, ExternalLink, Link, ChevronDown, ChevronUp,
-  ArrowUpRight, StopCircle
+  ArrowUpRight, StopCircle, Lock
 } from 'lucide-react';
 import './SimpleBranchingRules.css';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface RedirectConfig {
   enabled: boolean;
@@ -38,6 +39,7 @@ interface BranchingRule {
   depends_on: string | null;
   condition: string | null;
   value: string | null;
+  value_multi?: string[];   // multi-answer selection for show conditions
   // Redirect settings
   redirect_enabled: boolean;
   redirect_url: string | null;
@@ -161,8 +163,107 @@ const SurveyUrlPicker: React.FC<SurveyUrlPickerProps> = ({ value, surveys, curre
   );
 };
 
+// ── Multi-answer selector for show conditions ──────────────────────────────
+interface MultiAnswerSelectProps {
+  options: string[];
+  value: string[];
+  onChange: (vals: string[]) => void;
+}
+const MultiAnswerSelect: React.FC<MultiAnswerSelectProps> = ({ options, value, onChange }) => {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  React.useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const toggle = (opt: string) => {
+    const next = value.includes(opt) ? value.filter(v => v !== opt) : [...value, opt];
+    onChange(next);
+  };
+
+  const label = value.length === 0
+    ? 'Select answer…'
+    : value.length === 1
+      ? value[0].length > 22 ? value[0].slice(0, 22) + '…' : value[0]
+      : `${value.length} answers selected`;
+
+  return (
+    <div ref={ref} style={{ position: 'relative', minWidth: 140 }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="sbr-select answer-select"
+        style={{
+          width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between', gap: 4, cursor: 'pointer',
+          background: value.length > 0 ? '#fffbeb' : undefined,
+          borderColor: value.length > 0 ? '#f59e0b' : undefined,
+        }}
+      >
+        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12 }}>{label}</span>
+        <ChevronDown size={12} style={{ flexShrink: 0, opacity: 0.5 }} />
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, zIndex: 999,
+          background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.12)', minWidth: 200, maxHeight: 260,
+          overflowY: 'auto', marginTop: 4,
+        }}>
+          {/* Clear all */}
+          {value.length > 0 && (
+            <button
+              type="button"
+              onClick={() => { onChange([]); setOpen(false); }}
+              style={{ width: '100%', padding: '7px 12px', fontSize: 11, color: '#ef4444', background: '#fef2f2', border: 'none', borderBottom: '1px solid #fee2e2', cursor: 'pointer', textAlign: 'left', fontWeight: 600 }}
+            >
+              ✕ Clear all ({value.length} selected)
+            </button>
+          )}
+          {options.map(opt => {
+            const checked = value.includes(opt);
+            return (
+              <label
+                key={opt}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 12px', cursor: 'pointer', fontSize: 12,
+                  background: checked ? '#fffbeb' : 'transparent',
+                  borderBottom: '1px solid #f9fafb',
+                  transition: 'background 0.1s',
+                }}
+                onMouseEnter={e => { if (!checked) (e.currentTarget as HTMLLabelElement).style.background = '#f9fafb'; }}
+                onMouseLeave={e => { if (!checked) (e.currentTarget as HTMLLabelElement).style.background = 'transparent'; }}
+              >
+                <div style={{
+                  width: 15, height: 15, borderRadius: 4, flexShrink: 0,
+                  border: `2px solid ${checked ? '#f59e0b' : '#d1d5db'}`,
+                  background: checked ? '#f59e0b' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {checked && <svg width="8" height="6" viewBox="0 0 8 6" fill="none"><path d="M1 3L3 5L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                </div>
+                <input type="checkbox" checked={checked} onChange={() => toggle(opt)} style={{ display: 'none' }} />
+                <span style={{ color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{opt}</span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved, focusQuestionId }) => {
   const baseUrl = getApiBaseUrl();
+  const { hasFeature } = useAuth();
   
   const [rules, setRules] = useState<BranchingRule[]>([]);
   const [loading, setLoading] = useState(true);
@@ -258,6 +359,10 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
           chain_survey_no_label: r.chain_survey_no_label || 'No thanks',
           chain_survey_configs: r.chain_survey_configs || [],
           layers: r.layers || [],
+          // Initialize value_multi from show_if.value if it's an array
+          value_multi: Array.isArray(r.show_if?.value)
+            ? r.show_if.value
+            : (r.value ? [r.value] : []),
         }));
         setRules(rulesWithRedirect);
       } else {
@@ -630,16 +735,31 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
                     
                     <td className="col-answer">
                       {!rule.always_show && rule.depends_on && answerOptions.length > 0 ? (
-                        <select
-                          value={rule.value || ''}
-                          onChange={(e) => updateRule(index, 'value', e.target.value)}
-                          className="sbr-select answer-select"
-                        >
-                          <option value="">Select answer...</option>
-                          {answerOptions.map((opt) => (
-                            <option key={opt} value={opt}>{opt}</option>
-                          ))}
-                        </select>
+                        <div style={{ position: 'relative' }}>
+                          <MultiAnswerSelect
+                            options={answerOptions}
+                            value={rule.value_multi || (rule.value ? [rule.value] : [])}
+                            onChange={(vals) => {
+                              setRules(prev => prev.map((r, i) => {
+                                if (i !== index) return r;
+                                const updated = {
+                                  ...r,
+                                  value_multi: vals,
+                                  value: vals.length === 1 ? vals[0] : (vals.length > 1 ? vals.join(',') : null),
+                                };
+                                if (!updated.always_show && updated.depends_on) {
+                                  updated.show_if = {
+                                    depends_on: updated.depends_on,
+                                    condition: vals.length > 1 ? 'in' : (updated.condition || 'equals'),
+                                    value: vals.length > 1 ? vals : (vals[0] || null),
+                                  };
+                                }
+                                return updated;
+                              }));
+                              setHasChanges(true);
+                            }}
+                          />
+                        </div>
                       ) : (
                         <span className="na-text">—</span>
                       )}
@@ -680,34 +800,58 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
                           <div className="exp-tab-bar">
                             <button
                               className={`exp-tab exp-tab--redirect ${(activeConfigTab[index] ?? 'redirect') === 'redirect' ? 'exp-tab--active' : ''}`}
-                              onClick={() => setActiveConfigTab(prev => ({ ...prev, [index]: 'redirect' }))}
+                              onClick={() => {
+                                if (!hasFeature('branching_redirect_chain')) return;
+                                setActiveConfigTab(prev => ({ ...prev, [index]: 'redirect' }));
+                              }}
+                              title={!hasFeature('branching_redirect_chain') ? 'Upgrade your plan to use Redirect Chain' : undefined}
+                              style={!hasFeature('branching_redirect_chain') ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
                             >
                               <ArrowUpRight size={14} />
                               Redirect
-                              {rule.redirect_enabled && <span className="exp-tab-dot exp-tab-dot--amber" />}
+                              {!hasFeature('branching_redirect_chain') && <Lock size={9} style={{ marginLeft: 3 }} />}
+                              {rule.redirect_enabled && hasFeature('branching_redirect_chain') && <span className="exp-tab-dot exp-tab-dot--amber" />}
                             </button>
                             <button
                               className={`exp-tab exp-tab--chain ${(activeConfigTab[index] ?? 'redirect') === 'chain' ? 'exp-tab--active' : ''}`}
-                              onClick={() => setActiveConfigTab(prev => ({ ...prev, [index]: 'chain' }))}
+                              onClick={() => {
+                                if (!hasFeature('branching_survey_chain')) return;
+                                setActiveConfigTab(prev => ({ ...prev, [index]: 'chain' }));
+                              }}
+                              title={!hasFeature('branching_survey_chain') ? 'Upgrade your plan to use Survey Chain' : undefined}
+                              style={!hasFeature('branching_survey_chain') ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
                             >
                               <Link size={14} />
                               Chain Survey
-                              {rule.chain_survey_enabled && <span className="exp-tab-dot exp-tab-dot--teal" />}
+                              {!hasFeature('branching_survey_chain') && <Lock size={9} style={{ marginLeft: 3 }} />}
+                              {rule.chain_survey_enabled && hasFeature('branching_survey_chain') && <span className="exp-tab-dot exp-tab-dot--teal" />}
                             </button>
                             <button
                               className={`exp-tab exp-tab--end ${(activeConfigTab[index] ?? 'redirect') === 'end' ? 'exp-tab--active' : ''}`}
-                              onClick={() => setActiveConfigTab(prev => ({ ...prev, [index]: 'end' }))}
+                              onClick={() => {
+                                if (!hasFeature('branching_survey_end')) return;
+                                setActiveConfigTab(prev => ({ ...prev, [index]: 'end' }));
+                              }}
+                              title={!hasFeature('branching_survey_end') ? 'Upgrade your plan to use Survey End' : undefined}
+                              style={!hasFeature('branching_survey_end') ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
                             >
                               <StopCircle size={14} />
                               End Survey
-                              {rule.end_here_enabled && <span className="exp-tab-dot exp-tab-dot--red" />}
+                              {!hasFeature('branching_survey_end') && <Lock size={9} style={{ marginLeft: 3 }} />}
+                              {rule.end_here_enabled && hasFeature('branching_survey_end') && <span className="exp-tab-dot exp-tab-dot--red" />}
                             </button>
                             <button
                               className={`exp-tab exp-tab--passfail ${(activeConfigTab[index] ?? 'redirect') === 'passfail' ? 'exp-tab--active' : ''}`}
-                              onClick={() => setActiveConfigTab(prev => ({ ...prev, [index]: 'passfail' }))}
+                              onClick={() => {
+                                if (!hasFeature('branching_multi_layer')) return;
+                                setActiveConfigTab(prev => ({ ...prev, [index]: 'passfail' }));
+                              }}
+                              title={!hasFeature('branching_multi_layer') ? 'Upgrade your plan to use Multi Layer' : undefined}
+                              style={!hasFeature('branching_multi_layer') ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
                             >
                               ◈ Multi Layer
-                              {(rule.layers && rule.layers.length > 0) && <span className="exp-tab-dot" style={{ background: '#8b5cf6' }} />}
+                              {!hasFeature('branching_multi_layer') && <Lock size={9} style={{ marginLeft: 3 }} />}
+                              {(rule.layers && rule.layers.length > 0) && hasFeature('branching_multi_layer') && <span className="exp-tab-dot" style={{ background: '#8b5cf6' }} />}
                             </button>
                           </div>
 

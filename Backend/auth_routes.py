@@ -351,6 +351,31 @@ def check_auth():
         token = auth_header.split(' ')[1]
         user = auth_service.get_user_from_token(token)
         
+        # Build plan features list for this user's role
+        plan_features = []
+        if user:
+            try:
+                from plan_features_api import _get_plan_features_config, _config_to_role_features
+                config = _get_plan_features_config()
+                role_features = _config_to_role_features(config)
+                user_role = user.get('role', 'basic')
+                # Map 'basic' to 'free' for the config key
+                config_role = 'free' if user_role == 'basic' else user_role
+                plan_features = role_features.get(config_role, [])
+                # Admin always gets all features
+                if user_role == 'admin':
+                    plan_features = role_features.get('admin', [])
+                # Always include core keys so old feature checks still work
+                always_on = ['create', 'survey', 'analytics']
+                for key in always_on:
+                    if key not in plan_features:
+                        plan_features.append(key)
+            except Exception as e:
+                import traceback
+                print(f"[plan_features] ERROR building plan_features: {e}")
+                traceback.print_exc()
+                plan_features = []  # fallback - frontend uses hardcoded defaults
+
         return jsonify({
             'authenticated': user is not None,
             'user': {
@@ -360,6 +385,7 @@ def check_auth():
                 'simpleUserId': user.get('simpleUserId', 0),
                 'role': user['role'],
                 'location_feature_enabled': bool(user.get('location_feature_enabled', False)),
+                'plan_features': plan_features,
             } if user else None
         })
         

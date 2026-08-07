@@ -7,9 +7,12 @@ export interface User {
   name: string;
   role: 'basic' | 'premium' | 'enterprise' | 'admin';
   features?: string[];
+  /** Plan features granted by the admin-configurable plan feature config */
+  plan_features?: string[];
   status?: 'approved' | 'disapproved' | 'locked' | 'pending_confirmation';
   createdAt?: string;
   simpleUserId?: number;
+  location_feature_enabled?: boolean;
 }
 
 export interface AuthResponse {

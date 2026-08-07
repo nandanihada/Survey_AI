@@ -429,6 +429,86 @@ def get_survey_responses(survey_id):
     except Exception as e:
         return jsonify({'error': f'Failed to get responses: {str(e)}'}), 500
 
+@survey_bp.route('/<survey_id>/clone', methods=['POST'])
+@requireAuth
+def clone_survey(survey_id):
+    """
+    Clone an existing survey into a brand-new survey with a fresh short_id.
+    The clone is fully independent — branching rules, questions, and settings
+    are deep-copied so editing one never affects the other.
+    """
+    try:
+        user = g.current_user
+        user_id = str(user['_id'])
+
+        # Find the source survey by short_id, id, or ObjectId
+        source = (
+            db.surveys.find_one({'short_id': survey_id}) or
+            db.surveys.find_one({'id': survey_id})
+        )
+        if not source:
+            try:
+                source = db.surveys.find_one({'_id': ObjectId(survey_id)})
+            except Exception:
+                pass
+        if not source:
+            return jsonify({'error': 'Survey not found'}), 404
+
+        # Only the owner or an admin can clone
+        owner_id = str(source.get('ownerUserId') or source.get('user_id') or '')
+        if owner_id != user_id and user.get('role') != 'admin':
+            return jsonify({'error': 'Access denied'}), 403
+
+        # Deep-copy and strip identity / ownership fields
+        import copy
+        clone = copy.deepcopy(source)
+
+        # Generate a fresh identity
+        new_short_id = generate_short_id()
+        clone.pop('_id', None)
+        clone['short_id'] = new_short_id
+        clone['id'] = new_short_id          # keep id == short_id for consistency
+        clone['ownerUserId'] = user_id      # new owner is the cloning user
+        clone['shared_with'] = []           # do not carry over collaborators
+
+        # Mark as draft and stamp times
+        clone['status'] = 'draft'
+        clone['created_at'] = datetime.utcnow()
+        clone['updated_at'] = datetime.utcnow()
+
+        # Prefix the title so it's clearly a clone
+        original_title = source.get('title') or source.get('prompt') or 'Untitled Survey'
+        clone['title'] = f"Copy of {original_title}"
+
+        # Remove any response-level data that may have been accidentally stored on the survey doc
+        clone.pop('response_count', None)
+
+        result = db.surveys.insert_one(clone)
+        clone['_id'] = str(result.inserted_id)
+
+        # Also deep-copy branching rules if stored separately in branch_rules collection
+        branch_rules = db.branch_rules.find_one({'survey_id': survey_id})
+        if not branch_rules:
+            branch_rules = db.branch_rules.find_one({'survey_id': str(source.get('_id', ''))})
+        if branch_rules:
+            branch_clone = copy.deepcopy(branch_rules)
+            branch_clone.pop('_id', None)
+            branch_clone['survey_id'] = new_short_id
+            branch_clone['created_at'] = datetime.utcnow()
+            branch_clone['updated_at'] = datetime.utcnow()
+            db.branch_rules.insert_one(branch_clone)
+
+        convert_objectid_to_string(clone)
+        return jsonify({
+            'message': 'Survey cloned successfully',
+            'survey': clone,
+            'new_survey_id': new_short_id,
+        }), 201
+
+    except Exception as e:
+        return jsonify({'error': f'Failed to clone survey: {str(e)}'}), 500
+
+
 @survey_bp.route('/public', methods=['GET'])
 def get_public_surveys():
     """Get public surveys (no authentication required)"""
@@ -703,3 +783,27 @@ def remove_collaborator(survey_id, collaborator_id):
 
     except Exception as e:
         return jsonify({'error': f'Failed to remove collaborator: {str(e)}'}), 500
+
+
+@survey_bp.route('/<survey_id>/back-exit-email', methods=['POST'])
+def save_back_exit_email(survey_id):
+    """
+    Store an email address from a user who tried to go back but is interested
+    in future survey opportunities.  No authentication required — triggered by
+    the back-blocker overlay on the public survey page.
+    """
+    try:
+        data = request.get_json() or {}
+        email = (data.get('email') or '').strip().lower()
+        if not email or '@' not in email:
+            return jsonify({'error': 'Valid email required'}), 400
+
+        db.back_exit_emails.insert_one({
+            'survey_id': survey_id,
+            'email': email,
+            'submitted_at': datetime.utcnow(),
+            'ip': request.headers.get('X-Forwarded-For', request.remote_addr),
+        })
+        return jsonify({'message': 'Email saved'}), 201
+    except Exception as e:
+        return jsonify({'error': f'Failed to save email: {str(e)}'}), 500

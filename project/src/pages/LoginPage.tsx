@@ -11,8 +11,22 @@ import { trackLoginEvent, captureRefCode, getStoredRefCode, requestSignupLocatio
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { login, register } = useAuth();
+  const { login, register, authenticated, loading: authLoading } = useAuth();
   const [isLogin, setIsLogin] = useState(searchParams.get('mode') !== 'signup');
+  // Auto-redirect if already logged in
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    // Give authLoading a chance to resolve, then check
+    if (!authLoading) {
+      if (authenticated) {
+        // Already logged in — redirect after a short spin
+        const timer = setTimeout(() => navigate('/dashboard'), 800);
+        return () => clearTimeout(timer);
+      }
+      setCheckingSession(false);
+    }
+  }, [authLoading, authenticated, navigate]);
 
   // Capture any ?ref= param immediately — handles direct landing + redirect from /signup
   useEffect(() => { captureRefCode(); }, []);
@@ -131,6 +145,8 @@ const LoginPage: React.FC = () => {
         const data = await response.json();
         localStorage.setItem('auth_token', data.token);
         localStorage.setItem('user_data', JSON.stringify(data.user));
+        // Stamp login time for 3-hour auto-logout
+        localStorage.setItem('auth_login_time', String(Date.now()));
         trackLoginEvent('google');
         
         if (data.isNewUser) {
@@ -202,6 +218,7 @@ const LoginPage: React.FC = () => {
         const data = await response.json();
         localStorage.setItem('auth_token', data.token);
         localStorage.setItem('user_data', JSON.stringify(data.user));
+        localStorage.setItem('auth_login_time', String(Date.now()));
         if (data.isNewUser) {
           localStorage.setItem('welcome_new_user', data.user.name || data.user.email);
         }
@@ -218,6 +235,37 @@ const LoginPage: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  // ── Already logged in — show a brief spinner then redirect ──────────────
+  if (authLoading || (checkingSession && !authLoading)) {
+    return (
+      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gradient-to-b from-white via-white to-red-100/60">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.4 }}
+          className="flex flex-col items-center gap-5"
+        >
+          {/* Logo */}
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-red-50 to-white border border-red-100 flex items-center justify-center shadow-lg shadow-red-500/10">
+            <img src="/logo.png" alt="Logo" className="w-9 h-9 object-contain" />
+          </div>
+          {/* Spinner */}
+          <div className="relative w-10 h-10">
+            <div className="absolute inset-0 rounded-full border-2 border-red-100" />
+            <motion.div
+              className="absolute inset-0 rounded-full border-2 border-transparent border-t-red-500"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+            />
+          </div>
+          <p className="text-sm text-gray-400 font-medium">
+            {authenticated ? 'Redirecting you…' : 'Checking session…'}
+          </p>
+        </motion.div>
+      </div>
+    );
+  }
 
   // Account creation animation overlay
   if (showCreatingAccount) {

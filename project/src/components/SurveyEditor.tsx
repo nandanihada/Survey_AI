@@ -2,10 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import OptimizedLoader from './OptimizedLoader';
 import TemplateSelector from './TemplateSelector';
+import BasicSurveyTemplate from '../templates/BasicSurveyTemplate';
 import type { Survey, Question, AnimationConfig } from '../types/Survey';
 import { generateSurveyLink, type SurveyLinkParams } from '../utils/surveyLinkUtils';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, Save, ArrowLeft, Grid3X3, Copy, CheckCircle, Settings, ExternalLink, Share2, Trash2, X, ChevronUp, ChevronDown, Zap, Sparkles, RefreshCw, GitBranch, Mail, Send, Loader2, CornerDownLeft } from 'lucide-react';
+import { Plus, Save, ArrowLeft, Grid3X3, Copy, CheckCircle, Settings, ExternalLink, Share2, Trash2, X, ChevronUp, ChevronDown, Zap, Sparkles, RefreshCw, GitBranch, Mail, Send, Loader2, CornerDownLeft, Eye, EyeOff, Lock } from 'lucide-react';
 import { LOGO_BASE64 } from '../utils/logoBase64';
 import './SurveyEditor.css';
 import { BranchFlowEditor, SimpleBranchingRules } from './branching';
@@ -20,10 +21,14 @@ type BranchMap = Record<string, QuestionBranchInfo>; // keyed by question id
 
 const QUESTION_TYPES = [
   { value: 'multiple_choice', label: 'Multiple Choice', icon: '☰' },
-  { value: 'short_answer', label: 'Short Answer', icon: '✎' },
-  { value: 'yes_no', label: 'Yes / No', icon: '◑' },
-  { value: 'rating', label: 'Rating', icon: '★' },
-  { value: 'range', label: 'Scale', icon: '⊞' },
+  { value: 'short_answer',    label: 'Short Answer',    icon: '✎' },
+  { value: 'yes_no',          label: 'Yes / No',        icon: '◑' },
+  { value: 'rating',          label: 'Rating',          icon: '★' },
+  { value: 'range',           label: 'Scale',           icon: '⊞' },
+  { value: 'dropdown',        label: 'Dropdown',        icon: '▾' },
+  { value: 'dropdown_multi',  label: 'Multi-Dropdown',  icon: '▾▾' },
+  { value: 'matrix',          label: 'Matrix / Grid',   icon: '⊟' },
+  { value: 'list',            label: 'List',            icon: '≡' },
 ];
 
 const OPTION_KEYS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
@@ -465,7 +470,7 @@ const MailInviteTab: React.FC<MailInviteTabProps> = ({ surveyId, surveyTitle, se
 const SurveyEditor: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, hasFeature } = useAuth();
 
   // Whether the current user has admin-granted permission to use the location toggle
   const [locationFeatureEnabled, setLocationFeatureEnabled] = React.useState(false);
@@ -476,6 +481,11 @@ const SurveyEditor: React.FC = () => {
   const [error, setError] = useState('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveMessage, setSaveMessage] = useState('');
+  // Track unsaved edits — set true whenever survey state changes, cleared on successful save
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [draftRestoredAt, setDraftRestoredAt] = useState<number | null>(null);
+  // Preview mode — shows the real survey template in the center panel
+  const [showPreview, setShowPreview] = useState(false);
   const [copied, setCopied] = useState(false);
   const [urlParams] = useState<SurveyLinkParams>({});
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
@@ -500,6 +510,9 @@ const SurveyEditor: React.FC = () => {
   const [showSharePopup, setShowSharePopup] = useState(false);
   const [shareLinkRevealed, setShareLinkRevealed] = useState(false);
   const [showAnimationPanel, setShowAnimationPanel] = useState(false);
+  // Animation mode — takes over the whole editor layout for focused animation editing
+  const [animationMode, setAnimationMode] = useState(false);
+  const [previewReplayKey, setPreviewReplayKey] = useState(0);
 
   // Mail invite state
   const [shareTab, setShareTab] = useState<'link' | 'mail'>('link');
@@ -627,7 +640,26 @@ const SurveyEditor: React.FC = () => {
         const data = await res.json();
         const surveyData = data.survey || data;
         if (!surveyData || !surveyData.questions) throw new Error('Invalid survey data received');
-        setSurvey(surveyData);
+
+        // Check localStorage for a saved draft (unsaved changes from a previous session)
+        const draftKey = `survey_draft_${id}`;
+        const savedDraft = localStorage.getItem(draftKey);
+        if (savedDraft) {
+          try {
+            const draft = JSON.parse(savedDraft);
+            if (draft && draft._draftTimestamp) {
+              setSurvey(draft);
+              setHasUnsavedChanges(true);
+              setDraftRestoredAt(draft._draftTimestamp);
+            } else {
+              setSurvey(surveyData);
+            }
+          } catch {
+            setSurvey(surveyData);
+          }
+        } else {
+          setSurvey(surveyData);
+        }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Failed to load survey';
         setError(message);
@@ -662,6 +694,20 @@ const SurveyEditor: React.FC = () => {
   useEffect(() => {
     fetchBranchMap();
   }, [fetchBranchMap]);
+
+  // Auto-save unsaved changes to localStorage so the user can resume later
+  useEffect(() => {
+    if (!id || !survey || isLoading) return;
+    // Debounce: save 1.5s after the last change
+    const timer = setTimeout(() => {
+      const draftKey = `survey_draft_${id}`;
+      const draftData = { ...survey, _draftTimestamp: Date.now() };
+      localStorage.setItem(draftKey, JSON.stringify(draftData));
+      setHasUnsavedChanges(true);
+    }, 1500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [survey, id, isLoading]);
 
   // Load collaborators when settings modal opens
   const openSettings = useCallback(async () => {
@@ -760,6 +806,11 @@ const SurveyEditor: React.FC = () => {
         body: JSON.stringify(survey),
       });
       if (!res.ok) throw new Error(`Failed to save survey: ${res.status}`);
+      // Clear the local draft — changes are now persisted to the server
+      const draftKey = `survey_draft_${id}`;
+      localStorage.removeItem(draftKey);
+      setHasUnsavedChanges(false);
+      setDraftRestoredAt(null);
       setSaveStatus('saved');
       setSaveMessage('Saved!');
       setTimeout(() => { setSaveStatus('idle'); setSaveMessage(''); }, 3000);
@@ -771,7 +822,7 @@ const SurveyEditor: React.FC = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [survey, apiBaseUrl]);
+  }, [survey, apiBaseUrl, id]);
 
   const addNewQuestion = useCallback(() => {
     if (!survey) return;
@@ -863,31 +914,51 @@ const SurveyEditor: React.FC = () => {
       q.options = ['Yes', 'No'];
     } else if ((newType === 'multiple_choice' || newType === 'radio') && (!q.options || q.options.length === 0)) {
       q.options = ['Option 1', 'Option 2'];
+    } else if (newType === 'dropdown' || newType === 'dropdown_multi') {
+      if (!q.options || q.options.length === 0) q.options = ['Option 1', 'Option 2', 'Option 3'];
+    } else if (newType === 'matrix') {
+      if (!q.options || q.options.length === 0) q.options = ['Row 1', 'Row 2', 'Row 3'];
+      if (!(q as any).matrixColumns || (q as any).matrixColumns.length === 0) {
+        (q as any).matrixColumns = ['Column A', 'Column B', 'Column C'];
+      }
+    } else if (newType === 'list') {
+      if (!q.options || q.options.length === 0) q.options = ['Item 1', 'Item 2', 'Item 3'];
     }
     updated.questions[index] = q;
     setSurvey(updated);
-    // Auto-generate AI options when switching to multiple choice (only if question has real text)
-    if ((newType === 'multiple_choice' || newType === 'radio') && q.question && q.question !== 'New Question') {
+    // Auto-generate AI options when switching to types with options
+    if (['multiple_choice', 'radio', 'dropdown', 'dropdown_multi', 'list', 'matrix'].includes(newType) && q.question && q.question !== 'New Question') {
       generateOptionsForQuestion(q.question, newType, index);
     }
   };
 
-  const generateOptionsForQuestion = async (questionText: string, questionType: string, index: number) => {
+  const generateOptionsForQuestion = async (questionText: string, questionType: string, index: number, optionCount?: number) => {
     setIsGeneratingOptions(true);
     try {
+      // Use passed count first, then read from current state, then default to 4
+      const q = survey?.questions[index];
+      const count = optionCount ?? (q as any)?.optionCount ?? 4;
       const res = await fetch(`${apiBaseUrl}/api/refine-question`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: questionText, type: questionType, action: 'generate_options' })
+        body: JSON.stringify({ question: questionText, type: questionType, action: 'generate_options', option_count: count })
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.options && data.options.length > 0) {
+        // Apply options and columns in a single state update
+        if ((data.options && data.options.length > 0) || (questionType === 'matrix' && data.columns?.length)) {
           setSurvey(prev => {
             if (!prev) return prev;
             const updated = { ...prev };
             updated.questions = [...updated.questions];
-            updated.questions[index] = { ...updated.questions[index], options: data.options };
+            const q = { ...updated.questions[index] };
+            if (data.options && data.options.length > 0) {
+              q.options = data.options;
+            }
+            if (questionType === 'matrix' && data.columns?.length) {
+              (q as any).matrixColumns = data.columns;
+            }
+            updated.questions[index] = q;
             return updated;
           });
         }
@@ -1195,7 +1266,11 @@ const SurveyEditor: React.FC = () => {
 
   const activeQ = survey.questions[activeQuestionIndex];
   const typeIcon = QUESTION_TYPES.find(t => t.value === activeQ?.type)?.icon || '✎';
-  const hasOptions = activeQ && (activeQ.type === 'multiple_choice' || activeQ.type === 'yes_no' || activeQ.type === 'radio');
+  const hasOptions = activeQ && (
+    activeQ.type === 'multiple_choice' || activeQ.type === 'yes_no' || activeQ.type === 'radio' ||
+    activeQ.type === 'dropdown' || activeQ.type === 'dropdown_multi' ||
+    activeQ.type === 'list' || activeQ.type === 'matrix'
+  );
   const theme = getTheme(survey.template_type || 'custom');
 
   return (
@@ -1215,6 +1290,16 @@ const SurveyEditor: React.FC = () => {
               className="text-xs sm:text-sm font-semibold text-gray-900 bg-transparent border-none outline-none min-w-0 flex-1 max-w-[140px] sm:max-w-[220px] hover:bg-gray-50 focus:bg-gray-50 rounded px-1 sm:px-2 py-1 transition-colors"
               placeholder="Untitled Survey"
             />
+            {/* Draft badge — shown when there are unsaved changes */}
+            {hasUnsavedChanges && (
+              <span
+                title={draftRestoredAt ? `Draft restored from ${new Date(draftRestoredAt).toLocaleTimeString()}` : 'Unsaved changes — will be auto-restored on next visit'}
+                className="flex-shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200 select-none cursor-default"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse inline-block" />
+                Draft
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
             <button
@@ -1225,9 +1310,16 @@ const SurveyEditor: React.FC = () => {
             </button>
             <button
               onClick={() => setShowBranchingEditor(true)}
-              className="flex items-center gap-1 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs text-purple-600 border border-purple-200 rounded-lg hover:bg-purple-50 transition-colors"
+              disabled={!hasFeature('editor_branching')}
+              title={!hasFeature('editor_branching') ? 'Upgrade your plan to access branching' : 'Open Branching Editor'}
+              className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs rounded-lg border transition-colors ${
+                !hasFeature('editor_branching')
+                  ? 'text-gray-400 border-gray-200 cursor-not-allowed opacity-60'
+                  : 'text-purple-600 border-purple-200 hover:bg-purple-50'
+              }`}
             >
               <GitBranch size={12} /> <span className="hidden sm:inline">Branching</span>
+              {!hasFeature('editor_branching') && <Lock size={10} className="ml-0.5" />}
             </button>
             <button
               onClick={() => { setShareLinkRevealed(false); setShowSharePopup(true); setTimeout(() => setShareLinkRevealed(true), 1800); }}
@@ -1235,6 +1327,24 @@ const SurveyEditor: React.FC = () => {
             >
               <Share2 size={12} /> <span className="hidden sm:inline">Share</span>
             </button>
+            <button
+              onClick={() => setShowPreview(v => !v)}
+              className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs rounded-lg border transition-colors ${
+                showPreview
+                  ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700'
+                  : 'text-indigo-600 border-indigo-200 hover:bg-indigo-50'
+              }`}
+              title={showPreview ? 'Exit preview' : 'Preview with animations'}
+            >
+              {showPreview ? <EyeOff size={12} /> : <Eye size={12} />}
+              <span className="hidden sm:inline">{showPreview ? 'Exit Preview' : 'Preview'}</span>
+            </button>
+            {/* Animation mode top-bar indicator */}
+            {animationMode && (
+              <span className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs rounded-lg bg-purple-100 text-purple-700 font-semibold border border-purple-200">
+                <Zap size={11} /> Animation Mode
+              </span>
+            )}
             <button
               onClick={handleSave}
               disabled={isSaving}
@@ -1525,165 +1635,177 @@ const SurveyEditor: React.FC = () => {
         </div>
       )}
 
-      {/* ── Animation Settings Modal ── */}
-      {showAnimationPanel && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => setShowAnimationPanel(false)}>
-          <div
-            className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-            style={{ animation: 'editorModalIn 0.25s ease-out' }}
-          >
+      {/* ── Animation Mode — full-screen takeover ── */}
+      {animationMode && (
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left: Animation Controls */}
+          <div className="w-72 bg-white border-r border-purple-100 flex flex-col shrink-0 overflow-y-auto">
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                <Zap size={15} className="text-purple-500" /> Animation Settings
-              </h3>
-              <button onClick={() => setShowAnimationPanel(false)} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                <X size={16} />
+            <div className="px-5 py-4 border-b border-purple-100 bg-gradient-to-r from-purple-50 to-indigo-50 flex items-center justify-between shrink-0">
+              <span className="text-sm font-bold text-purple-800 flex items-center gap-2">
+                <Zap size={15} className="text-purple-600" /> Animation Settings
+              </span>
+              <button
+                onClick={() => setAnimationMode(false)}
+                className="text-xs font-semibold text-purple-600 hover:text-purple-800 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-purple-100 transition-colors"
+              >
+                <X size={13} /> Done
               </button>
             </div>
 
-            {/* Body */}
-            <div className="px-6 py-5 overflow-y-auto flex-1 space-y-6">
-              {/* Two-column: Question & Answer animations */}
-              <div className="grid grid-cols-2 gap-5">
-                {/* Question Animation */}
-                <div>
-                  <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Question Animation</label>
-                  <div className="space-y-1">
-                    {QUESTION_ANIMATIONS.map(a => (
+            <div className="px-4 py-4 space-y-5 flex-1">
+              {/* Question Animation */}
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Question Animation</label>
+                <div className="space-y-1">
+                  {QUESTION_ANIMATIONS.map(a => {
+                    const animFeatureMap: Record<string, string> = {
+                      fadeSlideUp: 'editor_anim_fadeSlideUp',
+                      typewriter: 'editor_anim_typewriter',
+                      flipIn: 'editor_anim_flipIn',
+                      zoomBounce: 'editor_anim_zoomBounce',
+                      slideFromLeft: 'editor_anim_slideFromLeft',
+                      blurReveal: 'editor_anim_blurReveal',
+                    };
+                    const isLocked = !hasFeature(animFeatureMap[a.value] || 'editor_anim_fadeSlideUp');
+                    return (
                       <button
                         key={a.value}
-                        onClick={() => updateAnimation('questionAnimation', a.value)}
-                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors ${
-                          animConfig.questionAnimation === a.value
-                            ? 'bg-purple-100 text-purple-700 font-medium ring-1 ring-purple-200'
-                            : 'text-gray-600 hover:bg-gray-50'
+                        onClick={() => {
+                          if (isLocked) return;
+                          updateAnimation('questionAnimation', a.value);
+                          setPreviewReplayKey(k => k + 1);
+                        }}
+                        title={isLocked ? 'Upgrade your plan to use this animation' : a.desc}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs transition-all ${
+                          isLocked
+                            ? 'opacity-50 cursor-not-allowed text-gray-400'
+                            : animConfig.questionAnimation === a.value
+                              ? 'bg-purple-600 text-white font-semibold shadow-md shadow-purple-200'
+                              : 'text-gray-600 hover:bg-purple-50 border border-transparent hover:border-purple-100'
                         }`}
                       >
-                        <span className="text-base w-5 text-center">{a.icon}</span>
-                        <div className="text-left">
-                          <div>{a.label}</div>
-                          <div className="text-[9px] text-gray-400">{a.desc}</div>
+                        <span className="text-sm w-5 text-center">{a.icon}</span>
+                        <div className="text-left flex-1">
+                          <div className="font-medium">{a.label}</div>
+                          <div className={`text-[9px] mt-0.5 ${animConfig.questionAnimation === a.value ? 'text-purple-200' : 'text-gray-400'}`}>{a.desc}</div>
                         </div>
+                        {isLocked && <Lock size={10} className="flex-shrink-0 text-red-400" />}
                       </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Answer Animation */}
-                <div>
-                  <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Answer Animation</label>
-                  <div className="space-y-1">
-                    {ANSWER_ANIMATIONS.map(a => (
-                      <button
-                        key={a.value}
-                        onClick={() => updateAnimation('answerAnimation', a.value)}
-                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors ${
-                          animConfig.answerAnimation === a.value
-                            ? 'bg-purple-100 text-purple-700 font-medium ring-1 ring-purple-200'
-                            : 'text-gray-600 hover:bg-gray-50'
-                        }`}
-                      >
-                        <span className="text-base w-5 text-center">{a.icon}</span>
-                        <div className="text-left">
-                          <div>{a.label}</div>
-                          <div className="text-[9px] text-gray-400">{a.desc}</div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Sliders row */}
-              <div className="grid grid-cols-2 gap-5">
-                {/* Delay */}
-                <div>
-                  <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                    Delay <span className="text-gray-400 normal-case font-normal">({animConfig.delayMs}ms)</span>
-                  </label>
-                  <input
-                    type="range" min={0} max={2000} step={50}
-                    value={animConfig.delayMs}
-                    onChange={e => updateAnimation('delayMs', parseInt(e.target.value))}
-                    className="w-full accent-purple-500"
-                  />
-                  <div className="flex justify-between text-[10px] text-gray-400 mt-1">
-                    <span>None</span><span>2s</span>
-                  </div>
-                </div>
-
-                {/* Speed */}
-                <div>
-                  <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                    Speed <span className="text-gray-400 normal-case font-normal">({animConfig.speedMs}ms)</span>
-                  </label>
-                  <input
-                    type="range" min={200} max={1500} step={50}
-                    value={animConfig.speedMs}
-                    onChange={e => updateAnimation('speedMs', parseInt(e.target.value))}
-                    className="w-full accent-purple-500"
-                  />
-                  <div className="flex justify-between text-[10px] text-gray-400 mt-1">
-                    <span>Fast</span><span>Slow</span>
-                  </div>
+              {/* Answer Animation */}
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Answer Animation</label>
+                <div className="space-y-1">
+                  {ANSWER_ANIMATIONS.map(a => {
+                    const isLocked = !hasFeature('editor_anim_fadeSlideUp');
+                    return (
+                      <button
+                        key={a.value}
+                        onClick={() => {
+                          if (isLocked) return;
+                          updateAnimation('answerAnimation', a.value);
+                          setPreviewReplayKey(k => k + 1);
+                        }}
+                        title={isLocked ? 'Upgrade your plan to use answer animations' : a.desc}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs transition-all ${
+                          isLocked
+                            ? 'opacity-50 cursor-not-allowed text-gray-400'
+                            : animConfig.answerAnimation === a.value
+                              ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-200'
+                              : 'text-gray-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-100'
+                        }`}
+                      >
+                        <span className="text-sm w-5 text-center">{a.icon}</span>
+                        <div className="text-left flex-1">
+                          <div className="font-medium">{a.label}</div>
+                          <div className={`text-[9px] mt-0.5 ${animConfig.answerAnimation === a.value ? 'text-indigo-200' : 'text-gray-400'}`}>{a.desc}</div>
+                        </div>
+                        {isLocked && <Lock size={10} className="flex-shrink-0 text-red-400" />}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Auto Advance */}
-              <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+              {/* Speed */}
+              <div className="pt-1 border-t border-gray-100">
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">
+                  Speed <span className="text-purple-600 font-normal normal-case">({animConfig.speedMs}ms)</span>
+                </label>
+                <input
+                  type="range" min={200} max={1500} step={50}
+                  value={animConfig.speedMs}
+                  onChange={e => { updateAnimation('speedMs', parseInt(e.target.value)); setPreviewReplayKey(k => k + 1); }}
+                  className="w-full accent-purple-500"
+                />
+                <div className="flex justify-between text-[10px] text-gray-400 mt-1"><span>Fast</span><span>Slow</span></div>
+              </div>
+
+              {/* Delay */}
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">
+                  Delay <span className="text-purple-600 font-normal normal-case">({animConfig.delayMs}ms)</span>
+                </label>
+                <input
+                  type="range" min={0} max={2000} step={50}
+                  value={animConfig.delayMs}
+                  onChange={e => { updateAnimation('delayMs', parseInt(e.target.value)); setPreviewReplayKey(k => k + 1); }}
+                  className="w-full accent-purple-500"
+                />
+                <div className="flex justify-between text-[10px] text-gray-400 mt-1"><span>None</span><span>2s</span></div>
+              </div>
+
+              {/* Auto-advance */}
+              <div className="pt-1 border-t border-gray-100">
                 <label className="flex items-center justify-between cursor-pointer">
                   <div>
-                    <span className="text-[11px] font-semibold text-gray-600 uppercase tracking-wider">Auto-advance</span>
-                    <p className="text-[10px] text-gray-400 mt-0.5">Automatically move to next question after answering</p>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Auto-advance</span>
+                    <p className="text-[10px] text-gray-400 mt-0.5">Move to next after answering</p>
                   </div>
                   <div
                     onClick={() => updateAnimation('autoAdvance', !animConfig.autoAdvance)}
-                    className={`w-10 h-[22px] rounded-full transition-colors relative cursor-pointer shrink-0 ${
-                      animConfig.autoAdvance ? 'bg-purple-500' : 'bg-gray-300'
-                    }`}
+                    className={`w-10 h-[22px] rounded-full transition-colors relative cursor-pointer shrink-0 ${animConfig.autoAdvance ? 'bg-purple-500' : 'bg-gray-300'}`}
                   >
-                    <div className={`absolute top-[3px] w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                      animConfig.autoAdvance ? 'translate-x-[22px]' : 'translate-x-[3px]'
-                    }`} />
+                    <div className={`absolute top-[3px] w-4 h-4 bg-white rounded-full shadow transition-transform ${animConfig.autoAdvance ? 'translate-x-[22px]' : 'translate-x-[3px]'}`} />
                   </div>
                 </label>
-
-                {animConfig.autoAdvance && (
-                  <div className="mt-3 pt-3 border-t border-gray-200">
-                    <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                      Advance Delay <span className="text-gray-400 normal-case font-normal">({(animConfig.autoAdvanceDelay / 1000).toFixed(1)}s)</span>
-                    </label>
-                    <input
-                      type="range" min={500} max={5000} step={250}
-                      value={animConfig.autoAdvanceDelay}
-                      onChange={e => updateAnimation('autoAdvanceDelay', parseInt(e.target.value))}
-                      className="w-full accent-purple-500"
-                    />
-                    <div className="flex justify-between text-[10px] text-gray-400 mt-1">
-                      <span>0.5s</span><span>5s</span>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
+          </div>
 
-            {/* Footer */}
-            <div className="px-6 py-4 border-t border-gray-100 shrink-0 flex justify-end">
+          {/* Right: Live Preview */}
+          <div className="flex-1 flex flex-col overflow-hidden bg-[#f0f0eb]">
+            {/* Preview toolbar */}
+            <div className="flex items-center justify-between px-5 py-3 bg-purple-700 text-white shrink-0">
+              <span className="text-xs font-semibold flex items-center gap-2">
+                <Eye size={13} /> Live Preview — change any setting on the left to see it instantly
+              </span>
               <button
-                onClick={() => setShowAnimationPanel(false)}
-                className="px-5 py-2 bg-purple-500 text-white rounded-lg text-xs font-medium hover:bg-purple-600 transition-colors"
+                onClick={() => setPreviewReplayKey(k => k + 1)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-purple-700 hover:bg-purple-50 transition-colors"
               >
-                Done
+                <RefreshCw size={12} /> Replay
               </button>
+            </div>
+            {/* Template preview — remounts on every replay */}
+            <div className="flex-1 overflow-y-auto">
+              <BasicSurveyTemplate
+                key={`anim-preview-${previewReplayKey}`}
+                survey={survey}
+                previewMode={true}
+              />
             </div>
           </div>
         </div>
       )}
 
       {/* ── Main 3-Panel Layout ── */}
-      <div className="flex flex-1 overflow-hidden flex-row">
+      <div className={`flex flex-1 overflow-hidden flex-row ${animationMode ? 'hidden' : ''}`}>
 
         {/* ── Left Panel: Question List ── */}
         <div className={`
@@ -1773,11 +1895,38 @@ const SurveyEditor: React.FC = () => {
           flex-1 flex items-start justify-center overflow-y-auto scrollbar-transparent
           ${mobilePanel === 'editor' ? 'flex' : 'hidden md:flex'}
         `} style={{
-          background: theme.bg,
+          background: showPreview ? '#f0f0eb' : theme.bg,
           fontFamily: "'Outfit', -apple-system, BlinkMacSystemFont, sans-serif",
           transition: 'background 0.4s ease',
         }}>
-          {activeQ ? (
+          {/* ── Live Preview Mode ── */}
+          {showPreview ? (
+            <div style={{ width: '100%', maxWidth: 700, margin: '0 auto', position: 'relative' }}>
+              {/* Preview banner */}
+              <div style={{
+                position: 'sticky', top: 0, zIndex: 10,
+                background: 'linear-gradient(90deg, #4f46e5, #7c3aed)',
+                color: '#fff', padding: '8px 16px',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                fontSize: 12, fontWeight: 600,
+              }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Eye size={13} /> Preview — animations &amp; navigation are live
+                </span>
+                <button
+                  onClick={() => setShowPreview(false)}
+                  style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer', fontWeight: 600 }}
+                >
+                  Exit Preview
+                </button>
+              </div>
+              <BasicSurveyTemplate
+                key={`preview-${JSON.stringify(survey.animation)}`}
+                survey={survey}
+                previewMode={true}
+              />
+            </div>
+          ) : activeQ ? (
             <div style={{ position: 'relative', maxWidth: 580, width: '100%', margin: '24px 12px 24px' }} className="sm:mx-6 sm:my-10">
               {/* Pin icon */}
               <div style={{
@@ -1920,6 +2069,7 @@ const SurveyEditor: React.FC = () => {
                     />
                   )}
                   {/* AI Refine Button */}
+                  {hasFeature('editor_ai_refine') && (
                   <button
                     onClick={() => refineQuestion(activeQuestionIndex)}
                     disabled={isRefining}
@@ -1937,6 +2087,7 @@ const SurveyEditor: React.FC = () => {
                       <Sparkles size={16} />
                     )}
                   </button>
+                  )}
                 </div>
 
                 {/* Description */}
@@ -2116,6 +2267,106 @@ const SurveyEditor: React.FC = () => {
                       </div>
                     </div>
                   )}
+
+                  {/* Dropdown (single select) */}
+                  {activeQ.type === 'dropdown' && (
+                    <div style={{ marginTop: 4 }}>
+                      <div style={{
+                        border: `1px solid ${theme.border}`, borderRadius: 10, padding: '11px 14px',
+                        background: theme.paperInner, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        fontSize: 13, color: theme.textLight, fontFamily: "'Outfit', sans-serif",
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.04)', maxWidth: 380,
+                      }}>
+                        <span>Select an option…</span>
+                        <ChevronDown size={15} style={{ opacity: 0.5 }} />
+                      </div>
+                      <div style={{ marginTop: 8, borderRadius: 10, border: `1px solid ${theme.border}`, overflow: 'hidden', maxWidth: 380 }}>
+                        {(activeQ.options || []).map((opt, i) => (
+                          <div key={i} style={{
+                            padding: '9px 14px', fontSize: 13, color: theme.text,
+                            borderBottom: i < (activeQ.options?.length ?? 1) - 1 ? `1px solid ${theme.border}` : 'none',
+                            fontFamily: "'Outfit', sans-serif", background: theme.paperInner,
+                          }}>{opt}</div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Multi-select Dropdown */}
+                  {activeQ.type === 'dropdown_multi' && (
+                    <div style={{ marginTop: 4, maxWidth: 380 }}>
+                      <p style={{ fontSize: 11, color: theme.textLight, marginBottom: 8, fontFamily: "'Outfit', sans-serif" }}>Select all that apply</p>
+                      {(activeQ.options || []).map((opt, i) => (
+                        <div key={i} style={{
+                          display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px',
+                          borderRadius: 8, border: `1px solid ${theme.border}`, background: theme.paperInner,
+                          marginBottom: 6, fontSize: 13, color: theme.text, fontFamily: "'Outfit', sans-serif",
+                        }}>
+                          <div style={{ width: 16, height: 16, borderRadius: 4, border: `1.5px solid ${theme.border}`, flexShrink: 0 }} />
+                          {opt}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Matrix / Grid */}
+                  {activeQ.type === 'matrix' && (
+                    <div style={{ marginTop: 4, overflowX: 'auto' }}>
+                      {(() => {
+                        const rows = activeQ.options || ['Row 1', 'Row 2', 'Row 3'];
+                        const cols = (activeQ as any).matrixColumns || ['Col A', 'Col B', 'Col C'];
+                        return (
+                          <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 4px', fontSize: 12, fontFamily: "'Outfit', sans-serif" }}>
+                            <thead>
+                              <tr>
+                                <th style={{ width: '35%', textAlign: 'left', padding: '4px 8px', color: theme.textLight, fontWeight: 600 }}></th>
+                                {cols.map((col: string, ci: number) => (
+                                  <th key={ci} style={{ textAlign: 'center', padding: '4px 8px', color: theme.textLight, fontWeight: 600 }}>{col}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {rows.map((row, ri) => (
+                                <tr key={ri} style={{ background: ri % 2 === 0 ? theme.paperInner : 'transparent' }}>
+                                  <td style={{ padding: '8px', color: theme.text, fontWeight: 500 }}>{row}</td>
+                                  {cols.map((_: string, ci: number) => (
+                                    <td key={ci} style={{ textAlign: 'center', padding: '8px' }}>
+                                      <div style={{
+                                        width: 18, height: 18, borderRadius: '50%',
+                                        border: `1.5px solid ${theme.border}`, background: theme.paperInner,
+                                        margin: '0 auto',
+                                      }} />
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* List */}
+                  {activeQ.type === 'list' && (
+                    <div style={{ marginTop: 4, maxWidth: 380 }}>
+                      {(activeQ.options || []).map((item, i) => (
+                        <div key={i} style={{
+                          display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px',
+                          borderRadius: 9, border: `1px solid ${theme.border}`, background: theme.paperInner,
+                          marginBottom: 6, fontSize: 13, color: theme.text, fontFamily: "'Outfit', sans-serif",
+                        }}>
+                          <span style={{
+                            width: 22, height: 22, borderRadius: 5, flexShrink: 0,
+                            border: `1.5px solid ${theme.border}`, background: 'transparent',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 10, fontWeight: 700, color: theme.textLight,
+                          }}>{i + 1}</span>
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -2159,20 +2410,43 @@ const SurveyEditor: React.FC = () => {
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-2">Type</label>
                 <div className="grid grid-cols-2 md:grid-cols-1 gap-1.5">
-                  {QUESTION_TYPES.map(t => (
-                    <button
-                      key={t.value}
-                      onClick={() => changeQuestionType(activeQuestionIndex, t.value)}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
-                        activeQ.type === t.value
-                          ? 'bg-red-50 text-red-600 font-medium'
-                          : 'text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >
-                      <span className="text-base">{t.icon}</span>
-                      {t.label}
-                    </button>
-                  ))}
+                  {QUESTION_TYPES.map(t => {
+                    // Map question type to plan feature key
+                    const featureKeyMap: Record<string, string> = {
+                      multiple_choice: 'editor_type_multiple_choice',
+                      short_answer: 'editor_type_short_answer',
+                      yes_no: 'editor_type_yes_no',
+                      rating: 'editor_type_rating',
+                      range: 'editor_type_scale',
+                      dropdown: 'editor_type_dropdown',
+                      dropdown_multi: 'editor_type_dropdown_multi',
+                      matrix: 'editor_type_matrix',
+                      list: 'editor_type_list',
+                    };
+                    const featureKey = featureKeyMap[t.value];
+                    const isLocked = featureKey ? !hasFeature(featureKey) : false;
+                    return (
+                      <button
+                        key={t.value}
+                        onClick={() => {
+                          if (isLocked) return;
+                          changeQuestionType(activeQuestionIndex, t.value);
+                        }}
+                        title={isLocked ? 'Upgrade your plan to use this answer type' : t.label}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+                          isLocked
+                            ? 'opacity-50 cursor-not-allowed text-gray-400'
+                            : activeQ.type === t.value
+                              ? 'bg-red-50 text-red-600 font-medium'
+                              : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        <span className="text-base">{t.icon}</span>
+                        {t.label}
+                        {isLocked && <Lock size={10} className="ml-auto text-red-400" />}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -2206,6 +2480,99 @@ const SurveyEditor: React.FC = () => {
                 </div>
               )}
 
+              {/* Option count — for multiple_choice, dropdown, dropdown_multi, list */}
+              {['multiple_choice', 'dropdown', 'dropdown_multi', 'list'].includes(activeQ.type) && (
+                <div className="pt-3 border-t border-gray-100">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    Number of Options
+                    <span className="text-gray-400 font-normal ml-1">({(activeQ as any).optionCount || 4})</span>
+                  </label>
+                  <p className="text-[10px] text-gray-400 mb-2">AI generates this many options</p>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {[2, 3, 4, 5, 6, 7, 8].map(n => (
+                      <button
+                        key={n}
+                        onClick={() => {
+                          // Save the new count first
+                          const updated = { ...survey };
+                          updated.questions = [...updated.questions];
+                          (updated.questions[activeQuestionIndex] as any).optionCount = n;
+                          setSurvey(updated);
+                          // Pass n directly — don't read from stale state
+                          if (activeQ.question && activeQ.question !== 'New Question') {
+                            generateOptionsForQuestion(activeQ.question, activeQ.type, activeQuestionIndex, n);
+                          }
+                        }}
+                        className={`w-8 h-8 rounded-lg text-xs font-semibold transition-colors ${
+                          ((activeQ as any).optionCount || 4) === n
+                            ? 'bg-red-500 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >{n}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Matrix columns editor */}
+              {activeQ.type === 'matrix' && (
+                <div className="pt-3 border-t border-gray-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-xs font-medium text-gray-500">Column Headers</label>
+                    {hasFeature('editor_ai_options') && (
+                    <button
+                      onClick={() => generateOptionsForQuestion(activeQ.question, 'matrix', activeQuestionIndex)}
+                      disabled={isGeneratingOptions}
+                      className="flex items-center gap-1 text-[10px] text-purple-600 font-semibold hover:text-purple-700 disabled:opacity-50"
+                    >
+                      <Sparkles size={10} /> {isGeneratingOptions ? 'Generating…' : 'AI Generate'}
+                    </button>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    {((activeQ as any).matrixColumns || ['Column A', 'Column B', 'Column C']).map((col: string, ci: number) => (
+                      <div key={ci} className="flex gap-1 items-center">
+                        <input
+                          type="text"
+                          value={col}
+                          onChange={(e) => {
+                            const updated = { ...survey };
+                            updated.questions = [...updated.questions];
+                            const cols = [...((updated.questions[activeQuestionIndex] as any).matrixColumns || [])];
+                            cols[ci] = e.target.value;
+                            (updated.questions[activeQuestionIndex] as any).matrixColumns = cols;
+                            setSurvey(updated);
+                          }}
+                          className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-red-400"
+                          placeholder={`Column ${ci + 1}`}
+                        />
+                        <button
+                          onClick={() => {
+                            const updated = { ...survey };
+                            updated.questions = [...updated.questions];
+                            const cols = ((updated.questions[activeQuestionIndex] as any).matrixColumns || []).filter((_: string, i: number) => i !== ci);
+                            (updated.questions[activeQuestionIndex] as any).matrixColumns = cols;
+                            setSurvey(updated);
+                          }}
+                          className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                        ><X size={12} /></button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => {
+                        const updated = { ...survey };
+                        updated.questions = [...updated.questions];
+                        const cols = [...((updated.questions[activeQuestionIndex] as any).matrixColumns || [])];
+                        cols.push(`Column ${cols.length + 1}`);
+                        (updated.questions[activeQuestionIndex] as any).matrixColumns = cols;
+                        setSurvey(updated);
+                      }}
+                      className="text-xs text-red-500 hover:text-red-600 flex items-center gap-1 mt-1"
+                    ><Plus size={11} /> Add column</button>
+                  </div>
+                </div>
+              )}
+
               {/* Reorder */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-2">Reorder</label>
@@ -2232,31 +2599,36 @@ const SurveyEditor: React.FC = () => {
                 <label className="block text-xs font-medium text-gray-500 mb-2">Answer Style</label>
                 <div className="grid grid-cols-1 gap-1.5">
                   {[
-                    { value: 'classic', label: 'Classic Box', preview: '┌───┐' },
-                    { value: 'underline', label: 'Underline', preview: '────' },
-                    { value: 'card', label: 'Card', preview: '▓▓▓▓' },
-                    { value: 'pill', label: 'Pill', preview: '(══)' },
-                    { value: 'flat', label: 'Flat', preview: '░░░░' },
+                    { value: 'classic', label: 'Classic Box', preview: '┌───┐', featureKey: 'editor_style_classic' },
+                    { value: 'underline', label: 'Underline', preview: '────', featureKey: 'editor_style_underline' },
+                    { value: 'card', label: 'Card', preview: '▓▓▓▓', featureKey: 'editor_style_card' },
+                    { value: 'pill', label: 'Pill', preview: '(══)', featureKey: 'editor_style_pill' },
+                    { value: 'flat', label: 'Flat', preview: '░░░░', featureKey: 'editor_style_flat' },
                   ].map(style => {
                     const currentStyle = activeQ.answerStyle || survey.answerStyle || 'classic';
+                    const isLocked = !hasFeature(style.featureKey);
                     return (
                       <button
                         key={style.value}
                         onClick={() => {
-                          // Apply to current question only by default
+                          if (isLocked) return;
                           const updated = { ...survey };
                           updated.questions = [...updated.questions];
                           updated.questions[activeQuestionIndex] = { ...updated.questions[activeQuestionIndex], answerStyle: style.value };
                           setSurvey(updated);
                         }}
+                        title={isLocked ? 'Upgrade your plan to use this answer style' : style.label}
                         className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
-                          currentStyle === style.value
-                            ? 'bg-blue-50 text-blue-600 font-medium border border-blue-200'
-                            : 'text-gray-600 hover:bg-gray-50 border border-transparent'
+                          isLocked
+                            ? 'opacity-50 cursor-not-allowed text-gray-400 border border-transparent'
+                            : currentStyle === style.value
+                              ? 'bg-blue-50 text-blue-600 font-medium border border-blue-200'
+                              : 'text-gray-600 hover:bg-gray-50 border border-transparent'
                         }`}
                       >
                         <span className="text-[10px] font-mono w-8 text-center opacity-60">{style.preview}</span>
                         {style.label}
+                        {isLocked && <Lock size={10} className="ml-auto text-red-400" />}
                       </button>
                     );
                   })}
@@ -2286,10 +2658,20 @@ const SurveyEditor: React.FC = () => {
 
                 {/* Question Image */}
                 <div className="mb-3">
-                  <p className="text-[11px] font-semibold text-gray-600 mb-1">Question Image</p>
+                  <p className="text-[11px] font-semibold text-gray-600 mb-1 flex items-center gap-1">
+                    Question Image
+                    {!hasFeature('editor_question_image') && <Lock size={10} className="text-red-400" />}
+                  </p>
 
-                  {/* URL input row */}
-                  <input
+                  {!hasFeature('editor_question_image') ? (
+                    <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                      <Lock size={12} className="text-amber-600 flex-shrink-0" />
+                      <p className="text-[10px] text-amber-700 font-medium">Upgrade your plan to add images to questions</p>
+                    </div>
+                  ) : (
+                    <>
+                    {/* URL input row */}
+                    <input
                     type="text"
                     value={(activeQ as any).questionImage || ''}
                     onChange={(e) => {
@@ -2377,14 +2759,25 @@ const SurveyEditor: React.FC = () => {
                       </div>
                     </>
                   )}
+                    </>
+                  )}
                 </div>
 
                 {/* Option Images — only for choice questions */}
                 {hasOptions && (
                   <div>
-                    <p className="text-[11px] font-semibold text-gray-600 mb-1">Option Images</p>
+                    <p className="text-[11px] font-semibold text-gray-600 mb-1 flex items-center gap-1">
+                      Option Images
+                      {!hasFeature('editor_option_images') && <Lock size={10} className="text-red-400" />}
+                    </p>
 
-                    {/* Image mode toggle */}
+                    {!hasFeature('editor_option_images') ? (
+                      <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <Lock size={12} className="text-amber-600 flex-shrink-0" />
+                        <p className="text-[10px] text-amber-700 font-medium">Upgrade your plan to add images to answer choices</p>
+                      </div>
+                    ) : (
+                    <>
                     <div className="flex gap-1.5 mb-2">
                       {(['with-text', 'replace-text'] as const).map(mode => (
                         <button
@@ -2500,6 +2893,8 @@ const SurveyEditor: React.FC = () => {
                         );
                       })}
                     </div>
+                    </>
+                    )}
                   </div>
                 )}
               </div>
@@ -2539,10 +2934,20 @@ const SurveyEditor: React.FC = () => {
               {/* Actions */}
               <div className="pt-3 border-t border-gray-100 space-y-2">
                 <button
-                  onClick={() => setShowAnimationPanel(true)}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-medium rounded-lg transition-colors text-purple-600 border border-purple-200 bg-purple-50 hover:bg-purple-100"
+                  onClick={() => {
+                    if (!hasFeature('editor_anim_fadeSlideUp')) return;
+                    setAnimationMode(true);
+                    setPreviewReplayKey(k => k + 1);
+                  }}
+                  title={!hasFeature('editor_anim_fadeSlideUp') ? 'Upgrade your plan to access animation settings' : 'Animation Settings'}
+                  className={`w-full flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-medium rounded-lg transition-colors ${
+                    !hasFeature('editor_anim_fadeSlideUp')
+                      ? 'text-gray-400 border border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
+                      : 'text-purple-600 border border-purple-200 bg-purple-50 hover:bg-purple-100'
+                  }`}
                 >
                   <Zap size={13} /> Animation Settings
+                  {!hasFeature('editor_anim_fadeSlideUp') && <Lock size={10} />}
                 </button>
 
                 <button
@@ -2635,6 +3040,7 @@ const SurveyEditor: React.FC = () => {
                   >
                     📋 Table
                   </button>
+                  {hasFeature('branching_flow_diagram') ? (
                   <button
                     onClick={() => setBranchingViewMode('flow')}
                     className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-md text-[11px] sm:text-sm font-medium transition-all whitespace-nowrap ${
@@ -2645,6 +3051,15 @@ const SurveyEditor: React.FC = () => {
                   >
                     🔀 Diagram
                   </button>
+                  ) : (
+                  <button
+                    disabled
+                    title="Upgrade your plan to access Flow Diagram"
+                    className="px-2 sm:px-4 py-1.5 sm:py-2 rounded-md text-[11px] sm:text-sm font-medium text-gray-400 cursor-not-allowed opacity-60 flex items-center gap-1 whitespace-nowrap"
+                  >
+                    🔀 Diagram <Lock size={10} />
+                  </button>
+                  )}
                 </div>
                 
                 <button
@@ -2681,6 +3096,7 @@ const SurveyEditor: React.FC = () => {
 
       {/* ── Floating AI Assistant FAB + Panel ── */}
       {/* FAB button — fixed bottom-right, always visible */}
+      {hasFeature('editor_ai_assistant') && (
       <button
         className={`ai-fab ${showAiBox ? 'ai-fab--active' : ''}`}
         onClick={() => setShowAiBox(v => !v)}
@@ -2700,9 +3116,10 @@ const SurveyEditor: React.FC = () => {
         {/* Pulse ring when closed */}
         {!showAiBox && <span className="ai-fab-pulse" />}
       </button>
+      )}
 
       {/* AI panel — slides up from bottom-right above the FAB */}
-      {showAiBox && (
+      {showAiBox && hasFeature('editor_ai_assistant') && (
         <div className="ai-fab-panel" onClick={e => e.stopPropagation()}>
           {/* Panel header */}
           <div className="ai-fab-panel-header">

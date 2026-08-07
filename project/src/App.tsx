@@ -288,15 +288,16 @@ function LegacyDashboard() {
               <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className={`flex flex-row items-center rounded-lg p-1 text-xs gap-1 ${isDarkMode ? 'bg-slate-700/40' : 'bg-stone-100'}`}>
                   {[
-                    { value: 'create', icon: PenSquare, label: 'Create', requiresFeature: 'create' },
-                    { value: 'surveys', icon: FolderOpen, label: 'Surveys', requiresFeature: 'survey' },
-                    { value: 'responses', icon: TrendingUp, label: 'Analytics', requiresFeature: 'analytics' },
-                    { value: 'sessions', icon: MapPin, label: 'Sessions', requiresFeature: 'sessions', isPremiumIcon: true },
-                    { value: 'postback', icon: Link, label: 'Postback', requiresFeature: 'postback', isPremiumIcon: true },
-                    { value: 'passfail', icon: Settings, label: 'Pass/Fail', requiresFeature: 'pass_fail', isPremiumIcon: true },
-                    { value: 'testlab', icon: () => <span className="text-xs">🧪</span>, label: 'Test Lab', requiresFeature: 'test_lab', isPremiumIcon: true }
-                  ].map(({ value, icon: Icon, label, requiresFeature, isPremiumIcon }) => {
-                    const hasAccess = hasFeature(requiresFeature);
+                    { value: 'create', icon: PenSquare, label: 'Create', requiresFeature: 'create', alwaysVisible: true },
+                    { value: 'surveys', icon: FolderOpen, label: 'Surveys', requiresFeature: 'survey', alwaysVisible: true },
+                    { value: 'responses', icon: TrendingUp, label: 'Analytics', requiresFeature: 'analytics', alwaysVisible: true },
+                    { value: 'sessions', icon: MapPin, label: 'Sessions', requiresFeature: 'tab_sessions', isPremiumIcon: true },
+                    { value: 'postback', icon: Link, label: 'Postback', requiresFeature: 'tab_postback', isPremiumIcon: true },
+                    { value: 'passfail', icon: Settings, label: 'Pass/Fail', requiresFeature: 'tab_passfail', isPremiumIcon: true },
+                    { value: 'testlab', icon: () => <span className="text-xs">🧪</span>, label: 'Test Lab', requiresFeature: 'tab_testlab', isPremiumIcon: true }
+                  ].map(({ value, icon: Icon, label, requiresFeature, isPremiumIcon, alwaysVisible }) => {
+                    // alwaysVisible tabs are never locked regardless of plan
+                    const hasAccess = alwaysVisible ? true : hasFeature(requiresFeature);
                     return (
                       <TabsTrigger
                         key={value}
@@ -451,16 +452,16 @@ function LegacyDashboard() {
               </div>
               <div className="flex-1 py-2 overflow-y-auto">
                 {[
-                  { value: 'create', icon: PenSquare, label: 'Create', desc: 'Generate AI surveys', requiresFeature: 'create' },
-                  { value: 'surveys', icon: FolderOpen, label: 'Surveys', desc: 'Manage your surveys', requiresFeature: 'survey' },
-                  { value: 'responses', icon: TrendingUp, label: 'Analytics', desc: 'View responses & data', requiresFeature: 'analytics' },
-                  { value: 'sessions', icon: MapPin, label: 'Sessions', desc: 'Real-time session tracking', requiresFeature: 'sessions', isPremiumIcon: true },
-                  { value: 'postback', icon: Link, label: 'Postback', desc: 'Configure postbacks', requiresFeature: 'postback', isPremiumIcon: true },
-                  { value: 'email', icon: Mail, label: 'Email', desc: 'Email triggers & templates', requiresFeature: 'email' },
-                  { value: 'passfail', icon: Settings, label: 'Pass/Fail', desc: 'Set evaluation rules', requiresFeature: 'pass_fail', isPremiumIcon: true },
-                  { value: 'testlab', icon: () => <span className="text-lg">🧪</span>, label: 'Test Lab', desc: 'Widget testing', requiresFeature: 'test_lab', isPremiumIcon: true }
-                ].map(({ value, icon: Icon, label, desc, requiresFeature, isPremiumIcon }) => {
-                  const hasAccess = hasFeature(requiresFeature);
+                  { value: 'create', icon: PenSquare, label: 'Create', desc: 'Generate AI surveys', requiresFeature: 'create', alwaysVisible: true },
+                  { value: 'surveys', icon: FolderOpen, label: 'Surveys', desc: 'Manage your surveys', requiresFeature: 'survey', alwaysVisible: true },
+                  { value: 'responses', icon: TrendingUp, label: 'Analytics', desc: 'View responses & data', requiresFeature: 'analytics', alwaysVisible: true },
+                  { value: 'sessions', icon: MapPin, label: 'Sessions', desc: 'Real-time session tracking', requiresFeature: 'tab_sessions', isPremiumIcon: true },
+                  { value: 'postback', icon: Link, label: 'Postback', desc: 'Configure postbacks', requiresFeature: 'tab_postback', isPremiumIcon: true },
+                  { value: 'email', icon: Mail, label: 'Email', desc: 'Email triggers & templates', requiresFeature: 'tab_email' },
+                  { value: 'passfail', icon: Settings, label: 'Pass/Fail', desc: 'Set evaluation rules', requiresFeature: 'tab_passfail', isPremiumIcon: true },
+                  { value: 'testlab', icon: () => <span className="text-lg">🧪</span>, label: 'Test Lab', desc: 'Widget testing', requiresFeature: 'tab_testlab', isPremiumIcon: true }
+                ].map(({ value, icon: Icon, label, desc, requiresFeature, isPremiumIcon, alwaysVisible }) => {
+                  const hasAccess = alwaysVisible ? true : hasFeature(requiresFeature);
                   const isActive = activeTab === value;
                   return (
                     <button
@@ -558,7 +559,7 @@ function LegacyDashboard() {
                 </div>
               </TabsContent>
               <TabsContent value="postback">
-                {hasFeature('postback') ? (
+                {hasFeature('tab_postback') ? (
                   <Suspense fallback={<OptimizedLoader type="page" message="Loading postback manager..." />}>
                     <PostbackManager isDarkMode={isDarkMode} />
                   </Suspense>
@@ -571,7 +572,7 @@ function LegacyDashboard() {
                 )}
               </TabsContent>
               <TabsContent value="email">
-                {hasFeature('email') ? (
+                {hasFeature('tab_email') ? (
                   <Suspense fallback={<OptimizedLoader type="page" message="Loading email system..." />}>
                     <EmailDashboard />
                   </Suspense>
@@ -584,7 +585,7 @@ function LegacyDashboard() {
                 )}
               </TabsContent>
               <TabsContent value="passfail">
-                {hasFeature('pass_fail') ? (
+                {hasFeature('tab_passfail') ? (
                   <Suspense fallback={<OptimizedLoader type="page" message="Loading pass/fail admin..." />}>
                     <PassFailAdmin isDarkMode={isDarkMode} />
                   </Suspense>
@@ -597,7 +598,7 @@ function LegacyDashboard() {
                 )}
               </TabsContent>
               <TabsContent value="testlab">
-                {hasFeature('test_lab') ? (
+                {hasFeature('tab_testlab') ? (
                   <div className="space-y-6">
                     <div className={`p-6 rounded-lg border ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-stone-200'}`}>
                       <h2 className={`text-xl font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>

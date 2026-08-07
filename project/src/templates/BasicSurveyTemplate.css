@@ -1097,3 +1097,27 @@
 .pepper-numeric:focus { outline: none; border-bottom-color: var(--pepper-red); }
 .pepper-numeric::-webkit-inner-spin-button, .pepper-numeric::-webkit-outer-spin-button { opacity: 1; }
 .pepper-numeric-hint { font-size: 12px; color: var(--pepper-text-lighter); font-style: italic; }
+
+
+/* ── Typewriter animation ── */
+@keyframes pepper-typewriter {
+  from { width: 0; }
+  to   { width: 100%; }
+}
+
+@keyframes pepper-cursor-blink {
+  0%, 100% { border-right-color: var(--pepper-red); }
+  50%       { border-right-color: transparent; }
+}
+
+.pepper-typewriter {
+  overflow: hidden;
+  white-space: nowrap;
+  border-right: 2.5px solid var(--pepper-red);
+  width: 0;
+  animation:
+    pepper-typewriter var(--tw-dur, 1.8s) steps(var(--tw-chars, 30), end) forwards,
+    pepper-cursor-blink 0.75s step-end infinite;
+  /* start cursor blink after typing finishes */
+  animation-delay: 0s, var(--tw-dur, 1.8s);
+}

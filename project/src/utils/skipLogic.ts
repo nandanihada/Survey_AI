@@ -45,6 +45,14 @@ export function shouldShowQuestion(
     case 'contains':
       return String(parentAnswer).toLowerCase().includes(String(value).toLowerCase());
 
+    case 'in':
+      // value is an array of strings — show if answer matches any of them
+      if (Array.isArray(value)) {
+        return value.some(v => String(parentAnswer).toLowerCase() === String(v).toLowerCase());
+      }
+      // Fallback: treat as comma-separated
+      return String(value).split(',').map(v => v.trim().toLowerCase()).includes(String(parentAnswer).toLowerCase());
+
     default:
       return true;
   }

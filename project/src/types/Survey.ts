@@ -1,7 +1,7 @@
 export interface ShowIfCondition {
   depends_on: string;
-  condition: 'equals' | 'not_equals' | 'greater_than' | 'less_than' | 'contains';
-  value: string | number;
+  condition: 'equals' | 'not_equals' | 'greater_than' | 'less_than' | 'contains' | 'in';
+  value: string | number | string[];
 }
 
 export interface Question {
@@ -9,12 +9,16 @@ export interface Question {
   question: string;
   questionDescription?: string;
   answerDescription?: string;
-  type: 'text' | 'radio' | 'checkbox' | 'dropdown' | 'range' | 'multiple_choice' | 'yes_no' | 'short_answer' | 'rating';
+  type: 'text' | 'radio' | 'checkbox' | 'dropdown' | 'dropdown_multi' | 'range' | 'multiple_choice' | 'yes_no' | 'short_answer' | 'rating' | 'matrix' | 'list';
   options?: string[];
   required?: boolean;
   answerStyle?: string;
   /** Allow selecting multiple options (checkbox mode) for multiple_choice questions */
   allowMultiple?: boolean;
+  /** How many options to generate with AI for multiple_choice (2-10, default 4) */
+  optionCount?: number;
+  /** Column headers for matrix questions */
+  matrixColumns?: string[];
   /** Delay in milliseconds before this question appears after the previous one */
   questionDelay?: number;
   show_if?: ShowIfCondition | null;

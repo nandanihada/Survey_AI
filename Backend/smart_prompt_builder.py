@@ -360,9 +360,9 @@ YOU MUST:
             )
     else:
         type_instruction = (
-            "Use a variety of types: multiple_choice (~25%), multi_select (~10%), "
-            "rating (~15%), yes_no (~15%), short_answer (~15%), likert (~10%), "
-            "ranking (~5%), dropdown (~5%). "
+            "Use a variety of types: multiple_choice (~20%), multi_select (~10%), "
+            "rating (~15%), yes_no (~10%), short_answer (~15%), likert (~10%), "
+            "ranking (~5%), dropdown (~5%), dropdown_multi (~5%), matrix (~5%). "
             "Never let more than 2 consecutive questions share the same type."
         )
 
@@ -446,6 +446,9 @@ TYPE GUIDE:
 - likert: agreement scale — options MUST be exactly: ["Strongly Agree", "Agree", "Neutral", "Disagree", "Strongly Disagree"]
 - ranking: rank items in order — provide 3-6 items as options
 - dropdown: single select shown as dropdown — use for long option lists (5+ items). Add "Other (please specify)" if applicable.
+- dropdown_multi: multi-select dropdown (checkboxes in a list) — use when multiple selections needed from a long list. Set allowMultiple: true.
+- matrix: grid/table question — rows are topics in "options", columns are scale headers in "matrixColumns". Provide 3-5 rows and 3-5 column headers (e.g. ["Very Good","Good","Neutral","Poor","Very Poor"]).
+- list: numbered list of selectable items — similar to multi_select but displayed as a numbered list. Set allowMultiple: true.
 - numeric: number input — add "min" and "max" fields if relevant
 
 {type_instruction}

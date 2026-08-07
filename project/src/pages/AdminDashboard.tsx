@@ -15,7 +15,13 @@ import ReferralTab from '../components/admin/ReferralTab';
 import EarningsConfigTab from '../components/admin/EarningsConfigTab';
 import SurveyReportTab from '../components/admin/SurveyReportTab';
 import LocationControlTab from '../components/admin/LocationControlTab';
-import { Bell, Filter, Save, Edit2, X, Check, ToggleLeft, ToggleRight, Eye, EyeOff, Play, RotateCcw, AlertCircle, Activity, Mail, AlertTriangle, Gift, DollarSign, FileBarChart } from 'lucide-react';
+import PlanFeaturesTab from '../components/admin/PlanFeaturesTab';
+import {
+  Bell, Filter, Save, Edit2, X, Check, Eye, EyeOff, Play, RotateCcw, AlertCircle,
+  Users, LayoutDashboard, FileText, BarChart2, SlidersHorizontal, CheckSquare,
+  Gift, DollarSign, Radio, Mail, Trash2, MapPin, Settings2, ChevronLeft,
+  ChevronRight, Shield, RefreshCw, Layers
+} from 'lucide-react';
 import { getApiBaseUrl } from '../utils/deploymentFix';
 
 interface User {
@@ -88,12 +94,160 @@ interface FilterFormData {
 }
 
 const AdminDashboard: React.FC = () => {
+  // ── baseUrl declared first so all functions below can use it ──────────────
+  const baseUrl = getApiBaseUrl();
+
   const [users, setUsers] = useState<User[]>([]);
   const [surveys, setSurveys] = useState<any[]>([]);
   const [filters, setFilters] = useState<Filter[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking' | 'tracking' | 'contacts' | 'deletions' | 'referrals' | 'earnings-config' | 'survey-report' | 'location-control'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking' | 'tracking' | 'contacts' | 'deletions' | 'referrals' | 'earnings-config' | 'survey-report' | 'location-control' | 'survey-settings' | 'back-exits' | 'plan-features'>('users');
   const [showNotifModal, setShowNotifModal] = useState(false);
+  // Sidebar collapse state
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  
+  // Platform config state (for Survey Settings tab)
+  const [platformConfig, setPlatformConfig] = useState<{ back_button_enabled: boolean } | null>(null);
+  const [platformConfigSaving, setPlatformConfigSaving] = useState(false);
+  const [platformConfigMsg, setPlatformConfigMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // Survey Settings sub-tab
+  const [settingsSubTab, setSettingsSubTab] = useState<'global' | 'per-survey' | 'per-user'>('global');
+  // Per-survey back button overrides (surveyId -> enabled | null = use global)
+  const [surveyBackOverrides, setSurveyBackOverrides] = useState<Record<string, boolean | null>>({});
+  const [surveyBackSaving, setSurveyBackSaving] = useState<string | null>(null);
+  // Per-user back button overrides (userId -> enabled | null = use global)
+  const [userBackOverrides, setUserBackOverrides] = useState<Record<string, boolean | null>>({});
+  const [userBackSaving, setUserBackSaving] = useState<string | null>(null);
+  // Surveys/users for settings sub-tabs
+  const [settingsSurveys, setSettingsSurveys] = useState<any[]>([]);
+  const [settingsUsers, setSettingsUsers] = useState<any[]>([]);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+
+  const loadPlatformConfig = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${baseUrl}/api/admin/platform-config`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPlatformConfig(data.config);
+      }
+    } catch { /* silent */ }
+  };
+
+  const savePlatformConfig = async (updates: Partial<{ back_button_enabled: boolean }>) => {
+    setPlatformConfigSaving(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${baseUrl}/api/admin/platform-config`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPlatformConfig(data.config);
+        setPlatformConfigMsg({ type: 'success', text: 'Settings saved!' });
+      } else {
+        setPlatformConfigMsg({ type: 'error', text: 'Failed to save settings.' });
+      }
+    } catch {
+      setPlatformConfigMsg({ type: 'error', text: 'Network error.' });
+    } finally {
+      setPlatformConfigSaving(false);
+      setTimeout(() => setPlatformConfigMsg(null), 3000);
+    }
+  };
+
+  const loadSettingsData = async (subTab: 'global' | 'per-survey' | 'per-user') => {
+    const token = localStorage.getItem('auth_token');
+    if (subTab === 'per-survey' && settingsSurveys.length === 0) {
+      setSettingsLoading(true);
+      try {
+        const res = await fetch(`${baseUrl}/api/admin/surveys-with-config`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const list = data.surveys || [];
+          setSettingsSurveys(list);
+          const overrides: Record<string, boolean | null> = {};
+          list.forEach((s: any) => {
+            const id = s.short_id || s._id;
+            overrides[id] = typeof s.back_button_enabled === 'boolean' ? s.back_button_enabled : null;
+          });
+          setSurveyBackOverrides(overrides);
+        }
+      } finally {
+        setSettingsLoading(false);
+      }
+    }
+    if (subTab === 'per-user' && settingsUsers.length === 0) {
+      setSettingsLoading(true);
+      try {
+        const res = await fetch(`${baseUrl}/api/admin/users`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const list = data.users || [];
+          setSettingsUsers(list);
+          const overrides: Record<string, boolean | null> = {};
+          list.forEach((u: any) => {
+            const id = u._id || u.uid;
+            overrides[id] = typeof u.back_button_enabled === 'boolean' ? u.back_button_enabled : null;
+          });
+          setUserBackOverrides(overrides);
+        }
+      } finally {
+        setSettingsLoading(false);
+      }
+    }
+  };
+
+  const saveSurveyBackButton = async (surveyId: string, enabled: boolean | null) => {
+    setSurveyBackSaving(surveyId);
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (enabled === null) {
+        // Remove override — not supported by backend directly, use a sentinel
+        // We'll store null as removing the field by setting a special value
+        await fetch(`${baseUrl}/api/admin/surveys/${surveyId}/back-button`, {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ back_button_enabled: null, use_global: true }),
+        });
+      } else {
+        await fetch(`${baseUrl}/api/admin/surveys/${surveyId}/back-button`, {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ back_button_enabled: enabled }),
+        });
+      }
+      setSurveyBackOverrides(prev => ({ ...prev, [surveyId]: enabled }));
+    } finally {
+      setSurveyBackSaving(null);
+    }
+  };
+
+  const saveUserBackButton = async (userId: string, enabled: boolean | null) => {
+    setUserBackSaving(userId);
+    try {
+      const token = localStorage.getItem('auth_token');
+      await fetch(`${baseUrl}/api/admin/users/${userId}/back-button`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(enabled === null
+          ? { back_button_enabled: true, use_global: true }
+          : { back_button_enabled: enabled }
+        ),
+      });
+      setUserBackOverrides(prev => ({ ...prev, [userId]: enabled }));
+    } finally {
+      setUserBackSaving(null);
+    }
+  };
   
   // Filter management states
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -103,7 +257,28 @@ const AdminDashboard: React.FC = () => {
   const [filterSuccess, setFilterSuccess] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
-  const baseUrl = getApiBaseUrl();
+  // Back-exits tab state
+  const [backExits, setBackExits] = useState<Array<{
+    _id: string; email: string; survey_id: string;
+    submitted_at: string; ip?: string;
+  }>>([]);
+  const [backExitsLoading, setBackExitsLoading] = useState(false);
+
+  const loadBackExits = async () => {
+    setBackExitsLoading(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${baseUrl}/api/admin/back-exits`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBackExits(data.exits || []);
+      }
+    } finally {
+      setBackExitsLoading(false);
+    }
+  };
 
   // User functions
   const fetchUsers = async () => {
@@ -433,278 +608,222 @@ const AdminDashboard: React.FC = () => {
     ? filters 
     : filters.filter(f => f.category === selectedCategory);
 
+  type NavItem = { id: typeof activeTab; icon: React.ReactNode; label: string };
+  type NavGroup = { label: string; items: NavItem[] };
+  const NAV_GROUPS: NavGroup[] = [
+    { label: 'People',     items: [{ id: 'users', icon: <Users size={14} />, label: 'Users' }] },
+    { label: 'Content',    items: [
+      { id: 'surveys',         icon: <FileText size={14} />,        label: 'All Surveys' },
+      { id: 'survey-report',   icon: <BarChart2 size={14} />,       label: 'Survey Report' },
+      { id: 'filters',         icon: <SlidersHorizontal size={14}/>, label: 'Filters' },
+      { id: 'pass-fail',       icon: <CheckSquare size={14} />,     label: 'Pass / Fail' },
+    ]},
+    { label: 'Growth',     items: [
+      { id: 'referrals',       icon: <Gift size={14} />,            label: 'Referrals' },
+      { id: 'earnings-config', icon: <DollarSign size={14} />,      label: 'Earnings' },
+    ]},
+    { label: 'Engagement', items: [
+      { id: 'tracking',        icon: <Radio size={14} />,           label: 'Tracking' },
+      { id: 'contacts',        icon: <Mail size={14} />,            label: 'Contacts' },
+      { id: 'link-masking',    icon: <Shield size={14} />,          label: 'Link Masking' },
+    ]},
+    { label: 'System',     items: [
+      { id: 'location-control',icon: <MapPin size={14} />,          label: 'Location' },
+      { id: 'deletions',       icon: <Trash2 size={14} />,          label: 'Deletions' },
+      { id: 'survey-settings', icon: <Settings2 size={14} />,       label: 'Survey Settings' },
+      { id: 'back-exits',      icon: <ChevronLeft size={14} />,     label: 'Back Exits' },
+      { id: 'plan-features',   icon: <Layers size={14} />,          label: 'Plan Features' },
+    ]},
+  ];
+  const activeLabel = NAV_GROUPS.flatMap((g: NavGroup) => g.items).find((i: NavItem) => i.id === activeTab)?.label || '';
+
   return (
     <ProtectedRoute requireAdmin>
-      <div className="min-h-screen bg-gray-50">
-        <Header />
-        
-        <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-          <div className="px-4 py-6 sm:px-0">
-            <div className="mb-8">
-              <div className="flex items-center justify-between">
+      {/* Paper-cream shell — fixed to viewport height, children scroll independently */}
+      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#F5F1E8', fontFamily: "'Outfit', -apple-system, sans-serif" }}>
+        <div style={{ flexShrink: 0 }}><Header /></div>
+
+        {/* ── Top bar ── */}
+        <div style={{ background: '#FDFCFA', borderBottom: '1px solid #EBE8E3', boxShadow: '0 1px 3px rgba(45,37,32,0.06)', flexShrink: 0 }}
+          className="px-5 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarCollapsed(c => !c)}
+              title={sidebarCollapsed ? 'Expand' : 'Collapse'}
+              style={{ color: '#9B9189', background: '#F5F1E8', border: '1px solid #EBE8E3', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+            >
+              {sidebarCollapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
+            </button>
+            <div className="flex items-center gap-2.5">
+              <div style={{ width: 32, height: 32, borderRadius: 9, background: 'linear-gradient(135deg, #C4785C 0%, #A8624A 100%)', boxShadow: '0 2px 8px rgba(196,120,92,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <LayoutDashboard size={14} color="#fff" />
+              </div>
+              {!sidebarCollapsed && (
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-                  <p className="mt-2 text-gray-600">Manage users, surveys, and system filters</p>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: '#2D2520', lineHeight: 1 }}>Admin Panel</p>
+                  <p style={{ fontSize: 10, color: '#9B9189', marginTop: 2 }}>Pepperwahl Control Centre</p>
                 </div>
-                <button
-                  onClick={() => setShowNotifModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-sm font-semibold transition-colors"
-                >
-                  <Bell size={16} />
-                  Send Notification
-                </button>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <div className="hidden sm:flex items-center gap-2">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#F5F1E8', border: '1px solid #EBE8E3', borderRadius: 8, padding: '5px 10px' }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981', flexShrink: 0, display: 'inline-block' }} />
+                <span style={{ fontSize: 11, color: '#6B6158', fontWeight: 500 }}>{users.length} users</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#F5F1E8', border: '1px solid #EBE8E3', borderRadius: 8, padding: '5px 10px' }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#C4785C', flexShrink: 0, display: 'inline-block' }} />
+                <span style={{ fontSize: 11, color: '#6B6158', fontWeight: 500 }}>{surveys.length} surveys</span>
               </div>
             </div>
+            <button
+              onClick={() => setShowNotifModal(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#C4785C', color: '#fff', border: 'none', borderRadius: 9, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', boxShadow: '0 2px 8px rgba(196,120,92,0.28)', fontFamily: 'inherit' }}
+            >
+              <Bell size={13} /> Send Notification
+            </button>
+          </div>
+        </div>
 
-            {/* Tabs */}
-            <div className="border-b border-gray-200 mb-6">
-              <nav className="-mb-px flex space-x-8">
-                <button
-                  onClick={() => setActiveTab('users')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'users'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  Users
-                </button>
-                <button
-                  onClick={() => setActiveTab('surveys')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'surveys'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  All Surveys
-                </button>
-                <button
-                  onClick={() => setActiveTab('filters')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center gap-1 ${
-                    activeTab === 'filters'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <Filter size={16} />
-                  Suggestion Filters
-                </button>
-                <button
-                  onClick={() => setActiveTab('pass-fail')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'pass-fail'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  Pass/Fail
-                </button>
-                <button
-                  onClick={() => setActiveTab('link-masking')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'link-masking'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  Link Masking
-                </button>
-                <button
-                  onClick={() => setActiveTab('tracking')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center gap-1 ${
-                    activeTab === 'tracking'
-                      ? 'border-indigo-500 text-indigo-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <Activity size={14} /> Tracking
-                </button>
-                <button
-                  onClick={() => setActiveTab('contacts')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center gap-1 ${
-                    activeTab === 'contacts'
-                      ? 'border-emerald-500 text-emerald-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <Mail size={14} /> Contacts
-                </button>
-                <button
-                  onClick={() => setActiveTab('deletions')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center gap-1 ${
-                    activeTab === 'deletions'
-                      ? 'border-red-500 text-red-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <AlertTriangle size={14} /> Deletions
-                </button>
-                <button
-                  onClick={() => setActiveTab('referrals')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center gap-1 ${
-                    activeTab === 'referrals'
-                      ? 'border-orange-500 text-orange-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <Gift size={14} /> Referrals
-                </button>
-                <button
-                  onClick={() => setActiveTab('earnings-config')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center gap-1 ${
-                    activeTab === 'earnings-config'
-                      ? 'border-indigo-600 text-indigo-700'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <DollarSign size={14} /> Earnings Config
-                </button>
-                <button
-                  onClick={() => setActiveTab('survey-report')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center gap-1 ${
-                    activeTab === 'survey-report'
-                      ? 'border-teal-600 text-teal-700'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <FileBarChart size={14} /> Survey Report
-                </button>
-                <button
-                  onClick={() => setActiveTab('location-control')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center gap-1 ${
-                    activeTab === 'location-control'
-                      ? 'border-blue-600 text-blue-700'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  📍 Location
-                </button>
-              </nav>
+        {/* ── Body ── */}
+        <div style={{ display: 'flex', flex: '1 1 0', overflow: 'hidden' }}>
+
+          {/* ── Sidebar — scrolls independently ── */}
+          <aside style={{
+            width: sidebarCollapsed ? 52 : 216,
+            minWidth: sidebarCollapsed ? 52 : 216,
+            transition: 'width 0.2s ease, min-width 0.2s ease',
+            background: '#FDFCFA',
+            borderRight: '1px solid #EBE8E3',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            scrollbarWidth: 'none' as const,
+            flexShrink: 0,
+            height: '100%',
+          }}
+          className="[&::-webkit-scrollbar]:hidden"
+          >
+            <nav style={{ padding: sidebarCollapsed ? '16px 6px' : '16px 8px' }}>
+              {NAV_GROUPS.map(group => (
+                <div key={group.label} style={{ marginBottom: 18 }}>
+                  {!sidebarCollapsed && (
+                    <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#C4A99A', padding: '0 6px', marginBottom: 4 }}>
+                      {group.label}
+                    </p>
+                  )}
+                  {sidebarCollapsed && <div style={{ height: 1, background: '#EBE8E3', margin: '8px 4px 10px' }} />}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    {group.items.map((item: NavItem) => {
+                      const isActive = activeTab === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => { setActiveTab(item.id); if (item.id === 'survey-settings') { loadPlatformConfig(); setSettingsSubTab('global'); } if (item.id === 'back-exits') { loadBackExits(); } }}
+                          title={sidebarCollapsed ? item.label : undefined}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            padding: sidebarCollapsed ? '9px 0' : '8px 10px',
+                            justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
+                            borderRadius: 9, border: 'none', cursor: 'pointer',
+                            transition: 'background 0.12s ease, color 0.12s ease',
+                            fontFamily: "'Outfit', sans-serif", fontSize: 12.5,
+                            fontWeight: isActive ? 600 : 400,
+                            background: isActive ? '#FEF0EC' : 'transparent',
+                            color: isActive ? '#C4785C' : '#6B6158',
+                            borderLeft: isActive && !sidebarCollapsed ? '2.5px solid #C4785C' : '2.5px solid transparent',
+                            width: '100%',
+                          }}
+                        >
+                          <span style={{ flexShrink: 0, opacity: isActive ? 1 : 0.6, display: 'flex' }}>{item.icon}</span>
+                          {!sidebarCollapsed && <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, textAlign: 'left' }}>{item.label}</span>}
+                          {!sidebarCollapsed && isActive && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#C4785C', flexShrink: 0 }} />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </nav>
+          </aside>
+
+          {/* ── Main ── */}
+          {/* ── Main content — scrolls independently ── */}
+          <main style={{ flex: '1 1 0', overflowY: 'auto', overflowX: 'hidden', padding: 22, height: '100%' }}>
+            {/* Heading */}
+            <div style={{ marginBottom: 18 }}>
+              <h2 style={{ fontSize: 17, fontWeight: 700, color: '#2D2520', margin: 0 }}>{activeLabel}</h2>
+              <p style={{ fontSize: 11, color: '#9B9189', marginTop: 3 }}>
+                {activeTab === 'users' && `${users.length} registered users`}
+                {activeTab === 'surveys' && `${surveys.length} surveys`}
+                {activeTab === 'filters' && `${filters.length} filters`}
+                {activeTab === 'plan-features' && 'Configure which features are available per plan'}
+                {!['users','surveys','filters','plan-features'].includes(activeTab) && 'Manage settings and configuration'}
+              </p>
             </div>
 
-            {loading ? (
-              <div className="flex justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              </div>
-            ) : (
-              <>
+            {/* Content card */}
+            <div style={{ background: '#FDFCFA', borderRadius: 14, border: '1px solid #EBE8E3', boxShadow: '0 1px 6px rgba(45,37,32,0.05)', overflow: 'hidden' }}>
+              {loading ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0', gap: 14 }}>
+                  <div className="animate-spin" style={{ width: 34, height: 34, borderRadius: '50%', border: '3px solid #EBE8E3', borderTopColor: '#C4785C' }} />
+                  <p style={{ fontSize: 12, color: '#9B9189', fontWeight: 500 }}>Loading…</p>
+                </div>
+              ) : (
+                <>
                 {/* Users Tab */}
                 {activeTab === 'users' && (
-                  <div className="bg-white shadow overflow-hidden sm:rounded-md">
-                    <ul className="divide-y divide-gray-200">
-                      {users.map((user) => (
-                        <li key={user._id || user.uid} className="px-6 py-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center">
-                              {user.photo_url ? (
-                                <img
-                                  className="h-10 w-10 rounded-full"
-                                  src={user.photo_url}
-                                  alt={user.name}
-                                />
-                              ) : (
-                                <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
-                                  <span className="text-sm font-medium text-gray-700">
-                                    {user.name.charAt(0).toUpperCase()}
-                                  </span>
-                                </div>
-                              )}
-                              <div className="ml-4">
-                                <div className="text-sm font-medium text-gray-900">
-                                  {user.name}
-                                </div>
-                                <div className="text-sm text-gray-500">{user.email}</div>
-                                <div className="text-xs text-gray-400">
-                                  Joined {new Date(user.created_at).toLocaleDateString()}
-                                </div>
-                              </div>
+                  <div style={{ borderRadius: 14, overflow: 'hidden' }}>
+                    {users.map((user) => (
+                      <div key={user._id || user.uid} style={{ borderBottom: '1px solid #F5F1E8', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'background 0.1s' }}
+                        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = '#FEF9F7'}
+                        onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                          {user.photo_url ? (
+                            <img style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', border: '2px solid #EBE8E3' }} src={user.photo_url} alt={user.name} />
+                          ) : (
+                            <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'linear-gradient(135deg, #D4917A, #C4785C)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 4px rgba(196,120,92,0.25)', flexShrink: 0 }}>
+                              <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{user.name?.charAt(0).toUpperCase()}</span>
                             </div>
-                            <div className="flex items-center space-x-4">
-                              <div className="flex flex-col space-y-2">
-                                <div className="flex items-center space-x-2">
-                                  <span className="text-sm font-medium text-gray-700">Role:</span>
-                                  <span
-                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                      user.role === 'admin'
-                                        ? 'bg-purple-100 text-purple-800'
-                                        : user.role === 'enterprise'
-                                        ? 'bg-blue-100 text-blue-800'
-                                        : user.role === 'premium'
-                                        ? 'bg-green-100 text-green-800'
-                                        : 'bg-gray-100 text-gray-800'
-                                    }`}
-                                  >
-                                    {user.role}
-                                  </span>
-                                  <select
-                                    value={user.role}
-                                    onChange={(e) =>
-                                      updateUserRole(user._id || user.uid, e.target.value as 'basic' | 'premium' | 'enterprise' | 'admin')
-                                    }
-                                    className="text-sm border-gray-300 rounded-md"
-                                  >
-                                    <option value="basic">Basic</option>
-                                    <option value="premium">Premium</option>
-                                    <option value="enterprise">Enterprise</option>
-                                    <option value="admin">Admin</option>
-                                  </select>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                  <span className="text-sm font-medium text-gray-700">Status:</span>
-                                  <span
-                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                      (user.status || 'approved') === 'approved'
-                                        ? 'bg-green-100 text-green-800'
-                                        : (user.status || 'approved') === 'disapproved'
-                                        ? 'bg-red-100 text-red-800'
-                                        : 'bg-yellow-100 text-yellow-800'
-                                    }`}
-                                  >
-                                    {user.status || 'approved'}
-                                  </span>
-                                  <select
-                                    value={user.status || 'approved'}
-                                    onChange={(e) =>
-                                      updateUserStatus(user._id || user.uid, e.target.value as 'approved' | 'disapproved' | 'locked')
-                                    }
-                                    className="text-sm border-gray-300 rounded-md"
-                                  >
-                                    <option value="approved">Approved</option>
-                                    <option value="disapproved">Disapproved</option>
-                                    <option value="locked">Locked</option>
-                                  </select>
-                                </div>
-                              </div>
-                            </div>
+                          )}
+                          <div>
+                            <p style={{ fontSize: 13, fontWeight: 600, color: '#2D2520', margin: 0 }}>{user.name}</p>
+                            <p style={{ fontSize: 11, color: '#9B9189', margin: '2px 0 0' }}>{user.email}</p>
+                            <p style={{ fontSize: 10, color: '#C4A99A', margin: '2px 0 0' }}>Joined {new Date(user.created_at).toLocaleDateString()}</p>
                           </div>
-                        </li>
-                      ))}
-                    </ul>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600, background: user.role === 'admin' ? '#FEF0EC' : user.role === 'enterprise' ? '#EEF2FF' : user.role === 'premium' ? '#ECFDF5' : '#F5F1E8', color: user.role === 'admin' ? '#C4785C' : user.role === 'enterprise' ? '#4F46E5' : user.role === 'premium' ? '#059669' : '#6B6158' }}>
+                              {user.role}
+                            </span>
+                            <select value={user.role} onChange={(e) => updateUserRole(user._id || user.uid, e.target.value as 'basic' | 'premium' | 'enterprise' | 'admin')} style={{ fontSize: 11, border: '1px solid #EBE8E3', borderRadius: 7, padding: '4px 8px', background: '#FDFCFA', color: '#3D3530', cursor: 'pointer', fontFamily: 'inherit' }}>
+                              <option value="basic">Basic</option>
+                              <option value="premium">Premium</option>
+                              <option value="enterprise">Enterprise</option>
+                              <option value="admin">Admin</option>
+                            </select>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600, background: (user.status || 'approved') === 'approved' ? '#ECFDF5' : (user.status || 'approved') === 'disapproved' ? '#FEF2F2' : '#FFFBEB', color: (user.status || 'approved') === 'approved' ? '#059669' : (user.status || 'approved') === 'disapproved' ? '#DC2626' : '#D97706' }}>
+                              {user.status || 'approved'}
+                            </span>
+                            <select value={user.status || 'approved'} onChange={(e) => updateUserStatus(user._id || user.uid, e.target.value as 'approved' | 'disapproved' | 'locked')} style={{ fontSize: 11, border: '1px solid #EBE8E3', borderRadius: 7, padding: '4px 8px', background: '#FDFCFA', color: '#3D3530', cursor: 'pointer', fontFamily: 'inherit' }}>
+                              <option value="approved">Approved</option>
+                              <option value="disapproved">Disapproved</option>
+                              <option value="locked">Locked</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {users.length === 0 && <div style={{ padding: '60px 0', textAlign: 'center', color: '#9B9189', fontSize: 13 }}>No users found</div>}
                   </div>
                 )}
 
                 {/* Surveys Tab */}
                 {activeTab === 'surveys' && (
                   <div>
-                    {/* Debug info */}
-                    <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded">
-                      <h3 className="font-medium text-yellow-800">Debug Info:</h3>
-                      <p className="text-sm text-yellow-700">
-                        Surveys loaded: {surveys.length} | 
-                        Loading: {loading ? 'Yes' : 'No'} | 
-                        Data type: {Array.isArray(surveys) ? 'Array' : typeof surveys}
-                      </p>
-                      {surveys.length > 0 && (
-                        <details className="mt-2">
-                          <summary className="text-sm text-yellow-700 cursor-pointer">Show first survey</summary>
-                          <pre className="text-xs mt-2 p-2 bg-white rounded border overflow-auto max-h-32">
-                            {JSON.stringify(surveys[0], null, 2)}
-                          </pre>
-                        </details>
-                      )}
-                    </div>
-                    
                     {surveys.length === 0 ? (
                       <div className="bg-white shadow overflow-hidden sm:rounded-md p-6">
                         <div className="text-center">
@@ -1179,10 +1298,270 @@ const AdminDashboard: React.FC = () => {
                 {activeTab === 'location-control' && (
                   <LocationControlTab />
                 )}
-              </>
-            )}
-          </div>
-        </main>
+
+                {/* Survey Settings Tab */}
+                {activeTab === 'survey-settings' && (
+                  <div className="bg-white shadow sm:rounded-lg overflow-hidden">
+                    {/* Header */}
+                    <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                      <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">⚙️ Survey Settings</h3>
+                      <p className="text-xs text-gray-500 mt-0.5">Control back-button behaviour globally, per survey, or per user.</p>
+                    </div>
+
+                    {/* Sub-tab bar */}
+                    <div className="flex border-b border-gray-200 px-6 bg-white">
+                      {(['global', 'per-survey', 'per-user'] as const).map(tab => (
+                        <button
+                          key={tab}
+                          onClick={() => { setSettingsSubTab(tab); loadSettingsData(tab); }}
+                          className={`py-3 px-4 text-xs font-semibold border-b-2 transition-colors mr-1 ${
+                            settingsSubTab === tab
+                              ? 'border-orange-500 text-orange-600'
+                              : 'border-transparent text-gray-500 hover:text-gray-700'
+                          }`}
+                        >
+                          {tab === 'global' ? '🌐 Global' : tab === 'per-survey' ? '📋 Per Survey' : '👤 Per User'}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="p-6">
+                      {/* ── Global sub-tab ── */}
+                      {settingsSubTab === 'global' && (
+                        <div className="max-w-lg space-y-4">
+                          <p className="text-xs text-gray-500">This setting is the default for all surveys. Per-survey or per-user overrides take priority over this.</p>
+                          <div className="border border-gray-200 rounded-xl p-5">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1">
+                                <p className="text-sm font-semibold text-gray-800">Back Button — Default</p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  When disabled, the Back button is hidden from all survey pages and browser-back shows an email capture page.
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => { if (!platformConfig) return; savePlatformConfig({ back_button_enabled: !platformConfig.back_button_enabled }); }}
+                                disabled={platformConfigSaving || !platformConfig}
+                                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${platformConfig?.back_button_enabled ? 'bg-green-500' : 'bg-gray-300'} disabled:opacity-50`}
+                              >
+                                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${platformConfig?.back_button_enabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                              </button>
+                            </div>
+                            <div className="mt-3">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${platformConfig?.back_button_enabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                {platformConfig === null ? 'Loading…' : platformConfig.back_button_enabled ? '✓ Enabled globally' : '✗ Disabled globally'}
+                              </span>
+                            </div>
+                          </div>
+                          {platformConfigMsg && (
+                            <div className={`px-4 py-2 rounded-lg text-sm font-medium ${platformConfigMsg.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                              {platformConfigMsg.text}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* ── Per Survey sub-tab ── */}
+                      {settingsSubTab === 'per-survey' && (
+                        <div>
+                          <p className="text-xs text-gray-500 mb-4">Override the back button for individual surveys. "Use Global" means no override — it follows the global setting.</p>
+                          {settingsLoading ? (
+                            <div className="flex justify-center py-10"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500" /></div>
+                          ) : (
+                            <div className="overflow-x-auto rounded-xl border border-gray-200">
+                              <table className="min-w-full text-sm">
+                                <thead className="bg-gray-50 border-b border-gray-200">
+                                  <tr>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Survey</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">ID</th>
+                                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">Back Button</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                  {settingsSurveys.map((s: any) => {
+                                    const id = s.short_id || s._id;
+                                    const val = surveyBackOverrides[id];
+                                    return (
+                                      <tr key={id} className="hover:bg-gray-50 transition-colors">
+                                        <td className="px-4 py-3 font-medium text-gray-900 max-w-xs truncate">{s.title || 'Untitled'}</td>
+                                        <td className="px-4 py-3 font-mono text-xs text-gray-500">{id}</td>
+                                        <td className="px-4 py-3 text-center">
+                                          <div className="flex items-center justify-center gap-2">
+                                            {/* 3-way selector: ON / OFF / Global */}
+                                            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-[11px] font-semibold">
+                                              <button
+                                                onClick={() => saveSurveyBackButton(id, true)}
+                                                disabled={surveyBackSaving === id}
+                                                className={`px-3 py-1.5 transition-colors ${val === true ? 'bg-green-500 text-white' : 'bg-white text-gray-500 hover:bg-green-50'}`}
+                                              >ON</button>
+                                              <button
+                                                onClick={() => saveSurveyBackButton(id, false)}
+                                                disabled={surveyBackSaving === id}
+                                                className={`px-3 py-1.5 border-l border-gray-200 transition-colors ${val === false ? 'bg-red-500 text-white' : 'bg-white text-gray-500 hover:bg-red-50'}`}
+                                              >OFF</button>
+                                              <button
+                                                onClick={() => saveSurveyBackButton(id, null)}
+                                                disabled={surveyBackSaving === id}
+                                                className={`px-3 py-1.5 border-l border-gray-200 transition-colors ${val === null ? 'bg-gray-200 text-gray-700' : 'bg-white text-gray-400 hover:bg-gray-50'}`}
+                                              >Global</button>
+                                            </div>
+                                            {surveyBackSaving === id && <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-orange-400 border-t-transparent" />}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                  {settingsSurveys.length === 0 && (
+                                    <tr><td colSpan={3} className="px-4 py-8 text-center text-gray-400 text-sm">No surveys found</td></tr>
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* ── Per User sub-tab ── */}
+                      {settingsSubTab === 'per-user' && (
+                        <div>
+                          <p className="text-xs text-gray-500 mb-4">Override the back button for all surveys belonging to a specific user. "Use Global" removes the override.</p>
+                          {settingsLoading ? (
+                            <div className="flex justify-center py-10"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500" /></div>
+                          ) : (
+                            <div className="overflow-x-auto rounded-xl border border-gray-200">
+                              <table className="min-w-full text-sm">
+                                <thead className="bg-gray-50 border-b border-gray-200">
+                                  <tr>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">User</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Email</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Role</th>
+                                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">Back Button</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                  {settingsUsers.map((u: any) => {
+                                    const id = u._id || u.uid;
+                                    const val = userBackOverrides[id];
+                                    return (
+                                      <tr key={id} className="hover:bg-gray-50 transition-colors">
+                                        <td className="px-4 py-3 font-medium text-gray-900">{u.name || '—'}</td>
+                                        <td className="px-4 py-3 text-gray-500 text-xs">{u.email}</td>
+                                        <td className="px-4 py-3">
+                                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : u.role === 'premium' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{u.role}</span>
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                          <div className="flex items-center justify-center gap-2">
+                                            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-[11px] font-semibold">
+                                              <button
+                                                onClick={() => saveUserBackButton(id, true)}
+                                                disabled={userBackSaving === id}
+                                                className={`px-3 py-1.5 transition-colors ${val === true ? 'bg-green-500 text-white' : 'bg-white text-gray-500 hover:bg-green-50'}`}
+                                              >ON</button>
+                                              <button
+                                                onClick={() => saveUserBackButton(id, false)}
+                                                disabled={userBackSaving === id}
+                                                className={`px-3 py-1.5 border-l border-gray-200 transition-colors ${val === false ? 'bg-red-500 text-white' : 'bg-white text-gray-500 hover:bg-red-50'}`}
+                                              >OFF</button>
+                                              <button
+                                                onClick={() => saveUserBackButton(id, null)}
+                                                disabled={userBackSaving === id}
+                                                className={`px-3 py-1.5 border-l border-gray-200 transition-colors ${val === null ? 'bg-gray-200 text-gray-700' : 'bg-white text-gray-400 hover:bg-gray-50'}`}
+                                              >Global</button>
+                                            </div>
+                                            {userBackSaving === id && <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-orange-400 border-t-transparent" />}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                  {settingsUsers.length === 0 && (
+                                    <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400 text-sm">No users found</td></tr>
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Back Exits Tab */}
+                {activeTab === 'back-exits' && (
+                  <div>
+                    {/* Header row */}
+                    <div style={{ padding: '16px 20px', borderBottom: '1px solid #F5F1E8', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: '#2D2520', margin: 0 }}>Back Exit Captures</p>
+                        <p style={{ fontSize: 11, color: '#9B9189', marginTop: 2 }}>Emails collected when respondents tried to go back</p>
+                      </div>
+                      <button
+                        onClick={loadBackExits}
+                        disabled={backExitsLoading}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontSize: 11, fontWeight: 600, background: '#F5F1E8', border: '1px solid #EBE8E3', borderRadius: 8, cursor: 'pointer', color: '#6B6158', fontFamily: 'inherit' }}
+                      >
+                        <RefreshCw size={12} style={{ animation: backExitsLoading ? 'spin 0.8s linear infinite' : 'none' }} />
+                        Refresh
+                      </button>
+                    </div>
+
+                    {backExitsLoading ? (
+                      <div style={{ padding: '60px 0', textAlign: 'center' }}>
+                        <div className="animate-spin" style={{ width: 28, height: 28, borderRadius: '50%', border: '2.5px solid #EBE8E3', borderTopColor: '#C4785C', margin: '0 auto 10px' }} />
+                        <p style={{ fontSize: 12, color: '#9B9189' }}>Loading…</p>
+                      </div>
+                    ) : backExits.length === 0 ? (
+                      <div style={{ padding: '60px 0', textAlign: 'center' }}>
+                        <ChevronLeft size={32} color="#EBE8E3" style={{ margin: '0 auto 10px', display: 'block' }} />
+                        <p style={{ fontSize: 13, color: '#9B9189' }}>No back-exit emails captured yet</p>
+                        <p style={{ fontSize: 11, color: '#C4A99A', marginTop: 4 }}>They appear here when back is disabled and a respondent leaves their email</p>
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                          <thead>
+                            <tr style={{ background: '#FAF8F5', borderBottom: '1px solid #EBE8E3' }}>
+                              {['Email', 'Survey ID', 'Time', 'IP Address'].map(h => (
+                                <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9B9189' }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {backExits.map((exit, i) => (
+                              <tr key={exit._id || i} style={{ borderBottom: '1px solid #F5F1E8' }}
+                                onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = '#FEF9F7'}
+                                onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = 'transparent'}
+                              >
+                                <td style={{ padding: '12px 16px', color: '#2D2520', fontWeight: 500 }}>{exit.email}</td>
+                                <td style={{ padding: '12px 16px' }}>
+                                  <span style={{ fontFamily: 'monospace', fontSize: 11, background: '#F5F1E8', padding: '2px 8px', borderRadius: 6, color: '#6B6158' }}>{exit.survey_id}</span>
+                                </td>
+                                <td style={{ padding: '12px 16px', color: '#9B9189' }}>
+                                  {exit.submitted_at ? new Date(exit.submitted_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                                </td>
+                                <td style={{ padding: '12px 16px', color: '#C4A99A', fontFamily: 'monospace', fontSize: 11 }}>{exit.ip || '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <div style={{ padding: '10px 16px', borderTop: '1px solid #F5F1E8', fontSize: 11, color: '#9B9189' }}>
+                          {backExits.length} record{backExits.length !== 1 ? 's' : ''}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Plan Features Tab */}
+                {activeTab === 'plan-features' && (
+                  <PlanFeaturesTab />
+                )}
+
+                </>
+              )}
+            </div>{/* end content card */}
+          </main>
+        </div>{/* end body */}
       </div>
       {showNotifModal && <SendNotificationModal onClose={() => setShowNotifModal(false)} />}
     </ProtectedRoute>
