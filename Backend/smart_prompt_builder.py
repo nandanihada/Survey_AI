@@ -437,6 +437,33 @@ GOOD (produce this style):
   }}
 ]
 
+=== SHOW LOGIC (conditional branching — use this to create smart surveys) ===
+When a question's visibility should depend on a previous answer, populate "show_if" instead of leaving it null.
+
+TWO CONDITION TYPES:
+1. "equals" — show when one specific answer was selected
+   Example: {{"depends_on": "q2", "condition": "equals", "value": "Yes"}}
+
+2. "in" — show when ANY of several answers were selected (multi-answer routing)
+   Example: {{"depends_on": "q3", "condition": "in", "value": ["Manager", "Director", "VP"]}}
+
+RULES for show_if:
+- depends_on must reference a PREVIOUS question's id (not current or future)
+- Only use show_if on questions where it genuinely improves the survey logic
+- A follow-up to a yes_no question: use "equals" with "Yes" or "No"
+- When multiple similar answers all lead to the same follow-up: use "in" with an array
+- Short_answer, rating, likert, ranking → usually show_if: null (always show)
+- Aim for at least 25-30% of questions to have conditional show_if when the topic warrants it
+
+EXAMPLE — education survey with branching:
+[
+  {{"id": "q1", "text": "Are you currently a student?", "type": "yes_no", "options": ["Yes","No"], "show_if": null}},
+  {{"id": "q2", "text": "What is your major?", "type": "multiple_choice", "options": ["Engineering","Business","Arts","Science"], "show_if": {{"depends_on": "q1", "condition": "equals", "value": "Yes"}}}},
+  {{"id": "q3", "text": "What year are you in?", "type": "multiple_choice", "options": ["1st","2nd","3rd","4th","5th+"], "show_if": {{"depends_on": "q1", "condition": "equals", "value": "Yes"}}}},
+  {{"id": "q4", "text": "What is your current profession?", "type": "short_answer", "options": [], "show_if": {{"depends_on": "q1", "condition": "equals", "value": "No"}}}},
+  {{"id": "q5", "text": "Rate your campus facilities", "type": "rating", "options": [], "show_if": {{"depends_on": "q2", "condition": "in", "value": ["Engineering","Science"]}}}}
+]
+
 TYPE GUIDE:
 - multiple_choice: single-select from options (radio buttons). For most questions, add "Other (please specify)" as the final option so respondents can write their own answer if none fit.
 - multi_select: select all that apply (checkboxes) — set allowMultiple: true. Always add "Other (please specify)" as the final option.

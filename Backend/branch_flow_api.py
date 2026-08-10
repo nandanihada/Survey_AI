@@ -282,17 +282,14 @@ def apply_prompt_branching_rules(survey_id: str, questions: list, branching_rule
 def ai_suggest_branches(questions: list) -> list:
     """
     Call OpenAI to analyze all questions and decide branching logic.
-    
-    CRITICAL: For every Yes/No or multiple-choice question, ALL answer paths
-    must have at least one question assigned. Both "Yes" AND "No" branches
-    must be shown in the decision tree.
+    Supports both single-answer (condition: equals) and multi-answer
+    (condition: in, value: [...]) show conditions.
     """
     api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("AI_API_KEY", "")
     if not api_key:
         print("⚠️ No OpenAI key - skipping AI branch suggestion")
         return questions
 
-    # Build simplified question list for AI
     q_list = []
     for i, q in enumerate(questions):
         q_list.append({
@@ -302,35 +299,45 @@ def ai_suggest_branches(questions: list) -> list:
             "options": q.get("options", [])
         })
 
-    prompt = f"""You are a survey branching expert. Given these survey questions, assign show_if conditions to create a complete decision tree.
+    prompt = f"""You are a survey branching expert. Given these survey questions, assign show_if conditions to create a complete, logical decision tree.
 
 Questions:
 {json.dumps(q_list, indent=2)}
 
 CRITICAL RULES:
-1. For every yes_no or multiple_choice question with options, you MUST assign follow-up questions to EACH possible answer.
-   - Example: Q1 is Yes/No → some questions must have show_if "Yes", other questions must have show_if "No"
-   - NEVER leave one answer path with zero follow-up questions (both Yes AND No must have at least one question each)
-2. Questions of type short_answer, rating, text, scale → show_if = null (always show)
-3. A question can only depend on a PREVIOUS question (never a future one)
-4. Distribute the remaining questions logically between answer paths
-5. If you're unsure which path a question belongs to, assign it to the most logical answer
+1. For every yes_no or multiple_choice question, assign follow-up questions to the answer paths.
+   - BOTH "Yes" AND "No" answer paths must each get at least one follow-up question.
+   - For multiple_choice questions, group logically related answers together using the "in" condition.
+2. Questions of type short_answer, rating, text, scale → show_if = null (always show).
+3. A question can only depend on a PREVIOUS question (never a future one).
+4. Use "condition: in" with an array when multiple answers should trigger the same question.
+   Use "condition: equals" when only one specific answer triggers it.
 
-EXAMPLE for a Yes/No survey:
-- Q1: "Do you use social media?" (yes_no) → show_if: null (root question)
-- Q2: "Which platforms?" → show_if: depends_on Q1, value "Yes"  
-- Q3: "Why not?" → show_if: depends_on Q1, value "No"
-- Q4: "How many hours?" → show_if: depends_on Q1, value "Yes"
-- Q5: "Would you consider using it?" → show_if: depends_on Q1, value "No"
+CONDITION TYPES:
+- "equals": show this question only when the answer exactly matches one value
+  Example: {{"depends_on": "q1", "condition": "equals", "value": "Yes"}}
+- "in": show this question when the answer matches ANY of several values (multi-answer routing)
+  Example: {{"depends_on": "q1", "condition": "in", "value": ["Project Manager", "Team Lead", "Director"]}}
+
+EXAMPLE — multiple_choice survey about education sector roles:
+- Q1: "What is your role?" (multiple_choice, options: Teacher, Principal, Admin, Researcher, Other)
+  → show_if: null (root question)
+- Q2: "How many students do you teach?" 
+  → show_if: {{"depends_on": "q1", "condition": "in", "value": ["Teacher", "Principal"]}}
+  (both teachers AND principals deal with students)
+- Q3: "What research topics interest you?"
+  → show_if: {{"depends_on": "q1", "condition": "in", "value": ["Researcher", "Other"]}}
+- Q4: "What administrative systems do you use?"
+  → show_if: {{"depends_on": "q1", "condition": "in", "value": ["Admin", "Principal"]}}
 
 Return a JSON array with show_if for EVERY question:
 [
   {{"id": "q1", "show_if": null}},
-  {{"id": "q2", "show_if": {{"depends_on": "q1", "condition": "equals", "value": "Yes"}}}},
+  {{"id": "q2", "show_if": {{"depends_on": "q1", "condition": "in", "value": ["Teacher", "Principal"]}}}},
   {{"id": "q3", "show_if": {{"depends_on": "q1", "condition": "equals", "value": "No"}}}}
 ]
 
-RETURN ONLY VALID JSON. No explanation. Every question must be in the array."""
+RETURN ONLY VALID JSON ARRAY. No explanation. Every question must appear exactly once."""
 
     try:
         resp = http_requests.post(
@@ -359,103 +366,7 @@ RETURN ONLY VALID JSON. No explanation. Every question must be in the array."""
             suggestions = json.loads(content)
             suggestion_map = {s["id"]: s.get("show_if") for s in suggestions}
 
-            # Apply AI suggestions
-            enriched = []
-            for q in questions:
-                q_copy = dict(q)
-                q_id = q_copy.get("id", "")
-                if q_id in suggestion_map and not q_copy.get("show_if"):
-                    q_copy["show_if"] = suggestion_map[q_id]
-                enriched.append(q_copy)
-
-            print(f"✅ AI branch suggestions applied to {len(enriched)} questions")
-            return enriched
-        else:
-            print(f"⚠️ AI branch suggestion failed: {resp.status_code} {resp.text[:200]}")
-            return questions
-
-    except Exception as e:
-        print(f"⚠️ AI branch suggestion error: {e}")
-        return questions
-
-
-def ai_suggest_branches(questions: list) -> list:
-    """
-    Call OpenAI to analyze all questions and decide branching logic.
-    CRITICAL: For every Yes/No or multiple-choice question, ALL answer paths
-    must have at least one question assigned.
-    """
-    api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("AI_API_KEY", "")
-    if not api_key:
-        print("⚠️ No OpenAI key - skipping AI branch suggestion")
-        return questions
-
-    q_list = []
-    for i, q in enumerate(questions):
-        q_list.append({
-            "id": q.get("id", f"q{i}"),
-            "question": q.get("question", ""),
-            "type": q.get("type", "text"),
-            "options": q.get("options", [])
-        })
-
-    prompt = f"""You are a survey branching expert. Given these survey questions, assign show_if conditions to create a complete decision tree.
-
-Questions:
-{json.dumps(q_list, indent=2)}
-
-CRITICAL RULES:
-1. For every yes_no or multiple_choice question, you MUST assign follow-up questions to EACH possible answer.
-   - Example: Q1 is Yes/No → some questions must have show_if "Yes", other questions must have show_if "No"
-   - NEVER leave one answer path with zero follow-up questions (both Yes AND No must each get at least one question)
-2. Questions of type short_answer, rating, text, scale → show_if = null (always show to everyone)
-3. A question can only depend on a PREVIOUS question (never a future one)
-4. Distribute the remaining questions logically between answer paths
-5. If unsure which path a question belongs to, assign it to the most logical answer
-
-EXAMPLE for a Yes/No survey:
-- Q1: "Do you use social media?" (yes_no) → show_if: null
-- Q2: "Which platforms?" → show_if: depends_on Q1, value "Yes"
-- Q3: "Why not?" → show_if: depends_on Q1, value "No"
-- Q4: "How many hours?" → show_if: depends_on Q1, value "Yes"
-- Q5: "Would you consider it?" → show_if: depends_on Q1, value "No"
-
-Return a JSON array with show_if for EVERY question:
-[
-  {{"id": "q1", "show_if": null}},
-  {{"id": "q2", "show_if": {{"depends_on": "q1", "condition": "equals", "value": "Yes"}}}},
-  {{"id": "q3", "show_if": {{"depends_on": "q1", "condition": "equals", "value": "No"}}}}
-]
-
-RETURN ONLY VALID JSON. No explanation. Every question must appear in the array."""
-
-    try:
-        resp = http_requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            timeout=25,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "gpt-4o-mini",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.2,
-                "max_tokens": 2000
-            }
-        )
-
-        if resp.status_code == 200:
-            content = resp.json()["choices"][0]["message"]["content"].strip()
-            if content.startswith("```"):
-                content = content.split("```")[1]
-                if content.startswith("json"):
-                    content = content[4:]
-            content = content.strip()
-
-            suggestions = json.loads(content)
-            suggestion_map = {s["id"]: s.get("show_if") for s in suggestions}
-
+            # Apply AI suggestions — preserve existing show_if if already set
             enriched = []
             for q in questions:
                 q_copy = dict(q)

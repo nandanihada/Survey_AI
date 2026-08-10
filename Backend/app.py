@@ -75,6 +75,35 @@ from smart_prompt_builder import build_generation_request
 from pii_stripper import strip_pii_from_prompt
 
 
+def _normalize_show_if(show_if):
+    """
+    Validate and normalize a show_if condition object from AI output.
+    Supports:
+      condition: 'equals' → value must be a string
+      condition: 'in'     → value must be a non-empty list of strings
+    Returns normalized dict or None if invalid.
+    """
+    if not isinstance(show_if, dict):
+        return None
+    depends_on = show_if.get("depends_on")
+    condition = show_if.get("condition", "equals")
+    value = show_if.get("value")
+    if not depends_on or not condition:
+        return None
+    # Normalize 'in' condition
+    if condition == "in":
+        if isinstance(value, list) and len(value) > 0:
+            return {"depends_on": depends_on, "condition": "in", "value": [str(v) for v in value]}
+        elif isinstance(value, str) and value.strip():
+            # AI returned a single string instead of array — treat as equals
+            return {"depends_on": depends_on, "condition": "equals", "value": value}
+        return None
+    # Normalize 'equals' and other conditions
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    return {"depends_on": depends_on, "condition": condition, "value": str(value)}
+
+
 def find_survey(survey_id: str):
     """Find a survey by short_id, id, or _id (including ObjectId). Covers all ID formats."""
     survey = db["surveys"].find_one({"$or": [
@@ -2073,7 +2102,7 @@ def generate_survey():
                                     "rawType": raw_type,  # preserve original for frontend rendering
                                     "options": q.get("options", []),
                                     "required": q.get("required", True),
-                                    "show_if": q.get("show_if", None),
+                                    "show_if": _normalize_show_if(q.get("show_if")),
                                     "questionDescription": q.get("questionDescription") or None,
                                     "allowMultiple": allow_multiple,
                                     "numericMin": q.get("min"),
