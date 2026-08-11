@@ -4,7 +4,7 @@ Handles branching flow visualization, editing, and survey modes
 Supports: Standard, Mid-Survey Redirect, Custom modes
 """
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
 from flask_cors import cross_origin
 from datetime import datetime, timezone, timedelta
 from bson import ObjectId
@@ -2187,7 +2187,47 @@ def prepare_mid_survey_redirect(survey_id):
             upsert=True
         )
 
-        
+        # ── Save / update partial response record in `responses` collection ─────
+        # This ensures admins and survey owners can see answers collected before
+        # the redirect, even if the user never returns to finish the survey.
+        try:
+            now_utc = datetime.now(timezone.utc)
+            extra_data_for_partial = data.get("extra", {})
+            partial_user_info = {
+                "username":   extra_data_for_partial.get("username", ""),
+                "email":      extra_data_for_partial.get("email", ""),
+                "ip_address": request.environ.get("REMOTE_ADDR", "unknown"),
+                "user_agent": request.headers.get("User-Agent", "unknown"),
+                "click_id":   extra_data_for_partial.get("click_id", ""),
+            }
+            partial_doc = {
+                "survey_id":               survey_id,
+                "session_id":              session_id,
+                "responses":               current_answers,
+                "question_timings":        {},
+                "user_info":               partial_user_info,
+                "status":                  "partial",
+                "partial_submitted_at":    now_utc,
+                "submitted_at":            now_utc,          # keeps sort order consistent
+                "redirect_node_id":        redirect_node_id,
+                "redirected_to_url":       redirect_url,
+                "questions_answered":      current_question_index + 1,
+                "is_public":               True,
+            }
+            # Upsert so a second redirect on the same session just updates
+            result = db.responses.update_one(
+                {"session_id": session_id, "status": "partial"},
+                {"$set": partial_doc},
+                upsert=True,
+            )
+            if result.upserted_id:
+                print(f"💾 [PartialResponse] New partial record created for session {session_id}")
+            else:
+                print(f"🔄 [PartialResponse] Existing partial record updated for session {session_id}")
+        except Exception as partial_err:
+            # Non-blocking — never fail the redirect because of this
+            print(f"⚠️ [PartialResponse] Could not save partial response: {partial_err}")
+
         # Generate resume token
         resume_token = generate_resume_token({
             "session_id": session_id,
@@ -2476,3 +2516,141 @@ def delete_flow_edge(survey_id, edge_id):
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ═══════════════════════════════════════════════════════
+#  SURVEY FLOW ANALYTICS  (admin + survey-owner view)
+# ═══════════════════════════════════════════════════════
+
+from auth_middleware import requireAuth  # noqa: E402
+
+
+def _serialize_doc(doc):
+    """Safely convert ObjectId fields and datetime to strings."""
+    doc['_id'] = str(doc['_id'])
+    for field in ('submitted_at', 'partial_submitted_at'):
+        val = doc.get(field)
+        if val is not None and not isinstance(val, str):
+            doc[field] = val.isoformat()
+    return doc
+
+
+@branch_flow_bp.route('/api/flow-tracking/all-responses', methods=['GET', 'OPTIONS'])
+@cross_origin(supports_credentials=True, origins=ALLOWED_ORIGINS)
+@requireAuth
+def get_all_flow_responses():
+    """
+    Return a flat, time-sorted table of ALL responses (partial + submitted)
+    across all surveys the current user owns (admin sees everything).
+    Each row contains: survey id/title, time, respondent info, redirect info,
+    survey creator, outcome status.
+    """
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    try:
+        current_user = g.current_user
+        user_id      = str(current_user.get('_id', ''))
+        is_admin     = current_user.get('role') == 'admin'
+
+        # ── Get surveys this user has access to ───────────────────────────────
+        if is_admin:
+            surveys_cursor = db.surveys.find({}, {
+                'short_id': 1, 'id': 1, '_id': 1, 'title': 1,
+                'ownerUserId': 1, 'creator_email': 1
+            })
+        else:
+            surveys_cursor = db.surveys.find(
+                {'ownerUserId': user_id},
+                {'short_id': 1, 'id': 1, '_id': 1, 'title': 1,
+                 'ownerUserId': 1, 'creator_email': 1}
+            )
+
+        # Build lookup: all possible survey IDs → survey meta
+        survey_meta  = {}   # canonical_id → {title, short_id, creator_email, owner_id}
+        all_ids      = []   # every possible id variant to query responses with
+
+        for s in surveys_cursor:
+            s_str_id   = str(s.get('_id', ''))
+            short_id   = s.get('short_id') or s.get('id') or s_str_id
+            title      = s.get('title', 'Untitled')
+            owner_id   = s.get('ownerUserId', '')
+            creator_email = s.get('creator_email', '')
+
+            # Resolve creator email from users collection if missing
+            if not creator_email and owner_id:
+                try:
+                    u = db.users.find_one(
+                        {'_id': ObjectId(owner_id)},
+                        {'email': 1, 'name': 1}
+                    )
+                    if u:
+                        creator_email = u.get('email', '')
+                except Exception:
+                    pass
+
+            meta = {
+                'survey_title':   title,
+                'short_id':       short_id,
+                'creator_email':  creator_email,
+                'owner_id':       owner_id,
+            }
+            for vid in {short_id, s_str_id, s.get('id', '')} - {''}:
+                survey_meta[vid] = meta
+                all_ids.append(vid)
+
+        if not all_ids:
+            return jsonify({'success': True, 'rows': [], 'total': 0}), 200
+
+        # ── Fetch all matching responses ───────────────────────────────────────
+        raw_docs = list(
+            db.responses.find(
+                {'survey_id': {'$in': all_ids}}
+            ).sort('submitted_at', -1).limit(2000)   # cap at 2000 rows
+        )
+
+        rows = []
+        for doc in raw_docs:
+            _serialize_doc(doc)
+            sid       = doc.get('survey_id', '')
+            meta      = survey_meta.get(sid, {})
+            ui        = doc.get('user_info', {})
+            raw_ans   = doc.get('responses', {})
+            status    = doc.get('status', 'submitted')
+
+            rows.append({
+                # ─ survey info ─
+                'survey_id':      meta.get('short_id', sid),
+                'survey_title':   meta.get('survey_title', '—'),
+                'creator_email':  meta.get('creator_email', '—'),
+                # ─ timing ─
+                'submitted_at':         doc.get('submitted_at'),
+                'partial_submitted_at': doc.get('partial_submitted_at'),
+                # ─ respondent ─
+                'email':    ui.get('email', ''),
+                'username': ui.get('username', ''),
+                'click_id': ui.get('click_id', ''),
+                'ip':       ui.get('ip_address', ''),
+                # ─ answers ─
+                'questions_answered': doc.get('questions_answered', len(raw_ans)),
+                'answers': {qid: str(ans) for qid, ans in raw_ans.items()},
+                # ─ redirect ─
+                'redirected_to_url': doc.get('redirected_to_url', ''),
+                'redirect_node_id':  doc.get('redirect_node_id', ''),
+                # ─ outcome ─
+                'status': status,   # "partial" | "submitted"
+                # ─ session ─
+                'session_id':  doc.get('session_id', ''),
+                'response_id': doc['_id'],
+            })
+
+        return jsonify({
+            'success': True,
+            'total':   len(rows),
+            'rows':    rows,
+        }), 200
+
+    except Exception as e:
+        import traceback
+        print(f"[flow-tracking] ERROR: {traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500

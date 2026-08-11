@@ -438,6 +438,7 @@ try:
     from survey_sharing_api import survey_sharing_bp, setup_sharing_indexes
     from location_control_api import location_bp    # Location control admin API
     from plan_features_api import plan_features_bp  # Plan features config API
+    from resubmit_control_api import resubmit_bp   # Survey resubmit policy API
 
     # Register blueprints
 
@@ -477,6 +478,7 @@ try:
     app.register_blueprint(survey_invite_bp)  # Survey invite via email
     app.register_blueprint(survey_sharing_bp)  # Survey sharing earnings
     app.register_blueprint(location_bp)          # Location control at /api/admin/location
+    app.register_blueprint(resubmit_bp)          # Resubmit policy at /api/admin/resubmit
 
     # Setup tracking TTL indexes for 15-day auto-delete
     setup_tracking_indexes()
@@ -3279,14 +3281,33 @@ def test_endpoint():
 @app.route("/survey/<survey_id>/responses", methods=["GET", "OPTIONS"])
 @cross_origin(supports_credentials=True, origins="*")
 def get_survey_responses_route(survey_id):
-    """Get all responses for a specific survey"""
+    """
+    Get all responses for a specific survey.
+    Returns both fully-submitted and partial (mid-survey redirect) records
+    so survey owners can see answers even when the user was redirected away
+    before clicking Submit.
+    """
     if request.method == "OPTIONS":
         return "", 200
     try:
-        responses_cursor = db["responses"].find({"survey_id": survey_id})
+        # Resolve canonical survey ID (short_id, id, or _id)
+        survey_doc = db["surveys"].find_one({"$or": [
+            {"short_id": survey_id}, {"id": survey_id}, {"_id": survey_id}
+        ]})
+        canonical_id = str(survey_doc.get("id") or survey_doc.get("short_id") or survey_id) if survey_doc else survey_id
+
+        # Fetch submitted + partial records
+        responses_cursor = db["responses"].find(
+            {"survey_id": {"$in": [survey_id, canonical_id]}},
+            sort=[("submitted_at", -1)]
+        )
         responses = []
         for doc in responses_cursor:
             response_data = convert_objectid_to_string(doc)
+            # Serialise datetime fields that may still be datetime objects
+            for field in ("submitted_at", "partial_submitted_at"):
+                if response_data.get(field) and not isinstance(response_data[field], str):
+                    response_data[field] = response_data[field].isoformat()
             responses.append(response_data)
         return jsonify({
             "survey_id": survey_id,

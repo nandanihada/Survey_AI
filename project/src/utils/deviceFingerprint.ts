@@ -58,3 +58,11 @@ export function hasSurveyBeenCompleted(surveyId: string): boolean {
     return false;
   }
 }
+
+export function clearSurveyComplete(surveyId: string): void {
+  try {
+    localStorage.removeItem(`${LS_PREFIX}${surveyId}`);
+  } catch {
+    // ignore
+  }
+}

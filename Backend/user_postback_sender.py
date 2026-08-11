@@ -211,8 +211,20 @@ def build_user_postback_url(base_url, parameter_mappings, completion_data, surve
             post_data = available_data.copy()
             print(f"   Using all available data (no custom mappings)")
         
-        # Return base URL and POST data
-        return base_url, post_data
+        # Replace {placeholder} tokens in the URL query string even for POST requests
+        # e.g. ?click_id={aff_sub}&payout={payout} must be resolved before sending
+        final_url = base_url
+        for our_field, value in available_data.items():
+            placeholder = '{' + our_field + '}'
+            if placeholder in final_url:
+                if our_field == 'responses' and isinstance(value, (list, dict)):
+                    value_str = json.dumps(value)
+                else:
+                    value_str = str(value)
+                final_url = final_url.replace(placeholder, value_str)
+                print(f"   Replaced URL placeholder (POST): {placeholder} → {value_str[:50]}...")
+        
+        return final_url, post_data
     
     # For GET method, use query parameters
     else:

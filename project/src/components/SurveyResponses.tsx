@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, User, Mail, Download, RefreshCw, Eye, Lock, Trash2, Search } from 'lucide-react';
+import { Calendar, User, Mail, Download, RefreshCw, Eye, Lock, Trash2, Search, ExternalLink, GitBranch } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -13,6 +13,12 @@ interface SurveyResponse {
   submitted_at: string;
   status: string;
   url_parameters?: Record<string, any>;
+  // partial / redirect fields
+  partial_submitted_at?: string;
+  redirect_node_id?: string;
+  redirected_to_url?: string;
+  questions_answered?: number;
+  user_info?: { email?: string; username?: string; click_id?: string };
 }
 
 interface SurveyResponsesProps {
@@ -289,6 +295,11 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
           <h3 className="text-lg font-semibold text-gray-900">Survey Responses</h3>
           <p className="text-sm text-gray-600">
             {responses.length} response{responses.length !== 1 ? 's' : ''} collected
+            {responses.filter(r => r.status === 'partial').length > 0 && (
+              <span className="ml-2 text-amber-600 text-xs">
+                ({responses.filter(r => r.status === 'partial').length} redirected partial{responses.filter(r => r.status === 'partial').length !== 1 ? 's' : ''})
+              </span>
+            )}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -401,8 +412,14 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                    response.status === 'submitted' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-                  }`}>{response.status}</span>
+                    response.status === 'submitted' ? 'bg-green-100 text-green-700' :
+                    response.status === 'partial'   ? 'bg-amber-100 text-amber-700' :
+                                                      'bg-gray-100 text-gray-600'
+                  }`}>
+                    {response.status === 'submitted' ? '✅ Submitted' :
+                     response.status === 'partial'   ? '🔀 Redirected' :
+                     response.status}
+                  </span>
                   <button
                     onClick={() => setSelectedResponse(response)}
                     className="flex items-center gap-1 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded transition-colors"
@@ -435,6 +452,21 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+
+              {/* Redirect info strip for partial responses */}
+              {response.status === 'partial' && response.redirected_to_url && (
+                <div className="mx-4 mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2 text-xs">
+                  <GitBranch size={13} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                  <div className="min-w-0">
+                    <span className="font-medium text-amber-800">Redirected after question {response.questions_answered}</span>
+                    <span className="text-amber-600"> — user left survey mid-way</span>
+                    <div className="mt-1 flex items-center gap-1 text-amber-700 truncate">
+                      <ExternalLink size={10} className="flex-shrink-0" />
+                      <span className="truncate font-mono">{response.redirected_to_url}</span>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -494,6 +526,28 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
                       </div>
                     ))}
                   </div>
+
+                  {/* Redirect info in detail modal */}
+                  {selectedResponse.status === 'partial' && selectedResponse.redirected_to_url && (
+                    <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                      <div className="flex items-center gap-2 mb-1">
+                        <GitBranch size={14} className="text-amber-500" />
+                        <span className="text-sm font-medium text-amber-800">Mid-Survey Redirect</span>
+                      </div>
+                      <p className="text-xs text-amber-700 mb-1">
+                        User answered <strong>{selectedResponse.questions_answered}</strong> question(s) before being redirected.
+                      </p>
+                      <p className="text-xs text-amber-700 flex items-center gap-1 break-all">
+                        <ExternalLink size={10} className="flex-shrink-0" />
+                        {selectedResponse.redirected_to_url}
+                      </p>
+                      {selectedResponse.partial_submitted_at && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          Redirected at: {formatDate(selectedResponse.partial_submitted_at)}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

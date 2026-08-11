@@ -83,6 +83,9 @@ class EnhancedSurveyHandler:
             # Step 3: Start or get session tracking
             # Extract click_id from POST body (sent by frontend) or URL params as fallback
             click_id = request_data.get("click_id") or request.args.get('click_id', '')
+            aff_sub = request_data.get("aff_sub") or request.args.get('aff_sub', '')
+            sub1 = request_data.get("sub1") or request.args.get('sub1', '')
+            sub2 = request_data.get("sub2") or request.args.get('sub2', '')
             
             user_info = {
                 "username": username,
@@ -90,6 +93,9 @@ class EnhancedSurveyHandler:
                 "ip_address": request.environ.get('REMOTE_ADDR', 'unknown'),
                 "user_agent": request.headers.get('User-Agent', 'unknown'),
                 "click_id": click_id,
+                "aff_sub": aff_sub,
+                "sub1": sub1,
+                "sub2": sub2,
             }
             
             if not session_id:
@@ -121,6 +127,14 @@ class EnhancedSurveyHandler:
                 "responses": responses,
                 "question_timings": question_timings,
                 "user_info": user_info,
+                "aff_sub": aff_sub,
+                "sub1": sub1,
+                "sub2": sub2,
+                "click_id": click_id,
+                "ip_address": user_info["ip_address"],
+                "user_agent": user_info["user_agent"],
+                "username": username,
+                "email": email,
                 "submitted_at": datetime.now(timezone.utc),
                 "is_public": True,
                 "status": "submitted"
@@ -136,6 +150,48 @@ class EnhancedSurveyHandler:
                     f"⚠️ [DuplicateCheck] Suspected duplicate submission for survey {survey_id} "
                     f"(previous: {duplicate_result['previous_response_id']})"
                 )
+
+            # Step 5c: Admin-controlled resubmit policy check (hard server-side block)
+            try:
+                import hashlib
+                from resubmit_control_api import check_resubmit_allowed
+
+                fp_hash = None
+                if fingerprint_raw:
+                    fp_hash = hashlib.sha256(fingerprint_raw.strip().encode("utf-8")).hexdigest()
+
+                resubmit_check = check_resubmit_allowed(
+                    survey_id=survey_id,
+                    fingerprint_hash=fp_hash,
+                    email=email or None,
+                )
+
+                if not resubmit_check["allowed"]:
+                    reason = resubmit_check["reason"]
+                    cooldown_ends = resubmit_check.get("cooldown_ends_at")
+                    print(f"🚫 [ResubmitPolicy] Submission blocked for survey {survey_id} — reason: {reason}")
+
+                    error_payload = {
+                        "error": "resubmit_blocked",
+                        "status_code": 403,
+                        "reason": reason,
+                        "policy_mode": resubmit_check.get("policy_mode", "block_forever"),
+                        "cooldown_ends_at": cooldown_ends,
+                        "previous_submission_at": resubmit_check.get("previous_submission_at"),
+                        "message": (
+                            "You have already completed this survey and cannot fill it again."
+                            if reason == "block_forever"
+                            else f"You can fill this survey again after the cooldown period ends."
+                        ),
+                    }
+                    return error_payload
+
+                print(f"✅ [ResubmitPolicy] Submission allowed for survey {survey_id} — reason: {resubmit_check['reason']}")
+            except ImportError:
+                print("ℹ️ [ResubmitPolicy] Module not available — skipping policy check")
+            except Exception as rp_err:
+                # Non-blocking: if the check itself fails, allow the submission
+                print(f"⚠️ [ResubmitPolicy] Check error (non-blocking): {rp_err}")
 
             # Step 6: Check if pass/fail evaluation is enabled
             evaluation_enabled = check_survey_has_evaluation_enabled(survey_id)
@@ -175,9 +231,28 @@ class EnhancedSurveyHandler:
                 print(f"📊 Click data added: {click_data.get('click_count', 1)} clicks by {click_data.get('username', 'unknown')}")
             
             # Step 8: Save response to database
+            # If a partial record already exists for this session (user was redirected
+            # mid-survey and has now completed it), upgrade that record instead of
+            # inserting a duplicate. Otherwise do a fresh insert.
             try:
-                self.db.responses.insert_one(response_data)
-                print(f"💾 Response saved to database: {response_id}")
+                existing_partial = self.db.responses.find_one(
+                    {"session_id": session_id, "status": "partial"}
+                ) if session_id else None
+
+                if existing_partial:
+                    # Upgrade the partial record to a full submission
+                    response_data["_id"] = existing_partial["_id"]
+                    response_data["id"]  = str(existing_partial["_id"])
+                    response_data["partial_submitted_at"] = existing_partial.get("partial_submitted_at")
+                    response_data["redirect_node_id"]     = existing_partial.get("redirect_node_id", "")
+                    response_data["redirected_to_url"]    = existing_partial.get("redirected_to_url", "")
+                    response_data["questions_answered"]   = existing_partial.get("questions_answered", 0)
+                    self.db.responses.replace_one({"_id": existing_partial["_id"]}, response_data)
+                    response_id = str(existing_partial["_id"])
+                    print(f"🔄 Partial response upgraded to submitted: {response_id}")
+                else:
+                    self.db.responses.insert_one(response_data)
+                    print(f"💾 Response saved to database: {response_id}")
             except Exception as db_error:
                 print(f"❌ Database error: {db_error}")
                 return self._error_response(f"Database error: {str(db_error)}", 500)
@@ -581,6 +656,9 @@ class EnhancedSurveyHandler:
                 "user_id": response_data.get("user_id", ""),
                 "simple_user_id": response_data.get("simple_user_id", ""),
                 "click_id": response_data.get("click_id", ""),
+                "aff_sub": response_data.get("aff_sub", ""),
+                "sub1": response_data.get("sub1", ""),
+                "sub2": response_data.get("sub2", ""),
                 "ip_address": response_data.get("ip_address", ""),
                 "user_agent": response_data.get("user_agent", ""),
                 "evaluation_result": evaluation_result.get("result", "unknown")

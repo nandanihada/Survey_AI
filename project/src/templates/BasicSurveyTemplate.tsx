@@ -15,7 +15,8 @@ import { getApiBaseUrl } from '../utils/deploymentFix';
 import {
   getDeviceFingerprint,
   markSurveyComplete,
-  hasSurveyBeenCompleted
+  hasSurveyBeenCompleted,
+  clearSurveyComplete,
 } from '../utils/deviceFingerprint';
 
 interface Question {
@@ -82,6 +83,9 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const [email, setEmail] = useState<string | null>(null);
   const [trackingId, setTrackingId] = useState<string | null>(null);
   const [clickId, setClickId] = useState<string | null>(null);
+  const [affSub, setAffSub] = useState<string | null>(null);
+  const [sub1, setSub1] = useState<string | null>(null);
+  const [sub2, setSub2] = useState<string | null>(null);
   const [resumeSessionId, setResumeSessionId] = useState<string | null>(null);
   const [isResuming, setIsResuming] = useState(false);
 
@@ -189,6 +193,10 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const formRef = React.useRef<HTMLFormElement>(null);
   const [alreadyCompleted, setAlreadyCompleted] = useState(false);
   const [deviceFingerprint, setDeviceFingerprint] = useState<string>('');
+  // Admin resubmit policy state
+  const [resubmitBlocked, setResubmitBlocked] = useState(false);
+  const [resubmitReason, setResubmitReason] = useState<'block_forever' | 'cooldown_active' | ''>('');
+  const [resubmitCooldownEnds, setResubmitCooldownEnds] = useState<Date | null>(null);
 
   // Per-question timing tracking
   const [questionTimings, setQuestionTimings] = useState<Record<string, number>>({});
@@ -280,6 +288,9 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     const params = new URLSearchParams(location.search);
     setUsername(params.get('username'));
     setEmail(params.get('email'));
+    setAffSub(params.get('aff_sub'));
+    setSub1(params.get('sub1'));
+    setSub2(params.get('sub2'));
 
     let extractedClickId = params.get('click_id');
     if (!extractedClickId) {
@@ -340,13 +351,55 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   useEffect(() => {
     if (previewMode || !survey.id) return;
 
-    // Hard check: localStorage key set on previous submission
-    if (hasSurveyBeenCompleted(survey.id)) {
+    // Soft localStorage check — may be overridden by server policy below
+    const lsDone = hasSurveyBeenCompleted(survey.id);
+    if (lsDone) {
       setAlreadyCompleted(true);
     }
 
-    // Collect device fingerprint for soft backend check
-    getDeviceFingerprint().then(fp => setDeviceFingerprint(fp));
+    // Collect device fingerprint then run server-side resubmit policy check.
+    // The server is the source of truth — if it says "allowed", clear localStorage
+    // so the user can actually fill the survey (e.g. cooldown has passed).
+    getDeviceFingerprint().then(async (fp) => {
+      setDeviceFingerprint(fp);
+
+      const surveyId = (survey as any).short_id || survey.id;
+      if (!surveyId) return;
+      try {
+        const params = new URLSearchParams(location.search);
+        const emailParam = params.get('email') || '';
+        const res = await fetch(`${apiBaseUrl}/api/admin/resubmit/check/${surveyId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fingerprint_hash: fp, email: emailParam || undefined }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+
+          if (data.allowed) {
+            // Server says this user can fill — clear any stale localStorage block
+            // This handles: cooldown passed, admin unlocked, no policy set
+            if (lsDone) {
+              clearSurveyComplete(survey.id);
+              setAlreadyCompleted(false);
+            }
+            setResubmitBlocked(false);
+          } else {
+            // Server is blocking — show the correct screen
+            setResubmitBlocked(true);
+            setResubmitReason(data.reason === 'block_forever' ? 'block_forever' : 'cooldown_active');
+            if (data.cooldown_ends_at) {
+              setResubmitCooldownEnds(new Date(data.cooldown_ends_at));
+            }
+            // If there's NO admin policy at all (no_policy / allow), fall back to
+            // the localStorage-only check — don't override it with a false allow
+          }
+        }
+        // On fetch failure: keep whatever localStorage said (fail closed for LS, fail open for policy)
+      } catch {
+        // Non-critical — keep existing state
+      }
+    });
   }, [survey.id, previewMode]);
   // -----------------------------------------------------------------------------
 
@@ -860,13 +913,15 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         body: JSON.stringify({
           responses,
           question_timings: finalTimings,
-          email: email, // Use URL email parameter
+          email: email,
           username,
           tracking_id: trackingId,
           click_id: clickId,
+          aff_sub: affSub,
+          sub1: sub1,
+          sub2: sub2,
           device_fingerprint: deviceFingerprint || undefined,
           ...getMoustacheleadsPayload()
-          // No email_triggers_met flag - backend handles triggers automatically
         }),
       });
 
@@ -1470,7 +1525,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   }
 
   // Already completed (localStorage check) � near-zero false positive
-  if (alreadyCompleted && !previewMode) {
+  if (alreadyCompleted && !previewMode && !resubmitBlocked) {
     return (
       <div className="pepper-survey-container">
         <div style={{ maxWidth: '880px', width: '100%', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '4px' }}>
@@ -1508,7 +1563,69 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       </div>
     );
   }
-  
+
+  // Admin resubmit policy block — server-side enforcement
+  if (resubmitBlocked && !previewMode) {
+    const isForever = resubmitReason === 'block_forever';
+    return (
+      <div className="pepper-survey-container">
+        <div style={{ maxWidth: '880px', width: '100%', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '4px' }}>
+          <div style={{ width: '28px', height: '28px', backgroundImage: 'url(/logo.png)', backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', flexShrink: 0 }} />
+          <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--pepper-dark)', fontFamily: "'Kalam', cursive" }}>
+            {survey.title || 'Survey'}
+          </h1>
+        </div>
+        <div className="pepper-card-wrapper">
+          <div className="pepper-card" style={{ textAlign: 'center', padding: '60px 40px' }}>
+            <div style={{
+              width: 72, height: 72, borderRadius: '50%',
+              background: isForever
+                ? 'linear-gradient(135deg, #ef4444, #dc2626)'
+                : 'linear-gradient(135deg, #f59e0b, #d97706)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 24px',
+              boxShadow: isForever
+                ? '0 4px 20px rgba(239,68,68,0.35)'
+                : '0 4px 20px rgba(245,158,11,0.35)',
+            }}>
+              {isForever ? (
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
+                </svg>
+              ) : (
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+              )}
+            </div>
+            <h2 style={{ color: 'var(--pepper-dark)', marginBottom: 12, fontSize: 22 }}>
+              {isForever ? 'Survey already completed' : 'Survey temporarily unavailable'}
+            </h2>
+            <p style={{ color: 'var(--pepper-muted)', fontSize: 15, maxWidth: 400, margin: '0 auto', lineHeight: 1.6 }}>
+              {isForever
+                ? 'You have already submitted this survey. Only one response per person is allowed.'
+                : resubmitCooldownEnds
+                  ? (() => {
+                      const now = new Date();
+                      const diff = resubmitCooldownEnds.getTime() - now.getTime();
+                      if (diff <= 0) return 'You can fill this survey again now.';
+                      const totalMins = Math.ceil(diff / 60000);
+                      if (totalMins < 60) return `You can fill this survey again in ${totalMins} minute${totalMins !== 1 ? 's' : ''}.`;
+                      const totalHours = Math.ceil(diff / 3600000);
+                      if (totalHours < 24) return `You can fill this survey again in ${totalHours} hour${totalHours !== 1 ? 's' : ''} (${resubmitCooldownEnds.toLocaleString()}).`;
+                      return `You can fill this survey again after ${resubmitCooldownEnds.toLocaleString()}.`;
+                    })()
+                  : 'This survey has a cooldown period. Please try again later.'}
+            </p>
+          </div>
+        </div>
+        <div className="pepper-powered">
+          Powered by <a href="#">Pepperwahl</a>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="pepper-survey-container">
       {/* ── Browser-back blocker overlay ── */}

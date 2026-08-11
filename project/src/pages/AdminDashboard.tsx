@@ -14,13 +14,15 @@ import DeletionRequestsTab from '../components/admin/DeletionRequestsTab';
 import ReferralTab from '../components/admin/ReferralTab';
 import EarningsConfigTab from '../components/admin/EarningsConfigTab';
 import SurveyReportTab from '../components/admin/SurveyReportTab';
+import SurveyFlowTrackingTab from '../components/admin/SurveyFlowTrackingTab';
 import LocationControlTab from '../components/admin/LocationControlTab';
 import PlanFeaturesTab from '../components/admin/PlanFeaturesTab';
+import ResubmitPolicyTab from '../components/admin/ResubmitPolicyTab';
 import {
   Bell, Filter, Save, Edit2, X, Check, Eye, EyeOff, Play, RotateCcw, AlertCircle,
   Users, LayoutDashboard, FileText, BarChart2, SlidersHorizontal, CheckSquare,
   Gift, DollarSign, Radio, Mail, Trash2, MapPin, Settings2, ChevronLeft,
-  ChevronRight, Shield, RefreshCw, Layers
+  ChevronRight, Shield, RefreshCw, Layers, GitBranch
 } from 'lucide-react';
 import { getApiBaseUrl } from '../utils/deploymentFix';
 
@@ -101,7 +103,7 @@ const AdminDashboard: React.FC = () => {
   const [surveys, setSurveys] = useState<any[]>([]);
   const [filters, setFilters] = useState<Filter[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking' | 'tracking' | 'contacts' | 'deletions' | 'referrals' | 'earnings-config' | 'survey-report' | 'location-control' | 'survey-settings' | 'back-exits' | 'plan-features'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking' | 'tracking' | 'contacts' | 'deletions' | 'referrals' | 'earnings-config' | 'survey-report' | 'survey-flow-tracking' | 'location-control' | 'survey-settings' | 'back-exits' | 'plan-features' | 'resubmit-policy'>('users');
   const [showNotifModal, setShowNotifModal] = useState(false);
   // Sidebar collapse state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -613,10 +615,11 @@ const AdminDashboard: React.FC = () => {
   const NAV_GROUPS: NavGroup[] = [
     { label: 'People',     items: [{ id: 'users', icon: <Users size={14} />, label: 'Users' }] },
     { label: 'Content',    items: [
-      { id: 'surveys',         icon: <FileText size={14} />,        label: 'All Surveys' },
-      { id: 'survey-report',   icon: <BarChart2 size={14} />,       label: 'Survey Report' },
-      { id: 'filters',         icon: <SlidersHorizontal size={14}/>, label: 'Filters' },
-      { id: 'pass-fail',       icon: <CheckSquare size={14} />,     label: 'Pass / Fail' },
+      { id: 'surveys',              icon: <FileText size={14} />,        label: 'All Surveys' },
+      { id: 'survey-report',        icon: <BarChart2 size={14} />,       label: 'Survey Report' },
+      { id: 'survey-flow-tracking', icon: <GitBranch size={14} />,       label: 'Flow Tracking' },
+      { id: 'filters',              icon: <SlidersHorizontal size={14}/>, label: 'Filters' },
+      { id: 'pass-fail',            icon: <CheckSquare size={14} />,     label: 'Pass / Fail' },
     ]},
     { label: 'Growth',     items: [
       { id: 'referrals',       icon: <Gift size={14} />,            label: 'Referrals' },
@@ -633,6 +636,7 @@ const AdminDashboard: React.FC = () => {
       { id: 'survey-settings', icon: <Settings2 size={14} />,       label: 'Survey Settings' },
       { id: 'back-exits',      icon: <ChevronLeft size={14} />,     label: 'Back Exits' },
       { id: 'plan-features',   icon: <Layers size={14} />,          label: 'Plan Features' },
+      { id: 'resubmit-policy', icon: <RefreshCw size={14} />,       label: 'Resubmit Policy' },
     ]},
   ];
   const activeLabel = NAV_GROUPS.flatMap((g: NavGroup) => g.items).find((i: NavItem) => i.id === activeTab)?.label || '';
@@ -758,7 +762,8 @@ const AdminDashboard: React.FC = () => {
                 {activeTab === 'surveys' && `${surveys.length} surveys`}
                 {activeTab === 'filters' && `${filters.length} filters`}
                 {activeTab === 'plan-features' && 'Configure which features are available per plan'}
-                {!['users','surveys','filters','plan-features'].includes(activeTab) && 'Manage settings and configuration'}
+                {!['users','surveys','filters','plan-features','survey-flow-tracking'].includes(activeTab) && 'Manage settings and configuration'}
+                {activeTab === 'survey-flow-tracking' && 'Full session flow — questions answered, mid-survey redirects & outcomes'}
               </p>
             </div>
 
@@ -1294,6 +1299,11 @@ const AdminDashboard: React.FC = () => {
                   <SurveyReportTab />
                 )}
 
+                {/* Survey Flow Tracking Tab */}
+                {activeTab === 'survey-flow-tracking' && (
+                  <SurveyFlowTrackingTab />
+                )}
+
                 {/* Location Control Tab */}
                 {activeTab === 'location-control' && (
                   <LocationControlTab />
@@ -1555,6 +1565,11 @@ const AdminDashboard: React.FC = () => {
                 {/* Plan Features Tab */}
                 {activeTab === 'plan-features' && (
                   <PlanFeaturesTab />
+                )}
+
+                {/* Resubmit Policy Tab */}
+                {activeTab === 'resubmit-policy' && (
+                  <ResubmitPolicyTab />
                 )}
 
                 </>
