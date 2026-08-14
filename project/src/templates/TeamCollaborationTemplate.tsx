@@ -158,7 +158,7 @@ const TeamCollaborationTemplate: React.FC<Props> = ({ survey, previewMode = fals
             </div>
           ))}
         </div>
-        <div className="tc-sidebar-footer">Step {currentQuestionIndex + 1} of {normalizedQuestions.length}</div>
+        <div className="tc-sidebar-footer">Step {currentQuestionIndex + 1}{survey.show_question_count === true ? ` of ${normalizedQuestions.length}` : ''}</div>
       </aside>
 
       {/* Right content area */}

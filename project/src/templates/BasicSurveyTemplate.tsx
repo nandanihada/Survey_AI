@@ -1414,7 +1414,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       >
         <div className="pepper-question-number">
           <span className="num-badge">{index + 1}</span>
-          Question {index + 1} of {visibleQuestions.length}
+          Question {index + 1}{survey.show_question_count === true ? ` of ${visibleQuestions.length}` : ''}
         </div>
 
         {/* Question image — above position (default) */}

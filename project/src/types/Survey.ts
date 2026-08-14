@@ -72,6 +72,11 @@ export interface Survey {
    * Defaults to true (location popup shown). Set to false to disable the popup.
    */
   collect_location?: boolean;
+  /**
+   * Whether to show the total question count alongside the question number (e.g. "Question 1 of 32").
+   * Defaults to false (only "Question 1" shown). Set to true to show the total.
+   */
+  show_question_count?: boolean;
   theme?: {
     font: string;
     intent: string;

@@ -135,7 +135,7 @@ const EventFeedbackTemplate: React.FC<Props> = ({ survey, previewMode = false })
     if (previewMode && idx > 2) return null;
     return (
       <div key={q.id} className="ef-question-area">
-        <div className="ef-question-number"><span className="ef-num-badge">{idx + 1}</span> Question {idx + 1} of {normalizedQuestions.length}</div>
+        <div className="ef-question-number"><span className="ef-num-badge">{idx + 1}</span> Question {idx + 1}{survey.show_question_count === true ? ` of ${normalizedQuestions.length}` : ''}</div>
         <QuestionImage q={q} position="above" />
         {!previewMode ? (
           <motion.h2 className="ef-question-text" variants={qVariants} initial="initial" animate="animate" exit="exit">{q.question}</motion.h2>

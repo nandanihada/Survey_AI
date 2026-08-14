@@ -135,7 +135,7 @@ const EmployeeCheckInTemplate: React.FC<Props> = ({ survey, previewMode = false 
     if (previewMode && idx > 2) return null;
     return (
       <div key={q.id} className="ec-question-area">
-        <div className="ec-question-number"><span className="ec-num-badge">{idx + 1}</span> Question {idx + 1} of {normalizedQuestions.length}</div>
+        <div className="ec-question-number"><span className="ec-num-badge">{idx + 1}</span> Question {idx + 1}{survey.show_question_count === true ? ` of ${normalizedQuestions.length}` : ''}</div>
         <QuestionImage q={q} position="above" />
         {!previewMode ? (
           <motion.h2 className="ec-question-text" variants={qVariants} initial="initial" animate="animate" exit="exit">{q.question}</motion.h2>

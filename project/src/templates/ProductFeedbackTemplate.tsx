@@ -135,7 +135,7 @@ const ProductFeedbackTemplate: React.FC<Props> = ({ survey, previewMode = false 
     if (previewMode && idx > 2) return null;
     return (
       <div key={q.id} className="pf-question-area">
-        <div className="pf-question-number"><span className="pf-num-badge">{idx + 1}</span> Question {idx + 1} of {normalizedQuestions.length}</div>
+        <div className="pf-question-number"><span className="pf-num-badge">{idx + 1}</span> Question {idx + 1}{survey.show_question_count === true ? ` of ${normalizedQuestions.length}` : ''}</div>
         <QuestionImage q={q} position="above" />
         {!previewMode ? (
           <motion.h2 className="pf-question-text" variants={qVariants} initial="initial" animate="animate" exit="exit">{q.question}</motion.h2>

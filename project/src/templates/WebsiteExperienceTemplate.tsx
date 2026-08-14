@@ -154,7 +154,7 @@ const WebsiteExperienceTemplate: React.FC<Props> = ({ survey, previewMode = fals
 
       <div className="we-body">
         <form onSubmit={handleSubmit} className="we-form-card">
-          <div className="we-counter">Question {currentQuestionIndex + 1} of {normalizedQuestions.length}</div>
+          <div className="we-counter">Question {currentQuestionIndex + 1}{survey.show_question_count === true ? ` of ${normalizedQuestions.length}` : ''}</div>
           <AnimatePresence mode="wait">{normalizedQuestions.map((q, i) => renderQuestion(q, i))}</AnimatePresence>
           {!previewMode && (
             <div className="we-btns">
