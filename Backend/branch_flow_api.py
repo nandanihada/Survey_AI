@@ -2196,7 +2196,7 @@ def prepare_mid_survey_redirect(survey_id):
             partial_user_info = {
                 "username":   extra_data_for_partial.get("username", ""),
                 "email":      extra_data_for_partial.get("email", ""),
-                "ip_address": request.environ.get("REMOTE_ADDR", "unknown"),
+                "ip_address": request.headers.get('X-Forwarded-For', request.remote_addr or 'unknown').split(',')[0].strip(),
                 "user_agent": request.headers.get("User-Agent", "unknown"),
                 "click_id":   extra_data_for_partial.get("click_id", ""),
             }

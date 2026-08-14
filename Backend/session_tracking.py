@@ -40,8 +40,13 @@ class SurveySessionTracker:
             
             # Extract request metadata
             if request_data is None and request:
+                # Use X-Forwarded-For to get the real client IP (behind Render/Nginx proxy)
+                forwarded = request.headers.get('X-Forwarded-For', '')
+                real_ip = forwarded.split(',')[0].strip() if forwarded else (
+                    request.headers.get('X-Real-IP', '') or request.environ.get('REMOTE_ADDR', 'unknown')
+                )
                 request_data = {
-                    "ip_address": request.environ.get('REMOTE_ADDR', 'unknown'),
+                    "ip_address": real_ip,
                     "user_agent": request.headers.get('User-Agent', 'unknown'),
                     "referrer": request.headers.get('Referer', ''),
                     "click_id": request.args.get('click_id', ''),

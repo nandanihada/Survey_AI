@@ -90,7 +90,7 @@ class EnhancedSurveyHandler:
             user_info = {
                 "username": username,
                 "email": email,
-                "ip_address": request.environ.get('REMOTE_ADDR', 'unknown'),
+                "ip_address": request.headers.get('X-Forwarded-For', request.remote_addr or 'unknown').split(',')[0].strip(),
                 "user_agent": request.headers.get('User-Agent', 'unknown'),
                 "click_id": click_id,
                 "aff_sub": aff_sub,
@@ -269,7 +269,7 @@ class EnhancedSurveyHandler:
                     response_id=response_id,
                     session_id=session_id,
                     device_fingerprint=request_data.get("device_fingerprint", ""),
-                    ip=request_data.get("ip_address") or request.environ.get('REMOTE_ADDR', ''),
+                    ip=request_data.get("ip_address") or request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip(),
                 )
             except Exception as sharing_err:
                 # Non-critical — log and continue

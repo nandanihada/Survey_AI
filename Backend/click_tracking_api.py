@@ -7,7 +7,34 @@ from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify
 from mongodb_config import db
 import uuid
+import requests as http_requests
 from typing import Dict, Optional
+
+
+def _geo_from_ip(ip: str) -> dict:
+    """Non-blocking geo lookup via ip-api.com. Skips private/internal IPs."""
+    PRIVATE = {'unknown', '127.0.0.1', '::1', 'localhost', '0.0.0.0', ''}
+    if not ip or ip in PRIVATE:
+        return {}
+    # Skip RFC-1918 private ranges (Render internal IPs)
+    if ip.startswith('10.') or ip.startswith('192.168.') or ip.startswith('172.'):
+        return {}
+    try:
+        resp = http_requests.get(
+            f"http://ip-api.com/json/{ip}?fields=status,country,regionName,city",
+            timeout=2
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('status') == 'success':
+                return {
+                    'city': data.get('city', ''),
+                    'region': data.get('regionName', ''),
+                    'country': data.get('country', ''),
+                }
+    except Exception:
+        pass
+    return {}
 
 click_tracking_bp = Blueprint('click_tracking', __name__)
 
@@ -110,6 +137,7 @@ class ClickTracker:
                     "submission_count": 0,
                     "last_submission_time": None,
                     "evaluation_results": [],
+                    "location": _geo_from_ip(user_info.get('ip_address', '')),
                     "device_info": {
                         "device_type": self._detect_device_type(user_info.get('user_agent', '')),
                         "browser": self._detect_browser(user_info.get('user_agent', ''))
@@ -313,9 +341,15 @@ class ClickTracker:
 def track_survey_click(survey_id):
     """Track survey link click"""
     try:
-        # Extract user info from request
+        # Extract real client IP — prefer X-Forwarded-For (set by reverse proxies / Render / Nginx)
+        forwarded = request.headers.get('X-Forwarded-For', '')
+        if forwarded:
+            real_ip = forwarded.split(',')[0].strip()
+        else:
+            real_ip = request.headers.get('X-Real-IP', '') or request.environ.get('REMOTE_ADDR', 'unknown')
+
         user_info = {
-            'ip_address': request.environ.get('REMOTE_ADDR', 'unknown'),
+            'ip_address': real_ip,
             'user_agent': request.headers.get('User-Agent', 'unknown'),
             'referrer': request.headers.get('Referer', ''),
         }

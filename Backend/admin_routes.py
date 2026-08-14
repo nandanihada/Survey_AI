@@ -27,19 +27,49 @@ def convert_objectid_to_string(doc):
 @admin_bp.route('/users', methods=['GET'])
 @requireAdmin
 def get_all_users():
-    """Get all users"""
+    """Get all users with enhanced profile data including last login location"""
     try:
         users = list(db.users.find().sort('createdAt', -1))
-        
-        # Convert ObjectIds to strings and remove sensitive data
+
+        # Batch-fetch most recent login event per user (already has location stored at login time)
+        user_ids = [str(u['_id']) for u in users]
+        pipeline = [
+            {'$match': {'user_id': {'$in': user_ids}}},
+            {'$sort': {'created_at': -1}},
+            {'$group': {
+                '_id': '$user_id',
+                'location': {'$first': '$location'},
+                'ip_address': {'$first': '$ip_address'},
+                'login_method': {'$first': '$login_method'},
+            }}
+        ]
+        login_map = {doc['_id']: doc for doc in db.login_events.aggregate(pipeline)}
+
+        # Serialize and attach location
         for user in users:
+            uid = str(user['_id'])
             convert_objectid_to_string(user)
-        
-        return jsonify({
-            'users': users,
-            'total': len(users)
-        })
-        
+            for field in ('createdAt', 'lastLogin', 'updatedAt'):
+                val = user.get(field)
+                if val and hasattr(val, 'isoformat'):
+                    user[field] = val.isoformat()
+            if 'authProvider' not in user:
+                user['authProvider'] = 'email' if user.get('passwordHash') else 'unknown'
+            login_info = login_map.get(uid, {})
+            loc = login_info.get('location') or {}
+            user['last_login_location'] = {
+                'city': loc.get('city', ''),
+                'region': loc.get('region', ''),
+                'country': loc.get('country', ''),
+                'ip_address': login_info.get('ip_address', ''),
+            }
+            user.pop('passwordHash', None)
+            user.pop('confirmationToken', None)
+            user.pop('resetPasswordToken', None)
+            user.pop('resetPasswordExpiry', None)
+
+        return jsonify({'users': users, 'total': len(users)})
+
     except Exception as e:
         return jsonify({'error': f'Failed to get users: {str(e)}'}), 500
 
@@ -382,6 +412,171 @@ def get_comprehensive_survey_data():
     except Exception as e:
         print(f"Error in comprehensive survey data: {e}")
         return jsonify({'error': f'Failed to get comprehensive survey data: {str(e)}'}), 500
+
+
+# ── Survey Click Tracking (admin-wide) ───────────────────────────────────────
+
+@admin_bp.route('/survey-clicks', methods=['GET'])
+@requireAdmin
+def get_admin_survey_clicks():
+    """
+    Return click records across all surveys (or filtered by survey_id / submission_status).
+    Query params:
+      survey_id   - filter to a specific survey short_id
+      status      - 'all' (default) | 'submitted' | 'not_submitted'
+      limit       - max records (default 500)
+      page        - 1-based page number (default 1)
+    """
+    try:
+        survey_id = request.args.get('survey_id', '').strip()
+        status_filter = request.args.get('status', 'all').strip()
+        limit = min(int(request.args.get('limit', 500)), 2000)
+        page = max(int(request.args.get('page', 1)), 1)
+        skip = (page - 1) * limit
+
+        query = {}
+        if survey_id:
+            query['survey_id'] = survey_id
+        if status_filter and status_filter != 'all':
+            query['submission_status'] = status_filter
+
+        total = db.survey_clicks.count_documents(query)
+        records = list(
+            db.survey_clicks.find(query)
+            .sort('first_click_time', -1)
+            .skip(skip)
+            .limit(limit)
+        )
+
+        # Serialize datetimes and trim click_history
+        raw_ids = {}  # str_id -> original_id for DB update
+        for r in records:
+            orig_id = r.get('_id')
+            if isinstance(orig_id, ObjectId):
+                r['_id'] = str(orig_id)
+            raw_ids[r['_id']] = orig_id  # keep original for update_one
+            for field in ('first_click_time', 'last_click_time', 'last_submission_time', 'created_at', 'updated_at'):
+                val = r.get(field)
+                if val and hasattr(val, 'isoformat'):
+                    r[field] = val.isoformat()
+            if 'click_history' in r:
+                r['click_history'] = r['click_history'][-5:]
+
+        # ── Batch geo enrichment for records missing location ──────────────
+        # 1. Collect unique IPs that need resolution
+        SKIP_IPS = {'unknown', '127.0.0.1', '::1', 'localhost', '0.0.0.0', ''}
+        ip_to_geo: dict = {}
+        ips_needed: set = set()
+        for r in records:
+            if not (r.get('location') and (r['location'].get('city') or r['location'].get('country'))):
+                ip = r.get('ip_address', '')
+                # Skip private / internal IPs — they can never be resolved
+                if ip and ip not in SKIP_IPS and not ip.startswith(('10.', '172.', '192.168.')):
+                    ips_needed.add(ip)
+
+        # 2. Resolve unique IPs (cap at 80 to stay under ip-api free rate limit)
+        import requests as _req
+        for ip in list(ips_needed)[:80]:
+            try:
+                geo_r = _req.get(
+                    f"http://ip-api.com/json/{ip}?fields=status,country,regionName,city",
+                    timeout=2
+                )
+                if geo_r.status_code == 200:
+                    gd = geo_r.json()
+                    if gd.get('status') == 'success':
+                        ip_to_geo[ip] = {
+                            'city': gd.get('city', ''),
+                            'region': gd.get('regionName', ''),
+                            'country': gd.get('country', ''),
+                        }
+            except Exception:
+                pass
+
+        # 3. Apply resolved locations to records and persist back to DB
+        for r in records:
+            if not (r.get('location') and (r['location'].get('city') or r['location'].get('country'))):
+                ip = r.get('ip_address', '')
+                geo = ip_to_geo.get(ip)
+                if geo:
+                    r['location'] = geo
+                    # Persist using the original _id (ObjectId or string)
+                    orig_id = raw_ids.get(r['_id'], r['_id'])
+                    try:
+                        db.survey_clicks.update_one(
+                            {'_id': orig_id},
+                            {'$set': {'location': geo}}
+                        )
+                    except Exception:
+                        pass
+
+        # Aggregate summary stats
+        pipeline_summary = [
+            {'$match': query if query else {}},
+            {'$group': {
+                '_id': None,
+                'total_clicks': {'$sum': '$click_count'},
+                'unique_users': {'$sum': 1},
+                'submitted': {'$sum': {'$cond': [{'$eq': ['$submission_status', 'submitted']}, 1, 0]}},
+                'not_submitted': {'$sum': {'$cond': [{'$eq': ['$submission_status', 'not_submitted']}, 1, 0]}},
+            }}
+        ]
+        summary_result = list(db.survey_clicks.aggregate(pipeline_summary))
+        summary = summary_result[0] if summary_result else {
+            'total_clicks': 0, 'unique_users': 0, 'submitted': 0, 'not_submitted': 0
+        }
+        summary.pop('_id', None)
+        summary['conversion_rate'] = round(
+            summary['submitted'] / summary['unique_users'] * 100, 1
+        ) if summary.get('unique_users', 0) > 0 else 0
+
+        return jsonify({
+            'records': records,
+            'total': total,
+            'page': page,
+            'limit': limit,
+            'summary': summary
+        })
+    except Exception as e:
+        return jsonify({'error': f'Failed to get survey clicks: {str(e)}'}), 500
+
+
+@admin_bp.route('/survey-clicks/surveys-list', methods=['GET'])
+@requireAdmin
+def get_clicked_surveys_list():
+    """Return distinct survey IDs that have click records, with title lookup."""
+    try:
+        pipeline = [
+            {'$group': {
+                '_id': '$survey_id',
+                'total_clicks': {'$sum': '$click_count'},
+                'unique_visitors': {'$sum': 1},
+                'submitted': {'$sum': {'$cond': [{'$eq': ['$submission_status', 'submitted']}, 1, 0]}},
+                'last_click': {'$max': '$last_click_time'},
+            }},
+            {'$sort': {'last_click': -1}}
+        ]
+        grouped = list(db.survey_clicks.aggregate(pipeline))
+
+        # Enrich with survey title
+        for item in grouped:
+            sid = item['_id']
+            survey = db.surveys.find_one(
+                {'$or': [{'short_id': sid}, {'id': sid}]},
+                {'title': 1, 'status': 1}
+            )
+            item['title'] = survey.get('title', 'Unknown') if survey else 'Unknown'
+            item['survey_status'] = survey.get('status', 'unknown') if survey else 'unknown'
+            item['conversion_rate'] = round(
+                item['submitted'] / item['unique_visitors'] * 100, 1
+            ) if item.get('unique_visitors', 0) > 0 else 0
+            # Serialize datetime
+            if item.get('last_click') and hasattr(item['last_click'], 'isoformat'):
+                item['last_click'] = item['last_click'].isoformat()
+
+        return jsonify({'surveys': grouped, 'total': len(grouped)})
+    except Exception as e:
+        return jsonify({'error': f'Failed to get surveys list: {str(e)}'}), 500
 
 
 # ── Notification endpoints ──────────────────────────────────────────────────

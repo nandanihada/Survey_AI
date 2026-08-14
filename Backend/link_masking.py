@@ -135,7 +135,7 @@ class LinkMaskingHandler:
                 user_agent = request.headers.get('User-Agent', '')
                 raw_ref = request.headers.get('Referer', '') or ''
                 referrer = raw_ref.replace('.', '_').replace('/', '_').replace(':', '_')[:50] if raw_ref else 'direct'
-                ip_address = request.remote_addr or 'unknown'
+                ip_address = request.headers.get('X-Forwarded-For', request.remote_addr or 'unknown').split(',')[0].strip()
 
             device = self._parse_device(user_agent)
             browser = self._parse_browser(user_agent)

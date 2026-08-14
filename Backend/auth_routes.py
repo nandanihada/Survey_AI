@@ -226,24 +226,61 @@ def login():
         user = auth_service.authenticate_user(email, password)
         token = auth_service.generate_jwt_token(user)
         
-        # Track login event
+        # Track login event — geo lookup runs in background thread, login stays instant
         try:
             from user_tracking_api import db as tracking_db
             from datetime import timezone as tz
+            import threading
             ip = request.headers.get('X-Forwarded-For', request.remote_addr or 'unknown')
             if ',' in ip:
                 ip = ip.split(',')[0].strip()
-            tracking_db.login_events.insert_one({
-                "user_id": str(user['_id']),
-                "user_email": user['email'],
-                "user_name": user.get('name', ''),
-                "login_method": "email",
-                "ip_address": ip,
-                "device_info": {
-                    "user_agent": request.headers.get('User-Agent', ''),
-                },
-                "created_at": datetime.now(tz.utc)
-            })
+
+            # Capture everything needed before the request context is gone
+            _uid = str(user['_id'])
+            _email = user['email']
+            _name = user.get('name', '')
+            _ua = request.headers.get('User-Agent', '')
+
+            def _track_login_bg(user_id, user_email, user_name, ip_addr, user_agent):
+                try:
+                    import requests as _req
+                    from datetime import datetime, timezone as _tz
+                    geo = {}
+                    skip_ips = ('unknown', '127.0.0.1', '::1', 'localhost', '0.0.0.0', '')
+                    if ip_addr and ip_addr not in skip_ips:
+                        try:
+                            r = _req.get(
+                                f"http://ip-api.com/json/{ip_addr}?fields=status,country,regionName,city",
+                                timeout=3
+                            )
+                            if r.status_code == 200:
+                                d = r.json()
+                                if d.get('status') == 'success':
+                                    geo = {
+                                        'city': d.get('city', ''),
+                                        'region': d.get('regionName', ''),
+                                        'country': d.get('country', ''),
+                                    }
+                        except Exception:
+                            pass
+                    tracking_db.login_events.insert_one({
+                        "user_id": user_id,
+                        "user_email": user_email,
+                        "user_name": user_name,
+                        "login_method": "email",
+                        "ip_address": ip_addr,
+                        "location": geo,
+                        "device_info": {"user_agent": user_agent},
+                        "created_at": datetime.now(_tz.utc)
+                    })
+                except Exception as e:
+                    print(f"⚠️ Login tracking background error: {e}")
+
+            threading.Thread(
+                target=_track_login_bg,
+                args=(_uid, _email, _name, ip, _ua),
+                daemon=True
+            ).start()
         except Exception as track_err:
             print(f"⚠️ Login tracking failed (non-critical): {track_err}")
         
@@ -444,21 +481,61 @@ def firebase_login():
                 {'$set': {'lastLogin': datetime.utcnow()}}
             )
             
-            # Track login event
+            # Track login event — geo lookup runs in background thread, login stays instant
             try:
                 from datetime import timezone as tz
+                import threading
                 ip = request.headers.get('X-Forwarded-For', request.remote_addr or 'unknown')
                 if ',' in ip:
                     ip = ip.split(',')[0].strip()
-                db.login_events.insert_one({
-                    "user_id": str(existing_user['_id']),
-                    "user_email": email,
-                    "user_name": existing_user.get('name', name),
-                    "login_method": provider,
-                    "ip_address": ip,
-                    "device_info": {"user_agent": request.headers.get('User-Agent', '')},
-                    "created_at": datetime.now(tz.utc)
-                })
+
+                # Capture all values before request context is gone
+                _uid = str(existing_user['_id'])
+                _email2 = email
+                _name2 = existing_user.get('name', name)
+                _provider2 = provider
+                _ua2 = request.headers.get('User-Agent', '')
+
+                def _track_oauth_login(user_id, user_email, user_name, login_method, ip_addr, user_agent):
+                    try:
+                        import requests as _req
+                        from datetime import datetime as _dt, timezone as _tz
+                        geo = {}
+                        skip_ips = ('unknown', '127.0.0.1', '::1', 'localhost', '0.0.0.0', '')
+                        if ip_addr and ip_addr not in skip_ips:
+                            try:
+                                r = _req.get(
+                                    f"http://ip-api.com/json/{ip_addr}?fields=status,country,regionName,city",
+                                    timeout=3
+                                )
+                                if r.status_code == 200:
+                                    d = r.json()
+                                    if d.get('status') == 'success':
+                                        geo = {
+                                            'city': d.get('city', ''),
+                                            'region': d.get('regionName', ''),
+                                            'country': d.get('country', ''),
+                                        }
+                            except Exception:
+                                pass
+                        db.login_events.insert_one({
+                            "user_id": user_id,
+                            "user_email": user_email,
+                            "user_name": user_name,
+                            "login_method": login_method,
+                            "ip_address": ip_addr,
+                            "location": geo,
+                            "device_info": {"user_agent": user_agent},
+                            "created_at": _dt.now(_tz.utc)
+                        })
+                    except Exception as e:
+                        print(f"⚠️ OAuth login tracking background error: {e}")
+
+                threading.Thread(
+                    target=_track_oauth_login,
+                    args=(_uid, _email2, _name2, _provider2, ip, _ua2),
+                    daemon=True
+                ).start()
             except Exception as track_err:
                 print(f"⚠️ Login tracking failed (non-critical): {track_err}")
             

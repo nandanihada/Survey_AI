@@ -15,6 +15,7 @@ import ReferralTab from '../components/admin/ReferralTab';
 import EarningsConfigTab from '../components/admin/EarningsConfigTab';
 import SurveyReportTab from '../components/admin/SurveyReportTab';
 import SurveyFlowTrackingTab from '../components/admin/SurveyFlowTrackingTab';
+import SurveyClickTrackingTab from '../components/admin/SurveyClickTrackingTab';
 import LocationControlTab from '../components/admin/LocationControlTab';
 import PlanFeaturesTab from '../components/admin/PlanFeaturesTab';
 import ResubmitPolicyTab from '../components/admin/ResubmitPolicyTab';
@@ -22,20 +23,30 @@ import {
   Bell, Filter, Save, Edit2, X, Check, Eye, EyeOff, Play, RotateCcw, AlertCircle,
   Users, LayoutDashboard, FileText, BarChart2, SlidersHorizontal, CheckSquare,
   Gift, DollarSign, Radio, Mail, Trash2, MapPin, Settings2, ChevronLeft,
-  ChevronRight, Shield, RefreshCw, Layers, GitBranch
+  ChevronRight, Shield, RefreshCw, Layers, GitBranch, MousePointerClick
 } from 'lucide-react';
 import { getApiBaseUrl } from '../utils/deploymentFix';
 
 interface User {
   _id?: string;
-  uid: string;
+  uid?: string;
   email: string;
   name: string;
   photo_url?: string;
   role: 'basic' | 'premium' | 'enterprise' | 'admin';
-  status?: 'approved' | 'disapproved' | 'locked';
-  created_at: string;
-  last_login: string;
+  status?: 'approved' | 'disapproved' | 'locked' | 'pending_confirmation';
+  /** ISO string – when the account was created */
+  createdAt?: string;
+  /** ISO string – last login time */
+  lastLogin?: string;
+  /** OAuth provider: 'google', 'microsoft', 'email', etc. */
+  authProvider?: string;
+  /** Numeric user ID */
+  simpleUserId?: number | string;
+  /** Referral source code, if any */
+  pending_ref_code?: string;
+  /** Location from most recent login event */
+  last_login_location?: { city?: string; region?: string; country?: string; ip_address?: string };
 }
 
 interface Survey {
@@ -103,7 +114,7 @@ const AdminDashboard: React.FC = () => {
   const [surveys, setSurveys] = useState<any[]>([]);
   const [filters, setFilters] = useState<Filter[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking' | 'tracking' | 'contacts' | 'deletions' | 'referrals' | 'earnings-config' | 'survey-report' | 'survey-flow-tracking' | 'location-control' | 'survey-settings' | 'back-exits' | 'plan-features' | 'resubmit-policy'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking' | 'tracking' | 'contacts' | 'deletions' | 'referrals' | 'earnings-config' | 'survey-report' | 'survey-flow-tracking' | 'location-control' | 'survey-settings' | 'back-exits' | 'plan-features' | 'resubmit-policy' | 'survey-click-tracking'>('users');
   const [showNotifModal, setShowNotifModal] = useState(false);
   // Sidebar collapse state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -626,9 +637,10 @@ const AdminDashboard: React.FC = () => {
       { id: 'earnings-config', icon: <DollarSign size={14} />,      label: 'Earnings' },
     ]},
     { label: 'Engagement', items: [
-      { id: 'tracking',        icon: <Radio size={14} />,           label: 'Tracking' },
-      { id: 'contacts',        icon: <Mail size={14} />,            label: 'Contacts' },
-      { id: 'link-masking',    icon: <Shield size={14} />,          label: 'Link Masking' },
+      { id: 'tracking',               icon: <Radio size={14} />,           label: 'Tracking' },
+      { id: 'survey-click-tracking',  icon: <MousePointerClick size={14}/>, label: 'Survey Clicks' },
+      { id: 'contacts',               icon: <Mail size={14} />,            label: 'Contacts' },
+      { id: 'link-masking',           icon: <Shield size={14} />,          label: 'Link Masking' },
     ]},
     { label: 'System',     items: [
       { id: 'location-control',icon: <MapPin size={14} />,          label: 'Location' },
@@ -762,7 +774,8 @@ const AdminDashboard: React.FC = () => {
                 {activeTab === 'surveys' && `${surveys.length} surveys`}
                 {activeTab === 'filters' && `${filters.length} filters`}
                 {activeTab === 'plan-features' && 'Configure which features are available per plan'}
-                {!['users','surveys','filters','plan-features','survey-flow-tracking'].includes(activeTab) && 'Manage settings and configuration'}
+                {activeTab === 'survey-click-tracking' && 'Track survey link clicks, visit counts and completion status'}
+                {!['users','surveys','filters','plan-features','survey-flow-tracking','survey-click-tracking'].includes(activeTab) && 'Manage settings and configuration'}
                 {activeTab === 'survey-flow-tracking' && 'Full session flow — questions answered, mid-survey redirects & outcomes'}
               </p>
             </div>
@@ -779,49 +792,106 @@ const AdminDashboard: React.FC = () => {
                 {/* Users Tab */}
                 {activeTab === 'users' && (
                   <div style={{ borderRadius: 14, overflow: 'hidden' }}>
-                    {users.map((user) => (
-                      <div key={user._id || user.uid} style={{ borderBottom: '1px solid #F5F1E8', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'background 0.1s' }}
-                        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = '#FEF9F7'}
-                        onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                          {user.photo_url ? (
-                            <img style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', border: '2px solid #EBE8E3' }} src={user.photo_url} alt={user.name} />
-                          ) : (
-                            <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'linear-gradient(135deg, #D4917A, #C4785C)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 4px rgba(196,120,92,0.25)', flexShrink: 0 }}>
-                              <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{user.name?.charAt(0).toUpperCase()}</span>
+                    {users.map((user) => {
+                      const userId = user._id || user.uid || '';
+                      // Format date
+                      const joinedDate = user.createdAt
+                        ? new Date(user.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                        : null;
+                      const joinedTime = user.createdAt
+                        ? new Date(user.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+                        : null;
+                      const lastLoginStr = user.lastLogin
+                        ? new Date(user.lastLogin).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                        : null;
+                      // Auth provider label + colour
+                      const provider = (user.authProvider || 'email').toLowerCase();
+                      const isGoogle = provider === 'google';
+                      const isMicrosoft = provider === 'microsoft';
+                      const providerLabel = isGoogle ? 'Google' : isMicrosoft ? 'Microsoft' : 'Email';
+                      const providerBg = isGoogle ? '#FEF0EB' : isMicrosoft ? '#EFF6FF' : '#F0FDF4';
+                      const providerColor = isGoogle ? '#EA4335' : isMicrosoft ? '#2563EB' : '#16A34A';
+                      return (
+                        <div key={userId} style={{ borderBottom: '1px solid #F5F1E8', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, transition: 'background 0.1s' }}
+                          onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = '#FEF9F7'}
+                          onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}>
+                          {/* Avatar + basic info */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0, flex: '0 0 auto', maxWidth: 320 }}>
+                            {user.photo_url ? (
+                              <img style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', border: '2px solid #EBE8E3', flexShrink: 0 }} src={user.photo_url} alt={user.name} />
+                            ) : (
+                              <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'linear-gradient(135deg, #D4917A, #C4785C)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 4px rgba(196,120,92,0.25)', flexShrink: 0 }}>
+                                <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{user.name?.charAt(0).toUpperCase()}</span>
+                              </div>
+                            )}
+                            <div style={{ minWidth: 0 }}>
+                              <p style={{ fontSize: 13, fontWeight: 600, color: '#2D2520', margin: 0, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                {user.name}
+                                {user.simpleUserId && (
+                                  <span style={{ fontSize: 9, color: '#C4A99A', fontWeight: 500, background: '#F5F1E8', padding: '1px 5px', borderRadius: 4 }}>#{user.simpleUserId}</span>
+                                )}
+                              </p>
+                              <p style={{ fontSize: 11, color: '#9B9189', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</p>
+                              {/* Joined + provider + location row */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                                {joinedDate && (
+                                  <span style={{ fontSize: 10, color: '#9B9189', display: 'flex', alignItems: 'center', gap: 3 }}>
+                                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}><rect x="1" y="3" width="14" height="12" rx="2" stroke="#C4A99A" strokeWidth="1.5"/><path d="M5 1v4M11 1v4M1 7h14" stroke="#C4A99A" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                                    {joinedDate}{joinedTime && <>, {joinedTime}</>}
+                                  </span>
+                                )}
+                                {!joinedDate && <span style={{ fontSize: 10, color: '#C4A99A' }}>No join date</span>}
+                                <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 10, background: providerBg, color: providerColor }}>
+                                  {isGoogle && '🔵 '}{isMicrosoft && '🟦 '}{!isGoogle && !isMicrosoft && '📧 '}{providerLabel}
+                                </span>
+                                {lastLoginStr && (
+                                  <span style={{ fontSize: 10, color: '#C4A99A' }}>Last login: {lastLoginStr}</span>
+                                )}
+                                {/* Location from last login */}
+                                {(() => {
+                                  const loc = user.last_login_location;
+                                  if (!loc) return null;
+                                  const parts = [loc.city, loc.country].filter(Boolean);
+                                  if (parts.length === 0) return null;
+                                  return (
+                                    <span style={{ fontSize: 10, color: '#6B9E8A', display: 'flex', alignItems: 'center', gap: 3, background: '#F0FAF5', padding: '1px 7px', borderRadius: 10 }}>
+                                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#6B9E8A"/></svg>
+                                      {parts.join(', ')}
+                                    </span>
+                                  );
+                                })()}
+                              </div>
                             </div>
-                          )}
-                          <div>
-                            <p style={{ fontSize: 13, fontWeight: 600, color: '#2D2520', margin: 0 }}>{user.name}</p>
-                            <p style={{ fontSize: 11, color: '#9B9189', margin: '2px 0 0' }}>{user.email}</p>
-                            <p style={{ fontSize: 10, color: '#C4A99A', margin: '2px 0 0' }}>Joined {new Date(user.created_at).toLocaleDateString()}</p>
+                          </div>
+                          {/* Role + Status controls */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600, background: user.role === 'admin' ? '#FEF0EC' : user.role === 'enterprise' ? '#EEF2FF' : user.role === 'premium' ? '#ECFDF5' : '#F5F1E8', color: user.role === 'admin' ? '#C4785C' : user.role === 'enterprise' ? '#4F46E5' : user.role === 'premium' ? '#059669' : '#6B6158' }}>
+                                {user.role}
+                              </span>
+                              <select value={user.role} onChange={(e) => updateUserRole(userId, e.target.value as 'basic' | 'premium' | 'enterprise' | 'admin')} style={{ fontSize: 11, border: '1px solid #EBE8E3', borderRadius: 7, padding: '4px 8px', background: '#FDFCFA', color: '#3D3530', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                <option value="basic">Basic</option>
+                                <option value="premium">Premium</option>
+                                <option value="enterprise">Enterprise</option>
+                                <option value="admin">Admin</option>
+                              </select>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600,
+                                background: (user.status || 'approved') === 'approved' ? '#ECFDF5' : (user.status || 'approved') === 'disapproved' ? '#FEF2F2' : (user.status || 'approved') === 'pending_confirmation' ? '#FFF7ED' : '#FFFBEB',
+                                color: (user.status || 'approved') === 'approved' ? '#059669' : (user.status || 'approved') === 'disapproved' ? '#DC2626' : (user.status || 'approved') === 'pending_confirmation' ? '#EA580C' : '#D97706' }}>
+                                {user.status === 'pending_confirmation' ? 'pending' : (user.status || 'approved')}
+                              </span>
+                              <select value={user.status || 'approved'} onChange={(e) => updateUserStatus(userId, e.target.value as 'approved' | 'disapproved' | 'locked')} style={{ fontSize: 11, border: '1px solid #EBE8E3', borderRadius: 7, padding: '4px 8px', background: '#FDFCFA', color: '#3D3530', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                <option value="approved">Approved</option>
+                                <option value="disapproved">Disapproved</option>
+                                <option value="locked">Locked</option>
+                              </select>
+                            </div>
                           </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600, background: user.role === 'admin' ? '#FEF0EC' : user.role === 'enterprise' ? '#EEF2FF' : user.role === 'premium' ? '#ECFDF5' : '#F5F1E8', color: user.role === 'admin' ? '#C4785C' : user.role === 'enterprise' ? '#4F46E5' : user.role === 'premium' ? '#059669' : '#6B6158' }}>
-                              {user.role}
-                            </span>
-                            <select value={user.role} onChange={(e) => updateUserRole(user._id || user.uid, e.target.value as 'basic' | 'premium' | 'enterprise' | 'admin')} style={{ fontSize: 11, border: '1px solid #EBE8E3', borderRadius: 7, padding: '4px 8px', background: '#FDFCFA', color: '#3D3530', cursor: 'pointer', fontFamily: 'inherit' }}>
-                              <option value="basic">Basic</option>
-                              <option value="premium">Premium</option>
-                              <option value="enterprise">Enterprise</option>
-                              <option value="admin">Admin</option>
-                            </select>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600, background: (user.status || 'approved') === 'approved' ? '#ECFDF5' : (user.status || 'approved') === 'disapproved' ? '#FEF2F2' : '#FFFBEB', color: (user.status || 'approved') === 'approved' ? '#059669' : (user.status || 'approved') === 'disapproved' ? '#DC2626' : '#D97706' }}>
-                              {user.status || 'approved'}
-                            </span>
-                            <select value={user.status || 'approved'} onChange={(e) => updateUserStatus(user._id || user.uid, e.target.value as 'approved' | 'disapproved' | 'locked')} style={{ fontSize: 11, border: '1px solid #EBE8E3', borderRadius: 7, padding: '4px 8px', background: '#FDFCFA', color: '#3D3530', cursor: 'pointer', fontFamily: 'inherit' }}>
-                              <option value="approved">Approved</option>
-                              <option value="disapproved">Disapproved</option>
-                              <option value="locked">Locked</option>
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {users.length === 0 && <div style={{ padding: '60px 0', textAlign: 'center', color: '#9B9189', fontSize: 13 }}>No users found</div>}
                   </div>
                 )}
@@ -1302,6 +1372,11 @@ const AdminDashboard: React.FC = () => {
                 {/* Survey Flow Tracking Tab */}
                 {activeTab === 'survey-flow-tracking' && (
                   <SurveyFlowTrackingTab />
+                )}
+
+                {/* Survey Click Tracking Tab */}
+                {activeTab === 'survey-click-tracking' && (
+                  <SurveyClickTrackingTab />
                 )}
 
                 {/* Location Control Tab */}
