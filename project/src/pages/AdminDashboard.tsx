@@ -15,6 +15,7 @@ import ReferralTab from '../components/admin/ReferralTab';
 import EarningsConfigTab from '../components/admin/EarningsConfigTab';
 import SurveyReportTab from '../components/admin/SurveyReportTab';
 import SurveyFlowTrackingTab from '../components/admin/SurveyFlowTrackingTab';
+import FunnelTrackingTab from '../components/admin/FunnelTrackingTab';
 import SurveyClickTrackingTab from '../components/admin/SurveyClickTrackingTab';
 import LocationControlTab from '../components/admin/LocationControlTab';
 import PlanFeaturesTab from '../components/admin/PlanFeaturesTab';
@@ -114,7 +115,7 @@ const AdminDashboard: React.FC = () => {
   const [surveys, setSurveys] = useState<any[]>([]);
   const [filters, setFilters] = useState<Filter[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking' | 'tracking' | 'contacts' | 'deletions' | 'referrals' | 'earnings-config' | 'survey-report' | 'survey-flow-tracking' | 'location-control' | 'survey-settings' | 'back-exits' | 'plan-features' | 'resubmit-policy' | 'survey-click-tracking'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking' | 'tracking' | 'contacts' | 'deletions' | 'referrals' | 'earnings-config' | 'survey-report' | 'survey-flow-tracking' | 'funnel-tracking' | 'location-control' | 'survey-settings' | 'back-exits' | 'plan-features' | 'resubmit-policy' | 'survey-click-tracking'>('users');
   const [showNotifModal, setShowNotifModal] = useState(false);
   // Sidebar collapse state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -629,6 +630,7 @@ const AdminDashboard: React.FC = () => {
       { id: 'surveys',              icon: <FileText size={14} />,        label: 'All Surveys' },
       { id: 'survey-report',        icon: <BarChart2 size={14} />,       label: 'Survey Report' },
       { id: 'survey-flow-tracking', icon: <GitBranch size={14} />,       label: 'Flow Tracking' },
+      { id: 'funnel-tracking',      icon: <Layers size={14} />,          label: 'Funnel Tracking' },
       { id: 'filters',              icon: <SlidersHorizontal size={14}/>, label: 'Filters' },
       { id: 'pass-fail',            icon: <CheckSquare size={14} />,     label: 'Pass / Fail' },
     ]},
@@ -1372,6 +1374,11 @@ const AdminDashboard: React.FC = () => {
                 {/* Survey Flow Tracking Tab */}
                 {activeTab === 'survey-flow-tracking' && (
                   <SurveyFlowTrackingTab />
+                )}
+
+                {/* Funnel Tracking Tab */}
+                {activeTab === 'funnel-tracking' && (
+                  <FunnelTrackingTab />
                 )}
 
                 {/* Survey Click Tracking Tab */}

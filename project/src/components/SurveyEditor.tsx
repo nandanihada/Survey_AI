@@ -1907,6 +1907,32 @@ const SurveyEditor: React.FC = () => {
                           ⊡ Ends
                         </span>
                       )}
+                      {/* ── Funnel role badge ── */}
+                      {(q as any).funnel_role && (q as any).funnel_role !== 'neutral' && (
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold shrink-0 ${
+                          (q as any).funnel_role === 'screen'
+                            ? 'bg-red-100 text-red-700'
+                            : (q as any).funnel_role === 'both'
+                            ? 'bg-purple-100 text-purple-700'
+                            : 'bg-blue-100 text-blue-700'
+                        }`}
+                          title={
+                            (q as any).funnel_role === 'screen' ? 'Screening — hard fail terminates the funnel' :
+                            (q as any).funnel_role === 'both' ? 'Screens + Scores — does both' :
+                            'Scoring — adds points to job profiles'
+                          }
+                        >
+                          {(q as any).funnel_role === 'screen' ? '🛡 Screen' :
+                           (q as any).funnel_role === 'both'   ? '🔀 Both' :
+                                                                 '📊 Score'}
+                        </span>
+                      )}
+                      {/* ── Neutral funnel question ── */}
+                      {(q as any).funnel_role === 'neutral' && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-gray-100 text-gray-400" title="Neutral — collected but not used in scoring or screening">
+                          ○ Neutral
+                        </span>
+                      )}
                     </div>
                   </div>
                   {/* Right-side dot if any branching is set */}
@@ -2056,6 +2082,34 @@ const SurveyEditor: React.FC = () => {
 
                 {/* Editable question text */}
                 <div className="relative group">
+                  {/* ── Funnel role badge on active question ── */}
+                  {(activeQ as any).funnel_role && (
+                    <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+                      <span className="text-[10px] text-gray-400 font-medium">Funnel role:</span>
+                      {(['screen', 'score', 'both', 'neutral'] as const).map(role => (
+                        <button
+                          key={role}
+                          onClick={() => updateQuestion(activeQuestionIndex, 'funnel_role' as any, role)}
+                          className={`text-[10px] px-2 py-0.5 rounded-full font-bold border transition ${
+                            (activeQ as any).funnel_role === role
+                              ? role === 'screen' ? 'bg-red-500 text-white border-red-500'
+                              : role === 'both'   ? 'bg-purple-500 text-white border-purple-500'
+                              : role === 'score'  ? 'bg-blue-500 text-white border-blue-500'
+                                                 : 'bg-gray-400 text-white border-gray-400'
+                              : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
+                          }`}
+                          title={
+                            role === 'screen'  ? 'Hard fail — wrong answer terminates the funnel' :
+                            role === 'score'   ? 'Scoring — answer adds points to job profiles' :
+                            role === 'both'    ? 'Both — screens AND scores' :
+                                                'Neutral — just collected, no screening or scoring'
+                          }
+                        >
+                          {role === 'screen' ? '🛡 Screen' : role === 'score' ? '📊 Score' : role === 'both' ? '🔀 Both' : '○ Neutral'}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {/* Question image preview — above */}
                   {(activeQ as any).questionImage && (activeQ as any).questionImagePosition !== 'below' && (
                     <img

@@ -90,6 +90,7 @@ const ConfirmPage = lazyRetry(() => import('./pages/ConfirmPage'));
 const SurveyEditor = lazyRetry(() => import('./components/SurveyEditor'));
 const PublicSurveyPage = lazyRetry(() => import('./components/PublicSurveyPage'));
 const SurveyRedirectTransition = lazyRetry(() => import('./pages/SurveyRedirectTransition'));
+const FunnelTransitionPage = lazyRetry(() => import('./pages/FunnelTransitionPage'));
 const SurveyPreviewPage = lazyRetry(() => import('./components/SurveyPreviewPage'));
 const SurveyResponsesPage = lazyRetry(() => import('./components/SurveyResponsesPage'));
 
@@ -114,6 +115,7 @@ const ContactPage = lazyRetry(() => import('./pages/ContactPage'));
 const UpgradePage = lazyRetry(() => import('./pages/UpgradePage'));
 const SurveyForm = lazyRetry(() => import('./components/SurveyForm'));
 const SurveyList = lazyRetry(() => import('./components/SurveyList'));
+const FunnelList = lazyRetry(() => import('./components/FunnelList'));
 const PostbackManager = lazyRetry(() => import('./components/PostbackManager'));
 const ResponseAnalytics = lazyRetry(() => import('./components/ResponseAnalytics'));
 const FloatingWidget = lazyRetry(() => import('./components/FloatingWidget'));
@@ -124,6 +126,50 @@ const AnalyticsDashboard = lazyRetry(() => import('./pages/AnalyticsDashboard'))
 const SurveyAnalyticsPage = lazyRetry(() => import('./pages/SurveyAnalyticsPage'));
 const ProfessionalAnalyticsDashboard = lazyRetry(() => import('./pages/ProfessionalAnalyticsDashboard'));
 const SessionAnalyticsView = lazyRetry(() => import('./pages/SessionAnalyticsView'));
+
+// Surveys tab with Funnel Surveys subtab
+function SurveysTabWithFunnels({ isDarkMode, onCreateNew }: { isDarkMode: boolean; onCreateNew: () => void }) {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  // If URL has ?subtab=funnels, start on funnels tab
+  const [surveySubTab, setSurveySubTab] = useState<'surveys' | 'funnels'>(
+    searchParams.get('subtab') === 'funnels' ? 'funnels' : 'surveys'
+  );
+  const activeClass = 'bg-blue-600 text-white';
+  const inactiveClass = isDarkMode
+    ? 'text-gray-400 hover:text-gray-200'
+    : 'text-gray-500 hover:text-gray-700';
+  return (
+    <div>
+      {/* Subtab bar */}
+      <div className={`inline-flex rounded-xl border p-1 mb-4 gap-1 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-100 border-gray-200'}`}>
+        <button
+          onClick={() => setSurveySubTab('surveys')}
+          className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${surveySubTab === 'surveys' ? activeClass : inactiveClass}`}
+        >
+          My Surveys
+        </button>
+        <button
+          onClick={() => setSurveySubTab('funnels')}
+          className={`px-4 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1.5 ${surveySubTab === 'funnels' ? activeClass : inactiveClass}`}
+        >
+          <span>⛓</span> Funnel Surveys
+        </button>
+      </div>
+
+      {surveySubTab === 'surveys' && (
+        <Suspense fallback={<OptimizedLoader type="page" message="Loading surveys..." />}>
+          <SurveyList isDarkMode={isDarkMode} onCreateNew={onCreateNew} />
+        </Suspense>
+      )}
+      {surveySubTab === 'funnels' && (
+        <Suspense fallback={<OptimizedLoader type="page" message="Loading funnel surveys..." />}>
+          <FunnelList isDarkMode={isDarkMode} />
+        </Suspense>
+      )}
+    </div>
+  );
+}
 
 // Legacy dashboard component - will be removed after migration
 function LegacyDashboard() {
@@ -541,7 +587,8 @@ function LegacyDashboard() {
               </TabsContent>
               <TabsContent value="surveys">
                 <Suspense fallback={<OptimizedLoader type="page" message="Loading surveys..." />}>
-                  <SurveyList isDarkMode={isDarkMode} onCreateNew={() => setActiveTab('create')} />
+                  {/* Surveys / Funnel Surveys subtabs */}
+                  <SurveysTabWithFunnels isDarkMode={isDarkMode} onCreateNew={() => setActiveTab('create')} />
                 </Suspense>
               </TabsContent>
               <TabsContent value="responses">
@@ -711,6 +758,8 @@ export default function App() {
             <Route path="/s/:shortId" element={<PublicSurveyPage />} />
             {/* Transition page shown before external redirect — always shows return link */}
             <Route path="/survey-redirect" element={<SurveyRedirectTransition />} />
+            {/* Funnel job cascade transition page */}
+            <Route path="/funnel-transition" element={<FunnelTransitionPage />} />
 
             {/* Protected routes */}
             <Route path="/dashboard" element={

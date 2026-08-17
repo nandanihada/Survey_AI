@@ -89,6 +89,13 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const [resumeSessionId, setResumeSessionId] = useState<string | null>(null);
   const [isResuming, setIsResuming] = useState(false);
 
+  // ── Funnel state ──────────────────────────────────────────────────────────
+  const [funnelId, setFunnelId] = useState<string | null>(null);
+  const [funnelSessionId, setFunnelSessionId] = useState<string | null>(null);
+  const [funnelLayerIndex, setFunnelLayerIndex] = useState<number>(0);
+  const [funnelJobId, setFunnelJobId] = useState<string | null>(null);
+  const [isFunnelSurvey, setIsFunnelSurvey] = useState(false);
+
   const normalizeType = (type: string): 'text' | 'radio' | 'range' | 'ranking' | 'dropdown' | 'dropdown_multi' | 'matrix' | 'list' => {
     switch (type) {
       case 'multiple_choice':
@@ -127,7 +134,13 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     questionDescription: q.questionDescription,
     answerDescription: q.answerDescription,
     type: normalizeType(q.type),
-    options: q.options || [],
+    options: (() => {
+      // Always ensure yes_no questions have options
+      if ((q.type === 'yes_no') && (!q.options || q.options.length === 0)) {
+        return ['Yes', 'No'];
+      }
+      return q.options || [];
+    })(),
     answerStyle: (q as any).answerStyle || undefined,
     allowMultiple: q.allowMultiple || false,
     questionDelay: q.questionDelay || 0,
@@ -291,6 +304,19 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     setAffSub(params.get('aff_sub'));
     setSub1(params.get('sub1'));
     setSub2(params.get('sub2'));
+
+    // Funnel params
+    const fid = params.get('funnel');
+    const fsid = params.get('session');
+    const flayer = parseInt(params.get('layer') || '0');
+    const fjob = params.get('job');
+    if (fid) {
+      setFunnelId(fid);
+      setIsFunnelSurvey(true);
+      setFunnelLayerIndex(flayer);
+      if (fsid && fsid !== 'new') setFunnelSessionId(fsid);
+      if (fjob) setFunnelJobId(fjob);
+    }
 
     let extractedClickId = params.get('click_id');
     if (!extractedClickId) {
@@ -935,6 +961,123 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
       if (!response.ok) throw new Error(await response.text());
       const result = await response.json();
+
+      // ── FUNNEL ROUTING (if this is a funnel survey) ─────────────────────
+      // For funnel surveys we ALWAYS use funnel routing — never the normal redirect.
+      if (isFunnelSurvey && funnelId) {
+        const newSessionId = funnelSessionId || result.session_id || `fs_${Date.now()}`;
+
+        const isJobSurvey = !!funnelJobId;
+        const funnelEndpoint = isJobSurvey
+          ? `${apiBaseUrl}/api/funnels/${funnelId}/submit-job`
+          : `${apiBaseUrl}/api/funnels/${funnelId}/submit-screening`;
+
+        const funnelPayload = isJobSurvey
+          ? { job_id: funnelJobId, answers: responses, funnel_session_id: newSessionId }
+          : { survey_id: survey.id, layer_index: funnelLayerIndex, answers: responses, funnel_session_id: newSessionId, email, username, click_id: clickId };
+
+        const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const frontendBase = isLocalHost ? 'http://localhost:5173' : 'https://survey.pepperwahl.com';
+
+        // Show redirecting spinner immediately so user sees something
+        setRedirecting(true);
+
+        try {
+          const funnelRes = await fetch(funnelEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(funnelPayload)
+          });
+
+          if (!funnelRes.ok) {
+            const errText = await funnelRes.text();
+            console.error('Funnel API error:', errText);
+            // On API error show submitted state rather than redirecting to dashboard
+            setRedirecting(false);
+            setSubmitted(true);
+            return;
+          }
+
+          const funnelResult = await funnelRes.json();
+          const sessionIdToUse = funnelResult.funnel_session_id || newSessionId;
+          const action = funnelResult.action;
+
+          console.log(`🎯 [Funnel] Action: ${action}`, funnelResult);
+
+          if (action === 'terminate') {
+            const fallback = funnelResult.redirect_url;
+            setTimeout(() => { window.location.href = fallback || `${frontendBase}/`; }, 2000);
+            return;
+          }
+
+          if (action === 'no_match' || action === 'all_failed') {
+            const fallback = funnelResult.redirect_url;
+            if (fallback) {
+              setTimeout(() => { window.location.href = fallback; }, 2000);
+            } else {
+              setRedirecting(false);
+              setSubmitted(true);
+            }
+            return;
+          }
+
+          if (action === 'next_screening') {
+            const nextUrl = `${frontendBase}/survey/${funnelResult.next_survey_id}?funnel=${funnelId}&layer=${funnelResult.next_layer}&session=${sessionIdToUse}`;
+            setTimeout(() => { window.location.href = nextUrl; }, 1000);
+            return;
+          }
+
+          if (action === 'go_to_job') {
+            const nextUrl = `${frontendBase}/survey/${funnelResult.job_survey_id}?funnel=${funnelId}&session=${sessionIdToUse}&job=${funnelResult.job_id}&pos=0`;
+            setTimeout(() => { window.location.href = nextUrl; }, 1000);
+            return;
+          }
+
+          if (action === 'pass') {
+            const dest = funnelResult.redirect_url;
+            if (dest) {
+              setTimeout(() => { window.location.href = dest; }, 2000);
+            } else {
+              setRedirecting(false);
+              setSubmitted(true);
+            }
+            return;
+          }
+
+          if (action === 'next_job') {
+            const tp = funnelResult.transition_page || {};
+            const transitionUrl = `${frontendBase}/funnel-transition?` + new URLSearchParams({
+              funnel: funnelId,
+              session: sessionIdToUse,
+              next_job: funnelResult.next_job_id || '',
+              next_survey: funnelResult.next_job_survey_id || '',
+              pos: String(funnelResult.queue_position || 0),
+              heading: tp.heading || 'We found another great opportunity for you!',
+              msg: tp.message || "You didn't qualify for this role, but we have another opportunity.",
+              cta: tp.cta_text || 'See Next Opportunity →',
+              next_name: tp.next_job_display_name || '',
+              auto: String(tp.auto_redirect_seconds ?? 5),
+              show_name: tp.show_next_job_name ? 'true' : 'false'
+            }).toString();
+            setTimeout(() => { window.location.href = transitionUrl; }, 1000);
+            return;
+          }
+
+          // Unknown action — show submitted rather than bouncing to dashboard
+          console.warn('[Funnel] Unknown action:', action);
+          setRedirecting(false);
+          setSubmitted(true);
+          return;
+
+        } catch (funnelErr) {
+          console.error('Funnel routing error:', funnelErr);
+          // On network error, show submitted rather than redirecting to dashboard
+          setRedirecting(false);
+          setSubmitted(true);
+          return;
+        }
+      }
+      // ── END FUNNEL ROUTING ───────────────────────────────────────────────
 
       const redirect = result?.redirect || {};
       const evaluation = result?.evaluation || {};

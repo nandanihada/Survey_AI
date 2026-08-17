@@ -1,1 +1,0 @@
-import{u as r,n,r as o,i as c}from"./index-GFyW6bfm-1786702890286.js";function p(){const e=r(),a=n();return o.useEffect(()=>{c();const s=new URLSearchParams(a.search).get("ref"),t=s?`/login?mode=signup&ref=${s}`:"/login?mode=signup";e(t,{replace:!0})},[e,a.search]),null}export{p as default};

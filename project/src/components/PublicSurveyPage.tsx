@@ -21,6 +21,7 @@ const templateMap: Record<string, React.ComponentType<{ survey: Survey }>> = {
   customer_feedback: CustomerFeedbackTemplate,
   employee_checkin: EmployeeCheckInTemplate,
   custom: BasicSurveyTemplate,
+  basic: BasicSurveyTemplate,
   event_feedback: EventFeedbackTemplate,
   product_feedback: ProductFeedbackTemplate,
   team_collaboration: TeamCollaborationTemplate,
@@ -28,7 +29,7 @@ const templateMap: Record<string, React.ComponentType<{ survey: Survey }>> = {
   website_experience: WebsiteExperienceTemplate,
   training_feedback: TrainingFeedbackTemplate,
   service_cancellation: ServiceCancellationTemplate,
-  default: CustomerFeedbackTemplate,
+  default: BasicSurveyTemplate,
 };
 
 // Error boundary for template rendering

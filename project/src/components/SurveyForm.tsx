@@ -1,11 +1,12 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { generateSurvey, parseImage } from '../utils/api';
-import { Loader2, Sparkles, ImagePlus, Check, X, ArrowRight, Lightbulb, ChevronDown, Eye, Share2, BarChart2, Zap, Lock, Mail, ChevronRight, Hash, Edit3, RefreshCcw } from 'lucide-react';
+import { Loader2, Sparkles, ImagePlus, Check, X, ArrowRight, Lightbulb, ChevronDown, Eye, Share2, BarChart2, Zap, Lock, Mail, ChevronRight, Hash, Edit3, RefreshCcw, Layers, GitBranch } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { generateSurveyLink } from '../utils/surveyLinkUtils';
 import { parsePrompt as parsePromptFn, getClarificationNeeds as getClarificationNeedsFn, ClarificationNeeds as ClarificationNeedsType } from '../utils/promptParser';
 import SurveyClarification, { ClarificationAnswers as ClarificationAnswersType } from './SurveyClarification';
 import SearchLoader from './SearchLoader';
+import FunnelCreator from './FunnelCreator';
 
 interface Question {
   id: string;
@@ -65,6 +66,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
   const [collectLocation, setCollectLocation] = useState(false);
   const [wizardStep, setWizardStep] = useState(-1);
   const [wizardAnswers, setWizardAnswers] = useState<Record<number, string>>({});
+  const [createMode, setCreateMode] = useState<'single' | 'funnel'>('single');
 
   const handleToggleLocation = async (newValue: boolean) => {
     setCollectLocation(newValue);
@@ -510,7 +512,59 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
           </h1>
         </div>
 
-        {wizardStep === -1 && (
+        {/* ── Create mode toggle ── */}
+        <div className="flex justify-center mb-5">
+          <div className={`inline-flex rounded-2xl p-1 gap-1 ${isDarkMode ? 'bg-slate-800 border border-slate-700' : 'bg-stone-100 border border-stone-200'}`}>
+            <button
+              onClick={() => setCreateMode('single')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                createMode === 'single'
+                  ? isDarkMode
+                    ? 'bg-slate-600 text-white shadow'
+                    : 'bg-white text-slate-800 shadow-sm'
+                  : isDarkMode
+                    ? 'text-slate-400 hover:text-slate-200'
+                    : 'text-stone-500 hover:text-stone-700'
+              }`}
+            >
+              <Edit3 size={15} />
+              Single Survey
+            </button>
+            <button
+              onClick={() => setCreateMode('funnel')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                createMode === 'funnel'
+                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow'
+                  : isDarkMode
+                    ? 'text-slate-400 hover:text-slate-200'
+                    : 'text-stone-500 hover:text-stone-700'
+              }`}
+            >
+              <Layers size={15} />
+              Funnel Survey
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                createMode === 'funnel'
+                  ? 'bg-white/20 text-white'
+                  : isDarkMode ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-600'
+              }`}>AI</span>
+            </button>
+          </div>
+        </div>
+
+        {/* ── Funnel mode ── */}
+        {createMode === 'funnel' && (
+          <div className={`rounded-3xl border p-6 ${isDarkMode ? 'bg-slate-800/90 border-slate-700' : 'bg-white border-stone-200 shadow-sm'}`}>
+            <FunnelCreator
+              isDarkMode={isDarkMode}
+              onFunnelCreated={(funnelId) => {
+                window.location.href = `/?tab=surveys&subtab=funnels&open=${funnelId}`;
+              }}
+            />
+          </div>
+        )}
+
+        {/* ── Single survey mode ── */}
+        {createMode === 'single' && (
         <>
         {/* ── Clarification Panel (above prompt box) ── */}
         {showClarification && clarificationNeeds && (
@@ -858,9 +912,6 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
           </div>
         </div>
 
-        </>
-        )}
-
         {wizardStep !== -1 && (
           <div className={`relative rounded-[2rem] p-6 sm:p-8 md:p-10 transition-all duration-500 flex flex-col gap-6 ${
              isDarkMode 
@@ -1086,6 +1137,8 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
         {!showClarification && (
         <div className="flex items-center justify-center mt-4 sm:mt-6">
         </div>
+        )}
+        </>
         )}
       </div>
 
