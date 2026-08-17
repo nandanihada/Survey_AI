@@ -416,11 +416,11 @@ Survey name: {survey_name}
 Purpose: {survey_purpose}
 Key topics to cover: {', '.join(key_topics)}
 Survey type: {survey_type}
-{f"Job ID this survey qualifies for: {job_id}" if job_id else ""}
+{"Job ID this survey qualifies for: " + job_id if job_id else ""}
 {qualification_note}
 
 Overall funnel goal: {funnel_plan.get('goal', '')}
-{f"Job profiles in this funnel (for context):\n{job_profiles_summary}" if job_profiles_summary else ""}
+{"Job profiles in this funnel (for context):" + chr(10) + job_profiles_summary if job_profiles_summary else ""}
 {termination_note}
 {already_asked_note}
 
