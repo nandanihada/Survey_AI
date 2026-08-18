@@ -73,91 +73,116 @@ def analyze_funnel_prompt():
         lines = [f"  - {k}: {v}" for k, v in clarification_answers.items()]
         clarification_context = "\nUser's clarification answers:\n" + "\n".join(lines)
 
-    system_prompt = """You are an expert survey funnel architect. 
-Analyze the user's funnel requirement deeply and produce a structured plan.
-Be thorough but concise. Think like a product manager designing a screening system."""
+    system_prompt = """You are an expert survey funnel architect who can design any type of multi-survey funnel.
+You understand ALL funnel types:
+- Job/candidate screening (route candidates to best-fit roles)
+- Product recommendation (match users to best product/service)
+- Lead qualification (score leads for sales teams)
+- Course/program matching (recommend training paths)
+- Insurance/financial product matching
+- Market research with branching
+- Any prompt describing layers, branches, redirections, or multi-path surveys
 
-    analysis_prompt = f"""Analyze this survey funnel requirement:
+Your job: deeply understand the user's intent, extract the structure, and produce a clean plan.
+Never assume it must be a job funnel. Read what the prompt actually says."""
 
+    analysis_prompt = f"""Analyze this funnel requirement and produce a structured plan.
+
+USER PROMPT:
 "{prompt}"
 {clarification_context}
 
-Your task:
-1. Identify the core goal (job screening, lead qualification, product matching, etc.)
-2. Determine how many SCREENING surveys are needed (1-4) and what each covers
-3. Identify DESTINATION surveys/outcomes (job profiles, product tiers, offers, etc.)
-4. Figure out what scoring signals map to which destination
-5. Identify any HARD TERMINATION conditions (e.g. age < 18 = disqualify)
+STEP 1 — UNDERSTAND THE FUNNEL TYPE
+Read the prompt carefully. Identify:
+- What is the overall GOAL? (job screening / product discovery / lead gen / course matching / other)
+- What are the SCREENING SURVEYS? (surveys everyone goes through first to build a profile)
+- What are the DESTINATION SURVEYS? (surveys shown to specific users based on their profile — could be job surveys, product surveys, offer surveys, etc.)
+- Are there HARD TERMINATION conditions? (certain answers disqualify the user entirely)
+- Can users qualify for MULTIPLE destinations? (cascade on fail, or show multiple)
 
-If anything is critically unclear, return clarifying_questions (max 3 questions).
-If you have enough info, return the full funnel_plan.
+STEP 2 — RETURN THE PLAN
+If anything is critically unclear (not just unfamiliar), ask up to 3 clarifying questions.
+Otherwise return the full funnel_plan immediately.
 
-IMPORTANT RULES:
-- Screening surveys: collect background, preferences, experience
-- Each question should have a role: "screen" (pass/fail gate), "score" (adds points), "both", or "neutral"
-- Scoring questions have option_scores per destination profile
-- Hard-fail screening questions terminate the funnel immediately
+FUNNEL TYPES AND HOW TO MAP THEM:
+- "Job screening" → screening_surveys collect background, job_profiles are the job roles
+- "Product recommendation" → screening_surveys collect user profile/pain points, job_profiles are the products to match
+- "Lead qualification" → screening_surveys collect interest/fit signals, job_profiles are the lead tiers or product branches
+- "Course/program matching" → screening_surveys assess skill level/goals, job_profiles are the programs
+- "Detailed survey with layers and branches" → group the questions into logical screening surveys by layer, identify the branch destinations as job_profiles
 
-Return ONLY valid JSON in exactly this format:
+KEY INSIGHT: "job_profiles" in the plan doesn't mean only jobs.
+It means ANY destination the user gets routed to — products, services, programs, offers, roles, anything.
+The id can be a product name, a tier, a role, anything meaningful.
 
-If clarification needed:
+ALWAYS return valid JSON in EXACTLY this format.
+
+If clarification needed (only if truly ambiguous):
 {{
   "type": "clarification",
   "questions": [
-    {{"id": "q1", "question": "Should age under 18 immediately disqualify?", "options": ["Yes, terminate", "No, allow all ages"]}},
-    {{"id": "q2", "question": "Can a user qualify for multiple destinations simultaneously?", "options": ["Yes, cascade on fail", "No, only top match"]}}
+    {{"id": "q1", "question": "Can a user qualify for multiple destinations, or just the best match?", "options": ["Multiple (cascade on fail)", "Only best match"]}},
+    {{"id": "q2", "question": "Should any answer disqualify someone entirely?", "options": ["Yes", "No, everyone gets routed somewhere"]}}
   ]
 }}
 
-If ready to plan:
+If ready to plan (preferred — be decisive):
 {{
   "type": "funnel_plan",
-  "funnel_name": "CSR Job Screener",
-  "goal": "Screen and route candidates to CSR job opportunities based on background and skills",
+  "funnel_name": "Name describing the funnel purpose",
+  "funnel_type": "job_screening | product_recommendation | lead_qualification | course_matching | general",
+  "goal": "One sentence describing what this funnel does and for whom",
   "screening_surveys": [
     {{
       "index": 0,
-      "name": "General Background Screener",
-      "purpose": "Collect professional background, education, experience and sector preferences",
-      "estimated_questions": 13,
-      "key_topics": ["Age", "Education", "Work experience", "Sector background", "Job preferences"],
+      "name": "Survey name (e.g. Professional Background, Who Are You, Layer 1)",
+      "purpose": "What this survey collects and why",
+      "estimated_questions": 8,
+      "key_topics": ["Topic 1", "Topic 2", "Topic 3"],
       "has_termination": true,
-      "termination_condition": "Age under 18 → immediate disqualification"
-    }},
-    {{
-      "index": 1,
-      "name": "Job Interest & Mid-Screening",
-      "purpose": "Capture specific role interests and job function preferences for scoring",
-      "estimated_questions": 6,
-      "key_topics": ["Role interest", "Job functions", "CSR interest level", "Availability"],
-      "has_termination": false,
-      "termination_condition": null
+      "termination_condition": "Describe hard disqualifier or null"
     }}
   ],
   "job_profiles": [
     {{
-      "id": "hdfc",
-      "display_name": "HDFC Bank — Senior Manager CSR",
-      "match_criteria": "10+ years experience, strong MIS/digital platform background, stakeholder management",
-      "estimated_survey_questions": 12,
-      "key_topics": ["Product/MIS experience", "Digital platforms", "Power BI", "Vendor management"],
-      "qualification_flag": "10+ years preferred"
-    }},
-    {{
-      "id": "give_grants",
-      "display_name": "Give Grants — Senior Associate CSR Consulting",
-      "match_criteria": "3-5 years, CSR/consulting/NGO background, analytical skills",
-      "estimated_survey_questions": 12,
-      "key_topics": ["CSR activities", "Client management", "Data analysis", "Proposal writing"],
-      "qualification_flag": null
+      "id": "unique_id_no_spaces",
+      "display_name": "Human-readable name (product, role, tier, program)",
+      "match_criteria": "What profile qualifies for this destination — be specific",
+      "estimated_survey_questions": 8,
+      "key_topics": ["What this destination survey will test/ask"],
+      "qualification_flag": "Any special must-have requirement, or null"
     }}
   ],
-  "scoring_logic": "Answers in screening surveys assign points to each job profile. Higher score = stronger match. User is sent to highest-scoring job survey first, cascades on fail.",
-  "termination_conditions": ["Age under 18 → terminate immediately"],
-  "tiebreaker": "Priority order: first profile listed wins on equal score",
-  "estimated_total_surveys": 6,
-  "estimated_total_questions": 65
-}}"""
+  "scoring_logic": "Explain how screening answers map to destinations (points, branch conditions, awareness reveals, etc.)",
+  "termination_conditions": ["List any hard disqualifiers, or leave empty"],
+  "tiebreaker": "What happens when scores tie or multiple destinations qualify",
+  "estimated_total_surveys": 4,
+  "estimated_total_questions": 40
+}}
+
+EXAMPLES OF WHAT TO DO WITH COMPLEX PROMPTS:
+
+Example 1 — Detailed layer-by-layer prompt with branching:
+User pastes a document with LAYER 1/2/3/4, branch conditions, redirections.
+→ Group LAYER 1, LAYER 2, LAYER 3 into screening_surveys (index 0, 1, 2)
+→ Each branch destination (CashBook, Quik2Tally, Workiva OR HDFC/GiveGrants etc.) becomes a job_profile
+→ The "branch conditions" become the scoring_logic
+→ Any "TERMINATE" or "disqualify" conditions become termination_conditions
+→ Return the plan — don't ask questions unless truly impossible to understand
+
+Example 2 — Short vague prompt:
+"I want to match people to the right insurance product"
+→ This is clear enough. Assume 1-2 screening surveys, 3-4 product destinations
+→ Ask one clarifying question: "Which insurance products should users be matched to?"
+
+Example 3 — Product discovery funnel:
+"Screen finance professionals and route them to CashBook, Quik2Tally, or Workiva based on their role and pain points"
+→ 2-3 screening surveys (who are you, what do you do, what tools/problems)
+→ 3 job_profiles: cashbook, quik2tally, workiva
+→ Scoring: answers about expense management → cashbook, Tally pain → quik2tally, audit/reporting → workiva
+→ Return plan immediately, no clarification needed
+
+NOW ANALYZE THE USER'S PROMPT ABOVE AND RETURN THE PLAN."""
 
     try:
         resp = http_requests.post(
@@ -392,7 +417,7 @@ def _generate_single_survey(
 
     qualification_note = ""
     if qualification_flag:
-        qualification_note = f"Qualification flag: {qualification_flag}"
+        qualification_note = f"Special requirement / qualification flag: {qualification_flag}"
 
     # ── Build "already asked" context to prevent repetition ──
     already_asked_note = ""
@@ -410,31 +435,46 @@ Rules:
 - For job surveys specifically: focus on role-specific competencies, NOT general background
 """
 
-    prompt = f"""Generate a survey for a funnel. Return ONLY valid JSON.
+    prompt = f"""Generate a survey for a multi-survey funnel. Return ONLY valid JSON.
 
-Survey name: {survey_name}
+Funnel type: {funnel_plan.get('funnel_type', 'general')}
+Funnel goal: {funnel_plan.get('goal', '')}
+
+This specific survey:
+Name: {survey_name}
 Purpose: {survey_purpose}
 Key topics to cover: {', '.join(key_topics)}
-Survey type: {survey_type}
-{"Job ID this survey qualifies for: " + job_id if job_id else ""}
+Survey type: {survey_type}  (screening = everyone takes it, job = only matched users take it)
+{"Destination ID this survey qualifies for: " + job_id if job_id else ""}
 {qualification_note}
 
-Overall funnel goal: {funnel_plan.get('goal', '')}
-{"Job profiles in this funnel (for context):" + chr(10) + job_profiles_summary if job_profiles_summary else ""}
+{"Destination profiles in this funnel (for context):" + chr(10) + job_profiles_summary if job_profiles_summary else ""}
 {termination_note}
 {already_asked_note}
 
-Generate 8-14 high-quality questions relevant to the survey purpose.
+CRITICAL INSTRUCTION — USER'S OWN QUESTIONS:
+The original user prompt may already contain specific questions with answer options.
+If it does, you MUST use those exact questions and options for this survey.
+Do NOT invent new questions when the user has already written them.
+
+Rules:
+1. If the original prompt contains questions relevant to this survey's purpose → extract and use them EXACTLY (same wording, same options)
+2. Only add new questions if the user's prompt doesn't cover enough for this survey's purpose
+3. Keep the total between 5-15 questions
+4. Preserve the user's exact answer options — don't paraphrase or reorder them
 
 For SCREENING surveys:
-- Some questions should be role="screen" with a screening_rule (hard fail conditions)
-- Most questions should be role="score" or role="both" 
-- Include a mix of multiple_choice, yes_no, dropdown, multi_select question types
+- Mark questions that can disqualify users as role="screen"
+- Mark questions that signal destination fit as role="score" or role="both"
+- Include a mix of types: multiple_choice, yes_no, dropdown, multi_select
 
-For JOB surveys:
-- All questions are role="neutral" (scored by AI evaluation, not points)
-- Focus on testing actual job competencies, not just "do you have experience"
-- Include rating scales, multi-select skill checks, scenario questions
+For DESTINATION/JOB surveys:
+- All questions are role="neutral" (AI evaluates answers holistically)
+- These test actual competency for the destination, not background
+- Use the user's specific questions from the relevant branch/layer of their prompt
+
+Original user prompt (extract questions from here):
+{original_prompt[:3000]}
 
 Return this exact JSON structure:
 {{
@@ -442,39 +482,41 @@ Return this exact JSON structure:
   "questions": [
     {{
       "id": "q1",
-      "question": "Question text here",
-      "type": "multiple_choice",
-      "options": ["Option A", "Option B", "Option C"],
-      "required": true,
-      "funnel_role": "screen",
-      "screening_rule": {{
-        "enabled": true,
-        "fail_condition": "equals",
-        "fail_value": "Under 18",
-        "fail_reason": "Age under 18 disqualifies from all opportunities"
-      }},
-      "option_scores": {{}}
-    }},
-    {{
-      "id": "q2",
-      "question": "Question text here",
+      "question": "Exact question text from user's prompt or new question",
       "type": "multiple_choice",
       "options": ["Option A", "Option B", "Option C"],
       "required": true,
       "funnel_role": "score",
       "screening_rule": null,
       "option_scores": {{}}
+    }},
+    {{
+      "id": "q2",
+      "question": "Question text",
+      "type": "yes_no",
+      "options": ["Yes", "No"],
+      "required": true,
+      "funnel_role": "screen",
+      "screening_rule": {{
+        "enabled": true,
+        "fail_condition": "equals",
+        "fail_value": "No",
+        "fail_reason": "Does not qualify"
+      }},
+      "option_scores": {{}}
     }}
   ]
 }}
 
-IMPORTANT:
-- screening_rule should only be set when funnel_role is "screen" or "both"
-- option_scores is left empty {{}} — it will be filled by the scoring matrix step
-- question IDs must be unique: q1, q2, q3...
-- For yes_no questions use type "yes_no" AND always include options: ["Yes", "No"]
-- For multi-select use type "multi_select" with allowMultiple: true
-- Every question that has selectable answers MUST have a non-empty options array"""
+STRICT RULES:
+- screening_rule only when funnel_role is "screen" or "both"
+- option_scores is always empty {{}} — filled later by scoring step
+- question IDs: q1, q2, q3... (unique, sequential)
+- yes_no type MUST have options: ["Yes", "No"]
+- multi_select type MUST have allowMultiple: true
+- Every question with selectable answers MUST have a non-empty options array
+- If user wrote "Select all that apply" → use type "multi_select" with allowMultiple: true
+- If user wrote "Select up to N" → use type "multi_select" with allowMultiple: true"""
 
     resp = http_requests.post(
         "https://api.openai.com/v1/chat/completions",
@@ -483,8 +525,8 @@ IMPORTANT:
         json={
             "model": "gpt-4o",
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.3,
-            "max_tokens": 3000,
+            "temperature": 0.2,
+            "max_tokens": 4000,
             "response_format": {"type": "json_object"}
         }
     )
@@ -569,22 +611,28 @@ def _generate_scoring_matrix(api_key, funnel_plan, screening_survey_ids, origina
 
     questions_json = json.dumps(all_questions_summary[:30], indent=2)  # cap at 30 questions
 
-    prompt = f"""Assign scoring points to survey answer options for a job matching funnel.
+    prompt = f"""Assign scoring points to survey answer options for a funnel.
 
-Job profiles to score for:
+Funnel goal: {funnel_plan.get('goal', 'Match users to the best destination')}
+
+Destinations to score for (these can be jobs, products, programs, tiers, or anything):
 {job_descriptions}
 
 Survey questions and their answer options:
 {questions_json}
 
-For each answer option in each question, assign points (0-5) for each job profile.
-- 5 = strong signal for that job
-- 3 = moderate signal
+For each answer option in each question, assign points (0-5) for each destination.
+- 5 = strong signal this person matches that destination
+- 3 = moderate signal  
 - 1 = weak signal
-- 0 = no relevance
+- 0 = no relevance to that destination
 
-Be thoughtful: an answer like "Banking / Financial Services" for sector background 
-should give high points to HDFC, moderate to Give Grants, low/zero to HCL and Avaada.
+Think carefully about what each answer implies about fit for each destination.
+Examples:
+- "I use Tally daily" → high score for a Tally-related product destination
+- "I manage employee expenses" → high score for expense management product destination
+- "I work in audit" → high score for audit/reporting destination
+- "I'm in banking/finance" → high score for finance-related destination
 
 Return ONLY valid JSON in this exact structure:
 {{
@@ -593,8 +641,8 @@ Return ONLY valid JSON in this exact structure:
       "survey_id": "survey_id_here",
       "question_id": "q1",
       "option_scores": {{
-        "Option A": {{"hdfc": 4, "give_grants": 2, "hclfoundation": 1, "avaada": 2}},
-        "Option B": {{"hdfc": 0, "give_grants": 3, "hclfoundation": 5, "avaada": 3}}
+        "Option A": {{"dest_id_1": 4, "dest_id_2": 2, "dest_id_3": 1}},
+        "Option B": {{"dest_id_1": 0, "dest_id_2": 3, "dest_id_3": 5}}
       }}
     }}
   ]

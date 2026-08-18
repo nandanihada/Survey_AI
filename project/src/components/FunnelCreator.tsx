@@ -217,7 +217,6 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
     const totalSurveys =
       (funnelPlan.screening_surveys?.length || 0) +
       (funnelPlan.job_profiles?.length || 0);
-
     let progress = 0;
     const tick = () => {
       progress += Math.floor(Math.random() * 8) + 3;
@@ -423,6 +422,30 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
 
   const renderPlanStep = () => {
     if (!funnelPlan) return null;
+
+    // Guard against malformed AI response
+    if (!funnelPlan.screening_surveys || !funnelPlan.job_profiles) {
+      return (
+        <div className="space-y-4">
+          <div className={`rounded-xl border p-4 ${isDarkMode ? 'bg-red-950/30 border-red-800/40' : 'bg-red-50 border-red-200'}`}>
+            <p className={`text-sm font-medium ${isDarkMode ? 'text-red-300' : 'text-red-700'}`}>
+              The AI returned an incomplete plan. Please go back and try a more detailed prompt.
+            </p>
+            {funnelPlan.goal && (
+              <p className={`text-xs mt-1 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+                AI understood: {funnelPlan.goal}
+              </p>
+            )}
+          </div>
+          <button
+            onClick={() => { setStep('prompt'); setFunnelPlan(null); setError(''); }}
+            className={`px-4 py-2 rounded-xl text-sm ${isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'}`}
+          >
+            ← Edit prompt
+          </button>
+        </div>
+      );
+    }
     return (
       <div className="space-y-6">
         {/* Header */}
@@ -447,7 +470,7 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
             Phase 1 — Screening Surveys
           </p>
           <div className="space-y-2">
-            {funnelPlan.screening_surveys.map(s => (
+            {(funnelPlan.screening_surveys || []).map(s => (
               <div key={s.index} className={`rounded-xl border p-3 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
                 <div className="flex items-start justify-between">
                   <div>
@@ -456,7 +479,7 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
                     </p>
                     <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{s.purpose}</p>
                     <div className="flex flex-wrap gap-1 mt-2">
-                      {s.key_topics.slice(0, 5).map(t => (
+                      {(s.key_topics || []).slice(0, 5).map(t => (
                         <span key={t} className={`text-xs px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>{t}</span>
                       ))}
                     </div>
@@ -481,7 +504,7 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
             Phase 2 — Job Surveys (cascade on fail)
           </p>
           <div className="space-y-2">
-            {funnelPlan.job_profiles.map((j, i) => (
+            {(funnelPlan.job_profiles || []).map((j, i) => (
               <div key={j.id} className={`rounded-xl border p-3 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
                 <div className="flex items-start justify-between">
                   <div>
@@ -511,9 +534,9 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
         <div className={`rounded-xl border p-3 text-sm ${isDarkMode ? 'bg-gray-800 border-gray-700 text-gray-400' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
           <p className={`text-xs font-semibold uppercase mb-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Scoring & Routing</p>
           <p>{funnelPlan.scoring_logic}</p>
-          {funnelPlan.termination_conditions.length > 0 && (
+          {(funnelPlan.termination_conditions || []).length > 0 && (
             <p className="text-red-500 text-xs mt-2">
-              Hard stops: {funnelPlan.termination_conditions.join(' · ')}
+              Hard stops: {(funnelPlan.termination_conditions || []).join(' · ')}
             </p>
           )}
         </div>
