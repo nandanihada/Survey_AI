@@ -213,20 +213,10 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
     setError('');
     setGenerationProgress(0);
     setGeneratedSurveys([]);
-
-    const totalSurveys =
-      (funnelPlan.screening_surveys?.length || 0) +
-      (funnelPlan.job_profiles?.length || 0);
-    let progress = 0;
-    const tick = () => {
-      progress += Math.floor(Math.random() * 8) + 3;
-      setGenerationProgress(Math.min(progress, 90));
-    };
-    const progressTimer = setInterval(tick, 1200);
-
-    setGeneratingStep('Analyzing funnel requirements...');
+    setGeneratingStep('Starting generation...');
 
     try {
+      // Kick off background generation — returns immediately with job_id
       const res = await fetch(`${apiBase}/api/funnels/generate`, {
         method: 'POST',
         headers: authHeaders(),
@@ -236,25 +226,48 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
         })
       });
 
-      clearInterval(progressTimer);
-
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error || 'Generation failed');
+        throw new Error(err.error || 'Failed to start generation');
       }
 
-      const data = await res.json();
+      const { job_id } = await res.json();
 
-      setGeneratedSurveys(data.generated_surveys || []);
-      setFunnelId(data.funnel_id);
-      setGenerationProgress(100);
-      setGeneratingStep('Done!');
-      setStep('done');
+      // Poll for status every 3 seconds
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusRes = await fetch(`${apiBase}/api/funnels/generate-status/${job_id}`, {
+            headers: authHeaders()
+          });
+          if (!statusRes.ok) return;
+
+          const statusData = await statusRes.json();
+          setGenerationProgress(statusData.progress || 0);
+          setGeneratingStep(statusData.current_step || 'Generating...');
+          setGeneratedSurveys(statusData.generated_surveys || []);
+
+          if (statusData.status === 'done') {
+            clearInterval(pollInterval);
+            setFunnelId(statusData.funnel_id);
+            setGenerationProgress(100);
+            setGeneratingStep('Done!');
+            setStep('done');
+          } else if (statusData.status === 'error') {
+            clearInterval(pollInterval);
+            setError(statusData.error || 'Generation failed');
+            setStep('plan');
+          }
+        } catch (pollErr) {
+          console.error('Poll error:', pollErr);
+        }
+      }, 3000);
+
+      // Safety: stop polling after 10 minutes
+      setTimeout(() => clearInterval(pollInterval), 600000);
 
     } catch (e: any) {
-      clearInterval(progressTimer);
       setError(e.message || 'Generation failed');
-      setStep('plan'); // go back to plan so user can retry
+      setStep('plan');
     }
   };
 
@@ -664,7 +677,7 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
             if (onFunnelCreated) {
               onFunnelCreated(funnelId);
             } else {
-              navigate(`/?tab=surveys&subtab=funnels&open=${funnelId}`);
+              navigate(`/dashboard?tab=surveys&subtab=funnels&open=${funnelId}`);
             }
           }}
           className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold"

@@ -2110,6 +2110,51 @@ const SurveyEditor: React.FC = () => {
                       ))}
                     </div>
                   )}
+
+                  {/* ── Funnel option scoring display ── */}
+                  {(activeQ as any).funnel_role && ['score', 'both'].includes((activeQ as any).funnel_role) &&
+                   (activeQ as any).option_scores && Object.keys((activeQ as any).option_scores).length > 0 &&
+                   activeQ.options && activeQ.options.length > 0 && (
+                    <div className="mb-3 rounded-lg border border-blue-200 overflow-hidden">
+                      <div className="bg-blue-50 px-3 py-1.5 flex items-center gap-1.5">
+                        <span className="text-[10px] font-bold text-blue-700">📊 Scoring per option</span>
+                        <span className="text-[10px] text-blue-500">(editable in Funnel panel)</span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-[10px]">
+                          <thead>
+                            <tr className="bg-gray-50">
+                              <th className="text-left px-3 py-1 font-semibold text-gray-500">Answer</th>
+                              {Object.keys(Object.values((activeQ as any).option_scores)[0] as Record<string,number>).map(dest => (
+                                <th key={dest} className="text-center px-2 py-1 font-semibold text-gray-500">{dest.slice(0,8)}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {activeQ.options.map((opt: string) => {
+                              const scores = ((activeQ as any).option_scores as Record<string, Record<string, number>>)[opt] || {};
+                              return (
+                                <tr key={opt} className="border-t border-gray-100">
+                                  <td className="px-3 py-1 text-gray-700 max-w-[120px] truncate">{opt}</td>
+                                  {Object.entries(scores).map(([dest, pts]) => (
+                                    <td key={dest} className="px-2 py-1 text-center">
+                                      <span className={`inline-block w-6 text-center font-bold rounded ${
+                                        (pts as number) >= 5 ? 'text-white bg-green-600' :
+                                        (pts as number) >= 3 ? 'text-green-800 bg-green-200' :
+                                        (pts as number) === 2 ? 'text-blue-800 bg-blue-200' :
+                                        (pts as number) === 1 ? 'text-yellow-800 bg-yellow-200' :
+                                                               'text-red-500 bg-red-100'
+                                      }`}>{pts as number}</span>
+                                    </td>
+                                  ))}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
                   {/* Question image preview — above */}
                   {(activeQ as any).questionImage && (activeQ as any).questionImagePosition !== 'below' && (
                     <img

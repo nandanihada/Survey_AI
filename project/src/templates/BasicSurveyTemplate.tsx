@@ -95,6 +95,8 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const [funnelLayerIndex, setFunnelLayerIndex] = useState<number>(0);
   const [funnelJobId, setFunnelJobId] = useState<string | null>(null);
   const [isFunnelSurvey, setIsFunnelSurvey] = useState(false);
+  const [funnelTerminated, setFunnelTerminated] = useState(false);
+  const [funnelTerminateReason, setFunnelTerminateReason] = useState('');
 
   const normalizeType = (type: string): 'text' | 'radio' | 'range' | 'ranking' | 'dropdown' | 'dropdown_multi' | 'matrix' | 'list' => {
     switch (type) {
@@ -981,6 +983,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
         // Show redirecting spinner immediately so user sees something
         setRedirecting(true);
+        console.log(`🎯 [Funnel] Calling ${funnelEndpoint}`, { isJobSurvey, funnelId, funnelLayerIndex, funnelSessionId: newSessionId, survey_id: survey.id });
 
         try {
           const funnelRes = await fetch(funnelEndpoint, {
@@ -991,14 +994,14 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
           if (!funnelRes.ok) {
             const errText = await funnelRes.text();
-            console.error('Funnel API error:', errText);
-            // On API error show submitted state rather than redirecting to dashboard
+            console.error('Funnel API error:', funnelRes.status, errText);
             setRedirecting(false);
             setSubmitted(true);
             return;
           }
 
           const funnelResult = await funnelRes.json();
+          console.log('🎯 [Funnel] Full result:', JSON.stringify(funnelResult).slice(0, 500));
           const sessionIdToUse = funnelResult.funnel_session_id || newSessionId;
           const action = funnelResult.action;
 
@@ -1006,7 +1009,14 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
           if (action === 'terminate') {
             const fallback = funnelResult.redirect_url;
-            setTimeout(() => { window.location.href = fallback || `${frontendBase}/`; }, 2000);
+            if (fallback) {
+              setTimeout(() => { window.location.href = fallback; }, 2000);
+            } else {
+              setRedirecting(false);
+              setFunnelTerminated(true);
+              setFunnelTerminateReason(funnelResult.reason || 'Unfortunately, you do not meet the eligibility criteria for this opportunity at this time.');
+              setSubmitted(true);
+            }
             return;
           }
 
@@ -2451,7 +2461,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       )}
 
       {/* Success Overlay */}
-      {submitted && (
+      {(submitted || funnelTerminated) && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -2459,10 +2469,36 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           style={{
             position: 'fixed', inset: 0, zIndex: 9999,
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 50%, #2d0a0a 100%)',
+            background: funnelTerminated
+              ? 'linear-gradient(135deg, #111 0%, #1a0808 100%)'
+              : 'linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 50%, #2d0a0a 100%)',
             padding: 24,
           }}
         >
+          {/* Funnel not eligible page */}
+          {funnelTerminated && (
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.2, duration: 0.5 }}
+              style={{ textAlign: 'center', maxWidth: 420 }}
+            >
+              <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(239,68,68,0.15)', border: '2px solid rgba(239,68,68,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+                </svg>
+              </div>
+              <h2 style={{ color: '#fff', fontSize: 24, fontWeight: 700, marginBottom: 14, fontFamily: "'Outfit', sans-serif" }}>
+                Thank You for Participating
+              </h2>
+              <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 1.7, marginBottom: 10 }}>
+                {funnelTerminateReason}
+              </p>
+              <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 13 }}>
+                We appreciate your time and interest.
+              </p>
+            </motion.div>
+          )}
           {/* Animated confetti dots */}
           <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
             {[...Array(20)].map((_, i) => (
@@ -2556,7 +2592,6 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           </motion.div>
         </motion.div>
       )}
-
       {/* Submission Loading Overlay */}
       {isSubmitting && (
         <div className="pepper-submitting-overlay">

@@ -64,6 +64,7 @@ interface Funnel {
     survey_id: string;
     display_name: string;
     redirect_url: string;
+    redirect_rules?: Array<{ operator: string; threshold: number; url: string; label: string }>;
     pass_criteria: string;
     transition_page: {
       enabled: boolean;
@@ -74,6 +75,128 @@ interface Funnel {
     };
   }>;
 }
+
+// ─── Threshold Redirect Rules Component ──────────────────
+
+const OPERATORS = ['>=', '>', '<=', '<', '=='];
+
+const ThresholdRedirectRules: React.FC<{
+  jobId: string;
+  jobCfg: any;
+  isDarkMode: boolean;
+  inputClass: string;
+  textMuted: string;
+  textMain: string;
+  onSave: (jobId: string, patch: any) => Promise<void>;
+  saving: boolean;
+}> = ({ jobId, jobCfg, isDarkMode, inputClass, textMuted, textMain, onSave, saving }) => {
+  const existing = jobCfg.redirect_rules || (jobCfg.redirect_url ? [{ operator: '>=', threshold: 0, url: jobCfg.redirect_url, label: 'Default' }] : []);
+  const [rules, setRules] = useState<Array<{ operator: string; threshold: number; url: string; label: string }>>(existing);
+  const [editing, setEditing] = useState(false);
+
+  const addRule = () => setRules(r => [...r, { operator: '>=', threshold: 70, url: '', label: 'Good match' }]);
+  const removeRule = (i: number) => setRules(r => r.filter((_, idx) => idx !== i));
+  const updateRule = (i: number, field: string, val: string | number) =>
+    setRules(r => r.map((rule, idx) => idx === i ? { ...rule, [field]: val } : rule));
+
+  const save = async () => {
+    await onSave(jobId, { redirect_rules: rules, redirect_url: rules[0]?.url || '' });
+    setEditing(false);
+  };
+
+  const borderCol = isDarkMode ? 'border-gray-700' : 'border-gray-200';
+  const rowBg = isDarkMode ? 'bg-gray-750' : 'bg-gray-50';
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <p className={`text-xs font-medium ${textMuted}`}>Redirect on pass (score-based)</p>
+        <button
+          onClick={() => setEditing(e => !e)}
+          className={`text-xs ${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}
+        >
+          {editing ? 'Cancel' : rules.length > 0 ? <><Edit3 size={10} className="inline mr-0.5" />Edit rules</> : '+ Add rules'}
+        </button>
+      </div>
+
+      {/* Show current rules (read mode) */}
+      {!editing && rules.length > 0 && (
+        <div className={`rounded-lg border overflow-hidden ${borderCol}`}>
+          {rules.map((r, i) => (
+            <div key={i} className={`flex items-center gap-2 px-3 py-1.5 text-xs border-b last:border-b-0 ${borderCol} ${rowBg}`}>
+              <span className={`font-mono font-bold px-1.5 py-0.5 rounded ${isDarkMode ? 'bg-gray-700 text-blue-300' : 'bg-blue-50 text-blue-700'}`}>
+                score {r.operator} {r.threshold}%
+              </span>
+              <span className={`flex-1 truncate ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>{r.url || '(no URL)'}</span>
+              {r.label && <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500'}`}>{r.label}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!editing && rules.length === 0 && (
+        <p className={`text-xs ${textMuted}`}>(not set — click to add)</p>
+      )}
+
+      {/* Edit mode */}
+      {editing && (
+        <div className={`rounded-xl border p-3 space-y-2 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+          {/* Explanation */}
+          <div className={`rounded-lg p-2 text-[10px] leading-relaxed ${isDarkMode ? 'bg-blue-950/40 border border-blue-800/40 text-blue-300' : 'bg-blue-50 border border-blue-200 text-blue-700'}`}>
+            <p className="font-semibold mb-0.5">How the score works</p>
+            <p>After a user completes this survey, the AI evaluates their answers and gives a <strong>confidence score (0–100%)</strong> — how well they match this destination.</p>
+            <p className="mt-1">Example: score ≥ 80% → strong match → send to fast-track URL. Score &lt; 50% → weak match → send to waitlist URL.</p>
+            <p className="mt-1">Rules are checked <strong>in order</strong>. First match wins. If no rule matches, the user goes to the fallback URL.</p>
+          </div>
+          {rules.map((r, i) => (
+            <div key={i} className={`flex items-center gap-1.5 rounded-lg border p-2 ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'}`}>
+              <span className={`text-[10px] ${textMuted} shrink-0`}>If score</span>
+              <select
+                value={r.operator}
+                onChange={e => updateRule(i, 'operator', e.target.value)}
+                className={`text-xs rounded px-1 py-0.5 border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
+              >
+                {OPERATORS.map(op => <option key={op} value={op}>{op}</option>)}
+              </select>
+              <input
+                type="number" min={0} max={100}
+                value={r.threshold}
+                onChange={e => updateRule(i, 'threshold', parseInt(e.target.value) || 0)}
+                className={`w-12 text-xs rounded px-1 py-0.5 border text-center ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
+              />
+              <span className={`text-[10px] ${textMuted} shrink-0`}>%  →</span>
+              <input
+                value={r.url}
+                onChange={e => updateRule(i, 'url', e.target.value)}
+                placeholder="https://yoursite.com/..."
+                className={`flex-1 text-xs rounded px-2 py-0.5 border min-w-0 ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500' : 'bg-white border-gray-300 placeholder-gray-400'}`}
+              />
+              <input
+                value={r.label}
+                onChange={e => updateRule(i, 'label', e.target.value)}
+                placeholder="Label e.g. Strong match"
+                className={`w-24 text-xs rounded px-2 py-0.5 border ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500' : 'bg-white border-gray-300 placeholder-gray-400'}`}
+              />
+              <button onClick={() => removeRule(i)} className="text-red-400 hover:text-red-500 shrink-0"><X size={12} /></button>
+            </div>
+          ))}
+          <div className="flex gap-2">
+            <button onClick={addRule} className={`text-xs px-3 py-1.5 rounded-lg border ${isDarkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+              + Add rule
+            </button>
+            <button onClick={save} className={`text-xs px-3 py-1.5 rounded-lg font-medium bg-blue-600 hover:bg-blue-700 text-white ${saving ? 'opacity-60' : ''}`}>
+              {saving ? <Loader2 size={11} className="animate-spin inline mr-1" /> : null}
+              Save
+            </button>
+            <button onClick={() => setEditing(false)} className={`text-xs px-2 py-1.5 rounded-lg ${isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 interface Props {
   isDarkMode?: boolean;
@@ -146,9 +269,25 @@ const ScoringDetailsPanel: React.FC<{ funnel: Funnel; isDarkMode: boolean; apiBa
 
   return (
     <div className="space-y-6">
+      {/* Info + Color Legend */}
       <div className={`rounded-xl border p-3 text-xs ${isDarkMode ? 'bg-blue-950/30 border-blue-800/40 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
-        <Info size={12} className="inline mr-1" />
-        Each answer option in your screening surveys has AI-assigned points per job profile. Higher points = stronger match. Click any cell to edit.
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <span><Info size={12} className="inline mr-1" />Points per answer per destination. Click any cell to edit.</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-[10px] font-semibold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Signal strength:</span>
+            {[
+              { label: 'Highest (5)', bg: 'bg-green-600', text: 'text-white' },
+              { label: 'High (3-4)', bg: 'bg-green-200', text: 'text-green-800' },
+              { label: 'Mid (2)', bg: 'bg-blue-200', text: 'text-blue-800' },
+              { label: 'Low (1)', bg: 'bg-yellow-200', text: 'text-yellow-800' },
+              { label: 'None (0)', bg: 'bg-red-100', text: 'text-red-500' },
+            ].map(item => (
+              <span key={item.label} className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${item.bg} ${item.text}`}>
+                {item.label}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
       {surveys.map(sv => (
         <div key={sv.id}>
@@ -213,10 +352,11 @@ const ScoringDetailsPanel: React.FC<{ funnel: Funnel; isDarkMode: boolean; apiBa
                                 <button
                                   onClick={() => { setEditingCell({ surveyId: sv.id, qId: q.id, option: opt, jobId: jid }); setEditVal(String(pts)); }}
                                   className={`w-8 h-6 rounded text-xs font-bold transition hover:ring-2 hover:ring-blue-400 ${
-                                    pts >= 4 ? 'bg-green-100 text-green-700' :
-                                    pts >= 2 ? 'bg-yellow-100 text-yellow-700' :
-                                    pts > 0  ? 'bg-blue-50 text-blue-600' :
-                                    isDarkMode ? 'bg-gray-700 text-gray-500' : 'bg-gray-100 text-gray-400'
+                                    (pts as number) >= 5 ? 'bg-green-600 text-white' :
+                                    (pts as number) >= 3 ? 'bg-green-200 text-green-800' :
+                                    (pts as number) === 2 ? 'bg-blue-200 text-blue-800' :
+                                    (pts as number) === 1 ? 'bg-yellow-200 text-yellow-800' :
+                                    'bg-red-100 text-red-500'
                                   }`}
                                 >
                                   {pts}
@@ -245,6 +385,36 @@ const QuestionsPanel: React.FC<{ funnel: Funnel; isDarkMode: boolean; apiBase: s
   const [surveys, setSurveys] = useState<(SurveyDetail & { survey_type: string; survey_name: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedSurvey, setExpandedSurvey] = useState<string | null>(null);
+  const [predictingId, setPredictingId] = useState<string | null>(null);
+
+  const refetchSurvey = async (surveyId: string) => {
+    try {
+      const res = await fetch(`${apiBase}/api/surveys/${surveyId}`, { headers: authHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        setSurveys(prev => prev.map(sv =>
+          sv.id === surveyId ? { ...sv, questions: data.questions || [] } : sv
+        ));
+      }
+    } catch {}
+  };
+
+  const predictSignals = async (surveyId: string) => {
+    setPredictingId(surveyId);
+    try {
+      const res = await fetch(`${apiBase}/api/funnels/${funnel.funnel_id}/predict-job-signals/${surveyId}`, {
+        method: 'POST',
+        headers: authHeaders()
+      });
+      if (res.ok) {
+        await refetchSurvey(surveyId);
+      }
+    } catch (e) {
+      console.error('Predict signals error:', e);
+    } finally {
+      setPredictingId(null);
+    }
+  };
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -279,6 +449,18 @@ const QuestionsPanel: React.FC<{ funnel: Funnel; isDarkMode: boolean; apiBase: s
 
   return (
     <div className="space-y-3">
+      {/* Color legend */}
+      <div className={`rounded-xl border p-2.5 text-[10px] ${isDarkMode ? 'bg-gray-750 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className={`font-semibold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Answer signal:</span>
+          <span className="bg-green-600 text-white px-2 py-0.5 rounded-full font-semibold">●● Highest</span>
+          <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded-full font-semibold">● High</span>
+          <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-semibold">◐ Mid</span>
+          <span className="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full font-semibold">○ Low</span>
+          <span className="bg-red-50 text-red-400 px-2 py-0.5 rounded-full font-semibold">– None</span>
+          <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-semibold">✕ Screen fail</span>
+        </div>
+      </div>
       {surveys.map(sv => (
         <div key={sv.id} className={`rounded-xl border overflow-hidden ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
           <div
@@ -299,6 +481,18 @@ const QuestionsPanel: React.FC<{ funnel: Funnel; isDarkMode: boolean; apiBase: s
               >
                 <Edit3 size={10} /> Edit ↗
               </button>
+              {sv.survey_type === 'job' && (
+                <button
+                  onClick={e => { e.stopPropagation(); predictSignals(sv.id); }}
+                  disabled={predictingId === sv.id}
+                  className={`text-xs flex items-center gap-1 px-2 py-1 rounded-lg ${isDarkMode ? 'bg-purple-900/50 text-purple-300 hover:bg-purple-900' : 'bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200'}`}
+                  title="Ask AI to predict which answers signal strong/weak fit — then shows color coding"
+                >
+                  {predictingId === sv.id
+                    ? <><Loader2 size={10} className="animate-spin" /> Predicting...</>
+                    : <>✨ Predict signals</>}
+                </button>
+              )}
               {expandedSurvey === sv.id ? <ChevronDown size={14} className={textMuted} /> : <ChevronRight size={14} className={textMuted} />}
             </div>
           </div>
@@ -333,11 +527,47 @@ const QuestionsPanel: React.FC<{ funnel: Funnel; isDarkMode: boolean; apiBase: s
                       </div>
                       {q.options && q.options.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1.5">
-                          {q.options.map(opt => (
-                            <span key={opt} className={`text-[11px] px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
-                              {opt}
+                          {q.options.map(opt => {
+                            // For job surveys: show color based on option_scores if available
+                            // For screening surveys with scoring: show max score across all destinations
+                            const optScores = q.option_scores?.[opt];
+                            const maxPts = optScores
+                              ? Math.max(...Object.values(optScores).map(Number))
+                              : null;
+                            const isScreenFail = q.screening_rule?.enabled &&
+                              q.screening_rule.fail_condition === 'equals' &&
+                              opt.toLowerCase() === q.screening_rule.fail_value?.toLowerCase();
+
+                            let badgeClass = isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600';
+                            let signalDot = '';
+
+                            if (isScreenFail) {
+                              badgeClass = 'bg-red-100 text-red-700';
+                              signalDot = '✕ ';
+                            } else if (maxPts !== null) {
+                              if (maxPts >= 5) { badgeClass = 'bg-green-600 text-white'; signalDot = '●● '; }
+                              else if (maxPts >= 3) { badgeClass = 'bg-green-100 text-green-800'; signalDot = '● '; }
+                              else if (maxPts === 2) { badgeClass = 'bg-blue-100 text-blue-800'; signalDot = '◐ '; }
+                              else if (maxPts === 1) { badgeClass = 'bg-yellow-100 text-yellow-800'; signalDot = '○ '; }
+                              else { badgeClass = 'bg-red-50 text-red-400'; signalDot = '– '; }
+                            }
+
+                            return (
+                              <span
+                                key={opt}
+                                className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${badgeClass}`}
+                                title={maxPts !== null ? `Max signal: ${maxPts} pts` : opt}
+                              >
+                                {signalDot}{opt}
+                              </span>
+                            );
+                          })}
+                          {/* Legend for job survey questions */}
+                          {sv.survey_type === 'job' && !q.option_scores && (
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full italic ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                              (signal colors shown after AI scoring)
                             </span>
-                          ))}
+                          )}
                         </div>
                       )}
                     </div>
@@ -362,8 +592,6 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
   const [expanded, setExpanded] = useState(autoExpand);
   const [activeDetailTab, setActiveDetailTab] = useState<'overview' | 'scoring' | 'questions'>('overview');
   const [savingJobId, setSavingJobId] = useState<string | null>(null);
-  const [editingRedirectJobId, setEditingRedirectJobId] = useState<string | null>(null);
-  const [tempRedirectUrl, setTempRedirectUrl] = useState('');
   const [editingTransitionJobId, setEditingTransitionJobId] = useState<string | null>(null);
   const [tempTransition, setTempTransition] = useState<any>({});
   const [editingFallback, setEditingFallback] = useState(false);
@@ -543,26 +771,17 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
                         </button>
                       </div>
 
-                      {/* Redirect URL */}
-                      <div>
-                        <p className={`text-xs font-medium mb-1 ${textMuted}`}>Redirect URL on pass</p>
-                        {editingRedirectJobId === jobId ? (
-                          <div className="flex gap-2">
-                            <input value={tempRedirectUrl} onChange={e => setTempRedirectUrl(e.target.value)} placeholder="https://yoursite.com/apply" className={inputClass} />
-                            <button onClick={async () => { await saveJobConfig(jobId, { redirect_url: tempRedirectUrl }); setEditingRedirectJobId(null); }} className="px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg shrink-0">
-                              {savingJobId === jobId ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-                            </button>
-                            <button onClick={() => setEditingRedirectJobId(null)} className={`px-2 py-1.5 text-xs rounded-lg ${isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600'}`}><X size={12} /></button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <p className={`flex-1 text-xs truncate ${jobCfg.redirect_url ? (isDarkMode ? 'text-blue-400' : 'text-blue-600') : textMuted}`}>
-                              {jobCfg.redirect_url || '(not set — click to add)'}
-                            </p>
-                            <button onClick={() => { setEditingRedirectJobId(jobId); setTempRedirectUrl(jobCfg.redirect_url || ''); }} className={`text-xs ${textMuted}`}><Edit3 size={12} /></button>
-                          </div>
-                        )}
-                      </div>
+                      {/* Threshold-based Redirect Rules */}
+                      <ThresholdRedirectRules
+                        jobId={jobId}
+                        jobCfg={jobCfg}
+                        isDarkMode={isDarkMode}
+                        inputClass={inputClass}
+                        textMuted={textMuted}
+                        textMain={textMain}
+                        onSave={saveJobConfig}
+                        saving={savingJobId === jobId}
+                      />
 
                       {/* Transition page */}
                       <div>

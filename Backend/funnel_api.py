@@ -223,10 +223,10 @@ NOW ANALYZE THE USER'S PROMPT ABOVE AND RETURN THE PLAN."""
 @requireAuth
 def generate_funnel():
     """
-    Takes confirmed funnel_plan, generates all surveys with questions,
-    assigns scoring per answer, configures routing logic.
-    Returns funnel_id + all survey IDs.
-    This is a streaming-style endpoint — progress reported per survey.
+    Kicks off funnel generation in a background thread.
+    Returns immediately with a job_id.
+    Frontend polls /api/funnels/generate-status/<job_id> for progress.
+    This bypasses Render's 60-second proxy timeout.
     """
     if request.method == "OPTIONS":
         return "", 200
@@ -245,153 +245,199 @@ def generate_funnel():
     if not api_key:
         return jsonify({"error": "AI service not configured"}), 503
 
-    funnel_id = f"fnl_{uuid.uuid4().hex[:10]}"
-    generated_surveys = []
-    errors = []
+    job_id = f"fgen_{uuid.uuid4().hex[:12]}"
 
-    # ── Track all questions asked so far across the entire funnel ──
-    # Each entry: {"topic": "Age", "question": "What is your age?", "survey": "Survey 1"}
-    questions_asked_so_far: list = []
+    # Save initial job status to DB
+    db.funnel_generation_jobs.insert_one({
+        "job_id": job_id,
+        "status": "running",
+        "progress": 0,
+        "current_step": "Starting generation...",
+        "generated_surveys": [],
+        "funnel_id": None,
+        "errors": [],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
 
-    # ── Generate each screening survey ──
-    screening_survey_ids = []
-    for s_meta in funnel_plan.get("screening_surveys", []):
-        try:
-            survey_doc = _generate_single_survey(
-                api_key=api_key,
-                survey_name=s_meta["name"],
-                survey_purpose=s_meta["purpose"],
-                key_topics=s_meta.get("key_topics", []),
-                survey_type="screening",
-                funnel_plan=funnel_plan,
-                owner_user_id=owner_user_id,
-                funnel_id=funnel_id,
-                layer_index=s_meta["index"],
-                original_prompt=original_prompt,
-                questions_asked_so_far=questions_asked_so_far
-            )
-            # Add this survey's questions to the global tracker
-            for q in survey_doc.get("questions", []):
-                questions_asked_so_far.append({
-                    "topic": q.get("question", "")[:80],
-                    "survey": s_meta["name"]
-                })
-            screening_survey_ids.append({
-                "survey_id": survey_doc["id"],
-                "name": s_meta["name"],
-                "index": s_meta["index"],
-                "purpose": s_meta["purpose"]
-            })
-            generated_surveys.append({
-                "type": "screening",
-                "index": s_meta["index"],
-                "survey_id": survey_doc["id"],
-                "name": s_meta["name"],
-                "question_count": len(survey_doc.get("questions", []))
-            })
-            print(f"✅ [Funnel] Generated screening survey: {s_meta['name']} ({len(survey_doc.get('questions',[]))} questions, {len(questions_asked_so_far)} total asked)")
-        except Exception as e:
-            errors.append(f"Screening survey '{s_meta['name']}': {e}")
-            print(f"❌ [Funnel] Failed screening survey {s_meta['name']}: {e}")
+    # Run generation in background thread so we return immediately
+    import threading
+    thread = threading.Thread(
+        target=_run_funnel_generation_bg,
+        args=(job_id, funnel_plan, original_prompt, owner_user_id, api_key),
+        daemon=True
+    )
+    thread.start()
 
-    # ── Generate each job survey ──
-    # Job surveys only know what the screening surveys asked so they don't repeat
-    # screening-level questions. But job surveys don't share questions with each other
-    # since each tests a different job profile.
-    screening_questions_asked = list(questions_asked_so_far)  # snapshot after screening
-    job_surveys_config = {}
-    for job_meta in funnel_plan.get("job_profiles", []):
-        job_id = job_meta["id"]
-        try:
-            survey_doc = _generate_single_survey(
-                api_key=api_key,
-                survey_name=job_meta["display_name"],
-                survey_purpose=f"Job qualification survey for: {job_meta['match_criteria']}",
-                key_topics=job_meta.get("key_topics", []),
-                survey_type="job",
-                funnel_plan=funnel_plan,
-                owner_user_id=owner_user_id,
-                funnel_id=funnel_id,
-                layer_index=None,
-                original_prompt=original_prompt,
-                job_id=job_id,
-                qualification_flag=job_meta.get("qualification_flag"),
-                questions_asked_so_far=screening_questions_asked  # only avoid repeating screening Qs
-            )
-            job_surveys_config[job_id] = {
-                "survey_id": survey_doc["id"],
-                "display_name": job_meta["display_name"],
-                "redirect_url": "",
-                "pass_criteria": job_meta["match_criteria"],
-                "transition_page": {
-                    "enabled": True,
-                    "heading": "We found another great opportunity for you!",
-                    "message": "You didn't qualify for this role, but we have another opportunity that matches your profile.",
-                    "cta_text": "See Next Opportunity →",
-                    "auto_redirect_seconds": 5,
-                    "show_next_job_name": True
-                }
-            }
-            generated_surveys.append({
-                "type": "job",
-                "job_id": job_id,
-                "survey_id": survey_doc["id"],
-                "name": job_meta["display_name"],
-                "question_count": len(survey_doc.get("questions", []))
-            })
-            print(f"✅ [Funnel] Generated job survey: {job_meta['display_name']}")
-        except Exception as e:
-            errors.append(f"Job survey '{job_id}': {e}")
-            print(f"❌ [Funnel] Failed job survey {job_id}: {e}")
+    return jsonify({"job_id": job_id, "status": "running"}), 202
 
-    # ── Generate scoring matrix for screening surveys ──
+
+def _run_funnel_generation_bg(job_id, funnel_plan, original_prompt, owner_user_id, api_key):
+    """Runs the actual funnel generation in a background thread. Updates DB with progress."""
+
+    def update_job(status=None, progress=None, step=None, surveys=None, funnel_id=None, errors=None):
+        patch = {}
+        if status: patch["status"] = status
+        if progress is not None: patch["progress"] = progress
+        if step: patch["current_step"] = step
+        if surveys is not None: patch["generated_surveys"] = surveys
+        if funnel_id: patch["funnel_id"] = funnel_id
+        if errors is not None: patch["errors"] = errors
+        if patch:
+            db.funnel_generation_jobs.update_one({"job_id": job_id}, {"$set": patch})
+
     try:
-        scoring_matrix = _generate_scoring_matrix(
-            api_key=api_key,
-            funnel_plan=funnel_plan,
-            screening_survey_ids=screening_survey_ids,
-            original_prompt=original_prompt
+        funnel_id = f"fnl_{uuid.uuid4().hex[:10]}"
+        generated_surveys = []
+        errors = []
+        questions_asked_so_far: list = []
+
+        total_surveys = len(funnel_plan.get("screening_surveys", [])) + len(funnel_plan.get("job_profiles", []))
+        done = 0
+
+        # ── Screening surveys ──
+        screening_survey_ids = []
+        for s_meta in funnel_plan.get("screening_surveys", []):
+            update_job(step=f"Generating: {s_meta['name']}...", progress=int(done / max(total_surveys, 1) * 80))
+            try:
+                survey_doc = _generate_single_survey(
+                    api_key=api_key,
+                    survey_name=s_meta["name"],
+                    survey_purpose=s_meta["purpose"],
+                    key_topics=s_meta.get("key_topics", []),
+                    survey_type="screening",
+                    funnel_plan=funnel_plan,
+                    owner_user_id=owner_user_id,
+                    funnel_id=funnel_id,
+                    layer_index=s_meta["index"],
+                    original_prompt=original_prompt,
+                    questions_asked_so_far=questions_asked_so_far
+                )
+                for q in survey_doc.get("questions", []):
+                    questions_asked_so_far.append({"topic": q.get("question", "")[:80], "survey": s_meta["name"]})
+                screening_survey_ids.append({"survey_id": survey_doc["id"], "name": s_meta["name"], "index": s_meta["index"], "purpose": s_meta["purpose"]})
+                generated_surveys.append({"type": "screening", "index": s_meta["index"], "survey_id": survey_doc["id"], "name": s_meta["name"], "question_count": len(survey_doc.get("questions", []))})
+                done += 1
+                update_job(surveys=list(generated_surveys), progress=int(done / max(total_surveys, 1) * 80))
+                print(f"✅ [BG Funnel] Screening survey: {s_meta['name']}")
+            except Exception as e:
+                errors.append(f"Screening survey '{s_meta['name']}': {e}")
+                print(f"❌ [BG Funnel] Screening failed {s_meta['name']}: {e}")
+                done += 1
+
+        # ── Job surveys ──
+        screening_questions_asked = list(questions_asked_so_far)
+        job_surveys_config = {}
+        for job_meta in funnel_plan.get("job_profiles", []):
+            job_id_key = job_meta["id"]
+            update_job(step=f"Generating: {job_meta['display_name']}...", progress=int(done / max(total_surveys, 1) * 80))
+            try:
+                survey_doc = _generate_single_survey(
+                    api_key=api_key,
+                    survey_name=job_meta["display_name"],
+                    survey_purpose=f"Destination survey for: {job_meta['match_criteria']}",
+                    key_topics=job_meta.get("key_topics", []),
+                    survey_type="job",
+                    funnel_plan=funnel_plan,
+                    owner_user_id=owner_user_id,
+                    funnel_id=funnel_id,
+                    layer_index=None,
+                    original_prompt=original_prompt,
+                    job_id=job_id_key,
+                    qualification_flag=job_meta.get("qualification_flag"),
+                    questions_asked_so_far=screening_questions_asked
+                )
+                job_surveys_config[job_id_key] = {
+                    "survey_id": survey_doc["id"],
+                    "display_name": job_meta["display_name"],
+                    "redirect_url": "",
+                    "redirect_rules": [],
+                    "pass_criteria": job_meta["match_criteria"],
+                    "transition_page": {
+                        "enabled": True,
+                        "heading": "We found another great opportunity for you!",
+                        "message": "You didn't qualify for this role, but we have another opportunity that matches your profile.",
+                        "cta_text": "See Next Opportunity →",
+                        "auto_redirect_seconds": 5,
+                        "show_next_job_name": True
+                    }
+                }
+                generated_surveys.append({"type": "job", "job_id": job_id_key, "survey_id": survey_doc["id"], "name": job_meta["display_name"], "question_count": len(survey_doc.get("questions", []))})
+                done += 1
+                update_job(surveys=list(generated_surveys), progress=int(done / max(total_surveys, 1) * 80))
+                print(f"✅ [BG Funnel] Job survey: {job_meta['display_name']}")
+            except Exception as e:
+                errors.append(f"Job survey '{job_id_key}': {e}")
+                print(f"❌ [BG Funnel] Job failed {job_id_key}: {e}")
+                done += 1
+
+        # ── Scoring matrix ──
+        update_job(step="Building AI scoring matrix...", progress=85)
+        try:
+            scoring_matrix = _generate_scoring_matrix(api_key=api_key, funnel_plan=funnel_plan, screening_survey_ids=screening_survey_ids, original_prompt=original_prompt)
+            _apply_scoring_to_surveys(scoring_matrix, screening_survey_ids)
+            print(f"✅ [BG Funnel] Scoring matrix applied")
+        except Exception as e:
+            errors.append(f"Scoring matrix: {e}")
+            print(f"⚠️ [BG Funnel] Scoring matrix error: {e}")
+
+        # ── Save funnel config ──
+        job_priority_order = [j["id"] for j in funnel_plan.get("job_profiles", [])]
+        funnel_doc = {
+            "funnel_id": funnel_id,
+            "name": funnel_plan.get("funnel_name", "Untitled Funnel"),
+            "goal": funnel_plan.get("goal", ""),
+            "funnel_type": funnel_plan.get("funnel_type", "general"),
+            "original_prompt": original_prompt,
+            "funnel_plan": funnel_plan,
+            "owner_user_id": owner_user_id,
+            "screening_surveys": screening_survey_ids,
+            "job_surveys": job_surveys_config,
+            "job_priority_order": job_priority_order,
+            "fallback_url": "",
+            "min_score_threshold": 0,
+            "status": "active",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_surveys": generated_surveys,
+            "generation_errors": errors
+        }
+        db.funnels.insert_one(funnel_doc)
+        print(f"✅ [BG Funnel] Saved funnel: {funnel_id}")
+
+        update_job(
+            status="done",
+            progress=100,
+            step="Done!",
+            surveys=generated_surveys,
+            funnel_id=funnel_id,
+            errors=errors
         )
-        # Apply scoring to questions
-        _apply_scoring_to_surveys(scoring_matrix, screening_survey_ids)
-        print(f"✅ [Funnel] Scoring matrix applied")
+
     except Exception as e:
-        errors.append(f"Scoring matrix: {e}")
-        print(f"⚠️ [Funnel] Scoring matrix error (non-fatal): {e}")
+        import traceback
+        print(f"❌ [BG Funnel] Fatal error: {traceback.format_exc()}")
+        db.funnel_generation_jobs.update_one(
+            {"job_id": job_id},
+            {"$set": {"status": "error", "error": str(e), "progress": 0}}
+        )
 
-    # ── Build job priority order ──
-    job_priority_order = [j["id"] for j in funnel_plan.get("job_profiles", [])]
 
-    # ── Save funnel config ──
-    funnel_doc = {
-        "funnel_id": funnel_id,
-        "name": funnel_plan.get("funnel_name", "Untitled Funnel"),
-        "goal": funnel_plan.get("goal", ""),
-        "original_prompt": original_prompt,
-        "funnel_plan": funnel_plan,
-        "owner_user_id": owner_user_id,
-        "screening_surveys": screening_survey_ids,
-        "job_surveys": job_surveys_config,
-        "job_priority_order": job_priority_order,
-        "fallback_url": "",
-        "min_score_threshold": 0,
-        "status": "active",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-        "generated_surveys": generated_surveys,
-        "generation_errors": errors
-    }
-    db.funnels.insert_one(funnel_doc)
-    print(f"✅ [Funnel] Funnel saved: {funnel_id}")
+# ═══════════════════════════════════════════════════════
+#  GENERATION STATUS POLLING
+# ═══════════════════════════════════════════════════════
 
-    return jsonify({
-        "success": True,
-        "funnel_id": funnel_id,
-        "funnel_name": funnel_plan.get("funnel_name", "Untitled Funnel"),
-        "generated_surveys": generated_surveys,
-        "errors": errors,
-        "message": f"Generated {len(generated_surveys)} surveys successfully"
-    }), 200
+@funnel_bp.route("/api/funnels/generate-status/<job_id>", methods=["GET", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins=ALLOWED_ORIGINS)
+@requireAuth
+def get_generation_status(job_id):
+    """Poll this endpoint every 3 seconds to get generation progress."""
+    if request.method == "OPTIONS":
+        return "", 200
+    job = db.funnel_generation_jobs.find_one({"job_id": job_id})
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+    job.pop("_id", None)
+    return jsonify(job), 200
 
 
 def _generate_single_survey(
@@ -474,7 +520,7 @@ For DESTINATION/JOB surveys:
 - Use the user's specific questions from the relevant branch/layer of their prompt
 
 Original user prompt (extract questions from here):
-{original_prompt[:3000]}
+{original_prompt[:8000]}
 
 Return this exact JSON structure:
 {{
@@ -609,7 +655,7 @@ def _generate_scoring_matrix(api_key, funnel_plan, screening_survey_ids, origina
         for p in job_profiles
     )
 
-    questions_json = json.dumps(all_questions_summary[:30], indent=2)  # cap at 30 questions
+    questions_json = json.dumps(all_questions_summary[:50], indent=2)  # cap at 50 questions
 
     prompt = f"""Assign scoring points to survey answer options for a funnel.
 
@@ -997,3 +1043,141 @@ def repair_funnel_questions():
         "fixed_questions": fixed_questions,
         "total_funnel_surveys": len(funnel_surveys)
     }), 200
+
+
+# ═══════════════════════════════════════════════════════
+#  PREDICT SIGNAL COLORS FOR JOB SURVEY QUESTIONS
+# ═══════════════════════════════════════════════════════
+
+@funnel_bp.route("/api/funnels/<funnel_id>/predict-job-signals/<survey_id>", methods=["POST", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins=ALLOWED_ORIGINS)
+@requireAuth
+def predict_job_survey_signals(funnel_id, survey_id):
+    """
+    Ask AI to predict how strongly each answer option signals fit for the job profile.
+    Stores results as option_scores on each question (scale 0-5).
+    This lets the admin see color-coded answers before testing.
+    """
+    if request.method == "OPTIONS":
+        return "", 200
+
+    api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("AI_API_KEY", "")
+    if not api_key:
+        return jsonify({"error": "AI service not configured"}), 503
+
+    # Get funnel to find the job profile criteria
+    funnel = db.funnels.find_one({"funnel_id": funnel_id})
+    if not funnel:
+        return jsonify({"error": "Funnel not found"}), 404
+
+    # Find which job this survey belongs to
+    job_id = None
+    job_criteria = ""
+    job_display_name = ""
+    for jid, jcfg in funnel.get("job_surveys", {}).items():
+        if jcfg.get("survey_id") == survey_id:
+            job_id = jid
+            job_criteria = jcfg.get("pass_criteria", "")
+            job_display_name = jcfg.get("display_name", jid)
+            break
+
+    if not job_id:
+        return jsonify({"error": "Survey not found in funnel job surveys"}), 404
+
+    # Get the survey questions
+    survey_doc = db.surveys.find_one({"$or": [{"id": survey_id}, {"short_id": survey_id}]})
+    if not survey_doc:
+        return jsonify({"error": "Survey not found"}), 404
+
+    questions = survey_doc.get("questions", [])
+    scoreable_questions = [q for q in questions if q.get("options") and len(q.get("options", [])) > 0]
+
+    if not scoreable_questions:
+        return jsonify({"error": "No questions with options found"}), 400
+
+    # Build the prompt
+    q_summary = []
+    for q in scoreable_questions:
+        q_summary.append({
+            "id": q.get("id"),
+            "question": q.get("question", "")[:100],
+            "options": q.get("options", [])[:10]
+        })
+
+    prompt = f"""You are analyzing a job/product qualification survey to predict how each answer signals fit.
+
+Job/Destination profile: {job_display_name}
+Match criteria: {job_criteria}
+
+For each question's answer options, assign a signal strength score (0-5):
+- 5 = This answer very strongly indicates the person matches this profile
+- 4 = Strong signal
+- 3 = Moderate signal  
+- 2 = Weak signal
+- 1 = Very weak / ambiguous signal
+- 0 = This answer suggests the person does NOT match this profile
+
+Questions and options:
+{json.dumps(q_summary, indent=2)}
+
+Return ONLY valid JSON:
+{{
+  "signals": [
+    {{
+      "question_id": "q1",
+      "option_scores": {{
+        "Once a month": {{"_{job_id}": 5}},
+        "Once every few months": {{"_{job_id}": 3}},
+        "Once a year": {{"_{job_id}": 1}},
+        "Less than once a year": {{"_{job_id}": 0}}
+      }}
+    }}
+  ]
+}}
+
+Use "_{job_id}" as the key for each score."""
+
+    try:
+        resp = http_requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            timeout=30,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": "gpt-4o-mini",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.1,
+                "max_tokens": 2000,
+                "response_format": {"type": "json_object"}
+            }
+        )
+
+        if resp.status_code != 200:
+            return jsonify({"error": f"AI error: {resp.status_code}"}), 502
+
+        result = json.loads(resp.json()["choices"][0]["message"]["content"])
+        signals = result.get("signals", [])
+
+        # Apply to questions
+        updated = 0
+        for sig in signals:
+            qid = sig.get("question_id")
+            option_scores = sig.get("option_scores", {})
+            # Rename key from _{job_id} to the actual job_id
+            cleaned = {}
+            for opt, scores in option_scores.items():
+                cleaned[opt] = {k.lstrip("_"): v for k, v in scores.items()}
+
+            if cleaned:
+                db.surveys.update_one(
+                    {"$or": [{"id": survey_id}, {"short_id": survey_id}], "questions.id": qid},
+                    {"$set": {"questions.$.option_scores": cleaned, "questions.$.funnel_role": "score"}}
+                )
+                updated += 1
+
+        print(f"✅ [FunnelSignals] Applied signals to {updated} questions in {survey_id}")
+        return jsonify({"success": True, "questions_updated": updated, "job_id": job_id}), 200
+
+    except Exception as e:
+        import traceback
+        print(f"❌ predict_job_survey_signals error: {traceback.format_exc()}")
+        return jsonify({"error": str(e)}), 500

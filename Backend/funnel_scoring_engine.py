@@ -17,7 +17,14 @@ import uuid
 #  SCREENING CHECK
 # ─────────────────────────────────────────────
 
-def run_screening_check(questions: List[dict], answers: Dict[str, str]) -> dict:
+def _ensure_https(url: str) -> str:
+    """Ensure a URL has a scheme. Adds https:// if missing."""
+    if not url:
+        return url
+    url = url.strip()
+    if url and not url.startswith(("http://", "https://")):
+        return "https://" + url
+    return url
     """
     Check all screening questions in a survey against the user's answers.
     Returns {"passed": True} or {"passed": False, "reason": "...", "question_id": "..."}
@@ -300,7 +307,7 @@ def process_screening_survey_submission(
         return {
             "action": "terminate",
             "reason": screen_result["reason"],
-            "redirect_url": fallback_url
+            "redirect_url": _ensure_https(fallback_url)
         }
 
     # Step 2: Calculate scores
@@ -361,7 +368,7 @@ def process_screening_survey_submission(
         )
         return {
             "action": "no_match",
-            "redirect_url": fallback_url,
+            "redirect_url": _ensure_https(fallback_url),
             "cumulative_scores": cumulative
         }
 
@@ -450,13 +457,58 @@ def process_job_survey_submission(
     )
 
     if eval_result["verdict"] == "pass":
-        redirect_url = job_config.get("redirect_url", "")
+        confidence = eval_result["confidence"]  # 0-100
+
+        # ── Threshold-based redirect selection ──────────────────────────────
+        # Admin can configure multiple redirect URLs with score thresholds.
+        # redirect_rules: [{"operator": ">=", "threshold": 80, "url": "...", "label": "Strong match"},
+        #                   {"operator": ">=", "threshold": 60, "url": "...", "label": "Good match"},
+        #                   {"operator": "<",  "threshold": 60, "url": "...", "label": "Weak match"}]
+        # Rules are evaluated in order — first match wins.
+        redirect_rules = job_config.get("redirect_rules", [])
+        redirect_url = job_config.get("redirect_url", "")  # fallback single URL
+
+        # ── Ensure URL has a scheme ─────────────────────────────────────────
+        redirect_url = _ensure_https(redirect_url)
+        redirect_bucket_label = "default"
+        redirect_reason = f"AI confidence: {confidence}%"
+
+        if redirect_rules:
+            for rule in redirect_rules:
+                operator = rule.get("operator", ">=")
+                threshold = float(rule.get("threshold", 0))
+                rule_url = rule.get("url", "")
+                rule_label = rule.get("label", f"{operator}{threshold}%")
+
+                match = False
+                if operator == ">=":
+                    match = confidence >= threshold
+                elif operator == ">":
+                    match = confidence > threshold
+                elif operator == "<=":
+                    match = confidence <= threshold
+                elif operator == "<":
+                    match = confidence < threshold
+                elif operator == "==":
+                    match = confidence == threshold
+
+                if match and rule_url:
+                    redirect_url = _ensure_https(rule_url)
+                    redirect_bucket_label = rule_label
+                    redirect_reason = f"Score {confidence}% matched rule: {operator}{threshold}% → {rule_label}"
+                    break
+
+        print(f"🎯 [Funnel] Redirect bucket: {redirect_bucket_label} ({redirect_reason})")
+
         db.funnel_sessions.update_one(
             {"funnel_session_id": funnel_session_id},
             {"$set": {
                 "status": "completed",
                 "matched_job": job_id,
                 "final_redirect_url": redirect_url,
+                "redirect_bucket": redirect_bucket_label,
+                "redirect_reason": redirect_reason,
+                "ai_confidence": confidence,
                 "completed_at": datetime.now(timezone.utc).isoformat()
             }}
         )
@@ -464,6 +516,9 @@ def process_job_survey_submission(
             "action": "pass",
             "job_id": job_id,
             "redirect_url": redirect_url,
+            "redirect_bucket": redirect_bucket_label,
+            "redirect_reason": redirect_reason,
+            "ai_confidence": confidence,
             "ai_reason": eval_result["reason"]
         }
 
@@ -491,7 +546,7 @@ def process_job_survey_submission(
         )
         return {
             "action": "all_failed",
-            "redirect_url": fallback_url,
+            "redirect_url": _ensure_https(fallback_url),
             "failed_jobs": failed_jobs,
             "ai_reason": eval_result["reason"]
         }

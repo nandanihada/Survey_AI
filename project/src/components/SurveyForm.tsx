@@ -557,7 +557,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
             <FunnelCreator
               isDarkMode={isDarkMode}
               onFunnelCreated={(funnelId) => {
-                window.location.href = `/?tab=surveys&subtab=funnels&open=${funnelId}`;
+                window.location.href = `/dashboard?tab=surveys&subtab=funnels&open=${funnelId}`;
               }}
             />
           </div>
