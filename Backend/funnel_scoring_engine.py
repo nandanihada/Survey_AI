@@ -25,6 +25,52 @@ def _ensure_https(url: str) -> str:
     if url and not url.startswith(("http://", "https://")):
         return "https://" + url
     return url
+
+
+# ─────────────────────────────────────────────
+#  SCREENING CHECK
+# ─────────────────────────────────────────────
+
+def run_screening_check(questions: List[dict], answers: Dict[str, str]) -> dict:
+    """
+    Check all screening questions in a survey against the user's answers.
+    Returns {"passed": True} or {"passed": False, "reason": "...", "question_id": "..."}
+    Screening runs BEFORE scoring — one hard-fail stops everything.
+    """
+    for q in questions:
+        role = q.get("funnel_role", "neutral")  # screen | score | both | neutral
+        if role not in ("screen", "both"):
+            continue
+
+        screen_rule = q.get("screening_rule")
+        if not screen_rule or not screen_rule.get("enabled"):
+            continue
+
+        q_id = q.get("id", "")
+        answer = answers.get(q_id)
+        if answer is None:
+            continue
+
+        fail_condition = screen_rule.get("fail_condition", "equals")
+        fail_value = screen_rule.get("fail_value", "")
+
+        failed = False
+        if fail_condition == "equals":
+            failed = str(answer).strip().lower() == str(fail_value).strip().lower()
+        elif fail_condition == "in":
+            fail_values = fail_value if isinstance(fail_value, list) else [fail_value]
+            failed = str(answer).strip().lower() in [str(v).strip().lower() for v in fail_values]
+        elif fail_condition == "not_equals":
+            failed = str(answer).strip().lower() != str(fail_value).strip().lower()
+
+        if failed:
+            return {
+                "passed": False,
+                "reason": screen_rule.get("fail_reason", f"Answer '{answer}' failed screening on question {q_id}"),
+                "question_id": q_id
+            }
+
+    return {"passed": True}
     """
     Check all screening questions in a survey against the user's answers.
     Returns {"passed": True} or {"passed": False, "reason": "...", "question_id": "..."}

@@ -995,8 +995,10 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           if (!funnelRes.ok) {
             const errText = await funnelRes.text();
             console.error('Funnel API error:', funnelRes.status, errText);
+            // Show error to user instead of silent success page
             setRedirecting(false);
-            setSubmitted(true);
+            setIsSubmitting(false);
+            alert(`Funnel routing error (${funnelRes.status}): ${errText.slice(0, 200)}. Please try submitting again.`);
             return;
           }
 
@@ -1081,9 +1083,9 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
         } catch (funnelErr) {
           console.error('Funnel routing error:', funnelErr);
-          // On network error, show submitted rather than redirecting to dashboard
           setRedirecting(false);
-          setSubmitted(true);
+          setIsSubmitting(false);
+          alert(`Funnel network error: ${String(funnelErr).slice(0, 150)}. Please try submitting again.`);
           return;
         }
       }
