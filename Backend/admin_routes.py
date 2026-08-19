@@ -291,9 +291,9 @@ def get_comprehensive_survey_data():
             {
                 '$lookup': {
                     'from': 'users',
-                    'let': {'owner_id': {'$toObjectId': '$ownerUserId'}},
+                    'let': {'owner_id': '$ownerUserId'},
                     'pipeline': [
-                        {'$match': {'$expr': {'$eq': ['$_id', '$$owner_id']}}}
+                        {'$match': {'$expr': {'$eq': ['$uid', '$$owner_id']}}}
                     ],
                     'as': 'creator'
                 }
@@ -932,3 +932,422 @@ def get_back_exits():
         return jsonify({'exits': exits, 'total': len(exits)})
     except Exception as ex:
         return jsonify({'error': str(ex)}), 500
+
+
+# ─────────────────────────────────────────────────────────
+#  Moustache Leads — one-click publish integration
+# ─────────────────────────────────────────────────────────
+
+@admin_bp.route('/surveys/comprehensive/paginated', methods=['GET'])
+@requireAdmin
+def get_surveys_paginated():
+    """
+    Paginated version of the comprehensive survey endpoint.
+    Query params:
+        page     - 1-based page number (default 1)
+        per_page - surveys per page (default 20, max 100)
+        search   - optional title search string
+    """
+    try:
+        page     = max(int(request.args.get('page', 1)), 1)
+        per_page = min(int(request.args.get('per_page', 20)), 100)
+        search   = request.args.get('search', '').strip()
+        skip     = (page - 1) * per_page
+
+        match_stage = {}
+        if search:
+            match_stage['title'] = {'$regex': search, '$options': 'i'}
+
+        pipeline = []
+        if match_stage:
+            pipeline.append({'$match': match_stage})
+
+        pipeline += [
+            {'$lookup': {
+                'from': 'users',
+                'let': {'owner_id': '$ownerUserId'},
+                'pipeline': [{'$match': {'$expr': {'$eq': ['$uid', '$$owner_id']}}}],
+                'as': 'creator'
+            }},
+            {'$lookup': {
+                'from': 'survey_sessions',
+                'localField': 'short_id',
+                'foreignField': 'survey_id',
+                'as': 'sessions'
+            }},
+            {'$lookup': {
+                'from': 'responses',
+                'localField': 'short_id',
+                'foreignField': 'survey_id',
+                'as': 'responses'
+            }},
+            {'$addFields': {
+                'creator_info': {'$arrayElemAt': ['$creator', 0]},
+                'total_sessions': {'$size': '$sessions'},
+                'total_responses': {'$size': '$responses'},
+                'unique_ips': {
+                    '$size': {
+                        '$setUnion': [
+                            {'$map': {
+                                'input': '$sessions',
+                                'as': 's',
+                                'in': '$$s.user_info.ip_address'
+                            }},
+                            []
+                        ]
+                    }
+                }
+            }},
+            {'$project': {
+                '_id': 1, 'short_id': 1, 'title': 1, 'status': 1,
+                'created_at': 1, 'ownerUserId': 1,
+                'total_sessions': 1, 'total_responses': 1, 'unique_ips': 1,
+                'moustache_survey_id': 1, 'moustache_status': 1,
+                'creator_info': {
+                    '_id': 1, 'uid': 1, 'email': 1, 'name': 1,
+                    'role': 1, 'status': 1, 'simpleUserId': 1
+                }
+            }},
+            {'$sort': {'created_at': -1}},
+            {'$facet': {
+                'data':  [{'$skip': skip}, {'$limit': per_page}],
+                'total': [{'$count': 'count'}]
+            }}
+        ]
+
+        result      = list(db.surveys.aggregate(pipeline))
+        surveys_raw = result[0]['data'] if result else []
+        total_count = result[0]['total'][0]['count'] if result and result[0]['total'] else 0
+
+        for survey in surveys_raw:
+            convert_objectid_to_string(survey)
+            if survey.get('creator_info') and survey['creator_info'].get('_id'):
+                survey['creator_info']['_id'] = str(survey['creator_info']['_id'])
+
+            # Normalise: actual field is 'id', expose it as 'short_id' for the frontend
+            survey['short_id'] = survey.get('id') or survey.get('short_id') or str(survey.get('_id', ''))
+
+        return jsonify({
+            'surveys':    surveys_raw,
+            'total':      total_count,
+            'page':       page,
+            'per_page':   per_page,
+            'total_pages': -(-total_count // per_page)   # ceiling division
+        })
+
+    except Exception as e:
+        print(f"Error in paginated survey data: {e}")
+        return jsonify({'error': f'Failed to get surveys: {str(e)}'}), 500
+
+
+@admin_bp.route('/surveys/<survey_short_id>/publish-to-moustache', methods=['POST'])
+@requireAdmin
+def publish_to_moustache(survey_short_id):
+    """
+    Publish (or update) a Pepperwahl survey to Moustache Leads.
+
+    Expects JSON body:
+    {
+        "questions": [
+            {
+                "question": "Are you a homeowner?",
+                "options":  ["Yes", "No"],
+                "qualify_if": ["Yes"]
+            },
+            ...
+        ]
+    }
+
+    Pepperwahl builds the survey_link from the survey's short_id so
+    the admin only needs to supply the eligibility questions.
+    """
+    import os, requests as ext_requests
+
+    moustache_api_key = os.environ.get('MOUSTACHE_API_KEY', '')
+    moustache_api_url = os.environ.get(
+        'MOUSTACHE_API_URL',
+        'https://api.moustacheleads.com/api/external/pepperwahl/publish'
+    )
+    frontend_url = os.environ.get('FRONTEND_URL', 'https://survey.pepperwahl.com')
+
+    if not moustache_api_key or moustache_api_key == 'your_moustache_api_key_here':
+        return jsonify({'success': False, 'error': 'Moustache API key is not configured. Set MOUSTACHE_API_KEY in your .env file.'}), 400
+
+    try:
+        body = request.get_json(silent=True) or {}
+        questions = body.get('questions', [])
+        extra     = body.get('extra', {})
+
+        # Validate questions
+        if not questions:
+            return jsonify({'success': False, 'error': 'At least one eligibility question is required.'}), 400
+        if len(questions) > 5:
+            return jsonify({'success': False, 'error': 'A maximum of 5 eligibility questions is allowed.'}), 400
+        for i, q in enumerate(questions):
+            if not q.get('question', '').strip():
+                return jsonify({'success': False, 'error': f'Question {i+1} is missing text.'}), 400
+            if not q.get('options') or len(q['options']) < 2:
+                return jsonify({'success': False, 'error': f'Question {i+1} must have at least 2 options.'}), 400
+            if not q.get('qualify_if'):
+                return jsonify({'success': False, 'error': f'Question {i+1} must have at least one qualifying answer.'}), 400
+
+        # Fetch survey from DB
+        survey = (
+            db.surveys.find_one({'id': survey_short_id}) or
+            db.surveys.find_one({'short_id': survey_short_id}) or
+            db.surveys.find_one({'_id': survey_short_id})
+        )
+        if not survey:
+            return jsonify({'success': False, 'error': 'Survey not found.'}), 404
+
+        survey_id   = survey_short_id
+        survey_name = survey.get('title', 'Untitled Survey')
+        survey_link = f"{frontend_url}/survey/{survey_short_id}?uid={{{{user_id}}}}&src=moustache"
+
+        payload = {
+            'survey_id':   survey_id,
+            'survey_name': survey_name,
+            'survey_link': survey_link,
+            'questions':   questions
+        }
+
+        # Merge optional extra fields into payload
+        if extra.get('payout'):
+            try:
+                payload['payout_usd'] = float(extra['payout'])
+            except (ValueError, TypeError):
+                pass
+        if extra.get('country'):
+            payload['country'] = extra['country']
+        if extra.get('min_age'):
+            try:
+                payload['min_age'] = int(extra['min_age'])
+            except (ValueError, TypeError):
+                pass
+        if extra.get('max_age'):
+            try:
+                payload['max_age'] = int(extra['max_age'])
+            except (ValueError, TypeError):
+                pass
+        if extra.get('loi_minutes'):
+            try:
+                payload['loi_minutes'] = int(extra['loi_minutes'])
+            except (ValueError, TypeError):
+                pass
+        if extra.get('survey_type'):
+            payload['survey_type'] = extra['survey_type']
+        if extra.get('notes'):
+            payload['notes'] = extra['notes']
+
+        # Call Moustache API
+        try:
+            resp = ext_requests.post(
+                moustache_api_url,
+                json=payload,
+                headers={
+                    'Content-Type': 'application/json',
+                    'X-API-Key': moustache_api_key
+                },
+                timeout=15
+            )
+            moustache_data = resp.json()
+        except ext_requests.exceptions.Timeout:
+            return jsonify({'success': False, 'error': 'Moustache API timed out. Please try again.'}), 502
+        except Exception as req_err:
+            return jsonify({'success': False, 'error': f'Failed to reach Moustache API: {str(req_err)}'}), 502
+
+        if not resp.ok or not moustache_data.get('success'):
+            err_msg = moustache_data.get('error') or moustache_data.get('message') or f'HTTP {resp.status_code}'
+            return jsonify({'success': False, 'error': f'Moustache returned an error: {err_msg}'}), 400
+
+        moustache_survey_id = moustache_data.get('moustache_survey_id', '')
+        moustache_status    = moustache_data.get('status', 'published')
+
+        # Persist the Moustache survey ID back onto the survey document
+        db.surveys.update_one(
+            {'$or': [{'id': survey_short_id}, {'short_id': survey_short_id}, {'_id': survey_short_id}]},
+            {'$set': {
+                'moustache_survey_id': moustache_survey_id,
+                'moustache_status':    moustache_status,
+                'moustache_published_at': datetime.utcnow().isoformat(),
+                'moustache_questions': questions,
+                'moustache_extra':     extra
+            }}
+        )
+
+        return jsonify({
+            'success':            True,
+            'moustache_survey_id': moustache_survey_id,
+            'source_survey_id':   survey_id,
+            'status':             moustache_status,
+            'message':            moustache_data.get('message', 'Survey published to Moustache Leads successfully.')
+        })
+
+    except Exception as e:
+        print(f"Error in publish_to_moustache: {e}")
+        return jsonify({'success': False, 'error': f'Internal error: {str(e)}'}), 500
+
+
+@admin_bp.route('/surveys/<survey_short_id>/moustache-status', methods=['GET'])
+@requireAdmin
+def get_moustache_status(survey_short_id):
+    """Return the stored Moustache publish state for a survey."""
+    try:
+        survey = db.surveys.find_one(
+            {'short_id': survey_short_id},
+            {'moustache_survey_id': 1, 'moustache_status': 1,
+             'moustache_published_at': 1, 'moustache_questions': 1}
+        )
+        if not survey:
+            return jsonify({'error': 'Survey not found.'}), 404
+        return jsonify({
+            'moustache_survey_id':  survey.get('moustache_survey_id'),
+            'moustache_status':     survey.get('moustache_status'),
+            'moustache_published_at': survey.get('moustache_published_at'),
+            'moustache_questions':  survey.get('moustache_questions', [])
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ─────────────────────────────────────────────────────────
+#  Moustache Leads — bulk publish
+# ─────────────────────────────────────────────────────────
+
+@admin_bp.route('/surveys/bulk-publish-to-moustache', methods=['POST'])
+@requireAdmin
+def bulk_publish_to_moustache():
+    """
+    Publish multiple surveys to Moustache Leads using the same
+    questions and extra config template.
+
+    Body:
+    {
+        "survey_short_ids": ["abc123", "def456"],
+        "questions": [...],
+        "extra": { "payout": "2.50", "country": "US", ... }
+    }
+
+    Returns per-survey results.
+    """
+    import os, requests as ext_requests
+
+    moustache_api_key = os.environ.get('MOUSTACHE_API_KEY', '')
+    moustache_api_url = os.environ.get(
+        'MOUSTACHE_API_URL',
+        'https://api.moustacheleads.com/api/external/pepperwahl/publish'
+    )
+    frontend_url = os.environ.get('FRONTEND_URL', 'https://survey.pepperwahl.com')
+
+    if not moustache_api_key or moustache_api_key == 'your_moustache_api_key_here':
+        return jsonify({'success': False, 'error': 'Moustache API key is not configured.'}), 400
+
+    try:
+        body              = request.get_json(silent=True) or {}
+        survey_short_ids  = body.get('survey_short_ids', [])
+        questions         = body.get('questions', [])
+        extra             = body.get('extra', {})
+
+        if not survey_short_ids:
+            return jsonify({'success': False, 'error': 'No surveys selected.'}), 400
+        if len(survey_short_ids) > 50:
+            return jsonify({'success': False, 'error': 'Maximum 50 surveys per bulk publish.'}), 400
+        if not questions:
+            return jsonify({'success': False, 'error': 'At least one eligibility question is required.'}), 400
+        for i, q in enumerate(questions):
+            if not q.get('question', '').strip():
+                return jsonify({'success': False, 'error': f'Question {i+1} is missing text.'}), 400
+            if not q.get('options') or len(q['options']) < 2:
+                return jsonify({'success': False, 'error': f'Question {i+1} must have at least 2 options.'}), 400
+            if not q.get('qualify_if'):
+                return jsonify({'success': False, 'error': f'Question {i+1} must have at least one qualifying answer.'}), 400
+
+        results = []
+        success_count = 0
+        fail_count = 0
+
+        for short_id in survey_short_ids:
+            survey = (
+                db.surveys.find_one({'id': short_id}) or
+                db.surveys.find_one({'short_id': short_id}) or
+                db.surveys.find_one({'_id': short_id})
+            )
+            if not survey:
+                results.append({'survey_id': short_id, 'success': False, 'error': 'Survey not found.'})
+                fail_count += 1
+                continue
+
+            survey_name = survey.get('title', 'Untitled Survey')
+            survey_link = f"{frontend_url}/survey/{short_id}?uid={{{{user_id}}}}&src=moustache"
+
+            payload = {
+                'survey_id':   short_id,
+                'survey_name': survey_name,
+                'survey_link': survey_link,
+                'questions':   questions,
+            }
+
+            # Merge extra fields
+            if extra.get('payout'):
+                try: payload['payout_usd'] = float(extra['payout'])
+                except: pass
+            if extra.get('country'):     payload['country']      = extra['country']
+            if extra.get('min_age'):
+                try: payload['min_age'] = int(extra['min_age'])
+                except: pass
+            if extra.get('max_age'):
+                try: payload['max_age'] = int(extra['max_age'])
+                except: pass
+            if extra.get('loi_minutes'):
+                try: payload['loi_minutes'] = int(extra['loi_minutes'])
+                except: pass
+            if extra.get('survey_type'): payload['survey_type']  = extra['survey_type']
+            if extra.get('notes'):       payload['notes']         = extra['notes']
+
+            try:
+                resp = ext_requests.post(
+                    moustache_api_url,
+                    json=payload,
+                    headers={'Content-Type': 'application/json', 'X-API-Key': moustache_api_key},
+                    timeout=15
+                )
+                moustache_data = resp.json()
+            except Exception as req_err:
+                results.append({'survey_id': short_id, 'survey_name': survey_name, 'success': False, 'error': str(req_err)})
+                fail_count += 1
+                continue
+
+            if resp.ok and moustache_data.get('success'):
+                ml_id     = moustache_data.get('moustache_survey_id', '')
+                ml_status = moustache_data.get('status', 'published')
+                db.surveys.update_one(
+                    {'$or': [{'id': short_id}, {'short_id': short_id}, {'_id': short_id}]},
+                    {'$set': {
+                        'moustache_survey_id': ml_id,
+                        'moustache_status':    ml_status,
+                        'moustache_published_at': datetime.utcnow().isoformat(),
+                        'moustache_questions': questions,
+                        'moustache_extra':     extra,
+                    }}
+                )
+                results.append({
+                    'survey_id': short_id, 'survey_name': survey_name,
+                    'success': True, 'moustache_survey_id': ml_id, 'status': ml_status,
+                })
+                success_count += 1
+            else:
+                err_msg = moustache_data.get('error') or moustache_data.get('message') or f'HTTP {resp.status_code}'
+                results.append({'survey_id': short_id, 'survey_name': survey_name, 'success': False, 'error': err_msg})
+                fail_count += 1
+
+        return jsonify({
+            'success':       True,
+            'total':         len(survey_short_ids),
+            'success_count': success_count,
+            'fail_count':    fail_count,
+            'results':       results,
+        })
+
+    except Exception as e:
+        print(f"Error in bulk_publish_to_moustache: {e}")
+        return jsonify({'success': False, 'error': f'Internal error: {str(e)}'}), 500

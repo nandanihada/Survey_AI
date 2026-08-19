@@ -66,6 +66,7 @@ interface Props {
   onFunnelCreated?: (funnelId: string) => void;
   onCancel?: () => void;
   isDarkMode?: boolean;
+  initialPrompt?: string;
 }
 
 // ─── Example prompt ──────────────────────────────────────
@@ -84,13 +85,13 @@ Screen candidates on general background first (age, education, experience, secto
 
 // ─── Main Component ───────────────────────────────────────
 
-const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode = false }) => {
+const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode = false, initialPrompt = '' }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const apiBase = getApiBaseUrl();
 
   const [step, setStep] = useState<Step>('prompt');
-  const [prompt, setPrompt] = useState('');
+  const [prompt, setPrompt] = useState(initialPrompt);
   const [showExample, setShowExample] = useState(false);
 
   // Clarification
@@ -117,6 +118,13 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
       textareaRef.current.focus();
     }
   }, [step]);
+
+  // Update prompt if initialPrompt changes (e.g. user types more after flip)
+  useEffect(() => {
+    if (initialPrompt && !prompt) {
+      setPrompt(initialPrompt);
+    }
+  }, [initialPrompt]);
 
   // ── Helpers ──────────────────────────────────────────────
 

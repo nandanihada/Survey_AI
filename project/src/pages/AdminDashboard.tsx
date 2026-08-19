@@ -4,7 +4,6 @@
 import React, { useEffect, useState } from 'react';
 import ProtectedRoute from '../components/ProtectedRoute';
 import Header from '../components/Header';
-import FancyTable from '../components/FancyTable';
 import SendNotificationModal from '../components/SendNotificationModal';
 import PassFailAdmin from '../components/PassFailAdmin';
 import LinkMasking from '../components/LinkMasking';
@@ -24,8 +23,10 @@ import {
   Bell, Filter, Save, Edit2, X, Check, Eye, EyeOff, Play, RotateCcw, AlertCircle,
   Users, LayoutDashboard, FileText, BarChart2, SlidersHorizontal, CheckSquare,
   Gift, DollarSign, Radio, Mail, Trash2, MapPin, Settings2, ChevronLeft,
-  ChevronRight, Shield, RefreshCw, Layers, GitBranch, MousePointerClick
+  ChevronRight, Shield, RefreshCw, Layers, GitBranch, MousePointerClick, Send, Search
 } from 'lucide-react';
+import PublishToMoustacheModal from '../components/PublishToMoustacheModal';
+import BulkPublishToMoustacheModal from '../components/BulkPublishToMoustacheModal';
 import { getApiBaseUrl } from '../utils/deploymentFix';
 
 interface User {
@@ -113,6 +114,24 @@ const AdminDashboard: React.FC = () => {
 
   const [users, setUsers] = useState<User[]>([]);
   const [surveys, setSurveys] = useState<any[]>([]);
+  // ── Surveys tab — server-side pagination ──────────────────────────────────
+  const [surveyPage, setSurveyPage] = useState(1);
+  const [surveyPerPage] = useState(20);
+  const [surveyTotal, setsurveyTotal] = useState(0);
+  const [surveyTotalPages, setSurveyTotalPages] = useState(1);
+  const [surveySearch, setSurveySearch] = useState('');
+  const [surveySearchInput, setSurveySearchInput] = useState('');
+  const [surveysLoading, setSurveysLoading] = useState(false);
+  // ── Moustache publish modal ───────────────────────────────────────────────
+  const [moustacheModal, setMoustacheModal] = useState<{
+    surveyShortId: string;
+    surveyTitle: string;
+    existingMoustacheId?: string | null;
+    existingQuestions?: any[];
+  } | null>(null);
+  // ── Bulk publish ──────────────────────────────────────────────────────────
+  const [selectedSurveyIds, setSelectedSurveyIds] = useState<string[]>([]);
+  const [showBulkModal, setShowBulkModal] = useState(false);
   const [filters, setFilters] = useState<Filter[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking' | 'tracking' | 'contacts' | 'deletions' | 'referrals' | 'earnings-config' | 'survey-report' | 'survey-flow-tracking' | 'funnel-tracking' | 'location-control' | 'survey-settings' | 'back-exits' | 'plan-features' | 'resubmit-policy' | 'survey-click-tracking'>('users');
@@ -324,33 +343,33 @@ const AdminDashboard: React.FC = () => {
   };
 
   // Survey functions
-  const fetchAllSurveys = async () => {
+  const fetchAllSurveys = async (page = 1, search = '') => {
     try {
+      setSurveysLoading(true);
+      setSelectedSurveyIds([]); // clear selections on every load
       const token = localStorage.getItem('auth_token');
-      console.log('Fetching surveys with token:', token ? 'Token present' : 'No token');
-      
-      const response = await fetch(`${baseUrl}/api/admin/surveys/comprehensive`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const params = new URLSearchParams({
+        page: String(page),
+        per_page: String(surveyPerPage),
+        ...(search ? { search } : {})
       });
-      
-      console.log('Surveys response status:', response.status);
-      
+      const response = await fetch(`${baseUrl}/api/admin/surveys/comprehensive/paginated?${params}`, {
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+      });
       if (response.ok) {
         const data = await response.json();
-        console.log('Surveys data received:', data);
-        console.log('Number of surveys:', data.surveys?.length || 0);
-        console.log('First survey sample:', data.surveys?.[0]);
         setSurveys(data.surveys || []);
+        setsurveyTotal(data.total || 0);
+        setSurveyTotalPages(data.total_pages || 1);
+        setSurveyPage(page);
       } else {
         const errorData = await response.json();
-        console.error('Failed to fetch surveys:', response.status, errorData);
         alert(`Failed to fetch surveys: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Failed to fetch surveys:', error);
+    } finally {
+      setSurveysLoading(false);
     }
   };
 
@@ -528,7 +547,7 @@ const AdminDashboard: React.FC = () => {
       if (activeTab === 'users') {
         await fetchUsers();
       } else if (activeTab === 'surveys') {
-        await fetchAllSurveys();
+        await fetchAllSurveys(1, surveySearch);
       } else if (activeTab === 'filters') {
         await fetchFilters();
       }
@@ -692,7 +711,7 @@ const AdminDashboard: React.FC = () => {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#F5F1E8', border: '1px solid #EBE8E3', borderRadius: 8, padding: '5px 10px' }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#C4785C', flexShrink: 0, display: 'inline-block' }} />
-                <span style={{ fontSize: 11, color: '#6B6158', fontWeight: 500 }}>{surveys.length} surveys</span>
+                <span style={{ fontSize: 11, color: '#6B6158', fontWeight: 500 }}>{surveyTotal} surveys</span>
               </div>
             </div>
             <button
@@ -773,7 +792,7 @@ const AdminDashboard: React.FC = () => {
               <h2 style={{ fontSize: 17, fontWeight: 700, color: '#2D2520', margin: 0 }}>{activeLabel}</h2>
               <p style={{ fontSize: 11, color: '#9B9189', marginTop: 3 }}>
                 {activeTab === 'users' && `${users.length} registered users`}
-                {activeTab === 'surveys' && `${surveys.length} surveys`}
+                {activeTab === 'surveys' && `${surveyTotal} surveys`}
                 {activeTab === 'filters' && `${filters.length} filters`}
                 {activeTab === 'plan-features' && 'Configure which features are available per plan'}
                 {activeTab === 'survey-click-tracking' && 'Track survey link clicks, visit counts and completion status'}
@@ -900,145 +919,250 @@ const AdminDashboard: React.FC = () => {
 
                 {/* Surveys Tab */}
                 {activeTab === 'surveys' && (
-                  <div>
-                    {surveys.length === 0 ? (
-                      <div className="bg-white shadow overflow-hidden sm:rounded-md p-6">
-                        <div className="text-center">
-                          <p className="text-gray-500">Loading surveys...</p>
-                          <p className="text-sm text-gray-400 mt-2">
-                            If this persists, check the browser console for errors.
-                          </p>
-                        </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+
+                    {/* ── Toolbar: search + bulk + refresh ── */}
+                    <div style={{ padding: '14px 18px', borderBottom: '1px solid #EBE8E3', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      {/* Select-all checkbox */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                        <input
+                          type="checkbox"
+                          checked={surveys.length > 0 && surveys.every(s => selectedSurveyIds.includes(s.short_id))}
+                          onChange={e => {
+                            e.stopPropagation();
+                            if (e.target.checked) setSelectedSurveyIds(surveys.map(s => s.short_id));
+                            else setSelectedSurveyIds([]);
+                          }}
+                          style={{ width: 14, height: 14, cursor: "pointer", accentColor: "#C4785C", flexShrink: 0 }}
+                        />
+                        <span style={{ fontSize: 11, color: "#6B6158", fontWeight: 600, userSelect: "none" }}>All</span>
+                      </div>
+
+                      {/* Bulk publish button — visible when ≥1 selected */}
+                      {selectedSurveyIds.length > 0 && (
+                        <button
+                          onClick={() => setShowBulkModal(true)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#1A1A2E', color: '#F5C842', border: 'none', borderRadius: 9, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                        >
+                          <Send size={12} /> Bulk Publish ({selectedSurveyIds.length})
+                        </button>
+                      )}
+
+                      {/* Search */}
+                      <div style={{ position: 'relative', flex: '1 1 200px', minWidth: 140, maxWidth: 320 }}>
+                        <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#9B9189', pointerEvents: 'none' }} />
+                        <input
+                          style={{ width: '100%', border: '1px solid #EBE8E3', borderRadius: 9, padding: '7px 12px 7px 30px', fontSize: 12, color: '#2D2520', background: '#F5F1E8', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' as const }}
+                          placeholder="Search surveys…"
+                          value={surveySearchInput}
+                          onChange={e => setSurveySearchInput(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') { setSurveySearch(surveySearchInput); fetchAllSurveys(1, surveySearchInput); }
+                          }}
+                        />
+                      </div>
+                      <button
+                        onClick={() => { setSurveySearch(surveySearchInput); fetchAllSurveys(1, surveySearchInput); }}
+                        style={{ background: '#C4785C', color: '#fff', border: 'none', borderRadius: 9, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                      >Search</button>
+                      {surveySearch && (
+                        <button
+                          onClick={() => { setSurveySearch(''); setSurveySearchInput(''); fetchAllSurveys(1, ''); }}
+                          style={{ background: '#F5F1E8', border: '1px solid #EBE8E3', borderRadius: 9, padding: '7px 12px', fontSize: 12, color: '#6B6158', cursor: 'pointer', fontFamily: 'inherit' }}
+                        >Clear</button>
+                      )}
+                      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 11, color: '#9B9189' }}>{surveyTotal} total · page {surveyPage} of {surveyTotalPages}</span>
+                        <button onClick={() => fetchAllSurveys(surveyPage, surveySearch)} title="Refresh" style={{ background: '#F5F1E8', border: '1px solid #EBE8E3', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                          <RefreshCw size={12} color="#9B9189" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* ── Survey rows ── */}
+                    {surveysLoading ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 0', gap: 12 }}>
+                        <div className="animate-spin" style={{ width: 30, height: 30, borderRadius: '50%', border: '3px solid #EBE8E3', borderTopColor: '#C4785C' }} />
+                        <p style={{ fontSize: 12, color: '#9B9189' }}>Loading surveys…</p>
+                      </div>
+                    ) : surveys.length === 0 ? (
+                      <div style={{ padding: '60px 0', textAlign: 'center', color: '#9B9189', fontSize: 13 }}>
+                        {surveySearch ? `No surveys matching "${surveySearch}"` : 'No surveys found'}
                       </div>
                     ) : (
-                      <FancyTable
-                        data={surveys}
-                        title="Survey Management Dashboard"
-                        columns={[
-                          {
-                            key: 'title',
-                            label: 'Survey Title',
-                            sortable: true,
-                            filterable: true,
-                            width: '200px',
-                            render: (value, row) => (
-                              <div className="flex flex-col">
-                                <div className="font-medium text-gray-900">{value}</div>
-                                <div className="text-sm text-gray-500">ID: {row.short_id}</div>
+                      surveys.map((survey) => {
+                        const hasMoustache = !!survey.moustache_survey_id;
+                        return (
+                          <div
+                            key={survey._id || survey.short_id}
+                            style={{ borderBottom: '1px solid #F5F1E8', padding: '13px 18px', display: 'flex', alignItems: 'center', gap: 14, transition: 'background 0.1s' }}
+                            onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = '#FEF9F7'}
+                            onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}
+                          >
+                            {/* Checkbox */}
+                            <input
+                              type="checkbox"
+                              checked={selectedSurveyIds.includes(survey.short_id)}
+                              onChange={() => {
+                                const id = survey.short_id;
+                                setSelectedSurveyIds(prev =>
+                                  prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+                                );
+                              }}
+                              style={{ width: 14, height: 14, cursor: 'pointer', accentColor: '#C4785C', flexShrink: 0 }}
+                            />
+                            {/* Survey info */}
+                            <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: 13, fontWeight: 600, color: '#2D2520' }}>{survey.title}</span>
+                                {/* Survey status badge */}
+                                <span style={{
+                                  fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 10,
+                                  background: survey.status === 'published' ? '#ECFDF5' : survey.status === 'draft' ? '#F5F1E8' : '#FEF2F2',
+                                  color: survey.status === 'published' ? '#059669' : survey.status === 'draft' ? '#6B6158' : '#DC2626',
+                                }}>{survey.status}</span>
+                                {/* Moustache badge */}
+                                {hasMoustache && (
+                                  <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 10, background: '#1A1A2E', color: '#F5C842', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <span style={{ fontWeight: 800 }}>M</span> on Moustache
+                                  </span>
+                                )}
                               </div>
-                            )
-                          },
-                          {
-                            key: 'status',
-                            label: 'Status',
-                            sortable: true,
-                            filterable: true,
-                            width: '120px',
-                            render: (value) => (
-                              <span
-                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                  value === 'published'
-                                    ? 'bg-green-100 text-green-800'
-                                    : value === 'draft'
-                                    ? 'bg-gray-100 text-gray-800'
-                                    : 'bg-red-100 text-red-800'
-                                }`}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: 11, color: '#9B9189' }}>ID: {survey.short_id}</span>
+                                {survey.creator_info && (
+                                  <span style={{ fontSize: 11, color: '#9B9189' }}>
+                                    {survey.creator_info.name} · {survey.creator_info.email}
+                                  </span>
+                                )}
+                                <span style={{ fontSize: 11, color: '#C4A99A' }}>
+                                  {survey.total_sessions || 0} sessions · {survey.total_responses || 0} responses
+                                </span>
+                                <span style={{ fontSize: 11, color: '#C4A99A' }}>
+                                  {survey.created_at ? new Date(survey.created_at).toLocaleDateString() : '—'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 }}>
+                              <a
+                                href={`/survey/${survey.short_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ fontSize: 11, fontWeight: 600, color: '#6B6158', border: '1px solid #EBE8E3', borderRadius: 7, padding: '5px 10px', background: '#F5F1E8', textDecoration: 'none' }}
+                              >View</a>
+                              <a
+                                href={`/edit/${survey.short_id}`}
+                                style={{ fontSize: 11, fontWeight: 600, color: '#6B6158', border: '1px solid #EBE8E3', borderRadius: 7, padding: '5px 10px', background: '#F5F1E8', textDecoration: 'none' }}
+                              >Edit</a>
+                              {/* Publish to Moustache button */}
+                              <button
+                                onClick={() => setMoustacheModal({
+                                  surveyShortId: survey.short_id,
+                                  surveyTitle: survey.title,
+                                  existingMoustacheId: survey.moustache_survey_id || null,
+                                  existingQuestions: survey.moustache_questions || [],
+                                })}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 5,
+                                  fontSize: 11, fontWeight: 700,
+                                  border: hasMoustache ? '1px solid #A7F3D0' : '1px solid #1A1A2E',
+                                  borderRadius: 7, padding: '5px 10px',
+                                  background: hasMoustache ? '#ECFDF5' : '#1A1A2E',
+                                  color: hasMoustache ? '#059669' : '#F5C842',
+                                  cursor: 'pointer', fontFamily: 'inherit',
+                                }}
                               >
-                                {value}
-                              </span>
-                            )
-                          },
-                          {
-                            key: 'creator_info',
-                            label: 'Creator',
-                            sortable: true,
-                            filterable: true,
-                            width: '200px',
-                            render: (value, row) => (
-                              value ? (
-                                <div className="flex flex-col">
-                                  <div className="font-medium text-gray-900">{value.name}</div>
-                                  <div className="text-sm text-gray-500">{value.email}</div>
-                                  <div className="text-xs text-gray-400">UID: {value.simpleUserId || value.uid}</div>
-                                </div>
-                              ) : (
-                                <div className="text-sm text-gray-500">
-                                  <div>Unknown Creator</div>
-                                  <div className="text-xs text-gray-400">Owner ID: {row.ownerUserId}</div>
-                                </div>
-                              )
-                            )
-                          },
-                          {
-                            key: 'total_sessions',
-                            label: 'Sessions',
-                            sortable: true,
-                            filterable: true,
-                            width: '100px',
-                            render: (value) => (
-                              <div className="text-center">
-                                <div className="font-medium text-gray-900">{value || 0}</div>
-                                <div className="text-xs text-gray-500">sessions</div>
-                              </div>
-                            )
-                          },
-                          {
-                            key: 'total_responses',
-                            label: 'Responses',
-                            sortable: true,
-                            filterable: true,
-                            width: '100px',
-                            render: (value) => (
-                              <div className="text-center">
-                                <div className="font-medium text-gray-900">{value || 0}</div>
-                                <div className="text-xs text-gray-500">responses</div>
-                              </div>
-                            )
-                          },
-                          {
-                            key: 'created_at',
-                            label: 'Created',
-                            sortable: true,
-                            filterable: true,
-                            width: '120px',
-                            render: (value) => (
-                              <div className="text-sm text-gray-900">
-                                {new Date(value).toLocaleDateString()}
-                              </div>
-                            )
-                          },
-                          {
-                            key: 'actions',
-                            label: 'Actions',
-                            sortable: false,
-                            filterable: false,
-                            width: '120px',
-                            render: (value, row) => (
-                              <div className="flex flex-col space-y-1">
-                                <a
-                                  href={`/survey/${row.short_id}`}
-                                  className="text-blue-600 hover:text-blue-700 text-sm"
-                                >
-                                  View
-                                </a>
-                                <a
-                                  href={`/edit/${row.short_id}`}
-                                  className="text-gray-600 hover:text-gray-700 text-sm"
-                                >
-                                  Edit
-                                </a>
-                              </div>
-                            )
-                          }
-                        ]}
-                        searchable={true}
-                        pagination={true}
-                        pageSize={15}
-                        loading={loading}
-                        emptyMessage="No surveys found"
-                      />
+                                <Send size={11} />
+                                {hasMoustache ? 'Update' : 'Publish to Moustache'}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+
+                    {/* ── Pagination controls ── */}
+                    {!surveysLoading && surveyTotalPages > 1 && (
+                      <div style={{ padding: '12px 18px', borderTop: '1px solid #EBE8E3', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                        <span style={{ fontSize: 11, color: '#9B9189' }}>
+                          Showing {((surveyPage - 1) * surveyPerPage) + 1}–{Math.min(surveyPage * surveyPerPage, surveyTotal)} of {surveyTotal}
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <button
+                            disabled={surveyPage <= 1}
+                            onClick={() => fetchAllSurveys(surveyPage - 1, surveySearch)}
+                            style={{ width: 30, height: 30, borderRadius: 7, border: '1px solid #EBE8E3', background: surveyPage <= 1 ? '#F5F1E8' : '#FDFCFA', cursor: surveyPage <= 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: surveyPage <= 1 ? 0.4 : 1 }}
+                          ><ChevronLeft size={13} color="#6B6158" /></button>
+
+                          {/* Page number pills */}
+                          {Array.from({ length: Math.min(7, surveyTotalPages) }, (_, i) => {
+                            let pg: number;
+                            if (surveyTotalPages <= 7) pg = i + 1;
+                            else if (surveyPage <= 4) pg = i + 1;
+                            else if (surveyPage >= surveyTotalPages - 3) pg = surveyTotalPages - 6 + i;
+                            else pg = surveyPage - 3 + i;
+                            return (
+                              <button
+                                key={pg}
+                                onClick={() => fetchAllSurveys(pg, surveySearch)}
+                                style={{
+                                  width: 30, height: 30, borderRadius: 7, border: '1px solid #EBE8E3',
+                                  background: surveyPage === pg ? '#C4785C' : '#FDFCFA',
+                                  color: surveyPage === pg ? '#fff' : '#6B6158',
+                                  cursor: 'pointer', fontSize: 12, fontWeight: surveyPage === pg ? 700 : 400,
+                                  fontFamily: 'inherit',
+                                }}
+                              >{pg}</button>
+                            );
+                          })}
+
+                          <button
+                            disabled={surveyPage >= surveyTotalPages}
+                            onClick={() => fetchAllSurveys(surveyPage + 1, surveySearch)}
+                            style={{ width: 30, height: 30, borderRadius: 7, border: '1px solid #EBE8E3', background: surveyPage >= surveyTotalPages ? '#F5F1E8' : '#FDFCFA', cursor: surveyPage >= surveyTotalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: surveyPage >= surveyTotalPages ? 0.4 : 1 }}
+                          ><ChevronRight size={13} color="#6B6158" /></button>
+                        </div>
+                      </div>
                     )}
                   </div>
+                )}
+
+                {/* Moustache publish modal */}
+                {moustacheModal && (
+                  <PublishToMoustacheModal
+                    surveyShortId={moustacheModal.surveyShortId}
+                    surveyTitle={moustacheModal.surveyTitle}
+                    existingMoustacheId={moustacheModal.existingMoustacheId}
+                    existingQuestions={moustacheModal.existingQuestions}
+                    onClose={() => setMoustacheModal(null)}
+                    onPublished={(moustacheId, status) => {
+                      // Update the survey row in state without a full refetch
+                      setSurveys(prev => prev.map(s =>
+                        s.short_id === moustacheModal.surveyShortId
+                          ? { ...s, moustache_survey_id: moustacheId, moustache_status: status }
+                          : s
+                      ));
+                    }}
+                  />
+                )}
+
+                {/* Bulk publish modal */}
+                {showBulkModal && (
+                  <BulkPublishToMoustacheModal
+                    surveys={surveys.filter(s => selectedSurveyIds.includes(s.short_id)).map(s => ({ short_id: s.short_id, title: s.title }))}
+                    onClose={() => setShowBulkModal(false)}
+                    onDone={results => {
+                      // Update rows that were successfully published
+                      setSurveys(prev => prev.map(s => {
+                        const r = results.find(x => x.survey_id === s.short_id);
+                        if (r?.success) return { ...s, moustache_survey_id: r.moustache_survey_id, moustache_status: r.status };
+                        return s;
+                      }));
+                      setSelectedSurveyIds([]);
+                    }}
+                  />
                 )}
 
                 {/* Filters Tab */}
