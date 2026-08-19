@@ -67,6 +67,44 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
   const [wizardStep, setWizardStep] = useState(-1);
   const [wizardAnswers, setWizardAnswers] = useState<Record<number, string>>({});
   const [createMode, setCreateMode] = useState<'single' | 'funnel'>('single');
+  const [funnelSuggestion, setFunnelSuggestion] = useState<{show: boolean; reason: string; confidence: number}>({ show: false, reason: '', confidence: 0 });
+  const [isFlipping, setIsFlipping] = useState(false);
+  const [isFlipped, setIsFlipped] = useState(false);
+  const detectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Funnel detection on typing ────────────────────────────────────────────
+  const detectFunnel = async (text: string) => {
+    if (text.length < 60 || createMode === 'funnel') return;
+    try {
+      const isLocalApi = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const apiBase = isLocalApi ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
+      const res = await fetch(`${apiBase}/api/funnels/detect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: text })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.is_funnel && data.confidence >= 70) {
+          setFunnelSuggestion({ show: true, reason: data.reason, confidence: data.confidence });
+        } else {
+          setFunnelSuggestion(prev => prev.show ? { ...prev, show: false } : prev);
+        }
+      }
+    } catch {}
+  };
+
+  const handleSwitchToFunnel = () => {
+    // isFlipping = true adds a brief visual pulse to the suggestion banner
+    setIsFlipping(true);
+    // Short pause so user sees the "activating" state, then start the flip
+    setTimeout(() => {
+      setIsFlipped(true);
+      setCreateMode('funnel');
+      setIsFlipping(false);
+    }, 250);
+    setFunnelSuggestion(prev => ({ ...prev, show: false }));
+  };
 
   const handleToggleLocation = async (newValue: boolean) => {
     setCollectLocation(newValue);
@@ -284,6 +322,13 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
       setError('Please enter a survey topic or pick a suggestion'); 
       return; 
     }
+
+    // ── If funnel was detected but banner not dismissed, show it and block wizard ──
+    if (funnelSuggestion.show) {
+      // Banner is already visible — user must make a choice first
+      return;
+    }
+
     setError('');
     setShowMoreOptions(false);
 
@@ -512,58 +557,70 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
           </h1>
         </div>
 
-        {/* ── Create mode toggle ── */}
-        <div className="flex justify-center mb-5">
-          <div className={`inline-flex rounded-2xl p-1 gap-1 ${isDarkMode ? 'bg-slate-800 border border-slate-700' : 'bg-stone-100 border border-stone-200'}`}>
-            <button
-              onClick={() => setCreateMode('single')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                createMode === 'single'
-                  ? isDarkMode
-                    ? 'bg-slate-600 text-white shadow'
-                    : 'bg-white text-slate-800 shadow-sm'
-                  : isDarkMode
-                    ? 'text-slate-400 hover:text-slate-200'
-                    : 'text-stone-500 hover:text-stone-700'
-              }`}
-            >
-              <Edit3 size={15} />
-              Single Survey
-            </button>
-            <button
-              onClick={() => setCreateMode('funnel')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                createMode === 'funnel'
-                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow'
-                  : isDarkMode
-                    ? 'text-slate-400 hover:text-slate-200'
-                    : 'text-stone-500 hover:text-stone-700'
-              }`}
-            >
-              <Layers size={15} />
-              Funnel Survey
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                createMode === 'funnel'
-                  ? 'bg-white/20 text-white'
-                  : isDarkMode ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-600'
-              }`}>AI</span>
-            </button>
-          </div>
-        </div>
+        
 
-        {/* ── Funnel mode ── */}
-        {createMode === 'funnel' && (
-          <div className={`rounded-3xl border p-6 ${isDarkMode ? 'bg-slate-800/90 border-slate-700' : 'bg-white border-stone-200 shadow-sm'}`}>
-            <FunnelCreator
-              isDarkMode={isDarkMode}
-              onFunnelCreated={(funnelId) => {
-                window.location.href = `/dashboard?tab=surveys&subtab=funnels&open=${funnelId}`;
-              }}
-            />
+        {/* ── Flip card container ── */}
+        <div style={{ perspective: '1200px' }}>
+          <div style={{
+            transition: 'transform 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+            transformStyle: 'preserve-3d' as any,
+            transform: isFlipped ? 'rotateY(180deg)' : isFlipping ? 'scale(0.97) rotateY(8deg)' : 'rotateY(0deg)',
+            position: 'relative' as any,
+          }}>
+
+            {/* ── FRONT — Single survey mode ── */}
+            <div style={{ backfaceVisibility: 'hidden' as any, WebkitBackfaceVisibility: 'hidden' as any }}>
+
+        {/* ── Funnel suggestion banner (appears when AI detects funnel prompt) ── */}
+        {funnelSuggestion.show && createMode === 'single' && (
+          <div
+            className={`mb-4 rounded-2xl border p-4 ${isDarkMode ? 'bg-blue-950/40 border-blue-700/50' : 'bg-blue-50 border-blue-200'}`}
+            style={{ animation: 'sfFadeUp 0.4s ease-out' }}
+          >
+            <div className="flex items-start gap-3 mb-3">
+              <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isDarkMode ? 'bg-blue-900' : 'bg-blue-100'}`}>
+                <Layers size={16} className="text-blue-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-semibold ${isDarkMode ? 'text-blue-200' : 'text-blue-800'}`}>
+                  This looks like a funnel survey
+                </p>
+                <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                  {funnelSuggestion.reason || 'Your prompt mentions multiple surveys, screening, scoring, or routing — this is a funnel.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleSwitchToFunnel}
+                disabled={isFlipping}
+                className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${
+                  isFlipping
+                    ? 'bg-blue-400 text-white scale-95 opacity-80 cursor-wait'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white hover:scale-[1.02]'
+                }`}
+                style={{ boxShadow: isFlipping ? '0 0 12px rgba(59,130,246,0.6)' : undefined }}
+              >
+                {isFlipping ? '✦ Switching...' : '✦ Switch to Funnel mode'}
+              </button>
+              <button
+                onClick={() => {
+                  setFunnelSuggestion(f => ({ ...f, show: false }));
+                  // Continue with normal wizard — use a tiny delay for state to clear
+                  setTimeout(() => handleStartWizard(), 50);
+                }}
+                className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-all ${
+                  isDarkMode
+                    ? 'border-slate-600 text-slate-300 hover:bg-slate-700'
+                    : 'border-stone-300 text-stone-600 hover:bg-stone-100'
+                }`}
+              >
+                Continue in normal mode
+              </button>
+            </div>
           </div>
         )}
 
-        {/* ── Single survey mode ── */}
         {createMode === 'single' && (
         <>
         {/* ── Clarification Panel (above prompt box) ── */}
@@ -612,13 +669,23 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
             </div>
           )}
           <textarea
-            value={surveyTopic} onChange={(e) => setSurveyTopic(e.target.value)}
-            placeholder="Describe your survey topic or paste an image..."
+            value={surveyTopic} onChange={(e) => {
+              setSurveyTopic(e.target.value);
+              // Debounced funnel detection
+              if (detectionTimerRef.current) clearTimeout(detectionTimerRef.current);
+              detectionTimerRef.current = setTimeout(() => detectFunnel(e.target.value), 2000);
+            }}            placeholder="Describe your survey topic or paste an image..."
             className={`relative w-full px-4 sm:px-3.5 pt-4 pb-2 sm:py-3 text-[15px] resize-none border-0 focus:outline-none focus:ring-0 z-10 font-medium [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${isDarkMode ? 'bg-transparent text-white placeholder-slate-400' : 'bg-transparent text-slate-800 placeholder-slate-400'
               }`}
             rows={1}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && (surveyTopic.trim() || selectedSuggestion)) { e.preventDefault(); handleStartWizard(); } }}
             onPaste={(e) => {
+              // Detect funnel immediately on paste (faster than 2s debounce)
+              const pastedText = e.clipboardData?.getData('text');
+              if (pastedText && pastedText.length > 60) {
+                if (detectionTimerRef.current) clearTimeout(detectionTimerRef.current);
+                detectionTimerRef.current = setTimeout(() => detectFunnel(pastedText), 300);
+              }
               const items = e.clipboardData?.items;
               if (!items) return;
               for (let i = 0; i < items.length; i++) {
@@ -1140,6 +1207,45 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
         )}
         </>
         )}
+            </div> {/* end front face */}
+
+            {/* ── BACK — Funnel mode (rotated 180deg, visible after flip) ── */}
+            <div style={{
+              backfaceVisibility: 'hidden' as any,
+              WebkitBackfaceVisibility: 'hidden' as any,
+              transform: 'rotateY(180deg)',
+              position: 'absolute' as any,
+              top: 0, left: 0, right: 0,
+            }}>
+              {isFlipped && (
+                <div className={`rounded-3xl border p-6 ${isDarkMode ? 'bg-slate-800/90 border-slate-700' : 'bg-white border-stone-200 shadow-sm'}`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Layers size={18} className="text-blue-500" />
+                      <span className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>Funnel Survey Mode</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold">AI</span>
+                    </div>
+                    <button
+                      onClick={() => { setCreateMode('single'); setIsFlipped(false); setFunnelSuggestion(f => ({ ...f, show: false })); }}
+                      className={`text-xs px-2 py-1 rounded-lg ${isDarkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-stone-500 hover:bg-stone-100'}`}
+                    >
+                      ← Back to single survey
+                    </button>
+                  </div>
+                  <FunnelCreator
+                    isDarkMode={isDarkMode}
+                    initialPrompt={surveyTopic}
+                    onFunnelCreated={(funnelId) => {
+                      window.location.href = `/dashboard?tab=surveys&subtab=funnels&open=${funnelId}`;
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+          </div> {/* end flip inner */}
+        </div> {/* end flip container */}
+
       </div>
 
       {/* ── Survey Result Modal ── */}

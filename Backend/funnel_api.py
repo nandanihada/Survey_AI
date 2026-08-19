@@ -510,8 +510,11 @@ Rules:
 4. Preserve the user's exact answer options — don't paraphrase or reorder them
 
 For SCREENING surveys:
-- Mark questions that can disqualify users as role="screen"
-- Mark questions that signal destination fit as role="score" or role="both"
+- role="screen" with screening_rule ONLY for questions explicitly listed as hard termination conditions in the prompt
+  Examples of valid screen questions: "Age under 18 → disqualify", "No experience → terminate", "Not in target country → end"
+  DO NOT mark preference, interest, or opinion questions as screening — those are scoring questions
+- role="score" or role="both" for questions that signal which destination fits the user
+- role="neutral" for demographic/background questions that inform context but don't score or screen
 - Include a mix of types: multiple_choice, yes_no, dropdown, multi_select
 
 For DESTINATION/JOB surveys:
@@ -542,20 +545,16 @@ Return this exact JSON structure:
       "type": "yes_no",
       "options": ["Yes", "No"],
       "required": true,
-      "funnel_role": "screen",
-      "screening_rule": {{
-        "enabled": true,
-        "fail_condition": "equals",
-        "fail_value": "No",
-        "fail_reason": "Does not qualify"
-      }},
+      "funnel_role": "score",
+      "screening_rule": null,
       "option_scores": {{}}
     }}
   ]
 }}
 
 STRICT RULES:
-- screening_rule only when funnel_role is "screen" or "both"
+- screening_rule is ALMOST NEVER used — only for explicit hard disqualifiers stated in the prompt like "terminate if under 18" or "end survey if no experience"
+- Preference questions, interest questions, tool usage questions = role="score", screening_rule=null
 - option_scores is always empty {{}} — filled later by scoring step
 - question IDs: q1, q2, q3... (unique, sequential)
 - yes_no type MUST have options: ["Yes", "No"]
@@ -584,6 +583,11 @@ STRICT RULES:
     questions = survey_data.get("questions", [])
 
     # Ensure each question has a unique ID and funnel fields
+    # Also build a lookup of explicitly defined termination conditions from the prompt
+    explicit_termination_keywords = [
+        t.lower() for t in funnel_plan.get("termination_conditions", [])
+    ]
+
     for i, q in enumerate(questions):
         if not q.get("id"):
             q["id"] = f"q{i+1}"
@@ -593,6 +597,28 @@ STRICT RULES:
             q["option_scores"] = {}
         if "screening_rule" not in q:
             q["screening_rule"] = None
+
+        # ── Safety guard: strip screening rules unless question matches an
+        #    explicit termination condition defined in the funnel plan ──
+        # AI sometimes adds screening rules to regular preference/opinion questions.
+        # We only allow it when the question text clearly relates to a stated termination.
+        sr = q.get("screening_rule")
+        if sr and sr.get("enabled"):
+            q_text_lower = q.get("question", "").lower()
+            is_explicit = any(
+                kw in q_text_lower or kw in sr.get("fail_reason", "").lower()
+                for kw in explicit_termination_keywords
+            ) if explicit_termination_keywords else False
+
+            if not is_explicit and not explicit_termination_keywords:
+                # No termination conditions defined at all — strip all screening rules
+                q["screening_rule"] = None
+                q["funnel_role"] = "score" if q.get("funnel_role") in ("screen", "both") else q.get("funnel_role", "neutral")
+            elif not is_explicit:
+                # Termination conditions exist but this question doesn't match any
+                q["screening_rule"] = None
+                q["funnel_role"] = "score" if q.get("funnel_role") in ("screen", "both") else q.get("funnel_role", "neutral")
+
         # ── Fix: always give yes_no questions their options ──
         if q.get("type") == "yes_no" and not q.get("options"):
             q["options"] = ["Yes", "No"]
@@ -1181,3 +1207,69 @@ Use "_{job_id}" as the key for each score."""
         import traceback
         print(f"❌ predict_job_survey_signals error: {traceback.format_exc()}")
         return jsonify({"error": str(e)}), 500
+
+
+# ═══════════════════════════════════════════════════════
+#  QUICK FUNNEL DETECTION (no auth — fires as user types)
+# ═══════════════════════════════════════════════════════
+
+@funnel_bp.route("/api/funnels/detect", methods=["POST", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins="*")
+def detect_funnel_prompt():
+    """
+    Lightweight, fast check: does this prompt describe a funnel?
+    Called after user pauses typing (debounced ~2s).
+    Returns {is_funnel: bool, reason: str, confidence: 0-100}
+    Uses GPT-4o-mini with tiny token budget for speed.
+    """
+    if request.method == "OPTIONS":
+        return "", 200
+
+    data = request.get_json() or {}
+    prompt = (data.get("prompt") or "").strip()
+
+    if len(prompt) < 40:
+        return jsonify({"is_funnel": False, "reason": "", "confidence": 0}), 200
+
+    api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("AI_API_KEY", "")
+    if not api_key:
+        return jsonify({"is_funnel": False, "reason": "", "confidence": 0}), 200
+
+    detection_prompt = f"""Does this prompt describe a multi-survey funnel (screening + routing + scoring)?
+
+Funnel signals:
+- Multiple surveys or layers (Layer 1, Layer 2, LAYER 3...)
+- Screening then routing to different destinations
+- Scoring/matching people to products/jobs/programs
+- Branching to different survey paths based on answers
+- "route", "redirect", "qualify", "match", "screen", "scoring"
+
+Prompt:
+"{prompt[:800]}"
+
+Return ONLY JSON: {{"is_funnel": true/false, "confidence": 0-100, "reason": "one sentence why"}}"""
+
+    try:
+        resp = http_requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            timeout=8,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": "gpt-4o-mini",
+                "messages": [{"role": "user", "content": detection_prompt}],
+                "temperature": 0.0,
+                "max_tokens": 80,
+                "response_format": {"type": "json_object"}
+            }
+        )
+        if resp.status_code == 200:
+            result = json.loads(resp.json()["choices"][0]["message"]["content"])
+            return jsonify({
+                "is_funnel": bool(result.get("is_funnel", False)),
+                "confidence": int(result.get("confidence", 0)),
+                "reason": result.get("reason", "")
+            }), 200
+    except Exception as e:
+        print(f"⚠️ detect_funnel_prompt error: {e}")
+
+    return jsonify({"is_funnel": False, "reason": "", "confidence": 0}), 200
