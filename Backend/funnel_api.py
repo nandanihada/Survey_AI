@@ -610,7 +610,16 @@ STRICT RULES:
                 for kw in explicit_termination_keywords
             ) if explicit_termination_keywords else False
 
-            if not is_explicit and not explicit_termination_keywords:
+            # Extra guard: never terminate on yes/no questions unless question explicitly
+            # contains a hard disqualification word (age, citizenship, legal requirement etc.)
+            HARD_DISQUALIFY_WORDS = ["age", "18", "21", "legal", "citizen", "authorized", "eligible",
+                                     "criminal", "felony", "license", "certified", "visa", "permit"]
+            q_type = q.get("type", "")
+            if q_type == "yes_no" and not any(w in q_text_lower for w in HARD_DISQUALIFY_WORDS):
+                # This is a preference/opinion yes_no — should never terminate
+                q["screening_rule"] = None
+                q["funnel_role"] = "score" if q.get("funnel_role") in ("screen", "both") else q.get("funnel_role", "neutral")
+            elif not is_explicit and not explicit_termination_keywords:
                 # No termination conditions defined at all — strip all screening rules
                 q["screening_rule"] = None
                 q["funnel_role"] = "score" if q.get("funnel_role") in ("screen", "both") else q.get("funnel_role", "neutral")
@@ -765,7 +774,7 @@ def _apply_scoring_to_surveys(scoring_matrix, screening_survey_ids):
 @cross_origin(supports_credentials=True, origins=ALLOWED_ORIGINS)
 @requireAuth
 def get_funnels():
-    """Get all funnels for the current user."""
+    """Get all funnels for the current user with pagination and date filtering."""
     if request.method == "OPTIONS":
         return "", 200
 
@@ -773,30 +782,58 @@ def get_funnels():
     user_id = str(current_user.get("_id", ""))
     is_admin = current_user.get("role") == "admin"
 
+    # -- Query params --------------------------------------------------------
+    try:
+        page     = max(int(request.args.get('page', 1)), 1)
+        per_page = min(int(request.args.get('per_page', 20)), 100)
+    except (ValueError, TypeError):
+        page, per_page = 1, 20
+
+    search    = request.args.get('search', '').strip()
+    date_from = request.args.get('date_from', '').strip()
+    date_to   = request.args.get('date_to', '').strip()
+    skip = (page - 1) * per_page
+
+    # -- Build MongoDB query -------------------------------------------------
     query = {} if is_admin else {"owner_user_id": user_id}
-    funnels = list(db.funnels.find(query).sort("created_at", -1).limit(100))
+    if search:
+        query["name"] = {"$regex": search, "$options": "i"}
+    if date_from or date_to:
+        from datetime import datetime, timedelta
+        date_filter = {}
+        if date_from:
+            try: date_filter["$gte"] = datetime.strptime(date_from, "%Y-%m-%d")
+            except ValueError: pass
+        if date_to:
+            try: date_filter["$lte"] = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+            except ValueError: pass
+        if date_filter: query["created_at"] = date_filter
+
+    total   = db.funnels.count_documents(query)
+    funnels = list(db.funnels.find(query).sort("created_at", -1).skip(skip).limit(per_page))
 
     result = []
     for f in funnels:
         f["_id"] = str(f["_id"])
         result.append({
-            "funnel_id": f.get("funnel_id"),
-            "name": f.get("name"),
-            "goal": f.get("goal"),
-            "status": f.get("status", "active"),
-            "created_at": f.get("created_at"),
+            "funnel_id":         f.get("funnel_id"),
+            "name":              f.get("name"),
+            "goal":              f.get("goal"),
+            "status":            f.get("status", "active"),
+            "created_at":        f.get("created_at"),
             "screening_surveys": f.get("screening_surveys", []),
-            "job_surveys": f.get("job_surveys", {}),
+            "job_surveys":       f.get("job_surveys", {}),
             "generated_surveys": f.get("generated_surveys", []),
-            "total_surveys": len(f.get("generated_surveys", []))
+            "total_surveys":     len(f.get("generated_surveys", []))
         })
 
-    return jsonify({"funnels": result, "total": len(result)}), 200
-
-
-# ═══════════════════════════════════════════════════════
-#  GET SINGLE FUNNEL DETAIL
-# ═══════════════════════════════════════════════════════
+    return jsonify({
+        "funnels":     result,
+        "total":       total,
+        "page":        page,
+        "per_page":    per_page,
+        "total_pages": -(-total // per_page)
+    }), 200
 
 @funnel_bp.route("/api/funnels/<funnel_id>", methods=["GET", "OPTIONS"])
 @cross_origin(supports_credentials=True, origins=ALLOWED_ORIGINS)
@@ -1016,7 +1053,57 @@ def get_funnel_sessions(funnel_id):
 #  REPAIR: fix yes_no questions missing options in funnel surveys
 # ═══════════════════════════════════════════════════════
 
-@funnel_bp.route("/api/funnels/repair-questions", methods=["POST", "OPTIONS"])
+@funnel_bp.route("/api/funnels/<funnel_id>/repair-generated", methods=["POST", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins=ALLOWED_ORIGINS)
+@requireAuth
+def repair_funnel_generated_surveys(funnel_id):
+    """
+    Rebuilds the generated_surveys list for an existing funnel by
+    looking up the actual survey documents. Fixes funnels where
+    screening surveys are missing from generated_surveys.
+    """
+    if request.method == "OPTIONS":
+        return "", 200
+
+    funnel = db.funnels.find_one({"funnel_id": funnel_id})
+    if not funnel:
+        return jsonify({"error": "Funnel not found"}), 404
+
+    rebuilt = []
+
+    # Add screening surveys from the screening_surveys field
+    for ss in funnel.get("screening_surveys", []):
+        survey_doc = db.surveys.find_one({"id": ss["survey_id"]})
+        if survey_doc:
+            rebuilt.append({
+                "type": "screening",
+                "index": ss.get("index", 0),
+                "survey_id": ss["survey_id"],
+                "name": ss.get("name", survey_doc.get("title", "Screening")),
+                "question_count": len(survey_doc.get("questions", []))
+            })
+
+    # Add job surveys from the job_surveys field
+    for job_id_key, job_cfg in funnel.get("job_surveys", {}).items():
+        survey_doc = db.surveys.find_one({"id": job_cfg["survey_id"]})
+        if survey_doc:
+            rebuilt.append({
+                "type": "job",
+                "job_id": job_id_key,
+                "survey_id": job_cfg["survey_id"],
+                "name": job_cfg.get("display_name", survey_doc.get("title", job_id_key)),
+                "question_count": len(survey_doc.get("questions", []))
+            })
+
+    db.funnels.update_one(
+        {"funnel_id": funnel_id},
+        {"$set": {"generated_surveys": rebuilt, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+
+    return jsonify({"success": True, "rebuilt": len(rebuilt), "generated_surveys": rebuilt}), 200
+
+
+
 @cross_origin(supports_credentials=True, origins=ALLOWED_ORIGINS)
 @requireAuth
 def repair_funnel_questions():

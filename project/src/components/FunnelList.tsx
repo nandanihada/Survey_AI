@@ -6,8 +6,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Layers, Plus, ChevronDown, ChevronRight, ExternalLink,
-  Settings, BarChart3, Copy, Loader2, AlertCircle,
+  Layers, Plus, ChevronDown, ChevronRight, ExternalLink, Search, Calendar,
+  Settings, BarChart3, Copy, Loader2, AlertCircle, ChevronLeft,
   Filter, Target, GitBranch, Edit3, Check, X, Trash2,
   ArrowRight, RefreshCw, Eye, Link2, Zap, Info
 } from 'lucide-react';
@@ -420,7 +420,18 @@ const QuestionsPanel: React.FC<{ funnel: Funnel; isDarkMode: boolean; apiBase: s
     const fetchAll = async () => {
       setLoading(true);
       const results: (SurveyDetail & { survey_type: string; survey_name: string })[] = [];
-      for (const s of funnel.generated_surveys) {
+
+      // Build a combined list — generated_surveys first, then add any screening_surveys
+      // not already covered (fixes old funnels where generated_surveys is missing screening entries)
+      const genSurveys = [...funnel.generated_surveys];
+      const genIds = new Set(genSurveys.map(s => s.survey_id));
+      for (const ss of funnel.screening_surveys) {
+        if (!genIds.has(ss.survey_id)) {
+          genSurveys.push({ survey_id: ss.survey_id, name: ss.name, type: 'screening', index: ss.index, question_count: 0 });
+        }
+      }
+
+      for (const s of genSurveys) {
         try {
           const res = await fetch(`${apiBase}/api/surveys/${s.survey_id}`, { headers: authHeaders() });
           if (res.ok) {
@@ -706,6 +717,22 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
                 className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border ${isDarkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
                 <BarChart3 size={12} /> Refresh analytics
               </button>
+              {/* Show repair button when screening surveys are missing from generated_surveys */}
+              {funnel.generated_surveys.filter(s => s.type === 'screening').length === 0 && funnel.screening_surveys.length > 0 && (
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`${apiBase}/api/funnels/${funnel.funnel_id}/repair-generated`, {
+                        method: 'POST', headers: authHeaders()
+                      });
+                      if (res.ok) { onRefresh(); }
+                    } catch {}
+                  }}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-orange-300 text-orange-600 bg-orange-50 hover:bg-orange-100"
+                >
+                  <RefreshCw size={12} /> Fix missing surveys
+                </button>
+              )}
             </div>
 
             {/* Analytics */}
@@ -721,27 +748,43 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
               </div>
             )}
 
-            {/* Screening surveys */}
+            {/* Screening surveys — use generated_surveys if available, fall back to screening_surveys */}
             <div>
               <p className={`text-xs font-semibold uppercase tracking-wide mb-2 flex items-center gap-2 ${textMuted}`}>
                 <Filter size={12} /> Phase 1 — Screening
               </p>
               <div className="space-y-2">
-                {funnel.generated_surveys.filter(s => s.type === 'screening').map(s => (
-                  <div key={s.survey_id} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${isDarkMode ? 'bg-gray-750 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
-                    <div className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${isDarkMode ? 'bg-blue-900 text-blue-300' : 'bg-blue-100 text-blue-700'}`}>
-                      {(s.index ?? 0) + 1}
+                {(() => {
+                  // Primary source: generated_surveys with type=screening
+                  const fromGenerated = funnel.generated_surveys.filter(s => s.type === 'screening');
+                  // Fallback: screening_surveys array (always populated correctly)
+                  const displayList = fromGenerated.length > 0
+                    ? fromGenerated
+                    : funnel.screening_surveys.map((s, i) => ({
+                        survey_id: s.survey_id,
+                        name: s.name,
+                        question_count: 0,
+                        index: s.index ?? i,
+                        type: 'screening' as const
+                      }));
+                  return displayList.map(s => (
+                    <div key={s.survey_id} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${isDarkMode ? 'bg-gray-750 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                      <div className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${isDarkMode ? 'bg-blue-900 text-blue-300' : 'bg-blue-100 text-blue-700'}`}>
+                        {(s.index ?? 0) + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium truncate ${textMain}`}>{s.name}</p>
+                        {'question_count' in s && s.question_count > 0 && (
+                          <p className={`text-xs ${textMuted}`}>{s.question_count} questions</p>
+                        )}
+                      </div>
+                      <button onClick={() => window.open(`/edit/${s.survey_id}`, '_blank')}
+                        className={`flex items-center gap-1 text-xs ${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}>
+                        <Edit3 size={12} /> Edit ↗
+                      </button>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium truncate ${textMain}`}>{s.name}</p>
-                      <p className={`text-xs ${textMuted}`}>{s.question_count} questions</p>
-                    </div>
-                    <button onClick={() => window.open(`/edit/${s.survey_id}`, '_blank')}
-                      className={`flex items-center gap-1 text-xs ${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}>
-                      <Edit3 size={12} /> Edit ↗
-                    </button>
-                  </div>
-                ))}
+                  ));
+                })()}
               </div>
             </div>
 
@@ -872,19 +915,36 @@ const FunnelList: React.FC<Props> = ({ isDarkMode = false, onCreateNew }) => {
   const [autoExpandFunnelId, setAutoExpandFunnelId] = useState<string | null>(
     searchParams.get('open') || null
   );
+  // ── Pagination & filters ──────────────────────────────────────────────────
+  const [page, setPage]               = useState(1);
+  const [totalPages, setTotalPages]   = useState(1);
+  const [total, setTotal]             = useState(0);
+  const perPage                        = 20;
+  const [search, setSearch]           = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [dateFrom, setDateFrom]       = useState('');
+  const [dateTo, setDateTo]           = useState('');
 
   const authHeaders = () => {
     const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt_token') || '';
     return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
   };
 
-  const fetchFunnels = useCallback(async () => {
+  const fetchFunnels = useCallback(async (p = 1, s = '', df = '', dt = '') => {
     setLoading(true);
+    setError('');
     try {
-      const res = await fetch(`${apiBase}/api/funnels`, { headers: authHeaders() });
+      const params = new URLSearchParams({ page: String(p), per_page: String(perPage) });
+      if (s) params.set('search', s);
+      if (df) params.set('date_from', df);
+      if (dt) params.set('date_to', dt);
+      const res = await fetch(`${apiBase}/api/funnels?${params}`, { headers: authHeaders() });
       if (!res.ok) throw new Error('Failed to load funnels');
       const data = await res.json();
       setFunnels(data.funnels || []);
+      setTotal(data.total || 0);
+      setTotalPages(data.total_pages || 1);
+      setPage(p);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -892,17 +952,17 @@ const FunnelList: React.FC<Props> = ({ isDarkMode = false, onCreateNew }) => {
     }
   }, [apiBase]);
 
-  useEffect(() => { fetchFunnels(); }, [fetchFunnels]);
+  useEffect(() => { fetchFunnels(1, '', '', ''); }, [fetchFunnels]);
 
   const handleFunnelCreated = (funnelId: string) => {
     setAutoExpandFunnelId(funnelId);
     setShowCreator(false);
-    fetchFunnels();
+    fetchFunnels(1, search, dateFrom, dateTo);
   };
 
-  const textMain = isDarkMode ? 'text-gray-100' : 'text-gray-900';
   const textMuted = isDarkMode ? 'text-gray-400' : 'text-gray-500';
-  const cardBg = isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200';
+  const textMain  = isDarkMode ? 'text-gray-100' : 'text-gray-900';
+  const cardBg    = isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200';
 
   if (showCreator) {
     return (
@@ -925,13 +985,15 @@ const FunnelList: React.FC<Props> = ({ isDarkMode = false, onCreateNew }) => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className={`text-lg font-bold ${textMain}`}>Funnel Surveys</h2>
-          <p className={`text-sm ${textMuted}`}>Multi-survey screening and routing funnels</p>
+          <p className={`text-sm ${textMuted}`}>{total} funnel{total !== 1 ? 's' : ''} · page {page} of {totalPages}</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={fetchFunnels} className={`p-2 rounded-lg ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}>
+          <button onClick={() => fetchFunnels(page, search, dateFrom, dateTo)} className={`p-2 rounded-lg ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}>
             <RefreshCw size={16} />
           </button>
           <button onClick={() => setShowCreator(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold">
@@ -940,31 +1002,139 @@ const FunnelList: React.FC<Props> = ({ isDarkMode = false, onCreateNew }) => {
         </div>
       </div>
 
-      {loading && <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin text-blue-500" size={28} /></div>}
+      {/* ── Search + date filters ── */}
+      <div className={`rounded-xl border p-3 flex flex-wrap gap-3 items-end ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+        <div className="relative flex-1 min-w-[160px] max-w-xs">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <input
+            className={`w-full pl-8 pr-3 py-2 rounded-lg border text-sm ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-800'}`}
+            placeholder="Search funnels…"
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { setSearch(searchInput); fetchFunnels(1, searchInput, dateFrom, dateTo); } }}
+          />
+        </div>
+        <button onClick={() => { setSearch(searchInput); fetchFunnels(1, searchInput, dateFrom, dateTo); }}
+          className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">
+          Search
+        </button>
+        {search && (
+          <button onClick={() => { setSearch(''); setSearchInput(''); fetchFunnels(1, '', dateFrom, dateTo); }}
+            className={`px-3 py-2 rounded-lg text-sm border ${isDarkMode ? 'border-gray-600 text-gray-400 hover:bg-gray-700' : 'border-gray-300 text-gray-600 hover:bg-gray-100'}`}>
+            Clear
+          </button>
+        )}
+        <div className="flex items-center gap-2">
+          <label className={`text-xs font-medium flex items-center gap-1 ${textMuted}`}><Calendar size={12} /> From</label>
+          <input type="date" value={dateFrom}
+            onChange={e => { setDateFrom(e.target.value); fetchFunnels(1, search, e.target.value, dateTo); }}
+            className={`px-2 py-1.5 rounded-lg border text-sm ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-800'}`}
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <label className={`text-xs font-medium flex items-center gap-1 ${textMuted}`}><Calendar size={12} /> To</label>
+          <input type="date" value={dateTo}
+            onChange={e => { setDateTo(e.target.value); fetchFunnels(1, search, dateFrom, e.target.value); }}
+            className={`px-2 py-1.5 rounded-lg border text-sm ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-800'}`}
+          />
+        </div>
+        {(dateFrom || dateTo) && (
+          <button onClick={() => { setDateFrom(''); setDateTo(''); fetchFunnels(1, search, '', ''); }}
+            className={`px-3 py-1.5 rounded-lg text-xs border ${isDarkMode ? 'border-gray-600 text-gray-400 hover:bg-gray-700' : 'border-gray-300 text-gray-500 hover:bg-gray-100'}`}>
+            Clear dates
+          </button>
+        )}
+      </div>
+
+      {/* ── States ── */}
+      {loading && (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="animate-spin text-blue-500" size={28} />
+        </div>
+      )}
       {error && !loading && (
         <div className={`flex items-center gap-2 rounded-xl border p-4 text-sm ${isDarkMode ? 'bg-red-950/30 border-red-800/40 text-red-400' : 'bg-red-50 border-red-200 text-red-600'}`}>
           <AlertCircle size={16} /> {error}
         </div>
       )}
-
       {!loading && !error && funnels.length === 0 && (
         <div className={`rounded-2xl border-2 border-dashed p-12 text-center ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
           <Layers size={40} className={`mx-auto mb-4 ${isDarkMode ? 'text-gray-600' : 'text-gray-300'}`} />
-          <p className={`font-semibold ${textMain}`}>No funnel surveys yet</p>
-          <p className={`text-sm mt-1 mb-4 ${textMuted}`}>Create your first funnel — AI builds all surveys, scoring, and routing automatically.</p>
-          <button onClick={() => setShowCreator(true)} className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold">
-            <Plus size={16} /> Create Funnel Survey
-          </button>
+          <p className={`font-semibold ${textMain}`}>
+            {search || dateFrom || dateTo ? 'No funnels match your filters' : 'No funnel surveys yet'}
+          </p>
+          {!search && !dateFrom && !dateTo && (
+            <>
+              <p className={`text-sm mt-1 mb-4 ${textMuted}`}>Create your first funnel — AI builds all surveys, scoring, and routing automatically.</p>
+              <button onClick={() => setShowCreator(true)} className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold">
+                <Plus size={16} /> Create Funnel Survey
+              </button>
+            </>
+          )}
         </div>
       )}
 
+      {/* ── Funnel rows ── */}
       {!loading && funnels.length > 0 && (
         <div className="space-y-3">
           {funnels.map(f => (
-            <FunnelRow key={f.funnel_id} funnel={f} isDarkMode={isDarkMode} onRefresh={fetchFunnels} autoExpand={f.funnel_id === autoExpandFunnelId} />
+            <FunnelRow
+              key={f.funnel_id}
+              funnel={f}
+              isDarkMode={isDarkMode}
+              onRefresh={() => fetchFunnels(page, search, dateFrom, dateTo)}
+              autoExpand={f.funnel_id === autoExpandFunnelId}
+            />
           ))}
         </div>
       )}
+
+      {/* ── Pagination ── */}
+      {!loading && totalPages > 1 && (
+        <div className={`flex items-center justify-between pt-2 border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+          <span className={`text-sm ${textMuted}`}>
+            Showing {(page - 1) * perPage + 1}–{Math.min(page * perPage, total)} of {total}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              disabled={page <= 1}
+              onClick={() => fetchFunnels(page - 1, search, dateFrom, dateTo)}
+              className={`p-1.5 rounded-lg border text-sm disabled:opacity-40 ${isDarkMode ? 'border-gray-600 hover:bg-gray-700' : 'border-gray-300 hover:bg-gray-100'}`}
+            >
+              <ChevronLeft size={14} />
+            </button>
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              const pg = totalPages <= 5 ? i + 1
+                : page <= 3 ? i + 1
+                : page >= totalPages - 2 ? totalPages - 4 + i
+                : page - 2 + i;
+              return (
+                <button
+                  key={pg}
+                  onClick={() => fetchFunnels(pg, search, dateFrom, dateTo)}
+                  className={`w-8 h-8 rounded-lg border text-sm font-medium ${
+                    page === pg
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : isDarkMode
+                        ? 'border-gray-600 text-gray-300 hover:bg-gray-700'
+                        : 'border-gray-300 hover:bg-gray-100'
+                  }`}
+                >
+                  {pg}
+                </button>
+              );
+            })}
+            <button
+              disabled={page >= totalPages}
+              onClick={() => fetchFunnels(page + 1, search, dateFrom, dateTo)}
+              className={`p-1.5 rounded-lg border text-sm disabled:opacity-40 ${isDarkMode ? 'border-gray-600 hover:bg-gray-700' : 'border-gray-300 hover:bg-gray-100'}`}
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

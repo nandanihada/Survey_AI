@@ -10,6 +10,7 @@ import {
   X, Plus, Trash2, ChevronDown, ChevronUp,
   Send, CheckCircle, AlertCircle, Loader, DollarSign,
   Globe, Users, Clock, Tag, FileText, LayoutTemplate,
+  Sparkles, Code, Copy,
 } from 'lucide-react';
 import { getApiBaseUrl } from '../utils/deploymentFix';
 
@@ -28,6 +29,7 @@ export interface ExtraFields {
   max_age: string;
   loi_minutes: string;
   survey_type: string;
+  description: string;
   notes: string;
 }
 
@@ -120,7 +122,7 @@ const blankQuestion = (): EligibilityQuestion => ({ question: '', options: ['Yes
 
 const defaultExtra = (): ExtraFields => ({
   payout: '', country: 'US', min_age: '18', max_age: '',
-  loi_minutes: '', survey_type: 'product_interest', notes: '',
+  loi_minutes: '', survey_type: 'product_interest', description: '', notes: '',
 });
 
 const SURVEY_TYPES = [
@@ -154,7 +156,32 @@ const PublishToMoustacheModal: React.FC<Props> = ({
   const [extra, setExtra] = useState<ExtraFields>({ ...defaultExtra(), ...(existingExtra || {}) });
   const [expandedIdx, setExpandedIdx] = useState<number>(0);
   const [publishing, setPublishing] = useState(false);
-  const [result, setResult] = useState<{ success: boolean; message: string; moustacheId?: string } | null>(null);
+  const [result, setResult] = useState<{ success: boolean; message: string; moustacheId?: string; payloadSent?: any } | null>(null);
+  const [generatingDesc, setGeneratingDesc] = useState(false);
+  const [showJsonPreview, setShowJsonPreview] = useState(false);
+  const [jsonCopied, setJsonCopied] = useState(false);
+
+  // Build the preview payload (mirrors backend logic)
+  const buildPreviewPayload = () => {
+    const cleanedQuestions = questions.map(q => ({
+      ...q, options: q.options.filter(o => o.trim()),
+    }));
+    const preview: any = {
+      survey_id:   surveyShortId,
+      survey_name: surveyTitle,
+      survey_link: `https://survey.pepperwahl.com/survey/${surveyShortId}?uid={{user_id}}&src=moustache`,
+      questions:   cleanedQuestions,
+      payout_usd:  parseFloat(extra.payout) || 0,
+    };
+    if (extra.description) preview.description = extra.description;
+    if (extra.country)     preview.country      = extra.country;
+    if (extra.min_age)     preview.min_age      = parseInt(extra.min_age);
+    if (extra.max_age)     preview.max_age      = parseInt(extra.max_age);
+    if (extra.loi_minutes) preview.loi_minutes  = parseInt(extra.loi_minutes);
+    if (extra.survey_type) preview.survey_type  = extra.survey_type;
+    if (extra.notes)       preview.notes        = extra.notes;
+    return preview;
+  };
 
   useEffect(() => {
     if (existingQuestions?.length) setQuestions(existingQuestions);
@@ -206,6 +233,26 @@ const PublishToMoustacheModal: React.FC<Props> = ({
     setExpandedIdx(Math.max(0, idx - 1));
   };
 
+  const generateDescription = async () => {
+    setGeneratingDesc(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${baseUrl}/api/admin/surveys/${surveyShortId}/generate-description`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ survey_title: surveyTitle, survey_type: extra.survey_type }),
+      });
+      const data = await res.json();
+      if (data.description) {
+        setExtra(x => ({ ...x, description: data.description }));
+      }
+    } catch {
+      // silent — user can type manually
+    } finally {
+      setGeneratingDesc(false);
+    }
+  };
+
   // ── Validation ─────────────────────────────────────────────────────────────
 
   const validate = (): string | null => {
@@ -240,7 +287,7 @@ const PublishToMoustacheModal: React.FC<Props> = ({
       });
       const data = await res.json();
       if (data.success) {
-        setResult({ success: true, message: data.message, moustacheId: data.moustache_survey_id });
+        setResult({ success: true, message: data.message, moustacheId: data.moustache_survey_id, payloadSent: data.payload_sent });
         onPublished(data.moustache_survey_id, data.status);
       } else {
         setResult({ success: false, message: data.error || 'Publishing failed.' });
@@ -480,6 +527,42 @@ const PublishToMoustacheModal: React.FC<Props> = ({
               </p>
             </div>
 
+            {/* Description */}
+            <div>
+              <label style={C.label}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><FileText size={11} /> Description</span>
+              </label>
+              <div style={{ position: 'relative' }}>
+                <textarea
+                  style={{ ...C.input, resize: 'vertical' as const, minHeight: 68, paddingRight: 82 }}
+                  placeholder="Describe this survey for Moustache Leads users…"
+                  value={extra.description}
+                  onChange={e => setExtra(x => ({ ...x, description: e.target.value }))}
+                />
+                <button
+                  onClick={generateDescription}
+                  disabled={generatingDesc}
+                  title="Generate description using AI"
+                  style={{
+                    position: 'absolute', top: 7, right: 7,
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    background: generatingDesc ? '#E8D5CC' : 'linear-gradient(135deg, #7C3AED, #5B21B6)',
+                    color: '#fff', border: 'none', borderRadius: 6,
+                    padding: '4px 9px', fontSize: 10, fontWeight: 700,
+                    cursor: generatingDesc ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  {generatingDesc
+                    ? <><Loader size={10} style={{ animation: 'spin 1s linear infinite' }} /> Generating…</>
+                    : <><Sparkles size={10} /> AI Generate</>
+                  }
+                </button>
+              </div>
+              <p style={{ fontSize: 10, color: '#C4A99A', margin: '3px 0 0' }}>
+                Sent to Moustache as <code style={{ fontSize: 10 }}>description</code> · auto-generated from survey title if empty
+              </p>
+            </div>
+
             {/* Payout */}
             <div>
               <label style={C.label}>
@@ -494,6 +577,9 @@ const PublishToMoustacheModal: React.FC<Props> = ({
                 value={extra.payout}
                 onChange={e => setExtra(x => ({ ...x, payout: e.target.value }))}
               />
+              <p style={{ fontSize: 10, color: '#C4A99A', margin: '3px 0 0' }}>
+                Sent as <code style={{ fontSize: 10 }}>payout_usd</code> · defaults to 0 if blank
+              </p>
             </div>
 
             {/* Survey Type */}
@@ -512,6 +598,9 @@ const PublishToMoustacheModal: React.FC<Props> = ({
                 <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Globe size={11} /> Country</span>
               </label>
               <input style={C.input} placeholder="e.g. US, IN, GB" value={extra.country} onChange={e => setExtra(x => ({ ...x, country: e.target.value }))} />
+              <p style={{ fontSize: 10, color: '#C4A99A', margin: '3px 0 0' }}>
+                Sent as <code style={{ fontSize: 10 }}>country</code> · 2-letter ISO code
+              </p>
             </div>
 
             {/* Age range */}
@@ -546,6 +635,53 @@ const PublishToMoustacheModal: React.FC<Props> = ({
               />
             </div>
 
+            {/* JSON Preview */}
+            <div style={{ border: '1px solid #EBE8E3', borderRadius: 10, overflow: 'hidden' }}>
+              <button
+                onClick={() => setShowJsonPreview(v => !v)}
+                style={{
+                  width: '100%', padding: '9px 13px', background: showJsonPreview ? '#F0F4FF' : '#F9F7F4',
+                  border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center',
+                  justifyContent: 'space-between', fontFamily: 'inherit',
+                }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: '#4B5563' }}>
+                  <Code size={12} color="#6366F1" /> Preview JSON payload
+                </span>
+                <span style={{ fontSize: 10, color: '#9B9189' }}>
+                  {showJsonPreview ? 'Hide' : 'Show what will be sent to Moustache'}
+                </span>
+              </button>
+              {showJsonPreview && (() => {
+                const preview = result?.payloadSent || buildPreviewPayload();
+                const jsonStr = JSON.stringify(preview, null, 2);
+                return (
+                  <div style={{ position: 'relative', background: '#1E1E2E' }}>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(jsonStr); setJsonCopied(true); setTimeout(() => setJsonCopied(false), 2000); }}
+                      style={{
+                        position: 'absolute', top: 8, right: 8,
+                        display: 'flex', alignItems: 'center', gap: 4,
+                        background: jsonCopied ? '#059669' : '#374151', color: '#fff',
+                        border: 'none', borderRadius: 6, padding: '3px 8px',
+                        fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                      }}
+                    >
+                      <Copy size={10} /> {jsonCopied ? 'Copied!' : 'Copy'}
+                    </button>
+                    <pre style={{
+                      margin: 0, padding: '12px 14px', paddingTop: 34,
+                      fontSize: 10.5, color: '#E2E8F0', fontFamily: "'Fira Code', 'Consolas', monospace",
+                      overflowX: 'auto', maxHeight: 280, overflowY: 'auto',
+                      lineHeight: 1.6, whiteSpace: 'pre',
+                    }}>
+                      {jsonStr}
+                    </pre>
+                  </div>
+                );
+              })()}
+            </div>
+
             {/* Result banner */}
             {result && (
               <div style={{
@@ -566,6 +702,14 @@ const PublishToMoustacheModal: React.FC<Props> = ({
                     <p style={{ fontSize: 11, color: '#6B7280', margin: '4px 0 0' }}>
                       Moustache ID: <strong>{result.moustacheId}</strong>
                     </p>
+                  )}
+                  {result.success && result.payloadSent && (
+                    <button
+                      onClick={() => setShowJsonPreview(true)}
+                      style={{ fontSize: 10, color: '#6366F1', background: 'none', border: 'none', cursor: 'pointer', padding: '3px 0 0', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 4 }}
+                    >
+                      <Code size={10} /> View sent payload ↑
+                    </button>
                   )}
                 </div>
               </div>

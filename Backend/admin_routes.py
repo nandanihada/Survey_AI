@@ -414,7 +414,7 @@ def get_comprehensive_survey_data():
         return jsonify({'error': f'Failed to get comprehensive survey data: {str(e)}'}), 500
 
 
-# ── Survey Click Tracking (admin-wide) ───────────────────────────────────────
+# -- Survey Click Tracking (admin-wide) ---------------------------------------
 
 @admin_bp.route('/survey-clicks', methods=['GET'])
 @requireAdmin
@@ -462,7 +462,7 @@ def get_admin_survey_clicks():
             if 'click_history' in r:
                 r['click_history'] = r['click_history'][-5:]
 
-        # ── Batch geo enrichment for records missing location ──────────────
+        # -- Batch geo enrichment for records missing location --------------
         # 1. Collect unique IPs that need resolution
         SKIP_IPS = {'unknown', '127.0.0.1', '::1', 'localhost', '0.0.0.0', ''}
         ip_to_geo: dict = {}
@@ -470,7 +470,7 @@ def get_admin_survey_clicks():
         for r in records:
             if not (r.get('location') and (r['location'].get('city') or r['location'].get('country'))):
                 ip = r.get('ip_address', '')
-                # Skip private / internal IPs — they can never be resolved
+                # Skip private / internal IPs - they can never be resolved
                 if ip and ip not in SKIP_IPS and not ip.startswith(('10.', '172.', '192.168.')):
                     ips_needed.add(ip)
 
@@ -579,7 +579,7 @@ def get_clicked_surveys_list():
         return jsonify({'error': f'Failed to get surveys list: {str(e)}'}), 500
 
 
-# ── Notification endpoints ──────────────────────────────────────────────────
+# -- Notification endpoints --------------------------------------------------
 
 @admin_bp.route('/notifications', methods=['POST'])
 @requireAdmin
@@ -614,7 +614,7 @@ def send_notification():
         return jsonify({'error': f'Failed to send notification: {str(e)}'}), 500
 
 
-# ── Additional admin routes for frontend ──────────────────────────────────────────
+# -- Additional admin routes for frontend ------------------------------------------
 
 @admin_bp.route('/notifications', methods=['GET'])
 @requireAdmin
@@ -688,10 +688,10 @@ def delete_notification(notification_id):
         return jsonify({'error': str(e)}), 500
 
 
-# ─────────────────────────────────────────────────────────
+# ---------------------------------------------------------
 #  Platform-wide configuration (admin-only)
 #  Stored as a single document in db.platform_config
-# ─────────────────────────────────────────────────────────
+# ---------------------------------------------------------
 
 PLATFORM_CONFIG_ID = 'global'
 
@@ -754,7 +754,7 @@ def update_platform_config():
         return jsonify({'error': f'Failed to update platform config: {str(e)}'}), 500
 
 
-# Public endpoint — no auth required — so the survey page can read it
+# Public endpoint - no auth required - so the survey page can read it
 # Prefix is /api/admin but we expose it without auth for the survey renderer
 @admin_bp.route('/platform-config/public', methods=['GET'])
 def get_platform_config_public():
@@ -768,9 +768,9 @@ def get_platform_config_public():
         return jsonify({'error': f'Failed to get platform config: {str(e)}'}), 500
 
 
-# ─────────────────────────────────────────────────────────
+# ---------------------------------------------------------
 #  Per-survey back button override (admin-only)
-# ─────────────────────────────────────────────────────────
+# ---------------------------------------------------------
 
 @admin_bp.route('/surveys/<survey_id>/back-button', methods=['PUT'])
 @requireAdmin
@@ -813,9 +813,9 @@ def set_survey_back_button(survey_id):
         return jsonify({'error': f'Failed to update: {str(e)}'}), 500
 
 
-# ─────────────────────────────────────────────────────────
+# ---------------------------------------------------------
 #  Per-user back button override (admin-only)
-# ─────────────────────────────────────────────────────────
+# ---------------------------------------------------------
 
 @admin_bp.route('/users/<user_id>/back-button', methods=['PUT'])
 @requireAdmin
@@ -848,17 +848,17 @@ def set_user_back_button(user_id):
         return jsonify({'error': f'Failed to update: {str(e)}'}), 500
 
 
-# ─────────────────────────────────────────────────────────
-#  Public endpoint — resolved back-button for a survey
+# ---------------------------------------------------------
+#  Public endpoint - resolved back-button for a survey
 #  Precedence: survey-level > user-level > global
-# ─────────────────────────────────────────────────────────
+# ---------------------------------------------------------
 
 @admin_bp.route('/back-button-config/<survey_id>', methods=['GET'])
 def get_back_button_config(survey_id):
     """
     Return the effective back-button setting for a survey.
-    Resolution order: survey override → owner user override → global default.
-    No auth required — called by the public survey page.
+    Resolution order: survey override ? owner user override ? global default.
+    No auth required - called by the public survey page.
     """
     try:
         from bson import ObjectId as ObjId
@@ -909,9 +909,9 @@ def get_back_button_config(survey_id):
         return jsonify({'back_button_enabled': True, 'source': 'default', 'error': str(e)})
 
 
-# ─────────────────────────────────────────────────────────
+# ---------------------------------------------------------
 #  Back-exit email captures (admin view)
-# ─────────────────────────────────────────────────────────
+# ---------------------------------------------------------
 
 @admin_bp.route('/back-exits', methods=['GET'])
 @requireAdmin
@@ -934,9 +934,9 @@ def get_back_exits():
         return jsonify({'error': str(ex)}), 500
 
 
-# ─────────────────────────────────────────────────────────
-#  Moustache Leads — one-click publish integration
-# ─────────────────────────────────────────────────────────
+# ---------------------------------------------------------
+#  Moustache Leads - one-click publish integration
+# ---------------------------------------------------------
 
 @admin_bp.route('/surveys/comprehensive/paginated', methods=['GET'])
 @requireAdmin
@@ -952,6 +952,7 @@ def get_surveys_paginated():
         page     = max(int(request.args.get('page', 1)), 1)
         per_page = min(int(request.args.get('per_page', 20)), 100)
         search   = request.args.get('search', '').strip()
+        source_type = request.args.get('source_type', 'all').strip()  # 'surveys', 'funnels', 'all'
         skip     = (page - 1) * per_page
 
         match_stage = {}
@@ -1027,6 +1028,41 @@ def get_surveys_paginated():
             # Normalise: actual field is 'id', expose it as 'short_id' for the frontend
             survey['short_id'] = survey.get('id') or survey.get('short_id') or str(survey.get('_id', ''))
 
+
+        # -- Optionally include funnels ----------------------------------------
+        funnel_rows = []
+        funnel_total = 0
+        if source_type in ('funnels', 'all'):
+            funnel_match = {}
+            if search:
+                funnel_match['name'] = {'$regex': search, '$options': 'i'}
+            all_funnels = list(db.funnels.find(
+                funnel_match,
+                {'_id': 1, 'funnel_id': 1, 'name': 1, 'status': 1,
+                 'owner_user_id': 1, 'created_at': 1, 'moustache_survey_id': 1,
+                 'moustache_status': 1, 'moustache_questions': 1}
+            ).sort('created_at', -1))
+            funnel_total = len(all_funnels)
+            for f in all_funnels:
+                fid = str(f.get('funnel_id') or f.get('_id', ''))
+                f['_id'] = fid
+                f['short_id'] = fid
+                f['id'] = fid
+                f['title'] = f.get('name', 'Untitled Funnel')
+                f['source_type'] = 'funnel'
+                f['total_sessions'] = db.funnel_sessions.count_documents({'funnel_id': fid})
+                f['total_responses'] = 0
+                funnel_rows.append(f)
+
+        # Build combined result based on source_type
+        if source_type == 'funnels':
+            surveys_raw = funnel_rows
+            total_count = funnel_total
+        elif source_type == 'all':
+            surveys_raw = surveys_raw + funnel_rows
+            total_count = total_count + funnel_total
+        # else: surveys_raw already set above
+
         return jsonify({
             'surveys':    surveys_raw,
             'total':      total_count,
@@ -1038,6 +1074,48 @@ def get_surveys_paginated():
     except Exception as e:
         print(f"Error in paginated survey data: {e}")
         return jsonify({'error': f'Failed to get surveys: {str(e)}'}), 500
+
+
+@admin_bp.route('/surveys/<survey_short_id>/generate-description', methods=['POST'])
+@requireAdmin
+def generate_survey_description(survey_short_id):
+    """Generate a short marketing description for a survey using AI."""
+    import os
+    try:
+        body = request.get_json(silent=True) or {}
+        survey_title = body.get('survey_title', '')
+        survey_type  = body.get('survey_type', 'consumer research')
+
+        openai_key = os.environ.get('OPENAI_API_KEY', '')
+        if not openai_key:
+            # Fallback: generate from title without AI
+            desc = f"Participate in our {survey_title} survey. Share your opinions and help us understand consumer preferences. Takes just a few minutes."
+            return jsonify({'description': desc})
+
+        try:
+            import openai
+            client = openai.OpenAI(api_key=openai_key)
+            prompt = (
+                f"Write a short, engaging 2-sentence description (max 80 words) for a consumer survey titled "
+                f'"{survey_title}" of type "{survey_type}". '
+                f"This description will be shown to users on Moustache Leads before they take the survey. "
+                f"Make it appealing, clear, and mention that it takes a few minutes. "
+                f"Do not use quotes, markdown, or special characters. Plain text only."
+            )
+            resp = client.chat.completions.create(
+                model='gpt-3.5-turbo',
+                messages=[{'role': 'user', 'content': prompt}],
+                max_tokens=100,
+                temperature=0.7,
+            )
+            description = resp.choices[0].message.content.strip()
+        except Exception:
+            description = f"Share your thoughts on {survey_title}. This quick survey takes just a few minutes and your feedback helps us improve our products and services."
+
+        return jsonify({'description': description})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @admin_bp.route('/surveys/<survey_short_id>/publish-to-moustache', methods=['POST'])
@@ -1091,53 +1169,70 @@ def publish_to_moustache(survey_short_id):
             if not q.get('qualify_if'):
                 return jsonify({'success': False, 'error': f'Question {i+1} must have at least one qualifying answer.'}), 400
 
-        # Fetch survey from DB
-        survey = (
+        # Fetch from DB - check surveys first, then funnels (fnl_... IDs)
+        is_funnel   = False
+        survey_name = None
+        survey_link = None
+
+        survey_doc = (
             db.surveys.find_one({'id': survey_short_id}) or
             db.surveys.find_one({'short_id': survey_short_id}) or
             db.surveys.find_one({'_id': survey_short_id})
         )
-        if not survey:
-            return jsonify({'success': False, 'error': 'Survey not found.'}), 404
 
-        survey_id   = survey_short_id
-        survey_name = survey.get('title', 'Untitled Survey')
-        survey_link = f"{frontend_url}/survey/{survey_short_id}?uid={{{{user_id}}}}&src=moustache"
+        if survey_doc:
+            survey_name = survey_doc.get('title', 'Untitled Survey')
+            survey_link = f"{frontend_url}/survey/{survey_short_id}?uid={{{{user_id}}}}&src=moustache"
+        else:
+            # Try funnels collection
+            funnel_doc = (
+                db.funnels.find_one({'funnel_id': survey_short_id}) or
+                db.funnels.find_one({'_id': survey_short_id})
+            )
+            if not funnel_doc:
+                return jsonify({'success': False, 'error': 'Survey or funnel not found.'}), 404
+            is_funnel   = True
+            survey_name = funnel_doc.get('name', 'Untitled Funnel')
+            # Link to the first screening survey of the funnel
+            first_screening = (funnel_doc.get('screening_surveys') or [{}])[0]
+            first_survey_id = first_screening.get('survey_id', survey_short_id)
+            survey_link = f"{frontend_url}/survey/{first_survey_id}?funnel={survey_short_id}&uid={{{{user_id}}}}&src=moustache"
+
+        survey_id = survey_short_id  # used in payload and response
+
+        # Auto-generate description if not provided
+        description = extra.get('description', '').strip()
+        if not description:
+            description = f"Participate in our {survey_name} survey. Share your opinions and help us understand consumer preferences. Takes just a few minutes to complete."
 
         payload = {
             'survey_id':   survey_id,
             'survey_name': survey_name,
             'survey_link': survey_link,
-            'questions':   questions
+            'description': description,
+            'questions':   questions,
+            'payout_usd':  0.0,
+            'country':     extra.get('country', 'US') or 'US',
         }
 
-        # Merge optional extra fields into payload
+        # Merge extra fields - payout and country already in base payload, override if provided
         if extra.get('payout'):
-            try:
-                payload['payout_usd'] = float(extra['payout'])
-            except (ValueError, TypeError):
-                pass
+            try: payload['payout_usd'] = float(extra['payout'])
+            except (ValueError, TypeError): pass
         if extra.get('country'):
             payload['country'] = extra['country']
         if extra.get('min_age'):
-            try:
-                payload['min_age'] = int(extra['min_age'])
-            except (ValueError, TypeError):
-                pass
+            try: payload['min_age'] = int(extra['min_age'])
+            except: pass
         if extra.get('max_age'):
-            try:
-                payload['max_age'] = int(extra['max_age'])
-            except (ValueError, TypeError):
-                pass
+            try: payload['max_age'] = int(extra['max_age'])
+            except: pass
         if extra.get('loi_minutes'):
-            try:
-                payload['loi_minutes'] = int(extra['loi_minutes'])
-            except (ValueError, TypeError):
-                pass
-        if extra.get('survey_type'):
-            payload['survey_type'] = extra['survey_type']
-        if extra.get('notes'):
-            payload['notes'] = extra['notes']
+            try: payload['loi_minutes'] = int(extra['loi_minutes'])
+            except: pass
+        if extra.get('survey_type'): payload['survey_type']  = extra['survey_type']
+        if extra.get('notes'):       payload['notes']         = extra['notes']
+        if extra.get('source_type'): payload['source_type']   = extra['source_type']
 
         # Call Moustache API
         try:
@@ -1163,24 +1258,32 @@ def publish_to_moustache(survey_short_id):
         moustache_survey_id = moustache_data.get('moustache_survey_id', '')
         moustache_status    = moustache_data.get('status', 'published')
 
-        # Persist the Moustache survey ID back onto the survey document
-        db.surveys.update_one(
-            {'$or': [{'id': survey_short_id}, {'short_id': survey_short_id}, {'_id': survey_short_id}]},
-            {'$set': {
-                'moustache_survey_id': moustache_survey_id,
-                'moustache_status':    moustache_status,
-                'moustache_published_at': datetime.utcnow().isoformat(),
-                'moustache_questions': questions,
-                'moustache_extra':     extra
-            }}
-        )
+        # Persist the Moustache survey ID back onto the correct collection
+        _moustache_set = {
+            'moustache_survey_id': moustache_survey_id,
+            'moustache_status':    moustache_status,
+            'moustache_published_at': datetime.utcnow().isoformat(),
+            'moustache_questions': questions,
+            'moustache_extra':     extra
+        }
+        if is_funnel:
+            db.funnels.update_one(
+                {'$or': [{'funnel_id': survey_short_id}, {'_id': survey_short_id}]},
+                {'$set': _moustache_set}
+            )
+        else:
+            db.surveys.update_one(
+                {'$or': [{'id': survey_short_id}, {'short_id': survey_short_id}, {'_id': survey_short_id}]},
+                {'$set': _moustache_set}
+            )
 
         return jsonify({
             'success':            True,
             'moustache_survey_id': moustache_survey_id,
             'source_survey_id':   survey_id,
             'status':             moustache_status,
-            'message':            moustache_data.get('message', 'Survey published to Moustache Leads successfully.')
+            'message':            moustache_data.get('message', 'Survey published to Moustache Leads successfully.'),
+            'payload_sent':       payload,
         })
 
     except Exception as e:
@@ -1210,9 +1313,9 @@ def get_moustache_status(survey_short_id):
         return jsonify({'error': str(e)}), 500
 
 
-# ─────────────────────────────────────────────────────────
-#  Moustache Leads — bulk publish
-# ─────────────────────────────────────────────────────────
+# ---------------------------------------------------------
+#  Moustache Leads - bulk publish
+# ---------------------------------------------------------
 
 @admin_bp.route('/surveys/bulk-publish-to-moustache', methods=['POST'])
 @requireAdmin

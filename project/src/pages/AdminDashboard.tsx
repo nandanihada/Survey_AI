@@ -121,6 +121,7 @@ const AdminDashboard: React.FC = () => {
   const [surveyTotalPages, setSurveyTotalPages] = useState(1);
   const [surveySearch, setSurveySearch] = useState('');
   const [surveySearchInput, setSurveySearchInput] = useState('');
+  const [surveySourceType, setSurveySourceType] = useState<'surveys'|'funnels'|'all'>('surveys');
   const [surveysLoading, setSurveysLoading] = useState(false);
   // ── Moustache publish modal ───────────────────────────────────────────────
   const [moustacheModal, setMoustacheModal] = useState<{
@@ -128,10 +129,10 @@ const AdminDashboard: React.FC = () => {
     surveyTitle: string;
     existingMoustacheId?: string | null;
     existingQuestions?: any[];
+    sourceType?: 'survey' | 'funnel';
   } | null>(null);
-  // ── Bulk publish ──────────────────────────────────────────────────────────
-  const [selectedSurveyIds, setSelectedSurveyIds] = useState<string[]>([]);
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [selectedSurveyIds, setSelectedSurveyIds] = useState<string[]>([]);
   const [filters, setFilters] = useState<Filter[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking' | 'tracking' | 'contacts' | 'deletions' | 'referrals' | 'earnings-config' | 'survey-report' | 'survey-flow-tracking' | 'funnel-tracking' | 'location-control' | 'survey-settings' | 'back-exits' | 'plan-features' | 'resubmit-policy' | 'survey-click-tracking'>('users');
@@ -343,7 +344,7 @@ const AdminDashboard: React.FC = () => {
   };
 
   // Survey functions
-  const fetchAllSurveys = async (page = 1, search = '') => {
+  const fetchAllSurveys = async (page = 1, search = '', sourceType: 'surveys'|'funnels'|'all' = 'surveys') => {
     try {
       setSurveysLoading(true);
       setSelectedSurveyIds([]); // clear selections on every load
@@ -351,7 +352,8 @@ const AdminDashboard: React.FC = () => {
       const params = new URLSearchParams({
         page: String(page),
         per_page: String(surveyPerPage),
-        ...(search ? { search } : {})
+        ...(search ? { search } : {}),
+        source_type: sourceType,
       });
       const response = await fetch(`${baseUrl}/api/admin/surveys/comprehensive/paginated?${params}`, {
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
@@ -547,7 +549,7 @@ const AdminDashboard: React.FC = () => {
       if (activeTab === 'users') {
         await fetchUsers();
       } else if (activeTab === 'surveys') {
-        await fetchAllSurveys(1, surveySearch);
+        await fetchAllSurveys(1, surveySearch, surveySourceType);
       } else if (activeTab === 'filters') {
         await fetchFilters();
       }
@@ -938,6 +940,24 @@ const AdminDashboard: React.FC = () => {
                         <span style={{ fontSize: 11, color: "#6B6158", fontWeight: 600, userSelect: "none" }}>All</span>
                       </div>
 
+
+                      {/* Source type toggle */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 3, background: "#F5F1E8", borderRadius: 9, padding: 3, flexShrink: 0 }}>
+                        {([["surveys","Surveys"],["funnels","Funnels"],["all","All"]] as const).map(([val, label]) => (
+                          <button
+                            key={val}
+                            onClick={() => { setSurveySourceType(val); fetchAllSurveys(1, surveySearch, val); }}
+                            style={{
+                              fontSize: 11, fontWeight: 600, padding: "5px 12px", borderRadius: 7, border: "none",
+                              background: surveySourceType === val ? "#FDFCFA" : "transparent",
+                              color: surveySourceType === val ? "#C4785C" : "#9B9189",
+                              cursor: "pointer", fontFamily: "inherit",
+                              boxShadow: surveySourceType === val ? "0 1px 3px rgba(45,37,32,0.1)" : "none",
+                            }}
+                          >{label}</button>
+                        ))}
+                      </div>
+
                       {/* Bulk publish button — visible when ≥1 selected */}
                       {selectedSurveyIds.length > 0 && (
                         <button
@@ -957,23 +977,23 @@ const AdminDashboard: React.FC = () => {
                           value={surveySearchInput}
                           onChange={e => setSurveySearchInput(e.target.value)}
                           onKeyDown={e => {
-                            if (e.key === 'Enter') { setSurveySearch(surveySearchInput); fetchAllSurveys(1, surveySearchInput); }
+                            if (e.key === 'Enter') { setSurveySearch(surveySearchInput); fetchAllSurveys(1, surveySearchInput, surveySourceType); }
                           }}
                         />
                       </div>
                       <button
-                        onClick={() => { setSurveySearch(surveySearchInput); fetchAllSurveys(1, surveySearchInput); }}
+                        onClick={() => { setSurveySearch(surveySearchInput); fetchAllSurveys(1, surveySearchInput, surveySourceType); }}
                         style={{ background: '#C4785C', color: '#fff', border: 'none', borderRadius: 9, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
                       >Search</button>
                       {surveySearch && (
                         <button
-                          onClick={() => { setSurveySearch(''); setSurveySearchInput(''); fetchAllSurveys(1, ''); }}
+                          onClick={() => { setSurveySearch(''); setSurveySearchInput(''); fetchAllSurveys(1, '', surveySourceType); }}
                           style={{ background: '#F5F1E8', border: '1px solid #EBE8E3', borderRadius: 9, padding: '7px 12px', fontSize: 12, color: '#6B6158', cursor: 'pointer', fontFamily: 'inherit' }}
                         >Clear</button>
                       )}
                       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ fontSize: 11, color: '#9B9189' }}>{surveyTotal} total · page {surveyPage} of {surveyTotalPages}</span>
-                        <button onClick={() => fetchAllSurveys(surveyPage, surveySearch)} title="Refresh" style={{ background: '#F5F1E8', border: '1px solid #EBE8E3', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                        <button onClick={() => fetchAllSurveys(surveyPage, surveySearch, surveySourceType)} title="Refresh" style={{ background: '#F5F1E8', border: '1px solid #EBE8E3', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                           <RefreshCw size={12} color="#9B9189" />
                         </button>
                       </div>
@@ -1039,7 +1059,7 @@ const AdminDashboard: React.FC = () => {
                                   {survey.total_sessions || 0} sessions · {survey.total_responses || 0} responses
                                 </span>
                                 <span style={{ fontSize: 11, color: '#C4A99A' }}>
-                                  {survey.created_at ? new Date(survey.created_at).toLocaleDateString() : '—'}
+                                  {survey.created_at ? new Date(survey.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'}
                                 </span>
                               </div>
                             </div>
@@ -1063,6 +1083,7 @@ const AdminDashboard: React.FC = () => {
                                   surveyTitle: survey.title,
                                   existingMoustacheId: survey.moustache_survey_id || null,
                                   existingQuestions: survey.moustache_questions || [],
+                                  sourceType: (survey.source_type || 'survey') as 'survey' | 'funnel',
                                 })}
                                 style={{
                                   display: 'flex', alignItems: 'center', gap: 5,
@@ -1092,7 +1113,7 @@ const AdminDashboard: React.FC = () => {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                           <button
                             disabled={surveyPage <= 1}
-                            onClick={() => fetchAllSurveys(surveyPage - 1, surveySearch)}
+                            onClick={() => fetchAllSurveys(surveyPage - 1, surveySearch, surveySourceType)}
                             style={{ width: 30, height: 30, borderRadius: 7, border: '1px solid #EBE8E3', background: surveyPage <= 1 ? '#F5F1E8' : '#FDFCFA', cursor: surveyPage <= 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: surveyPage <= 1 ? 0.4 : 1 }}
                           ><ChevronLeft size={13} color="#6B6158" /></button>
 
@@ -1106,7 +1127,7 @@ const AdminDashboard: React.FC = () => {
                             return (
                               <button
                                 key={pg}
-                                onClick={() => fetchAllSurveys(pg, surveySearch)}
+                                onClick={() => fetchAllSurveys(pg, surveySearch, surveySourceType)}
                                 style={{
                                   width: 30, height: 30, borderRadius: 7, border: '1px solid #EBE8E3',
                                   background: surveyPage === pg ? '#C4785C' : '#FDFCFA',
@@ -1120,7 +1141,7 @@ const AdminDashboard: React.FC = () => {
 
                           <button
                             disabled={surveyPage >= surveyTotalPages}
-                            onClick={() => fetchAllSurveys(surveyPage + 1, surveySearch)}
+                            onClick={() => fetchAllSurveys(surveyPage + 1, surveySearch, surveySourceType)}
                             style={{ width: 30, height: 30, borderRadius: 7, border: '1px solid #EBE8E3', background: surveyPage >= surveyTotalPages ? '#F5F1E8' : '#FDFCFA', cursor: surveyPage >= surveyTotalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: surveyPage >= surveyTotalPages ? 0.4 : 1 }}
                           ><ChevronRight size={13} color="#6B6158" /></button>
                         </div>
@@ -1408,7 +1429,7 @@ const AdminDashboard: React.FC = () => {
 
                                 <div className="mt-2 flex items-center gap-4 text-xs text-gray-500">
                                   <span>Priority: {filter.priority}</span>
-                                  <span>Created: {new Date(filter.created_at).toLocaleDateString()}</span>
+                                  <span>Created: {new Date(filter.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}</span>
                                 </div>
                               </div>
 

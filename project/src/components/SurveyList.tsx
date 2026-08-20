@@ -50,6 +50,8 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
   const [error, setError] = useState<string>('');
   const [showPromptId, setShowPromptId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo]     = useState<string>('');
   const [cloningId, setCloningId] = useState<string | null>(null);
   // Track which survey IDs have an unsaved local draft
   const [localDraftIds, setLocalDraftIds] = useState<Set<string>>(new Set());
@@ -156,7 +158,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
+    return new Date(dateString).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
   };
 
   const generateShortTitle = (title: string): string => {
@@ -264,16 +266,31 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
   const inputBase = `pl-9 pr-3 py-2 border rounded-lg text-sm transition-colors focus:ring-2 focus:ring-red-500/20 focus:border-red-500`;
   const cardBase = `rounded-xl border p-5 transition-all duration-200 hover:shadow-sm`;
 
-  // Filter surveys by search query — matches title, prompt, short_id, or _id
-  const filteredSurveys = searchQuery.trim()
-    ? surveys.filter(s => {
-        const q = searchQuery.toLowerCase();
-        const title = (s.title || s.prompt || '').toLowerCase();
-        const shortId = (s.short_id || '').toLowerCase();
-        const mongoId = (s._id || s.id || '').toLowerCase();
-        return title.includes(q) || shortId.includes(q) || mongoId.includes(q);
-      })
-    : surveys;
+  // Filter surveys by search query + date range
+  const filteredSurveys = surveys.filter(s => {
+    // Search filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const title = (s.title || s.prompt || '').toLowerCase();
+      const shortId = (s.short_id || '').toLowerCase();
+      const mongoId = (s._id || s.id || '').toLowerCase();
+      if (!title.includes(q) && !shortId.includes(q) && !mongoId.includes(q)) return false;
+    }
+    // Date from filter (IST start of day)
+    if (dateFrom && s.created_at) {
+      const created = new Date(s.created_at);
+      const from = new Date(dateFrom + 'T00:00:00+05:30');
+      if (created < from) return false;
+    }
+    // Date to filter (IST end of day)
+    if (dateTo && s.created_at) {
+      const created = new Date(s.created_at);
+      const to = new Date(dateTo + 'T23:59:59+05:30');
+      if (created > to) return false;
+    }
+    return true;
+  });
+
 
   return (
     <div className="space-y-6">
@@ -302,6 +319,28 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
             </button>
           </div>
           <button onClick={() => onCreateNew?.()} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2">
+          {/* Date filters */}
+          <div className="flex flex-wrap items-center gap-2 mt-1">
+            <div className="flex items-center gap-1.5">
+              <Calendar size={12} className="text-gray-400 flex-shrink-0" />
+              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+                className={`px-2 py-1.5 rounded-lg border text-xs ${isDarkMode ? "bg-slate-700 border-slate-600 text-white" : "bg-stone-50 border-stone-300 text-stone-800"}`}
+                title="From date (IST)"
+              />
+              <span className="text-xs text-gray-400">to</span>
+              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+                className={`px-2 py-1.5 rounded-lg border text-xs ${isDarkMode ? "bg-slate-700 border-slate-600 text-white" : "bg-stone-50 border-stone-300 text-stone-800"}`}
+                title="To date (IST)"
+              />
+            </div>
+            {(dateFrom || dateTo) && (
+              <button onClick={() => { setDateFrom(""); setDateTo(""); }}
+                className="text-xs px-2 py-1 rounded-lg border border-stone-300 text-stone-500 hover:bg-stone-50">
+                Clear dates
+              </button>
+            )}
+          </div>
+
             <Plus size={16} />
             <span className="sm:inline">Create New</span>
           </button>
