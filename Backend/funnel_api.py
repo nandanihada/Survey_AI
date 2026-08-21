@@ -580,7 +580,9 @@ STRICT RULES:
         raise Exception(f"AI API error {resp.status_code}: {resp.text[:200]}")
 
     survey_data = json.loads(resp.json()["choices"][0]["message"]["content"])
-    questions = survey_data.get("questions", [])
+    raw_questions = survey_data.get("questions", [])
+    # Guard: AI sometimes returns a list with strings or nested dicts — keep only dicts
+    questions = [q for q in raw_questions if isinstance(q, dict)]
 
     # Ensure each question has a unique ID and funnel fields
     # Also build a lookup of explicitly defined termination conditions from the prompt
@@ -876,6 +878,55 @@ def update_funnel(funnel_id):
 
 
 # ═══════════════════════════════════════════════════════
+#  DELETE FUNNEL
+# ═══════════════════════════════════════════════════════
+
+@funnel_bp.route("/api/funnels/<funnel_id>", methods=["DELETE", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins=ALLOWED_ORIGINS)
+@requireAuth
+def delete_funnel(funnel_id):
+    """Delete a funnel and all its associated surveys."""
+    if request.method == "OPTIONS":
+        return "", 200
+
+    funnel = db.funnels.find_one({"funnel_id": funnel_id})
+    if not funnel:
+        return jsonify({"error": "Funnel not found"}), 404
+
+    # Collect all survey IDs to delete
+    survey_ids_to_delete = []
+    for ss in funnel.get("screening_surveys", []):
+        if ss.get("survey_id"):
+            survey_ids_to_delete.append(ss["survey_id"])
+    for job_cfg in funnel.get("job_surveys", {}).values():
+        if job_cfg.get("survey_id"):
+            survey_ids_to_delete.append(job_cfg["survey_id"])
+    # Also check generated_surveys for any extras
+    for gs in funnel.get("generated_surveys", []):
+        sid = gs.get("survey_id")
+        if sid and sid not in survey_ids_to_delete:
+            survey_ids_to_delete.append(sid)
+
+    # Delete all surveys
+    deleted_surveys = 0
+    if survey_ids_to_delete:
+        result = db.surveys.delete_many({"id": {"$in": survey_ids_to_delete}})
+        deleted_surveys = result.deleted_count
+
+    # Delete funnel sessions
+    db.funnel_sessions.delete_many({"funnel_id": funnel_id})
+
+    # Delete the funnel
+    db.funnels.delete_one({"funnel_id": funnel_id})
+
+    return jsonify({
+        "success": True,
+        "deleted_surveys": deleted_surveys,
+        "funnel_id": funnel_id
+    }), 200
+
+
+# ═══════════════════════════════════════════════════════
 #  RUNTIME — SCREENING SURVEY SUBMIT
 # ═══════════════════════════════════════════════════════
 
@@ -1053,54 +1104,250 @@ def get_funnel_sessions(funnel_id):
 #  REPAIR: fix yes_no questions missing options in funnel surveys
 # ═══════════════════════════════════════════════════════
 
-@funnel_bp.route("/api/funnels/<funnel_id>/repair-generated", methods=["POST", "OPTIONS"])
+@funnel_bp.route("/api/funnels/<funnel_id>/regenerate-screening", methods=["POST", "OPTIONS"])
 @cross_origin(supports_credentials=True, origins=ALLOWED_ORIGINS)
 @requireAuth
-def repair_funnel_generated_surveys(funnel_id):
+def regenerate_screening_surveys(funnel_id):
     """
-    Rebuilds the generated_surveys list for an existing funnel by
-    looking up the actual survey documents. Fixes funnels where
-    screening surveys are missing from generated_surveys.
+    Regenerates missing screening surveys for a funnel using the stored funnel_plan.
+    Called when screening surveys failed during initial generation.
     """
     if request.method == "OPTIONS":
         return "", 200
 
+    try:
+        funnel = db.funnels.find_one({"funnel_id": funnel_id})
+        if not funnel:
+            return jsonify({"error": "Funnel not found"}), 404
+
+        # Get the owner's API key
+        owner_user_id = funnel.get("owner_user_id", "")
+        user_doc = db.users.find_one({"user_id": owner_user_id}) or db.users.find_one({"id": owner_user_id})
+        api_key = None
+        if user_doc:
+            api_key = user_doc.get("openai_api_key") or user_doc.get("api_key")
+        if not api_key:
+            # Fall back to system key from environment
+            import os
+            api_key = os.environ.get("OPENAI_API_KEY", "")
+        if not api_key:
+            return jsonify({"error": "No API key available"}), 400
+
+        funnel_plan = funnel.get("funnel_plan", {})
+        screening_plan = funnel_plan.get("screening_surveys", [])
+        original_prompt = funnel.get("original_prompt", "")
+
+        if not screening_plan:
+            return jsonify({"error": "No screening survey plan found in funnel_plan"}), 400
+
+        existing_screening_ids = {s.get("survey_id") for s in funnel.get("screening_surveys", [])}
+        generated = []
+        new_screening_survey_ids = list(funnel.get("screening_surveys", []))
+        existing_generated = list(funnel.get("generated_surveys", []))
+        questions_asked_so_far = []
+
+        errors = []
+        for s_meta in screening_plan:
+            s_idx = s_meta.get("index", 0)
+            # Skip if already exists at this layer index
+            already_exists = any(
+                s.get("index") == s_idx
+                for s in funnel.get("screening_surveys", [])
+                if db.surveys.count_documents({"id": s.get("survey_id", "")}) > 0
+            )
+            if already_exists:
+                continue
+
+            try:
+                survey_doc = _generate_single_survey(
+                    api_key=api_key,
+                    survey_name=s_meta["name"],
+                    survey_purpose=s_meta["purpose"],
+                    key_topics=s_meta.get("key_topics", []),
+                    survey_type="screening",
+                    funnel_plan=funnel_plan,
+                    owner_user_id=owner_user_id,
+                    funnel_id=funnel_id,
+                    layer_index=s_idx,
+                    original_prompt=original_prompt,
+                    questions_asked_so_far=questions_asked_so_far
+                )
+                for q in survey_doc.get("questions", []):
+                    questions_asked_so_far.append({"topic": q.get("question", "")[:80], "survey": s_meta["name"]})
+
+                entry = {
+                    "survey_id": survey_doc["id"],
+                    "name": s_meta["name"],
+                    "index": s_idx,
+                    "purpose": s_meta.get("purpose", "")
+                }
+                new_screening_survey_ids.append(entry)
+                generated.append({
+                    "type": "screening",
+                    "index": s_idx,
+                    "survey_id": survey_doc["id"],
+                    "name": s_meta["name"],
+                    "question_count": len(survey_doc.get("questions", []))
+                })
+            except Exception as e:
+                import traceback
+                tb = traceback.format_exc()
+                print(f"[regenerate-screening] FAIL {s_meta.get('name')}: {tb}")
+                errors.append(f"{s_meta['name']}: {str(e)}")
+
+        if not generated:
+            return jsonify({"success": False, "error": "All screening survey generations failed", "details": errors}), 200
+
+        # Apply scoring matrix to new screening surveys
+        try:
+            scoring_matrix = _generate_scoring_matrix(
+                api_key=api_key,
+                funnel_plan=funnel_plan,
+                screening_survey_ids=[{"survey_id": g["survey_id"], "name": g["name"]} for g in generated],
+                original_prompt=original_prompt
+            )
+            _apply_scoring_to_surveys(scoring_matrix, [{"survey_id": g["survey_id"], "name": g["name"]} for g in generated])
+        except Exception as e:
+            errors.append(f"Scoring: {str(e)}")
+
+        # Rebuild full generated_surveys list: screening first, then existing jobs
+        job_surveys = [g for g in existing_generated if g.get("type") == "job"]
+        full_generated = sorted(generated, key=lambda x: x.get("index", 0)) + job_surveys
+
+        db.funnels.update_one(
+            {"funnel_id": funnel_id},
+            {"$set": {
+                "screening_surveys": new_screening_survey_ids,
+                "generated_surveys": full_generated,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+
+        return jsonify({
+            "success": True,
+            "generated": len(generated),
+            "errors": errors,
+            "screening_surveys": generated
+        }), 200
+
+    except Exception as e:
+        import traceback
+        print(f"[regenerate-screening] FATAL: {traceback.format_exc()}")
+        return jsonify({"success": False, "error": str(e)}), 200
+
+
+@funnel_bp.route("/api/funnels/<funnel_id>/debug-surveys", methods=["GET", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins=ALLOWED_ORIGINS)
+@requireAuth
+def debug_funnel_surveys(funnel_id):
+    if request.method == "OPTIONS":
+        return "", 200
+    funnel = db.funnels.find_one({"funnel_id": funnel_id})
+    if not funnel:
+        return jsonify({"error": "Funnel not found"}), 404
+    stored_screening = funnel.get("screening_surveys", [])
+    stored_generated = funnel.get("generated_surveys", [])
+    actual_surveys = list(db.surveys.find(
+        {"funnel_id": funnel_id},
+        {"id": 1, "title": 1, "funnel_survey_type": 1, "funnel_layer_index": 1, "_id": 0}
+    ))
+    return jsonify({
+        "funnel_id": funnel_id,
+        "stored_screening_surveys": stored_screening,
+        "stored_generated_surveys": stored_generated,
+        "actual_surveys_in_db": actual_surveys,
+        "counts": {
+            "stored_screening": len(stored_screening),
+            "stored_generated": len(stored_generated),
+            "actual_in_db": len(actual_surveys),
+            "actual_screening": sum(1 for s in actual_surveys if s.get("funnel_survey_type") == "screening"),
+            "actual_job": sum(1 for s in actual_surveys if s.get("funnel_survey_type") == "job"),
+        }
+    }), 200
+
+
+@funnel_bp.route("/api/funnels/<funnel_id>/repair-generated", methods=["POST", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins=ALLOWED_ORIGINS)
+@requireAuth
+def repair_funnel_generated_surveys(funnel_id):
+    if request.method == "OPTIONS":
+        return "", 200
     funnel = db.funnels.find_one({"funnel_id": funnel_id})
     if not funnel:
         return jsonify({"error": "Funnel not found"}), 404
 
-    rebuilt = []
+    rebuilt_generated = []
+    rebuilt_screening = list(funnel.get("screening_surveys", []))
+    found_ids = set()
 
-    # Add screening surveys from the screening_surveys field
+    # Source 1: screening_surveys field in funnel doc
     for ss in funnel.get("screening_surveys", []):
         survey_doc = db.surveys.find_one({"id": ss["survey_id"]})
         if survey_doc:
-            rebuilt.append({
+            rebuilt_generated.append({
                 "type": "screening",
                 "index": ss.get("index", 0),
                 "survey_id": ss["survey_id"],
                 "name": ss.get("name", survey_doc.get("title", "Screening")),
                 "question_count": len(survey_doc.get("questions", []))
             })
+            found_ids.add(ss["survey_id"])
 
-    # Add job surveys from the job_surveys field
-    for job_id_key, job_cfg in funnel.get("job_surveys", {}).items():
-        survey_doc = db.surveys.find_one({"id": job_cfg["survey_id"]})
-        if survey_doc:
-            rebuilt.append({
+    # Source 2: scan surveys collection by funnel_id (catches missing entries)
+    db_surveys = list(db.surveys.find({"funnel_id": funnel_id}))
+    for sv in db_surveys:
+        sv_id = sv.get("id", str(sv.get("_id", "")))
+        sv_type = sv.get("funnel_survey_type", "")
+        if sv_id in found_ids:
+            continue
+        if sv_type == "screening":
+            layer_idx = sv.get("funnel_layer_index", 0)
+            entry = {
+                "type": "screening",
+                "index": layer_idx,
+                "survey_id": sv_id,
+                "name": sv.get("title", f"Screening {layer_idx + 1}"),
+                "question_count": len(sv.get("questions", []))
+            }
+            rebuilt_generated.append(entry)
+            found_ids.add(sv_id)
+            if not any(s.get("survey_id") == sv_id for s in rebuilt_screening):
+                rebuilt_screening.append({
+                    "survey_id": sv_id,
+                    "name": sv.get("title", f"Screening {layer_idx + 1}"),
+                    "index": layer_idx,
+                    "purpose": ""
+                })
+        elif sv_type == "job":
+            job_id_key = sv.get("funnel_job_id", sv_id)
+            job_cfg = funnel.get("job_surveys", {}).get(job_id_key, {})
+            rebuilt_generated.append({
                 "type": "job",
                 "job_id": job_id_key,
-                "survey_id": job_cfg["survey_id"],
-                "name": job_cfg.get("display_name", survey_doc.get("title", job_id_key)),
-                "question_count": len(survey_doc.get("questions", []))
+                "survey_id": sv_id,
+                "name": job_cfg.get("display_name", sv.get("title", job_id_key)),
+                "question_count": len(sv.get("questions", []))
             })
+            found_ids.add(sv_id)
+
+    rebuilt_generated.sort(key=lambda x: (0 if x["type"] == "screening" else 1, x.get("index", 0)))
 
     db.funnels.update_one(
         {"funnel_id": funnel_id},
-        {"$set": {"generated_surveys": rebuilt, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        {"$set": {
+            "generated_surveys": rebuilt_generated,
+            "screening_surveys": rebuilt_screening,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
     )
 
-    return jsonify({"success": True, "rebuilt": len(rebuilt), "generated_surveys": rebuilt}), 200
+    return jsonify({
+        "success": True,
+        "rebuilt": len(rebuilt_generated),
+        "screening_count": sum(1 for s in rebuilt_generated if s["type"] == "screening"),
+        "job_count": sum(1 for s in rebuilt_generated if s["type"] == "job"),
+        "generated_surveys": rebuilt_generated
+    }), 200
 
 
 

@@ -78,6 +78,62 @@ interface Funnel {
 
 // ─── Threshold Redirect Rules Component ──────────────────
 
+// ─── Regenerate Screening Button ─────────────────────────
+const RegenerateScreeningButton: React.FC<{
+  funnelId: string;
+  apiBase: string;
+  authHeaders: () => Record<string, string>;
+  onRefresh: () => void;
+  compact?: boolean;
+}> = ({ funnelId, apiBase, authHeaders, onRefresh, compact }) => {
+  const [loading, setLoading] = React.useState(false);
+
+  const handleClick = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${apiBase}/api/funnels/${funnelId}/regenerate-screening`, {
+        method: 'POST', headers: authHeaders()
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`Generated ${data.generated} screening survey${data.generated !== 1 ? 's' : ''}! Refreshing...`);
+        onRefresh();
+      } else {
+        const msg = data.error || data.details?.join(', ') || 'Unknown error';
+        alert('Failed to regenerate: ' + msg);
+      }
+    } catch (e) {
+      alert('Error: ' + String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (compact) {
+    return (
+      <button
+        onClick={handleClick}
+        disabled={loading}
+        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-orange-300 text-orange-600 bg-orange-50 hover:bg-orange-100 font-medium disabled:opacity-60"
+      >
+        {loading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+        {loading ? 'Regenerating...' : 'Fix missing surveys'}
+      </button>
+    );
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={loading}
+      className="text-xs px-3 py-1.5 rounded-lg bg-orange-100 text-orange-700 hover:bg-orange-200 font-medium disabled:opacity-60 flex items-center gap-1.5"
+    >
+      {loading ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
+      {loading ? 'Regenerating screening surveys...' : 'Regenerate screening surveys'}
+    </button>
+  );
+};
+
 const OPERATORS = ['>=', '>', '<=', '<', '=='];
 
 const ThresholdRedirectRules: React.FC<{
@@ -609,6 +665,7 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
   const [tempFallback, setTempFallback] = useState('');
   const [analytics, setAnalytics] = useState<any>(null);
   const [copied, setCopied] = useState(false);
+  const [deletingFunnel, setDeletingFunnel] = useState(false);
 
   const authHeaders = () => {
     const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt_token') || '';
@@ -656,6 +713,26 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const deleteFunnel = async () => {
+    if (!window.confirm(`Are you sure you want to delete "${funnel.name}" and all its surveys? This cannot be undone.`)) return;
+    setDeletingFunnel(true);
+    try {
+      const res = await fetch(`${apiBase}/api/funnels/${funnel.funnel_id}`, {
+        method: 'DELETE', headers: authHeaders()
+      });
+      const data = await res.json();
+      if (data.success) {
+        onRefresh();
+      } else {
+        alert('Delete failed: ' + (data.error || 'Unknown error'));
+      }
+    } catch (e) {
+      alert('Error: ' + String(e));
+    } finally {
+      setDeletingFunnel(false);
+    }
+  };
+
   useEffect(() => { if (expanded && !analytics) fetchAnalytics(); }, [expanded]);
 
   const cardBg = isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200';
@@ -686,6 +763,14 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
           <span className={`text-xs px-2 py-0.5 rounded-full ${funnel.status === 'active' ? isDarkMode ? 'bg-green-900/50 text-green-400' : 'bg-green-100 text-green-700' : isDarkMode ? 'bg-gray-700 text-gray-500' : 'bg-gray-100 text-gray-500'}`}>
             {funnel.status}
           </span>
+          <button
+            onClick={e => { e.stopPropagation(); deleteFunnel(); }}
+            disabled={deletingFunnel}
+            title="Delete funnel"
+            className={`p-1 rounded-lg transition disabled:opacity-50 ${isDarkMode ? 'text-red-400 hover:bg-red-900/40 hover:text-red-300' : 'text-red-400 hover:bg-red-50 hover:text-red-600'}`}
+          >
+            {deletingFunnel ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+          </button>
           {expanded ? <ChevronDown size={16} className={textMuted} /> : <ChevronRight size={16} className={textMuted} />}
         </div>
       </div>
@@ -717,21 +802,22 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
                 className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border ${isDarkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
                 <BarChart3 size={12} /> Refresh analytics
               </button>
-              {/* Show repair button when screening surveys are missing from generated_surveys */}
-              {funnel.generated_surveys.filter(s => s.type === 'screening').length === 0 && funnel.screening_surveys.length > 0 && (
-                <button
-                  onClick={async () => {
-                    try {
-                      const res = await fetch(`${apiBase}/api/funnels/${funnel.funnel_id}/repair-generated`, {
-                        method: 'POST', headers: authHeaders()
-                      });
-                      if (res.ok) { onRefresh(); }
-                    } catch {}
-                  }}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-orange-300 text-orange-600 bg-orange-50 hover:bg-orange-100"
-                >
-                  <RefreshCw size={12} /> Fix missing surveys
-                </button>
+              <button
+                onClick={deleteFunnel}
+                disabled={deletingFunnel}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border disabled:opacity-50 ${isDarkMode ? 'border-red-800/60 text-red-400 hover:bg-red-900/30' : 'border-red-200 text-red-600 hover:bg-red-50'}`}>
+                {deletingFunnel ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                {deletingFunnel ? 'Deleting...' : 'Delete Funnel'}
+              </button>
+              {/* Regenerate button — shown whenever Phase 1 screening is empty */}
+              {funnel.generated_surveys.filter(s => s.type === 'screening').length === 0 && (
+                <RegenerateScreeningButton
+                  funnelId={funnel.funnel_id}
+                  apiBase={apiBase}
+                  authHeaders={authHeaders}
+                  onRefresh={onRefresh}
+                  compact
+                />
               )}
             </div>
 
@@ -748,25 +834,38 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
               </div>
             )}
 
-            {/* Screening surveys — use generated_surveys if available, fall back to screening_surveys */}
+            {/* Screening surveys */}
             <div>
               <p className={`text-xs font-semibold uppercase tracking-wide mb-2 flex items-center gap-2 ${textMuted}`}>
                 <Filter size={12} /> Phase 1 — Screening
               </p>
               <div className="space-y-2">
                 {(() => {
-                  // Primary source: generated_surveys with type=screening
+                  // Combine all sources: generated_surveys(screening) + screening_surveys fallback
                   const fromGenerated = funnel.generated_surveys.filter(s => s.type === 'screening');
-                  // Fallback: screening_surveys array (always populated correctly)
-                  const displayList = fromGenerated.length > 0
-                    ? fromGenerated
-                    : funnel.screening_surveys.map((s, i) => ({
-                        survey_id: s.survey_id,
-                        name: s.name,
-                        question_count: 0,
-                        index: s.index ?? i,
-                        type: 'screening' as const
-                      }));
+                  const fallback = funnel.screening_surveys.filter(ss =>
+                    !fromGenerated.some(g => g.survey_id === ss.survey_id)
+                  ).map((s, i) => ({
+                    survey_id: s.survey_id,
+                    name: s.name,
+                    question_count: 0,
+                    index: s.index ?? i,
+                    type: 'screening' as const
+                  }));
+                  const displayList = [...fromGenerated, ...fallback];
+                  if (displayList.length === 0) {
+                    return (
+                      <div className={`rounded-xl border border-dashed px-4 py-3 text-center ${isDarkMode ? 'border-gray-600 text-gray-500' : 'border-gray-300 text-gray-400'}`}>
+                        <p className="text-xs mb-2">Screening surveys not linked. Click Fix below.</p>
+                        <RegenerateScreeningButton
+                          funnelId={funnel.funnel_id}
+                          apiBase={apiBase}
+                          authHeaders={authHeaders}
+                          onRefresh={onRefresh}
+                        />
+                      </div>
+                    );
+                  }
                   return displayList.map(s => (
                     <div key={s.survey_id} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${isDarkMode ? 'bg-gray-750 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
                       <div className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${isDarkMode ? 'bg-blue-900 text-blue-300' : 'bg-blue-100 text-blue-700'}`}>
@@ -774,8 +873,8 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className={`text-sm font-medium truncate ${textMain}`}>{s.name}</p>
-                        {'question_count' in s && s.question_count > 0 && (
-                          <p className={`text-xs ${textMuted}`}>{s.question_count} questions</p>
+                        {'question_count' in s && (s as any).question_count > 0 && (
+                          <p className={`text-xs ${textMuted}`}>{(s as any).question_count} questions</p>
                         )}
                       </div>
                       <button onClick={() => window.open(`/edit/${s.survey_id}`, '_blank')}
