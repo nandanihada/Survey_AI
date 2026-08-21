@@ -41,6 +41,8 @@ def run_screening_check(questions: List[dict], answers: Dict[str, str]) -> dict:
                              "criminal", "felony", "license", "certified", "visa", "permit"]
 
     for q in questions:
+        if not isinstance(q, dict):
+            continue
         role = q.get("funnel_role", "neutral")  # screen | score | both | neutral
         if role not in ("screen", "both"):
             continue
@@ -97,6 +99,8 @@ def calculate_scores_from_answers(questions: List[dict], answers: Dict[str, str]
     totals: Dict[str, float] = {}
 
     for q in questions:
+        if not isinstance(q, dict):
+            continue
         role = q.get("funnel_role", "neutral")
         if role not in ("score", "both"):
             continue

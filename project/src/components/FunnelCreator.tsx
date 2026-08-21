@@ -522,7 +522,7 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
         {/* Job profiles */}
         <div>
           <p className={`text-xs font-semibold uppercase tracking-wide mb-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-            Phase 2 — Job Surveys (cascade on fail)
+            Phase 2 — Destination Surveys (cascade on fail)
           </p>
           <div className="space-y-2">
             {(funnelPlan.job_profiles || []).map((j, i) => (
@@ -621,7 +621,7 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
                   {s.name} — {s.question_count} questions
                 </span>
                 <span className={`ml-auto text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                  {s.type === 'screening' ? 'Screening' : 'Job Survey'}
+                  {s.type === 'screening' ? 'Screening' : 'Destination Survey'}
                 </span>
               </div>
             ))}

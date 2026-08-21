@@ -73,6 +73,33 @@ def analyze_funnel_prompt():
         lines = [f"  - {k}: {v}" for k, v in clarification_answers.items()]
         clarification_context = "\nUser's clarification answers:\n" + "\n".join(lines)
 
+    # ── Extract explicit count hints from the prompt before sending to AI ──
+    import re as _re
+    _screening_count_match = _re.search(
+        r'(\d+)\s*screening\s+surve(?:y|ys)',
+        prompt, _re.IGNORECASE
+    )
+    _explicit_screening_count = int(_screening_count_match.group(1)) if _screening_count_match else None
+
+    _layer2_count_match = _re.search(
+        r'(\d+)\s*(?:layer\s*2|destination|job|offer|product)\s+surve(?:y|ys)',
+        prompt, _re.IGNORECASE
+    )
+    _explicit_layer2_count = int(_layer2_count_match.group(1)) if _layer2_count_match else None
+
+    explicit_counts_note = ""
+    if _explicit_screening_count or _explicit_layer2_count:
+        parts = []
+        if _explicit_screening_count:
+            parts.append(f"{_explicit_screening_count} screening surveys")
+        if _explicit_layer2_count:
+            parts.append(f"{_explicit_layer2_count} destination/job surveys")
+        explicit_counts_note = (
+            f"\n⚠️  MANDATORY COUNT OVERRIDE — The user's prompt explicitly requests: {', '.join(parts)}. "
+            f"You MUST produce exactly those counts in screening_surveys and job_profiles respectively. "
+            f"Do NOT reduce, round, or ignore these numbers.\n"
+        )
+
     system_prompt = """You are an expert survey funnel architect who can design any type of multi-survey funnel.
 You understand ALL funnel types:
 - Job/candidate screening (route candidates to best-fit roles)
@@ -84,23 +111,37 @@ You understand ALL funnel types:
 - Any prompt describing layers, branches, redirections, or multi-path surveys
 
 Your job: deeply understand the user's intent, extract the structure, and produce a clean plan.
-Never assume it must be a job funnel. Read what the prompt actually says."""
+NEVER assume it must be a job funnel or a finance funnel. Read what the prompt actually says.
+The topic of the surveys must match the topic in the user's prompt exactly."""
 
     analysis_prompt = f"""Analyze this funnel requirement and produce a structured plan.
 
 USER PROMPT:
 "{prompt}"
 {clarification_context}
-
+{explicit_counts_note}
 STEP 1 — UNDERSTAND THE FUNNEL TYPE
 Read the prompt carefully. Identify:
+- What is the ACTUAL TOPIC? (e.g. cooking, fitness, travel, software, education — whatever the user said)
 - What is the overall GOAL? (job screening / product discovery / lead gen / course matching / other)
 - What are the SCREENING SURVEYS? (surveys everyone goes through first to build a profile)
-- What are the DESTINATION SURVEYS? (surveys shown to specific users based on their profile — could be job surveys, product surveys, offer surveys, etc.)
+- What are the DESTINATION SURVEYS? (surveys shown to specific users based on their profile)
 - Are there HARD TERMINATION conditions? (certain answers disqualify the user entirely)
 - Can users qualify for MULTIPLE destinations? (cascade on fail, or show multiple)
 
-STEP 2 — RETURN THE PLAN
+CRITICAL TOPIC RULE:
+The screening surveys and destination surveys MUST be about the topic described in the user's prompt.
+If the user says "cooking survey funnel" → all surveys must be about cooking.
+If the user says "fitness coaching" → all surveys must be about fitness.
+If the user says "travel recommendations" → all surveys must be about travel.
+NEVER generate surveys about loans, jobs, insurance, or finance unless the user's prompt is about those topics.
+
+STEP 2 — RESPECT EXPLICIT COUNTS
+If the user's prompt says "X screening surveys" → produce exactly X items in screening_surveys.
+If the user's prompt says "Y destination/layer-2 surveys" → produce exactly Y items in job_profiles.
+Do not reduce these counts because you think fewer would suffice. Honour what the user asked for.
+
+STEP 3 — RETURN THE PLAN
 If anything is critically unclear (not just unfamiliar), ask up to 3 clarifying questions.
 Otherwise return the full funnel_plan immediately.
 
@@ -135,10 +176,10 @@ If ready to plan (preferred — be decisive):
   "screening_surveys": [
     {{
       "index": 0,
-      "name": "Survey name (e.g. Professional Background, Who Are You, Layer 1)",
-      "purpose": "What this survey collects and why",
+      "name": "Survey name reflecting the ACTUAL topic from the user's prompt",
+      "purpose": "What this survey collects and why — must relate to the user's topic",
       "estimated_questions": 8,
-      "key_topics": ["Topic 1", "Topic 2", "Topic 3"],
+      "key_topics": ["Topic 1 about the user's actual subject", "Topic 2", "Topic 3"],
       "has_termination": true,
       "termination_condition": "Describe hard disqualifier or null"
     }}
@@ -146,14 +187,14 @@ If ready to plan (preferred — be decisive):
   "job_profiles": [
     {{
       "id": "unique_id_no_spaces",
-      "display_name": "Human-readable name (product, role, tier, program)",
-      "match_criteria": "What profile qualifies for this destination — be specific",
+      "display_name": "Human-readable name (product, role, tier, program) — must match user's topic",
+      "match_criteria": "What profile qualifies for this destination — be specific to the user's domain",
       "estimated_survey_questions": 8,
-      "key_topics": ["What this destination survey will test/ask"],
+      "key_topics": ["What this destination survey will test/ask — specific to user's topic"],
       "qualification_flag": "Any special must-have requirement, or null"
     }}
   ],
-  "scoring_logic": "Explain how screening answers map to destinations (points, branch conditions, awareness reveals, etc.)",
+  "scoring_logic": "Explain how screening answers map to destinations (points, branch conditions, etc.)",
   "termination_conditions": ["List any hard disqualifiers, or leave empty"],
   "tiebreaker": "What happens when scores tie or multiple destinations qualify",
   "estimated_total_surveys": 4,
@@ -165,22 +206,20 @@ EXAMPLES OF WHAT TO DO WITH COMPLEX PROMPTS:
 Example 1 — Detailed layer-by-layer prompt with branching:
 User pastes a document with LAYER 1/2/3/4, branch conditions, redirections.
 → Group LAYER 1, LAYER 2, LAYER 3 into screening_surveys (index 0, 1, 2)
-→ Each branch destination (CashBook, Quik2Tally, Workiva OR HDFC/GiveGrants etc.) becomes a job_profile
+→ Each branch destination becomes a job_profile with names matching the user's topic
 → The "branch conditions" become the scoring_logic
 → Any "TERMINATE" or "disqualify" conditions become termination_conditions
 → Return the plan — don't ask questions unless truly impossible to understand
 
-Example 2 — Short vague prompt:
-"I want to match people to the right insurance product"
-→ This is clear enough. Assume 1-2 screening surveys, 3-4 product destinations
-→ Ask one clarifying question: "Which insurance products should users be matched to?"
+Example 2 — Explicit count in prompt:
+"I want 6 screening surveys and 10 destination surveys about cooking styles"
+→ MUST produce 6 items in screening_surveys and 10 items in job_profiles
+→ All surveys must be about cooking — never about loans, jobs, or finance
 
-Example 3 — Product discovery funnel:
-"Screen finance professionals and route them to CashBook, Quik2Tally, or Workiva based on their role and pain points"
-→ 2-3 screening surveys (who are you, what do you do, what tools/problems)
-→ 3 job_profiles: cashbook, quik2tally, workiva
-→ Scoring: answers about expense management → cashbook, Tally pain → quik2tally, audit/reporting → workiva
-→ Return plan immediately, no clarification needed
+Example 3 — Short vague prompt:
+"I want to match people to the right fitness program"
+→ This is clear enough. Generate 1-2 screening surveys about fitness goals/level
+→ Destination surveys are about fitness programs, not unrelated products
 
 NOW ANALYZE THE USER'S PROMPT ABOVE AND RETURN THE PLAN."""
 
@@ -196,7 +235,7 @@ NOW ANALYZE THE USER'S PROMPT ABOVE AND RETURN THE PLAN."""
                     {"role": "user", "content": analysis_prompt}
                 ],
                 "temperature": 0.2,
-                "max_tokens": 2500,
+                "max_tokens": 4000,
                 "response_format": {"type": "json_object"}
             }
         )
@@ -313,7 +352,8 @@ def _run_funnel_generation_bg(job_id, funnel_plan, original_prompt, owner_user_i
                     questions_asked_so_far=questions_asked_so_far
                 )
                 for q in survey_doc.get("questions", []):
-                    questions_asked_so_far.append({"topic": q.get("question", "")[:80], "survey": s_meta["name"]})
+                    if isinstance(q, dict):  # guard: skip any non-dict items saved by AI
+                        questions_asked_so_far.append({"topic": q.get("question", "")[:80], "survey": s_meta["name"]})
                 screening_survey_ids.append({"survey_id": survey_doc["id"], "name": s_meta["name"], "index": s_meta["index"], "purpose": s_meta["purpose"]})
                 generated_surveys.append({"type": "screening", "index": s_meta["index"], "survey_id": survey_doc["id"], "name": s_meta["name"], "question_count": len(survey_doc.get("questions", []))})
                 done += 1
@@ -481,24 +521,49 @@ Rules:
 - For job surveys specifically: focus on role-specific competencies, NOT general background
 """
 
+    # ── Derive the domain from the funnel goal/name so the AI stays on topic ──
+    funnel_domain = funnel_plan.get('goal', funnel_plan.get('funnel_name', ''))
+
     prompt = f"""Generate a survey for a multi-survey funnel. Return ONLY valid JSON.
 
+════════════════════════════════════════════════
+FUNNEL CONTEXT
+════════════════════════════════════════════════
 Funnel type: {funnel_plan.get('funnel_type', 'general')}
-Funnel goal: {funnel_plan.get('goal', '')}
+Funnel goal: {funnel_domain}
 
 This specific survey:
-Name: {survey_name}
-Purpose: {survey_purpose}
-Key topics to cover: {', '.join(key_topics)}
-Survey type: {survey_type}  (screening = everyone takes it, job = only matched users take it)
-{"Destination ID this survey qualifies for: " + job_id if job_id else ""}
+  Name: {survey_name}
+  Purpose: {survey_purpose}
+  Key topics to cover: {', '.join(key_topics) if key_topics else '(derive from purpose above)'}
+  Survey type: {survey_type}  (screening = everyone takes it, destination = only matched users)
+{"  Destination ID this survey qualifies for: " + job_id if job_id else ""}
 {qualification_note}
 
 {"Destination profiles in this funnel (for context):" + chr(10) + job_profiles_summary if job_profiles_summary else ""}
 {termination_note}
 {already_asked_note}
 
-CRITICAL INSTRUCTION — USER'S OWN QUESTIONS:
+════════════════════════════════════════════════
+⚠️  DOMAIN RULE — READ BEFORE WRITING ANY QUESTION
+════════════════════════════════════════════════
+The funnel goal above describes the ACTUAL subject of this survey.
+Every question you write MUST be about that subject.
+
+NEVER write questions about:
+- Loans, payday loans, mortgages, or any lending products — unless the funnel goal is about loans
+- Insurance, Medicare, health coverage — unless the funnel goal is about insurance
+- Jobs, employment, HR, recruitment — unless the funnel goal is about job matching
+- Finance, investing, banking — unless the funnel goal is about finance
+
+If the funnel is about cooking → write questions about cooking.
+If the funnel is about travel → write questions about travel.
+If the funnel is about fitness → write questions about fitness.
+Match the domain of the funnel goal exactly.
+
+════════════════════════════════════════════════
+QUESTION SOURCING RULES
+════════════════════════════════════════════════
 The original user prompt may already contain specific questions with answer options.
 If it does, you MUST use those exact questions and options for this survey.
 Do NOT invent new questions when the user has already written them.
@@ -509,29 +574,35 @@ Rules:
 3. Keep the total between 5-15 questions
 4. Preserve the user's exact answer options — don't paraphrase or reorder them
 
+Original user prompt (extract questions from here if present):
+{original_prompt[:8000]}
+
+════════════════════════════════════════════════
+SURVEY ROLE RULES
+════════════════════════════════════════════════
 For SCREENING surveys:
 - role="screen" with screening_rule ONLY for questions explicitly listed as hard termination conditions in the prompt
-  Examples of valid screen questions: "Age under 18 → disqualify", "No experience → terminate", "Not in target country → end"
+  Examples: "Age under 18 → disqualify", "No experience → terminate", "Not in target country → end"
   DO NOT mark preference, interest, or opinion questions as screening — those are scoring questions
 - role="score" or role="both" for questions that signal which destination fits the user
 - role="neutral" for demographic/background questions that inform context but don't score or screen
 - Include a mix of types: multiple_choice, yes_no, dropdown, multi_select
 
-For DESTINATION/JOB surveys:
+For DESTINATION surveys:
 - All questions are role="neutral" (AI evaluates answers holistically)
-- These test actual competency for the destination, not background
+- These test actual competency or intent for the destination, not general background
 - Use the user's specific questions from the relevant branch/layer of their prompt
 
-Original user prompt (extract questions from here):
-{original_prompt[:8000]}
-
+════════════════════════════════════════════════
+RETURN FORMAT
+════════════════════════════════════════════════
 Return this exact JSON structure:
 {{
   "title": "{survey_name}",
   "questions": [
     {{
       "id": "q1",
-      "question": "Exact question text from user's prompt or new question",
+      "question": "Question text — must be about the funnel domain above",
       "type": "multiple_choice",
       "options": ["Option A", "Option B", "Option C"],
       "required": true,
@@ -554,7 +625,7 @@ Return this exact JSON structure:
 
 STRICT RULES:
 - screening_rule is ALMOST NEVER used — only for explicit hard disqualifiers stated in the prompt like "terminate if under 18" or "end survey if no experience"
-- Preference questions, interest questions, tool usage questions = role="score", screening_rule=null
+- Preference questions, interest questions, opinion questions = role="score", screening_rule=null
 - option_scores is always empty {{}} — filled later by scoring step
 - question IDs: q1, q2, q3... (unique, sequential)
 - yes_no type MUST have options: ["Yes", "No"]
@@ -598,6 +669,9 @@ STRICT RULES:
         if "option_scores" not in q:
             q["option_scores"] = {}
         if "screening_rule" not in q:
+            q["screening_rule"] = None
+        # Normalize: AI sometimes returns "null" (string) or other non-dict values
+        if not isinstance(q.get("screening_rule"), dict):
             q["screening_rule"] = None
 
         # ── Safety guard: strip screening rules unless question matches an
@@ -667,38 +741,41 @@ def _generate_scoring_matrix(api_key, funnel_plan, screening_survey_ids, origina
     Generate point values for every answer option in every screening survey
     for every job profile. Returns a map of survey_id → question_id → answer → {job_id: points}
     """
-    # Collect all questions from all screening surveys
+    # Collect all scoreable questions from all screening surveys
     all_questions_summary = []
     for s_info in screening_survey_ids:
         s_doc = db.surveys.find_one({"id": s_info["survey_id"]})
         if not s_doc:
             continue
         for q in s_doc.get("questions", []):
+            # Guard: skip anything that isn't a proper question dict
+            if not isinstance(q, dict):
+                continue
             if q.get("funnel_role") in ("score", "both") and q.get("options"):
                 all_questions_summary.append({
                     "survey_id": s_info["survey_id"],
                     "question_id": q["id"],
                     "question_text": q.get("question", "")[:80],
-                    "options": q.get("options", [])[:10]  # cap at 10 options
+                    "options": q.get("options", [])[:10]  # cap at 10 options per question
                 })
 
     if not all_questions_summary:
         return {}
 
     job_profiles = funnel_plan.get("job_profiles", [])
-    job_ids = [p["id"] for p in job_profiles]
     job_descriptions = "\n".join(
         f"  {p['id']}: {p['display_name']} — {p['match_criteria']}"
         for p in job_profiles
     )
+    funnel_goal = funnel_plan.get('goal', 'Match users to the best destination')
 
-    questions_json = json.dumps(all_questions_summary[:50], indent=2)  # cap at 50 questions
+    def _build_scoring_prompt(questions_slice):
+        questions_json = json.dumps(questions_slice, indent=2)
+        return f"""Assign scoring points to survey answer options for a funnel.
 
-    prompt = f"""Assign scoring points to survey answer options for a funnel.
+Funnel goal: {funnel_goal}
 
-Funnel goal: {funnel_plan.get('goal', 'Match users to the best destination')}
-
-Destinations to score for (these can be jobs, products, programs, tiers, or anything):
+Destinations to score for:
 {job_descriptions}
 
 Survey questions and their answer options:
@@ -706,16 +783,11 @@ Survey questions and their answer options:
 
 For each answer option in each question, assign points (0-5) for each destination.
 - 5 = strong signal this person matches that destination
-- 3 = moderate signal  
+- 3 = moderate signal
 - 1 = weak signal
 - 0 = no relevance to that destination
 
-Think carefully about what each answer implies about fit for each destination.
-Examples:
-- "I use Tally daily" → high score for a Tally-related product destination
-- "I manage employee expenses" → high score for expense management product destination
-- "I work in audit" → high score for audit/reporting destination
-- "I'm in banking/finance" → high score for finance-related destination
+Think carefully about what each answer implies about fit for each destination given the funnel goal above.
 
 Return ONLY valid JSON in this exact structure:
 {{
@@ -724,31 +796,59 @@ Return ONLY valid JSON in this exact structure:
       "survey_id": "survey_id_here",
       "question_id": "q1",
       "option_scores": {{
-        "Option A": {{"dest_id_1": 4, "dest_id_2": 2, "dest_id_3": 1}},
-        "Option B": {{"dest_id_1": 0, "dest_id_2": 3, "dest_id_3": 5}}
+        "Option A": {{"dest_id_1": 4, "dest_id_2": 2}},
+        "Option B": {{"dest_id_1": 0, "dest_id_2": 5}}
       }}
     }}
   ]
 }}"""
 
-    resp = http_requests.post(
-        "https://api.openai.com/v1/chat/completions",
-        timeout=45,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json={
-            "model": "gpt-4o",
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.1,
-            "max_tokens": 4000,
-            "response_format": {"type": "json_object"}
-        }
-    )
+    def _call_scoring_api(prompt_text):
+        """Call the scoring API with a higher token budget and a JSON-parse fallback."""
+        r = http_requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            timeout=60,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": "gpt-4o",
+                "messages": [{"role": "user", "content": prompt_text}],
+                "temperature": 0.1,
+                "max_tokens": 8000,  # raised from 4000 — large funnels need room
+                "response_format": {"type": "json_object"}
+            }
+        )
+        if r.status_code != 200:
+            raise Exception(f"Scoring matrix API error {r.status_code}: {r.text[:200]}")
+        raw = r.json()["choices"][0]["message"]["content"]
+        try:
+            return json.loads(raw).get("scoring_matrix", [])
+        except json.JSONDecodeError:
+            # Truncated response — try to recover whatever complete entries we got
+            print(f"⚠️ [BG Funnel] Scoring matrix JSON truncated, attempting partial recovery")
+            recovered = []
+            # Each complete entry ends with "}}" — extract them greedily
+            import re as _re
+            for m in _re.finditer(r'\{\s*"survey_id".*?"option_scores"\s*:\s*\{[^}]*\}\s*\}', raw, _re.DOTALL):
+                try:
+                    entry = json.loads(m.group(0))
+                    recovered.append(entry)
+                except Exception:
+                    pass
+            print(f"⚠️ [BG Funnel] Recovered {len(recovered)} scoring entries from truncated response")
+            return recovered
 
-    if resp.status_code != 200:
-        raise Exception(f"Scoring matrix API error {resp.status_code}")
+    # ── Batch large payloads to stay within token limits ──
+    # Each batch: max 25 questions → keeps request + response well under 8k tokens
+    BATCH_SIZE = 25
+    combined_matrix = []
+    for batch_start in range(0, len(all_questions_summary), BATCH_SIZE):
+        batch = all_questions_summary[batch_start: batch_start + BATCH_SIZE]
+        batch_prompt = _build_scoring_prompt(batch)
+        batch_result = _call_scoring_api(batch_prompt)
+        combined_matrix.extend(batch_result)
+        print(f"✅ [BG Funnel] Scoring batch {batch_start // BATCH_SIZE + 1}: {len(batch_result)} entries")
 
-    result = json.loads(resp.json()["choices"][0]["message"]["content"])
-    return result.get("scoring_matrix", [])
+    return combined_matrix
 
 
 def _apply_scoring_to_surveys(scoring_matrix, screening_survey_ids):
@@ -1173,7 +1273,8 @@ def regenerate_screening_surveys(funnel_id):
                     questions_asked_so_far=questions_asked_so_far
                 )
                 for q in survey_doc.get("questions", []):
-                    questions_asked_so_far.append({"topic": q.get("question", "")[:80], "survey": s_meta["name"]})
+                    if isinstance(q, dict):  # guard: skip any non-dict items saved by AI
+                        questions_asked_so_far.append({"topic": q.get("question", "")[:80], "survey": s_meta["name"]})
 
                 entry = {
                     "survey_id": survey_doc["id"],
@@ -1450,7 +1551,7 @@ def predict_job_survey_signals(funnel_id, survey_id):
         return jsonify({"error": "Survey not found"}), 404
 
     questions = survey_doc.get("questions", [])
-    scoreable_questions = [q for q in questions if q.get("options") and len(q.get("options", [])) > 0]
+    scoreable_questions = [q for q in questions if isinstance(q, dict) and q.get("options") and len(q.get("options", [])) > 0]
 
     if not scoreable_questions:
         return jsonify({"error": "No questions with options found"}), 400

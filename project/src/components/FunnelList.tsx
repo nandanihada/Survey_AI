@@ -382,7 +382,8 @@ const ScoringDetailsPanel: React.FC<{ funnel: Funnel; isDarkMode: boolean; apiBa
                       <tr key={oi} className={`border-t ${borderCol} ${oi % 2 === 0 ? '' : isDarkMode ? 'bg-gray-750/50' : 'bg-gray-50/50'}`}>
                         <td className={`px-3 py-1.5 ${textMain}`}>{opt}</td>
                         {jobIds.map(jid => {
-                          const pts = q.option_scores?.[opt]?.[jid] ?? 0;
+                          const rawScore = q.option_scores?.[opt]?.[jid];
+                          const pts = rawScore ?? null;  // null = not scored, number = scored (even if 0)
                           const isEditing = editingCell?.surveyId === sv.id && editingCell?.qId === q.id && editingCell?.option === opt && editingCell?.jobId === jid;
                           return (
                             <td key={jid} className="px-2 py-1.5 text-center">
@@ -406,8 +407,10 @@ const ScoringDetailsPanel: React.FC<{ funnel: Funnel; isDarkMode: boolean; apiBa
                                 </div>
                               ) : (
                                 <button
-                                  onClick={() => { setEditingCell({ surveyId: sv.id, qId: q.id, option: opt, jobId: jid }); setEditVal(String(pts)); }}
+                                  onClick={() => { setEditingCell({ surveyId: sv.id, qId: q.id, option: opt, jobId: jid }); setEditVal(String(pts ?? 0)); }}
+                                  title={pts === null ? 'Not yet scored — click to set' : `Score: ${pts}`}
                                   className={`w-8 h-6 rounded text-xs font-bold transition hover:ring-2 hover:ring-blue-400 ${
+                                    pts === null        ? (isDarkMode ? 'bg-gray-700 text-gray-500 border border-dashed border-gray-600' : 'bg-gray-100 text-gray-400 border border-dashed border-gray-300') :
                                     (pts as number) >= 5 ? 'bg-green-600 text-white' :
                                     (pts as number) >= 3 ? 'bg-green-200 text-green-800' :
                                     (pts as number) === 2 ? 'bg-blue-200 text-blue-800' :
@@ -415,7 +418,7 @@ const ScoringDetailsPanel: React.FC<{ funnel: Funnel; isDarkMode: boolean; apiBa
                                     'bg-red-100 text-red-500'
                                   }`}
                                 >
-                                  {pts}
+                                  {pts === null ? '–' : pts}
                                 </button>
                               )}
                             </td>
@@ -890,7 +893,7 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
             {/* Job surveys */}
             <div>
               <p className={`text-xs font-semibold uppercase tracking-wide mb-2 flex items-center gap-2 ${textMuted}`}>
-                <Target size={12} /> Phase 2 — Job Surveys
+                <Target size={12} /> Phase 2 — Destination Surveys
               </p>
               <div className="space-y-3">
                 {funnel.generated_surveys.filter(s => s.type === 'job').map((s, i) => {
