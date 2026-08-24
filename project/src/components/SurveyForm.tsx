@@ -445,8 +445,43 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
 
       const finalCount = clarificationAnswers?.questionCount || questionCount;
 
+      // ── AI template detection — runs in parallel with prompt building ──
+      // Fires immediately and resolves before generateSurvey is called.
+      // Falls back to 'custom' on any error or timeout (5 s cap).
+      const detectTemplateType = async (): Promise<string> => {
+        try {
+          const isLocalApi = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+          const apiBase = isLocalApi ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
+          const shortPrompt = (clarificationAnswers?.topic || surveyTopic).trim().slice(0, 300);
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 5000);
+          const res = await fetch(`${apiBase}/api/detect-template`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: shortPrompt }),
+            signal: controller.signal,
+          });
+          clearTimeout(timer);
+          if (res.ok) {
+            const data = await res.json();
+            const id = data.template_id as string;
+            console.log(`[Template Detection] → ${id} (confidence: ${data.confidence}%) — ${data.reason}`);
+            return id || 'custom';
+          }
+        } catch {
+          // Timeout or network error — fall through to default
+        }
+        return 'custom';
+      };
+
+      // Start detection immediately (non-blocking) then await its result below
+      const templateTypePromise = detectTemplateType();
+
+      // Await detection result — it started above so most of the time is already done
+      const detectedTemplate = await templateTypePromise;
+
       const result = await generateSurvey({
-        prompt: finalPrompt, template_type: 'custom', question_count: finalCount,
+        prompt: finalPrompt, template_type: detectedTemplate, question_count: finalCount,
         image_context: imageContext || undefined,
         theme: { font: 'DM Sans, sans-serif', intent: 'professional', colors: { primary: '#E8503A', background: '#F7F7FB', text: '#2D3142' } },
         topic: (clarificationAnswers?.topic || surveyTopic).trim() || selectedSuggestion?.label || '',

@@ -122,7 +122,7 @@ const blankQuestion = (): EligibilityQuestion => ({ question: '', options: ['Yes
 
 const defaultExtra = (): ExtraFields => ({
   payout: '', country: 'US', min_age: '18', max_age: '',
-  loi_minutes: '', survey_type: 'product_interest', description: '', notes: '',
+  loi_minutes: '', survey_type: 'product_interest', description: 'Complete the survey', notes: '',
 });
 
 const SURVEY_TYPES = [

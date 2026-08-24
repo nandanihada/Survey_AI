@@ -85,9 +85,24 @@ export interface Survey {
       background: string;
       text: string;
     };
+    /** User-selected font family. Applied to the survey's root element. */
+    font_family?: string;
+    /** Font size scale: 0.85 = small, 1.0 = normal (default), 1.15 = large */
+    font_size_scale?: number;
   };
   created_at?: string;
   shareable_link?: string;
   public_link?: string;
+  /** Videos attached to the survey (up to 3). Shown before questions start. */
+  survey_videos?: SurveyVideo[];
+  /** When true, respondents can replay videos. Defaults to false. */
+  video_replay_enabled?: boolean;
   [key: string]: unknown;
+}
+
+export interface SurveyVideo {
+  /** Backend-served URL, e.g. /uploads/videos/<uuid>.mp4 */
+  url: string;
+  /** Display title shown on the play button */
+  title?: string;
 }

@@ -12,6 +12,8 @@ import { getMoustacheleadsPayload } from '../utils/moustacheleads';
 import { getVisibleQuestions } from '../utils/skipLogic';
 import { requestGPSLocation } from '../hooks/useTracking';
 import { getApiBaseUrl } from '../utils/deploymentFix';
+import { QuestionImage, wrapOptionLabel } from '../utils/questionImages';
+import SurveyVideoPlayer from '../components/SurveyVideoPlayer';
 import {
   getDeviceFingerprint,
   markSurveyComplete,
@@ -32,6 +34,7 @@ interface Question {
   questionDelay?: number;
   show_if?: ShowIfCondition | null;
   questionImage?: string;
+  questionImages?: string[];
   questionImagePosition?: 'above' | 'below';
   optionImages?: Record<string, string>;
   optionImageMode?: 'with-text' | 'replace-text';
@@ -51,6 +54,7 @@ interface RawQuestion {
   questionDelay?: number;
   show_if?: ShowIfCondition | null;
   questionImage?: string;
+  questionImages?: string[];
   questionImagePosition?: 'above' | 'below';
   optionImages?: Record<string, string>;
   optionImageMode?: 'with-text' | 'replace-text';
@@ -148,6 +152,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     questionDelay: q.questionDelay || 0,
     show_if: q.show_if || null,
     questionImage: q.questionImage,
+    questionImages: (q as any).questionImages,
     questionImagePosition: q.questionImagePosition,
     optionImages: q.optionImages,
     optionImageMode: q.optionImageMode,
@@ -307,10 +312,10 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     setSub1(params.get('sub1'));
     setSub2(params.get('sub2'));
 
-    // Funnel params
-    const fid = params.get('funnel');
-    const fsid = params.get('session');
-    const flayer = parseInt(params.get('layer') || '0');
+    // Funnel params — support both short names (f, ly, sn) and legacy long names for backward compat
+    const fid = params.get('f') || params.get('funnel');
+    const fsid = params.get('sn') || params.get('session');
+    const flayer = parseInt(params.get('ly') || params.get('layer') || '0');
     const fjob = params.get('job');
     if (fid) {
       setFunnelId(fid);
@@ -1034,13 +1039,13 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           }
 
           if (action === 'next_screening') {
-            const nextUrl = `${frontendBase}/survey/${funnelResult.next_survey_id}?funnel=${funnelId}&layer=${funnelResult.next_layer}&session=${sessionIdToUse}`;
+            const nextUrl = `${frontendBase}/survey/${funnelResult.next_survey_id}?f=${funnelId}&ly=${funnelResult.next_layer}&sn=${sessionIdToUse}`;
             setTimeout(() => { window.location.href = nextUrl; }, 1000);
             return;
           }
 
           if (action === 'go_to_job') {
-            const nextUrl = `${frontendBase}/survey/${funnelResult.job_survey_id}?funnel=${funnelId}&session=${sessionIdToUse}&job=${funnelResult.job_id}&pos=0`;
+            const nextUrl = `${frontendBase}/survey/${funnelResult.job_survey_id}?f=${funnelId}&sn=${sessionIdToUse}&job=${funnelResult.job_id}&pos=0`;
             setTimeout(() => { window.location.href = nextUrl; }, 1000);
             return;
           }
@@ -1059,8 +1064,8 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           if (action === 'next_job') {
             const tp = funnelResult.transition_page || {};
             const transitionUrl = `${frontendBase}/funnel-transition?` + new URLSearchParams({
-              funnel: funnelId,
-              session: sessionIdToUse,
+              f: funnelId,
+              sn: sessionIdToUse,
               next_job: funnelResult.next_job_id || '',
               next_survey: funnelResult.next_job_survey_id || '',
               pos: String(funnelResult.queue_position || 0),
@@ -1572,14 +1577,8 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           Question {index + 1}{survey.show_question_count === true ? ` of ${visibleQuestions.length}` : ''}
         </div>
 
-        {/* Question image — above position (default) */}
-        {question.questionImage && question.questionImagePosition !== 'below' && (
-          <img
-            src={question.questionImage}
-            alt=""
-            className="pepper-question-image"
-          />
-        )}
+        {/* Question images — above position (default) */}
+        <QuestionImage q={question} position="above" />
 
         {/* Question text — typewriter gets CSS animation, others use motion */}
         {isTypewriter ? (
@@ -1633,14 +1632,8 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           <p className="pepper-question-desc">{question.questionDescription}</p>
         )}
 
-        {/* Question image — below position */}
-        {question.questionImage && question.questionImagePosition === 'below' && (
-          <img
-            src={question.questionImage}
-            alt=""
-            className="pepper-question-image pepper-question-image--below"
-          />
-        )}
+        {/* Question images — below position */}
+        <QuestionImage q={question} position="below" />
 
         <div className="pepper-question-separator"></div>
 
@@ -1781,8 +1774,25 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     );
   }
 
+  // ── Font settings from survey.theme ────────────────────────────────────
+  const FONT_STACKS: Record<string, string> = {
+    outfit:   "'Outfit', -apple-system, sans-serif",
+    inter:    "'Inter', -apple-system, sans-serif",
+    roboto:   "'Roboto', -apple-system, sans-serif",
+    lato:     "'Lato', -apple-system, sans-serif",
+    playfair: "'Playfair Display', Georgia, serif",
+    poppins:  "'Poppins', -apple-system, sans-serif",
+  };
+  const fontFamilyKey = (survey.theme as any)?.font_family || 'outfit';
+  const fontStack = FONT_STACKS[fontFamilyKey] || FONT_STACKS.outfit;
+  const fontSizeScale: number = (survey.theme as any)?.font_size_scale ?? 1.0;
+  const rootFontStyle: React.CSSProperties = {
+    fontFamily: fontStack,
+    fontSize: `${Math.round(fontSizeScale * 100)}%`,
+  };
+
   return (
-    <div className="pepper-survey-container">
+    <div className="pepper-survey-container" style={rootFontStyle}>
       {/* ── Browser-back blocker overlay ── */}
       {showBackBlocker && (
         <div style={{
@@ -1935,6 +1945,24 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         </div>
 
         <div className={`pepper-card ${previewMode ? 'preview-mode' : ''}`}>
+
+        {/* ── Survey Videos (shown before questions, above progress bar) ── */}
+        {!submitted && !previewMode && survey.survey_videos && survey.survey_videos.length > 0 && (
+          <div style={{ padding: '24px 28px 0 28px' }}>
+            <SurveyVideoPlayer
+              videos={survey.survey_videos}
+              replayEnabled={survey.video_replay_enabled === true}
+              onDisqualify={() => {
+                setFunnelTerminated(true);
+                setFunnelTerminateReason(
+                  'You switched tabs or left this window while a required video was playing. Your survey response has been disqualified.'
+                );
+                setSubmitted(true);
+              }}
+            />
+          </div>
+        )}
+
         {/* Progress Bar (hidden via CSS) */}
         <div className="pepper-progress">
           <div className="pepper-progress-track" style={{ '--progress-width': `${((currentQuestionIndex + 1) / visibleQuestions.length) * 100}%` } as React.CSSProperties}>

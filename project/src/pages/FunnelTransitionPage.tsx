@@ -1,7 +1,7 @@
 /**
  * FunnelTransitionPage
  * Shown between a failed job survey and the next job survey in the cascade.
- * URL: /funnel-transition?funnel=FUNNEL_ID&session=SESSION_ID&next_job=JOB_ID&next_survey=SURVEY_ID
+ * URL: /funnel-transition?f=FUNNEL_ID&sn=SESSION_ID&next_job=JOB_ID&next_survey=SURVEY_ID
  *
  * Reads transition config from URL params (passed by funnel submission handler).
  * Shows editable-content message, countdown, then redirects to next job survey.
@@ -17,9 +17,9 @@ const FunnelTransitionPage: React.FC = () => {
   const [redirecting, setRedirecting] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // URL params
-  const funnelId = searchParams.get('funnel') || '';
-  const sessionId = searchParams.get('session') || '';
+  // URL params — support short names (f, sn) with legacy long names as fallback
+  const funnelId = searchParams.get('f') || searchParams.get('funnel') || '';
+  const sessionId = searchParams.get('sn') || searchParams.get('session') || '';
   const nextJobId = searchParams.get('next_job') || '';
   const nextSurveyId = searchParams.get('next_survey') || '';
   const queuePosition = parseInt(searchParams.get('pos') || '0');
@@ -36,7 +36,7 @@ const FunnelTransitionPage: React.FC = () => {
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   const frontendBase = isLocalhost ? 'http://localhost:5173' : 'https://survey.pepperwahl.com';
   const nextSurveyUrl = nextSurveyId
-    ? `${frontendBase}/survey/${nextSurveyId}?funnel=${funnelId}&session=${sessionId}&job=${nextJobId}&pos=${queuePosition}`
+    ? `${frontendBase}/survey/${nextSurveyId}?f=${funnelId}&sn=${sessionId}&job=${nextJobId}&pos=${queuePosition}`
     : '';
 
   useEffect(() => {

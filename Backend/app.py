@@ -1941,21 +1941,27 @@ def generate_survey():
 
             return jsonify({"error": f"Invalid theme color: {str(e)}"}), 400
 
-        # Validate template type
-
-        if template_type not in prompt_templates:
-
+        # Validate template type — accept all 10 known IDs plus "custom" and "default"
+        KNOWN_TEMPLATE_IDS = {
+            "custom", "customer_feedback", "employee_checkin", "event_feedback",
+            "product_feedback", "team_collaboration", "onboarding_review",
+            "website_experience", "training_feedback", "service_cancellation", "default"
+        }
+        if template_type not in KNOWN_TEMPLATE_IDS:
             return (
                 jsonify(
                     {
-                        "error": f"Invalid template type. Available templates: {', '.join(prompt_templates.keys())}"
+                        "error": f"Invalid template type. Available templates: {', '.join(sorted(KNOWN_TEMPLATE_IDS))}"
                     }
                 ),
                 400,
             )
 
         # Get AI prompt template
-        use_smart_builder = template_type == "custom"
+        # All templates except those with a hand-crafted legacy prompt use the
+        # smart builder — it produces richer JSON output and respects wizard_answers.
+        LEGACY_TEMPLATES = {"customer_feedback", "employee_checkin", "default"}
+        use_smart_builder = template_type not in LEGACY_TEMPLATES
         pre_populated_questions = []  # Questions from image that bypass AI
         
         if use_smart_builder:
@@ -5725,9 +5731,75 @@ def upload_survey_image():
 
 
 @app.route('/uploads/<path:filename>')
+@cross_origin(origins='*')
 def serve_uploaded_image(filename):
-    """Serve uploaded survey images"""
+    """Serve uploaded survey images — cross-origin allowed for editor previews"""
     return send_from_directory(UPLOAD_DIR, filename)
+
+
+# ═══════════════════════════════════════════════════════════
+# VIDEO UPLOAD  — survey videos (up to 3 per survey)
+# Files saved to Backend/uploads/videos/ and served as static
+# URLs — accessible from the production domain.
+# ═══════════════════════════════════════════════════════════
+
+VIDEO_DIR = os.path.join(UPLOAD_DIR, 'videos')
+os.makedirs(VIDEO_DIR, exist_ok=True)
+
+ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'webm', 'mov', 'avi', 'mkv'}
+MAX_VIDEO_SIZE_MB = 100  # videos can be larger than images
+
+
+def _allowed_video(filename: str) -> bool:
+    return (
+        '.' in filename
+        and filename.rsplit('.', 1)[1].lower() in ALLOWED_VIDEO_EXTENSIONS
+    )
+
+
+@app.route('/api/upload-video', methods=['POST', 'OPTIONS'])
+def upload_survey_video():
+    """
+    Upload a survey video.
+    Returns a permanent public URL: /uploads/videos/<uuid>.<ext>
+    Accepts multipart/form-data with field name 'video'.
+    Max 3 videos per survey — enforced on the frontend.
+    Max file size: 100 MB.
+    """
+    if request.method == 'OPTIONS':
+        return '', 204
+
+    if 'video' not in request.files:
+        return jsonify({'error': 'No video file in request'}), 400
+
+    file = request.files['video']
+
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+
+    if not _allowed_video(file.filename):
+        return jsonify({'error': f'File type not allowed. Use: {", ".join(ALLOWED_VIDEO_EXTENSIONS)}'}), 400
+
+    file_bytes = file.read()
+    size_mb = len(file_bytes) / (1024 * 1024)
+    if size_mb > MAX_VIDEO_SIZE_MB:
+        return jsonify({'error': f'File too large. Maximum size is {MAX_VIDEO_SIZE_MB} MB'}), 413
+
+    ext = file.filename.rsplit('.', 1)[1].lower()
+    unique_name = f"{uuid.uuid4().hex}.{ext}"
+    save_path = os.path.join(VIDEO_DIR, unique_name)
+
+    with open(save_path, 'wb') as f:
+        f.write(file_bytes)
+
+    public_url = f"{request.scheme}://{request.host}/uploads/videos/{unique_name}"
+    return jsonify({'url': public_url, 'filename': unique_name}), 200
+
+
+@app.route('/uploads/videos/<path:filename>')
+def serve_uploaded_video(filename):
+    """Serve uploaded survey videos"""
+    return send_from_directory(VIDEO_DIR, filename)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -5799,6 +5871,103 @@ def catch_all(e):
 def serve_spa(**kwargs):
     """Serve the SPA for all frontend routes"""
     return send_from_directory(DIST_DIR, 'index.html')
+
+
+# ═══════════════════════════════════════════════════════
+#  AI TEMPLATE DETECTION
+# ═══════════════════════════════════════════════════════
+
+@app.route("/api/detect-template", methods=["POST", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins="*")
+def detect_template():
+    """
+    Given a survey prompt, uses GPT-4o-mini to pick the best matching
+    template from the 10 available options.
+
+    Request  : { "prompt": "..." }
+    Response : { "template_id": "customer_feedback", "confidence": 85, "reason": "..." }
+    """
+    if request.method == "OPTIONS":
+        return "", 200
+
+    data = request.get_json(silent=True) or {}
+    prompt = data.get("prompt", "").strip()
+
+    if not prompt:
+        return jsonify({"error": "prompt is required"}), 400
+
+    api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("AI_API_KEY", "")
+    if not api_key:
+        # Graceful fallback — return custom (smart builder) so generation still works
+        return jsonify({"template_id": "custom", "confidence": 0, "reason": "AI service unavailable"}), 200
+
+    # All 10 template definitions sent to the model
+    TEMPLATES = [
+        {"id": "custom",              "name": "Basic Survey",          "description": "General purpose survey for any topic"},
+        {"id": "customer_feedback",   "name": "Customer Feedback",     "description": "Product or service satisfaction, NPS, customer experience"},
+        {"id": "employee_checkin",    "name": "Employee Check-In",     "description": "Team wellness, burnout, employee engagement, manager support"},
+        {"id": "event_feedback",      "name": "Event Feedback",        "description": "Post-event review, conference, webinar, workshop rating"},
+        {"id": "product_feedback",    "name": "Product Feedback",      "description": "App, software or physical product usability and feature requests"},
+        {"id": "team_collaboration",  "name": "Team Collaboration",    "description": "Teamwork, communication, alignment and cross-team dynamics"},
+        {"id": "onboarding_review",   "name": "Onboarding Review",     "description": "New hire experience, first day, training effectiveness"},
+        {"id": "website_experience",  "name": "Website Experience",    "description": "Website usability, navigation, design and conversion feedback"},
+        {"id": "training_feedback",   "name": "Training Feedback",     "description": "Learning session, course or workshop impact and retention"},
+        {"id": "service_cancellation","name": "Service Cancellation",  "description": "Churn reasons, win-back, why users cancelled or left"},
+    ]
+
+    templates_text = "\n".join(
+        f'- id="{t["id"]}"  name="{t["name"]}"  description="{t["description"]}"'
+        for t in TEMPLATES
+    )
+
+    detection_prompt = f"""You are a survey template classifier. Given a survey prompt, choose the single best matching template from the list below.
+
+Available templates:
+{templates_text}
+
+User prompt: "{prompt[:500]}"
+
+Rules:
+- Pick the template whose description best matches the survey's purpose and audience.
+- If none clearly fit, use "custom".
+- Respond ONLY with valid JSON — no markdown, no extra text.
+
+Return: {{"template_id": "<id>", "confidence": <0-100>, "reason": "<one short sentence>"}}"""
+
+    try:
+        import requests as _req
+        r = _req.post(
+            "https://api.openai.com/v1/chat/completions",
+            timeout=15,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": "gpt-4o-mini",
+                "messages": [{"role": "user", "content": detection_prompt}],
+                "temperature": 0.0,
+                "max_tokens": 120,
+                "response_format": {"type": "json_object"}
+            }
+        )
+        if r.status_code == 200:
+            raw = r.json()["choices"][0]["message"]["content"]
+            result = json.loads(raw)
+            template_id = result.get("template_id", "custom")
+            # Validate — only accept known IDs
+            valid_ids = {t["id"] for t in TEMPLATES}
+            if template_id not in valid_ids:
+                template_id = "custom"
+            return jsonify({
+                "template_id": template_id,
+                "confidence": result.get("confidence", 70),
+                "reason": result.get("reason", "")
+            }), 200
+        else:
+            print(f"[detect-template] OpenAI error {r.status_code}: {r.text[:200]}")
+    except Exception as e:
+        print(f"[detect-template] Exception: {e}")
+
+    # Fallback on any error
+    return jsonify({"template_id": "custom", "confidence": 0, "reason": "Detection failed"}), 200
 
 
 if __name__ == "__main__":

@@ -1463,6 +1463,165 @@ const SurveyEditor: React.FC = () => {
                 </div>
               </div>
 
+              {/* ── Font Settings ── */}
+              <div className="mt-5 pt-5 border-t border-gray-100 space-y-4">
+                <p className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                  <span>Aa</span> Font Settings
+                </p>
+
+                {/* Font Family */}
+                <div>
+                  <p className="text-[11px] font-medium text-gray-600 mb-2">Font style</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {([
+                      { id: 'outfit',    label: 'Outfit',       stack: "'Outfit', sans-serif",           preview: 'Outfit' },
+                      { id: 'inter',     label: 'Inter',        stack: "'Inter', sans-serif",             preview: 'Inter' },
+                      { id: 'roboto',    label: 'Roboto',       stack: "'Roboto', sans-serif",            preview: 'Roboto' },
+                      { id: 'lato',      label: 'Lato',         stack: "'Lato', sans-serif",              preview: 'Lato' },
+                      { id: 'playfair',  label: 'Playfair',     stack: "'Playfair Display', serif",       preview: 'Playfair' },
+                      { id: 'poppins',   label: 'Poppins',      stack: "'Poppins', sans-serif",           preview: 'Poppins' },
+                    ] as { id: string; label: string; stack: string; preview: string }[]).map(f => {
+                      const current = (survey.theme as any)?.font_family || 'outfit';
+                      const active = current === f.id;
+                      return (
+                        <button
+                          key={f.id}
+                          onClick={() => setSurvey({ ...survey, theme: { ...(survey.theme as any), font_family: f.id } })}
+                          style={{ fontFamily: f.stack }}
+                          className={`px-2 py-2 rounded-lg text-[12px] font-semibold border transition-colors text-left ${
+                            active
+                              ? 'bg-gray-900 text-white border-gray-900'
+                              : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          {f.preview}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Font Size */}
+                <div>
+                  <p className="text-[11px] font-medium text-gray-600 mb-2">Font size</p>
+                  <div className="flex gap-1.5">
+                    {([
+                      { label: '85%',  scale: 0.85 },
+                      { label: '100%', scale: 1.0  },
+                      { label: '115%', scale: 1.15 },
+                      { label: '130%', scale: 1.30 },
+                    ] as { label: string; scale: number }[]).map(s => {
+                      const current = (survey.theme as any)?.font_size_scale ?? 1.0;
+                      const active = Math.abs(current - s.scale) < 0.01;
+                      return (
+                        <button
+                          key={s.label}
+                          onClick={() => setSurvey({ ...survey, theme: { ...(survey.theme as any), font_size_scale: s.scale } })}
+                          className={`flex-1 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors ${
+                            active
+                              ? 'bg-gray-900 text-white border-gray-900'
+                              : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          {s.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Video Settings ── */}
+              <div className="mt-5 pt-5 border-t border-gray-100 space-y-3">
+                <p className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                  <span>▶</span> Survey Videos
+                  <span className="text-[10px] font-normal text-gray-400">up to 3</span>
+                </p>
+                <p className="text-[11px] text-gray-400 leading-relaxed">
+                  Videos appear at the start of <strong className="text-gray-600">this survey only</strong>, before any questions. Each survey has its own independent video list.
+                </p>
+
+                {/* Existing videos */}
+                {((survey as any).survey_videos || []).map((v: { url: string; title?: string }, idx: number) => (
+                  <div key={idx} className="flex items-center gap-2 px-2.5 py-2 bg-gray-50 border border-gray-200 rounded-lg">
+                    <span className="text-[10px] bg-gray-200 text-gray-600 font-bold px-1.5 py-0.5 rounded flex-shrink-0">#{idx + 1}</span>
+                    <p className="text-[11px] text-gray-700 flex-1 truncate font-medium">{v.title || `Video ${idx + 1}`}</p>
+                    <button
+                      onClick={() => {
+                        const vids = [...((survey as any).survey_videos || [])];
+                        vids.splice(idx, 1);
+                        setSurvey({ ...survey, survey_videos: vids } as any);
+                      }}
+                      className="text-red-400 hover:text-red-600 text-[11px] font-bold flex-shrink-0"
+                      title="Remove"
+                    >✕</button>
+                  </div>
+                ))}
+
+                {/* Upload new video */}
+                {((survey as any).survey_videos?.length ?? 0) < 3 && (
+                  <label className={`w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-[11px] font-semibold cursor-pointer transition-colors ${
+                    uploadingFor === 'video'
+                      ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-wait'
+                      : 'border-dashed border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50'
+                  }`}>
+                    <input
+                      type="file"
+                      accept="video/mp4,video/webm,video/quicktime,video/x-msvideo"
+                      className="hidden"
+                      disabled={uploadingFor === 'video'}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.size > 100 * 1024 * 1024) {
+                          alert('Video is too large. Maximum size is 100 MB.');
+                          return;
+                        }
+                        setUploadingFor('video');
+                        try {
+                          const fd = new FormData();
+                          fd.append('video', file);
+                          const res = await fetch(`${apiBaseUrl}/api/upload-video`, { method: 'POST', body: fd });
+                          if (!res.ok) { const err = await res.json(); alert(`Upload failed: ${err.error || res.statusText}`); return; }
+                          const data = await res.json();
+                          const existing = (survey as any).survey_videos || [];
+                          setSurvey({ ...survey, survey_videos: [...existing, { url: data.url, title: file.name.replace(/\.[^.]+$/, '') }] } as any);
+                        } catch { alert('Upload failed. Please check your connection.'); }
+                        finally { setUploadingFor(null); e.target.value = ''; }
+                      }}
+                    />
+                    {uploadingFor === 'video'
+                      ? <><span className="animate-spin inline-block w-3 h-3 border-2 border-gray-300 border-t-blue-500 rounded-full" /> Uploading…</>
+                      : <>🎬 Upload video ({(survey as any).survey_videos?.length ?? 0}/3)</>
+                    }
+                  </label>
+                )}
+
+                {/* Replay toggle */}
+                <div className="flex items-center justify-between pt-1">
+                  <div>
+                    <p className="text-[11px] font-medium text-gray-700">Allow video replay</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">Off by default. When off the play button is disabled after first view.</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={(survey as any).video_replay_enabled === true}
+                    onClick={() => setSurvey({ ...survey, video_replay_enabled: !(survey as any).video_replay_enabled } as any)}
+                    className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
+                      (survey as any).video_replay_enabled === true ? 'bg-blue-500' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        (survey as any).video_replay_enabled === true ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
               {/* ── Collaborators ── */}
               <div className="mt-5 pt-5 border-t border-gray-100">
                 <p className="text-xs font-semibold text-gray-700 mb-1 flex items-center gap-1.5">
@@ -2780,14 +2939,25 @@ const SurveyEditor: React.FC = () => {
                 </button>
               </div>
 
-              {/* ── Images ── */}
+              {/* ── Images & Videos ── */}
               <div className="pt-3 border-t border-gray-100">
-                <label className="block text-xs font-medium text-gray-500 mb-3">Images</label>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-xs font-medium text-gray-500">Images</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowSettings(true)}
+                    className="flex items-center gap-1 text-[10px] font-semibold text-blue-500 hover:text-blue-700 transition-colors"
+                    title="Open Survey Settings to manage videos"
+                  >
+                    🎬 Videos → Settings
+                  </button>
+                </div>
 
-                {/* Question Image */}
+                {/* Question Images — up to 4, full picture (no crop) */}
                 <div className="mb-3">
                   <p className="text-[11px] font-semibold text-gray-600 mb-1 flex items-center gap-1">
-                    Question Image
+                    Question Photos
+                    <span className="text-[10px] font-normal text-gray-400 ml-1">up to 4</span>
                     {!hasFeature('editor_question_image') && <Lock size={10} className="text-red-400" />}
                   </p>
 
@@ -2796,99 +2966,152 @@ const SurveyEditor: React.FC = () => {
                       <Lock size={12} className="text-amber-600 flex-shrink-0" />
                       <p className="text-[10px] text-amber-700 font-medium">Upgrade your plan to add images to questions</p>
                     </div>
-                  ) : (
-                    <>
-                    {/* URL input row */}
-                    <input
-                    type="text"
-                    value={(activeQ as any).questionImage || ''}
-                    onChange={(e) => {
+                  ) : (() => {
+                    // Build unified image list: prefer new questionImages[], fall back to legacy questionImage
+                    const existingImgs: string[] = (activeQ as any).questionImages?.length
+                      ? [...(activeQ as any).questionImages]
+                      : (activeQ as any).questionImage
+                        ? [(activeQ as any).questionImage]
+                        : [];
+
+                    const setImages = (imgs: string[]) => {
                       const updated = { ...survey };
                       updated.questions = [...updated.questions];
-                      (updated.questions[activeQuestionIndex] as any).questionImage = e.target.value || undefined;
+                      // Store in new field; clear legacy field
+                      (updated.questions[activeQuestionIndex] as any).questionImages = imgs.length > 0 ? imgs : undefined;
+                      (updated.questions[activeQuestionIndex] as any).questionImage = undefined;
                       setSurvey(updated);
-                    }}
-                    placeholder="Paste image URL..."
-                    className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-[11px] focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent mb-1.5"
-                  />
+                    };
 
-                  {/* Upload from device button */}
-                  <label className={`
-                    w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border
-                    text-[11px] font-semibold cursor-pointer transition-colors
-                    ${uploadingFor === 'question'
-                      ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-wait'
-                      : 'border-dashed border-gray-300 text-gray-500 hover:border-red-400 hover:text-red-500 hover:bg-red-50'}
-                  `}>
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg,image/jpg,image/gif,image/webp,image/svg+xml"
-                      className="hidden"
-                      disabled={uploadingFor === 'question'}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        uploadImage(file, (url) => {
-                          const updated = { ...survey };
-                          updated.questions = [...updated.questions];
-                          (updated.questions[activeQuestionIndex] as any).questionImage = url;
-                          setSurvey(updated);
-                        }, 'question');
-                        e.target.value = ''; // reset so same file can be re-selected
-                      }}
-                    />
-                    {uploadingFor === 'question' ? (
-                      <><span className="animate-spin inline-block w-3 h-3 border-2 border-gray-300 border-t-red-500 rounded-full" /> Uploading...</>
-                    ) : (
-                      <>📁 Upload from device</>
-                    )}
-                  </label>
+                    const addImage = (url: string) => {
+                      if (existingImgs.length >= 4) return;
+                      setImages([...existingImgs, url]);
+                    };
 
-                  {/* Preview + position controls */}
-                  {(activeQ as any).questionImage && (
-                    <>
-                      <img
-                        src={(activeQ as any).questionImage}
-                        alt="preview"
-                        className="mt-1.5 w-full h-20 object-cover rounded-lg border border-gray-200"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
-                      <div className="flex gap-1.5 mt-1.5">
-                        {(['above', 'below'] as const).map(pos => (
-                          <button
-                            key={pos}
-                            onClick={() => {
-                              const updated = { ...survey };
-                              updated.questions = [...updated.questions];
-                              (updated.questions[activeQuestionIndex] as any).questionImagePosition = pos;
-                              setSurvey(updated);
+                    const removeImage = (idx: number) => {
+                      setImages(existingImgs.filter((_, i) => i !== idx));
+                    };
+
+                    const canAdd = existingImgs.length < 4;
+
+                    return (
+                      <>
+                        {/* Existing image previews — 2-column grid */}
+                        {existingImgs.length > 0 && (
+                          <div className={`mb-2 ${existingImgs.length > 1 ? 'grid grid-cols-2 gap-1.5' : ''}`}>
+                            {existingImgs.map((src, idx) => (
+                              <div key={idx} className="relative group rounded-lg overflow-hidden border border-gray-200 bg-gray-50"
+                                style={{ minHeight: existingImgs.length === 1 ? 120 : 80 }}>
+                                <img
+                                  src={src}
+                                  alt={`Photo ${idx + 1}`}
+                                  className="w-full object-contain block"
+                                  style={{ height: existingImgs.length === 1 ? 120 : 80, background: '#f3f4f6' }}
+                                  onError={(e) => {
+                                    // Show a broken-image placeholder instead of hiding
+                                    const el = e.target as HTMLImageElement;
+                                    el.style.display = 'none';
+                                    const parent = el.parentElement;
+                                    if (parent && !parent.querySelector('.img-err-placeholder')) {
+                                      const placeholder = document.createElement('div');
+                                      placeholder.className = 'img-err-placeholder';
+                                      placeholder.style.cssText = `display:flex;align-items:center;justify-content:center;height:${existingImgs.length === 1 ? 120 : 80}px;width:100%;background:#f3f4f6;color:#9ca3af;font-size:11px;gap:4px;`;
+                                      placeholder.textContent = '⚠ Preview unavailable';
+                                      parent.appendChild(placeholder);
+                                    }
+                                  }}
+                                />
+                                <button
+                                  onClick={() => removeImage(idx)}
+                                  className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full text-[10px] font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                                  title="Remove"
+                                >✕</button>
+                                <span className="absolute bottom-1 left-1 bg-black/40 text-white text-[9px] px-1.5 py-0.5 rounded font-medium z-10">{idx + 1}/4</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Add more — URL input */}
+                        {canAdd && (
+                          <input
+                            type="text"
+                            placeholder={`Paste image URL (${existingImgs.length}/4 added)…`}
+                            className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-[11px] focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent mb-1.5"
+                            onBlur={(e) => {
+                              const val = e.target.value.trim();
+                              if (val) { addImage(val); e.target.value = ''; }
                             }}
-                            className={`flex-1 py-1 rounded-md text-[10px] font-semibold border transition-colors ${
-                              ((activeQ as any).questionImagePosition || 'above') === pos
-                                ? 'bg-gray-900 text-white border-gray-900'
-                                : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
-                            }`}
-                          >
-                            {pos === 'above' ? '↑ Above Q' : '↓ Below Q'}
-                          </button>
-                        ))}
-                        <button
-                          onClick={() => {
-                            const updated = { ...survey };
-                            updated.questions = [...updated.questions];
-                            (updated.questions[activeQuestionIndex] as any).questionImage = undefined;
-                            (updated.questions[activeQuestionIndex] as any).questionImagePosition = undefined;
-                            setSurvey(updated);
-                          }}
-                          className="px-2 py-1 rounded-md text-[10px] font-semibold border border-red-200 text-red-500 hover:bg-red-50 transition-colors"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </>
-                  )}
-                    </>
-                  )}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                const val = (e.target as HTMLInputElement).value.trim();
+                                if (val) { addImage(val); (e.target as HTMLInputElement).value = ''; }
+                              }
+                            }}
+                          />
+                        )}
+
+                        {/* Upload from device */}
+                        {canAdd && (
+                          <label className={`
+                            w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border
+                            text-[11px] font-semibold cursor-pointer transition-colors
+                            ${uploadingFor === 'question'
+                              ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-wait'
+                              : 'border-dashed border-gray-300 text-gray-500 hover:border-red-400 hover:text-red-500 hover:bg-red-50'}
+                          `}>
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/jpg,image/gif,image/webp,image/svg+xml"
+                              className="hidden"
+                              disabled={uploadingFor === 'question'}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                uploadImage(file, (url) => addImage(url), 'question');
+                                e.target.value = '';
+                              }}
+                            />
+                            {uploadingFor === 'question'
+                              ? <><span className="animate-spin inline-block w-3 h-3 border-2 border-gray-300 border-t-red-500 rounded-full" /> Uploading…</>
+                              : <>📁 Upload photo ({existingImgs.length}/4)</>
+                            }
+                          </label>
+                        )}
+
+                        {/* Position toggle — shown when at least 1 image */}
+                        {existingImgs.length > 0 && (
+                          <div className="flex gap-1.5 mt-2">
+                            {(['above', 'below'] as const).map(pos => (
+                              <button
+                                key={pos}
+                                onClick={() => {
+                                  const updated = { ...survey };
+                                  updated.questions = [...updated.questions];
+                                  (updated.questions[activeQuestionIndex] as any).questionImagePosition = pos;
+                                  setSurvey(updated);
+                                }}
+                                className={`flex-1 py-1 rounded-md text-[10px] font-semibold border transition-colors ${
+                                  ((activeQ as any).questionImagePosition || 'above') === pos
+                                    ? 'bg-gray-900 text-white border-gray-900'
+                                    : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                                }`}
+                              >
+                                {pos === 'above' ? '↑ Above Q' : '↓ Below Q'}
+                              </button>
+                            ))}
+                            <button
+                              onClick={() => setImages([])}
+                              className="px-2 py-1 rounded-md text-[10px] font-semibold border border-red-200 text-red-500 hover:bg-red-50 transition-colors"
+                              title="Remove all photos"
+                            >
+                              ✕ All
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
 
                 {/* Option Images — only for choice questions */}

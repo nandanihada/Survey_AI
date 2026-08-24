@@ -19,6 +19,7 @@ interface Question {
   type: 'text' | 'radio' | 'range';
   options?: string[];
   questionImage?: string;
+  questionImages?: string[];
   questionImagePosition?: 'above' | 'below';
   optionImages?: Record<string, string>;
   optionImageMode?: 'with-text' | 'replace-text';
@@ -32,6 +33,7 @@ interface RawQuestion {
   type: string;
   options?: string[];
   questionImage?: string;
+  questionImages?: string[];
   questionImagePosition?: 'above' | 'below';
   optionImages?: Record<string, string>;
   optionImageMode?: 'with-text' | 'replace-text';
@@ -354,8 +356,25 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
   };
 
   /* ── Main Render ── */
+  /* ── Font settings from survey.theme ── */
+  const CF_FONT_STACKS: Record<string, string> = {
+    outfit:   "'Outfit', -apple-system, sans-serif",
+    inter:    "'Inter', -apple-system, sans-serif",
+    roboto:   "'Roboto', -apple-system, sans-serif",
+    lato:     "'Lato', -apple-system, sans-serif",
+    playfair: "'Playfair Display', Georgia, serif",
+    poppins:  "'Poppins', -apple-system, sans-serif",
+  };
+  const cfFontKey = (survey.theme as any)?.font_family || 'outfit';
+  const cfFontStack = CF_FONT_STACKS[cfFontKey] || CF_FONT_STACKS.outfit;
+  const cfFontSizeScale: number = (survey.theme as any)?.font_size_scale ?? 1.0;
+  const cfRootFontStyle: React.CSSProperties = {
+    fontFamily: cfFontStack,
+    fontSize: `${Math.round(cfFontSizeScale * 100)}%`,
+  };
+
   return (
-    <div className="cf-survey-container">
+    <div className="cf-survey-container" style={cfRootFontStyle}>
       <div className="cf-card-wrapper">
         {/* Pin */}
         <div className="cf-pin">

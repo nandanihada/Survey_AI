@@ -412,13 +412,23 @@ def _run_funnel_generation_bg(job_id, funnel_plan, original_prompt, owner_user_i
 
         # ── Scoring matrix ──
         update_job(step="Building AI scoring matrix...", progress=85)
-        try:
-            scoring_matrix = _generate_scoring_matrix(api_key=api_key, funnel_plan=funnel_plan, screening_survey_ids=screening_survey_ids, original_prompt=original_prompt)
-            _apply_scoring_to_surveys(scoring_matrix, screening_survey_ids)
-            print(f"✅ [BG Funnel] Scoring matrix applied")
-        except Exception as e:
-            errors.append(f"Scoring matrix: {e}")
-            print(f"⚠️ [BG Funnel] Scoring matrix error: {e}")
+        scoring_applied = False
+        for scoring_attempt in range(2):  # try up to 2 times
+            try:
+                scoring_matrix = _generate_scoring_matrix(api_key=api_key, funnel_plan=funnel_plan, screening_survey_ids=screening_survey_ids, original_prompt=original_prompt)
+                if scoring_matrix:
+                    _apply_scoring_to_surveys(scoring_matrix, screening_survey_ids)
+                    print(f"✅ [BG Funnel] Scoring matrix applied ({len(scoring_matrix)} entries, attempt {scoring_attempt + 1})")
+                    scoring_applied = True
+                    break
+                else:
+                    print(f"⚠️ [BG Funnel] Scoring matrix empty on attempt {scoring_attempt + 1} — retrying…")
+            except Exception as e:
+                print(f"⚠️ [BG Funnel] Scoring matrix error on attempt {scoring_attempt + 1}: {e}")
+                if scoring_attempt == 1:
+                    errors.append(f"Scoring matrix: {e}")
+        if not scoring_applied:
+            print(f"⚠️ [BG Funnel] Scoring matrix could not be generated — use 'Generate Scoring' button to retry")
 
         # ── Save funnel config ──
         job_priority_order = [j["id"] for j in funnel_plan.get("job_profiles", [])]
@@ -712,7 +722,7 @@ STRICT RULES:
             q["allowMultiple"] = True
 
     short_id = generate_short_id(5)
-    survey_id = f"fnl_{funnel_id}_{job_id or f'screening_{layer_index}'}_{uuid.uuid4().hex[:6]}"
+    survey_id = f"fnl_{funnel_id}_{job_id or f'sc_{layer_index}'}_{uuid.uuid4().hex[:6]}"
 
     survey_doc = {
         "_id": survey_id,
@@ -739,28 +749,42 @@ STRICT RULES:
 def _generate_scoring_matrix(api_key, funnel_plan, screening_survey_ids, original_prompt):
     """
     Generate point values for every answer option in every screening survey
-    for every job profile. Returns a map of survey_id → question_id → answer → {job_id: points}
+    for every job profile. Returns a list of scoring_matrix entries.
+    
+    Note: we score ALL questions that have options (regardless of funnel_role),
+    because even "screen" role questions contribute signal for job matching.
+    Questions with funnel_role "neutral" that have no options are skipped.
     """
-    # Collect all scoreable questions from all screening surveys
+    # Collect all questions that have answer options from all screening surveys
     all_questions_summary = []
     for s_info in screening_survey_ids:
         s_doc = db.surveys.find_one({"id": s_info["survey_id"]})
         if not s_doc:
+            print(f"⚠️ [Scoring] Survey not found in DB: {s_info['survey_id']}")
             continue
-        for q in s_doc.get("questions", []):
-            # Guard: skip anything that isn't a proper question dict
+        questions = s_doc.get("questions", [])
+        print(f"[Scoring] Survey {s_info['survey_id']}: {len(questions)} total questions")
+        for q in questions:
             if not isinstance(q, dict):
                 continue
-            if q.get("funnel_role") in ("score", "both") and q.get("options"):
+            role = q.get("funnel_role", "neutral")
+            has_options = bool(q.get("options"))
+            # Score all questions that have options — screen/score/both/neutral all count
+            # (pure text/scale questions with no options cannot be scored)
+            if has_options:
                 all_questions_summary.append({
                     "survey_id": s_info["survey_id"],
                     "question_id": q["id"],
                     "question_text": q.get("question", "")[:80],
-                    "options": q.get("options", [])[:10]  # cap at 10 options per question
+                    "options": q.get("options", [])[:10],
+                    "role": role  # informational only
                 })
 
+    print(f"[Scoring] Total scoreable questions collected: {len(all_questions_summary)}")
+
     if not all_questions_summary:
-        return {}
+        print("⚠️ [Scoring] No scoreable questions found — all questions may be text/scale type or surveys are empty")
+        return []
 
     job_profiles = funnel_plan.get("job_profiles", [])
     job_descriptions = "\n".join(
@@ -789,7 +813,7 @@ For each answer option in each question, assign points (0-5) for each destinatio
 
 Think carefully about what each answer implies about fit for each destination given the funnel goal above.
 
-Return ONLY valid JSON in this exact structure:
+Return ONLY valid JSON. The top-level key MUST be "scoring_matrix" and its value MUST be an array. Example:
 {{
   "scoring_matrix": [
     {{
@@ -801,58 +825,139 @@ Return ONLY valid JSON in this exact structure:
       }}
     }}
   ]
-}}"""
+}}
+Do NOT add any text outside the JSON object. Do NOT rename "scoring_matrix"."""
 
     def _call_scoring_api(prompt_text):
-        """Call the scoring API with a higher token budget and a JSON-parse fallback."""
-        r = http_requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            timeout=60,
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={
-                "model": "gpt-4o",
-                "messages": [{"role": "user", "content": prompt_text}],
-                "temperature": 0.1,
-                "max_tokens": 8000,  # raised from 4000 — large funnels need room
-                "response_format": {"type": "json_object"}
-            }
-        )
-        if r.status_code != 200:
-            raise Exception(f"Scoring matrix API error {r.status_code}: {r.text[:200]}")
-        raw = r.json()["choices"][0]["message"]["content"]
-        try:
-            return json.loads(raw).get("scoring_matrix", [])
-        except json.JSONDecodeError:
-            # Truncated response — try to recover whatever complete entries we got
-            print(f"⚠️ [BG Funnel] Scoring matrix JSON truncated, attempting partial recovery")
-            recovered = []
-            # Each complete entry ends with "}}" — extract them greedily
-            import re as _re
-            for m in _re.finditer(r'\{\s*"survey_id".*?"option_scores"\s*:\s*\{[^}]*\}\s*\}', raw, _re.DOTALL):
-                try:
-                    entry = json.loads(m.group(0))
-                    recovered.append(entry)
-                except Exception:
-                    pass
-            print(f"⚠️ [BG Funnel] Recovered {len(recovered)} scoring entries from truncated response")
-            return recovered
+        """
+        Call the scoring API and return a list of scoring_matrix entries.
+        Uses gpt-4o-mini first (faster, cheaper, more reliable on structured JSON);
+        falls back to gpt-4o if mini returns nothing usable.
+        """
+        def _post(model):
+            # Calculate a safe token budget:
+            # Each question with N options × M destinations ≈ (N × M × 8) tokens of output.
+            # We cap at 4000 tokens per call — enough for ~5 questions with 6 destinations.
+            return http_requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                timeout=180,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt_text}],
+                    "temperature": 0.1,
+                    "max_tokens": 4000,
+                    "response_format": {"type": "json_object"}
+                }
+            )
 
-    # ── Batch large payloads to stay within token limits ──
-    # Each batch: max 25 questions → keeps request + response well under 8k tokens
-    BATCH_SIZE = 25
+        def _parse_raw(raw: str):
+            """
+            Extract a list of scoring entries from whatever JSON the AI returned.
+            Handles:
+              - {"scoring_matrix": [...]}         ← expected
+              - {"results": [...]}                ← alt key
+              - [...]                             ← bare array
+              - {"some_key": {"scoring_matrix": [...]}}  ← nested
+            Also handles truncated JSON by trying to close the string and re-parse.
+            """
+            def _try_parse(s):
+                try:
+                    return json.loads(s), True
+                except json.JSONDecodeError:
+                    return None, False
+
+            parsed, ok = _try_parse(raw)
+
+            # If truncated, try to close the JSON by appending brackets/braces
+            if not ok:
+                print(f"⚠️ [Scoring] json.loads failed on full response — attempting truncation recovery")
+                print(f"⚠️ [Scoring] Raw (first 500): {raw[:500]}")
+                # Find the last complete entry by looking for the last "}," or "}]" pattern
+                # Try progressively closing the JSON
+                for suffix in ("}]}}", "}]}", "}]", "]}", "]}"):
+                    candidate = raw.rstrip().rstrip(",").rstrip() + suffix
+                    parsed, ok = _try_parse(candidate)
+                    if ok:
+                        print(f"[Scoring] Truncation recovery succeeded with suffix: {suffix!r}")
+                        break
+
+            if not ok or parsed is None:
+                print(f"⚠️ [Scoring] Could not recover from truncated response")
+                return []
+
+            # Direct array
+            if isinstance(parsed, list):
+                return parsed
+
+            if isinstance(parsed, dict):
+                # Try common key names first
+                for key in ("scoring_matrix", "results", "matrix", "scores", "data"):
+                    val = parsed.get(key)
+                    if isinstance(val, list) and val:
+                        return val
+
+                # Scan all values for the first non-empty list
+                for val in parsed.values():
+                    if isinstance(val, list) and val:
+                        return val
+
+                # One level deeper (sometimes AI wraps in an extra object)
+                for val in parsed.values():
+                    if isinstance(val, dict):
+                        for inner_val in val.values():
+                            if isinstance(inner_val, list) and inner_val:
+                                return inner_val
+
+            print(f"⚠️ [Scoring] Could not find a list in parsed JSON. Keys: {list(parsed.keys()) if isinstance(parsed, dict) else type(parsed)}")
+            return []
+
+        # ── Try gpt-4o-mini first ──
+        for model in ("gpt-4o-mini", "gpt-4o"):
+            try:
+                r = _post(model)
+                if r.status_code != 200:
+                    print(f"⚠️ [Scoring] {model} returned HTTP {r.status_code}: {r.text[:200]}")
+                    continue
+                raw = r.json()["choices"][0]["message"]["content"]
+                print(f"[Scoring] {model} raw response (first 600 chars): {raw[:600]}")
+                entries = _parse_raw(raw)
+                if entries:
+                    print(f"[Scoring] {model} → {len(entries)} entries extracted")
+                    return entries
+                print(f"⚠️ [Scoring] {model} returned parseable JSON but no entries found — trying next model")
+            except Exception as e:
+                print(f"⚠️ [Scoring] {model} exception: {e}")
+                continue
+
+        print("⚠️ [Scoring] All models failed to return usable scoring entries")
+        return []
+
+    # ── Batch questions to stay within token limits ──
+    # With many destinations (6+) and many options per question, each question's
+    # option_scores JSON is ~300-500 tokens. Keep batches at 5 questions max
+    # so the response always fits within 4000 tokens and never gets truncated.
+    BATCH_SIZE = 5
     combined_matrix = []
     for batch_start in range(0, len(all_questions_summary), BATCH_SIZE):
         batch = all_questions_summary[batch_start: batch_start + BATCH_SIZE]
+        batch_num = batch_start // BATCH_SIZE + 1
+        total_batches = -(-len(all_questions_summary) // BATCH_SIZE)  # ceiling div
+        print(f"[Scoring] Batch {batch_num}/{total_batches}: {len(batch)} questions")
         batch_prompt = _build_scoring_prompt(batch)
         batch_result = _call_scoring_api(batch_prompt)
         combined_matrix.extend(batch_result)
-        print(f"✅ [BG Funnel] Scoring batch {batch_start // BATCH_SIZE + 1}: {len(batch_result)} entries")
+        print(f"✅ [Scoring] Batch {batch_num}/{total_batches}: {len(batch_result)} entries returned")
 
     return combined_matrix
 
 
 def _apply_scoring_to_surveys(scoring_matrix, screening_survey_ids):
-    """Write generated option_scores back into the survey question documents."""
+    """
+    Write generated option_scores back into the survey question documents.
+    Normalises the structure to always be: { option_text: { job_id: number } }
+    and guards against the AI returning inverted or extra-nested structures.
+    """
     for entry in scoring_matrix:
         s_id = entry.get("survey_id")
         q_id = entry.get("question_id")
@@ -861,11 +966,39 @@ def _apply_scoring_to_surveys(scoring_matrix, screening_survey_ids):
         if not s_id or not q_id or not option_scores:
             continue
 
-        # Update the specific question's option_scores
+        # ── Normalise: ensure every leaf value is a plain number ──
+        # The AI occasionally returns { option: { job_id: { job_id2: pts } } }
+        # (an extra level of nesting). Flatten any dict-valued leaves.
+        normalised: dict = {}
+        for opt_key, job_map in option_scores.items():
+            if not isinstance(job_map, dict):
+                # Unexpected scalar at option level — skip
+                continue
+            flat_jobs: dict = {}
+            for job_key, pts_val in job_map.items():
+                if isinstance(pts_val, (int, float)):
+                    flat_jobs[job_key] = float(pts_val)
+                elif isinstance(pts_val, dict):
+                    # Extra nesting — AI put another dict where a number should be.
+                    # Take the first numeric value found inside, or default to 0.
+                    inner_num = next(
+                        (v for v in pts_val.values() if isinstance(v, (int, float))),
+                        0
+                    )
+                    flat_jobs[job_key] = float(inner_num)
+                # else: ignore non-numeric non-dict values
+            if flat_jobs:
+                normalised[opt_key] = flat_jobs
+
+        if not normalised:
+            print(f"⚠️ [Apply] Skipping q={q_id} in {s_id} — no valid scores after normalisation")
+            continue
+
         db.surveys.update_one(
             {"id": s_id, "questions.id": q_id},
-            {"$set": {"questions.$.option_scores": option_scores}}
+            {"$set": {"questions.$.option_scores": normalised}}
         )
+        print(f"[Apply] Updated q={q_id} in {s_id}: {len(normalised)} options scored")
 
 
 # ═══════════════════════════════════════════════════════
@@ -1335,6 +1468,139 @@ def regenerate_screening_surveys(funnel_id):
         import traceback
         print(f"[regenerate-screening] FATAL: {traceback.format_exc()}")
         return jsonify({"success": False, "error": str(e)}), 200
+
+
+@funnel_bp.route("/api/funnels/<funnel_id>/regenerate-scoring", methods=["POST", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins=ALLOWED_ORIGINS)
+@requireAuth
+def regenerate_scoring(funnel_id):
+    """
+    Kicks off AI scoring matrix regeneration in a background thread and returns
+    a job_id immediately. The client polls GET /scoring-job/<job_id> for status.
+    This avoids HTTP timeouts on large funnels where generation can take 2–3 min.
+    """
+    if request.method == "OPTIONS":
+        return "", 200
+
+    funnel = db.funnels.find_one({"funnel_id": funnel_id})
+    if not funnel:
+        return jsonify({"error": "Funnel not found"}), 404
+
+    # Ownership check
+    current_user = g.current_user
+    is_admin = current_user.get("role") == "admin"
+    if not is_admin and str(funnel.get("owner_user_id", "")) != str(current_user.get("_id", "")):
+        return jsonify({"error": "Not authorised"}), 403
+
+    api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("AI_API_KEY", "")
+    if not api_key:
+        return jsonify({"error": "AI service not configured"}), 503
+
+    funnel_plan = funnel.get("funnel_plan", {})
+    if not funnel_plan:
+        return jsonify({"error": "Funnel has no stored funnel_plan — cannot regenerate scoring"}), 400
+
+    screening_surveys = funnel.get("screening_surveys", [])
+    if not screening_surveys:
+        return jsonify({"error": "No screening surveys found in this funnel"}), 400
+
+    # Create a job record so the frontend can poll progress
+    job_id = f"rscore_{uuid.uuid4().hex[:10]}"
+    db.scoring_jobs.insert_one({
+        "job_id": job_id,
+        "funnel_id": funnel_id,
+        "status": "running",
+        "message": "Starting scoring generation…",
+        "entries_applied": 0,
+        "surveys_updated": 0,
+        "error": None,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+
+    original_prompt = funnel.get("original_prompt", "")
+    screening_survey_ids = [
+        {"survey_id": s["survey_id"], "name": s.get("name", s["survey_id"])}
+        for s in screening_surveys
+    ]
+
+    def _run_in_bg():
+        try:
+            print(f"[regenerate-scoring] START job={job_id} funnel={funnel_id} surveys={len(screening_survey_ids)}")
+            db.scoring_jobs.update_one(
+                {"job_id": job_id},
+                {"$set": {"message": f"Generating scores for {len(screening_survey_ids)} survey(s)…"}}
+            )
+
+            scoring_matrix = _generate_scoring_matrix(
+                api_key=api_key,
+                funnel_plan=funnel_plan,
+                screening_survey_ids=screening_survey_ids,
+                original_prompt=original_prompt
+            )
+
+            if not scoring_matrix:
+                db.scoring_jobs.update_one(
+                    {"job_id": job_id},
+                    {"$set": {
+                        "status": "error",
+                        "error": "AI returned an empty scoring matrix. Check the backend logs for the raw response and try again."
+                    }}
+                )
+                return
+
+            _apply_scoring_to_surveys(scoring_matrix, screening_survey_ids)
+
+            db.funnels.update_one(
+                {"funnel_id": funnel_id},
+                {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
+            )
+
+            entries = len(scoring_matrix)
+            print(f"[regenerate-scoring] DONE job={job_id} entries={entries}")
+            db.scoring_jobs.update_one(
+                {"job_id": job_id},
+                {"$set": {
+                    "status": "done",
+                    "message": "Scoring generated successfully.",
+                    "entries_applied": entries,
+                    "surveys_updated": len(screening_survey_ids)
+                }}
+            )
+        except Exception as e:
+            import traceback
+            tb = traceback.format_exc()
+            print(f"[regenerate-scoring] FATAL job={job_id}: {tb}")
+            db.scoring_jobs.update_one(
+                {"job_id": job_id},
+                {"$set": {"status": "error", "error": str(e)}}
+            )
+
+    import threading
+    threading.Thread(target=_run_in_bg, daemon=True).start()
+
+    return jsonify({"job_id": job_id, "status": "running"}), 202
+
+
+@funnel_bp.route("/api/funnels/<funnel_id>/scoring-job/<job_id>", methods=["GET", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins=ALLOWED_ORIGINS)
+@requireAuth
+def get_scoring_job(funnel_id, job_id):
+    """Poll endpoint: returns current status of a regenerate-scoring job."""
+    if request.method == "OPTIONS":
+        return "", 200
+
+    job = db.scoring_jobs.find_one({"job_id": job_id, "funnel_id": funnel_id})
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    return jsonify({
+        "job_id": job_id,
+        "status": job.get("status", "running"),
+        "message": job.get("message", ""),
+        "entries_applied": job.get("entries_applied", 0),
+        "surveys_updated": job.get("surveys_updated", 0),
+        "error": job.get("error")
+    }), 200
 
 
 @funnel_bp.route("/api/funnels/<funnel_id>/debug-surveys", methods=["GET", "OPTIONS"])

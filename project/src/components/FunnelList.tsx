@@ -9,7 +9,7 @@ import {
   Layers, Plus, ChevronDown, ChevronRight, ExternalLink, Search, Calendar,
   Settings, BarChart3, Copy, Loader2, AlertCircle, ChevronLeft,
   Filter, Target, GitBranch, Edit3, Check, X, Trash2,
-  ArrowRight, RefreshCw, Eye, Link2, Zap, Info
+  ArrowRight, RefreshCw, Eye, Link2, Zap, Info, Sparkles
 } from 'lucide-react';
 import { getApiBaseUrl } from '../utils/deploymentFix';
 import { useAuth } from '../contexts/AuthContext';
@@ -267,27 +267,85 @@ const ScoringDetailsPanel: React.FC<{ funnel: Funnel; isDarkMode: boolean; apiBa
   const [editingCell, setEditingCell] = useState<{surveyId:string; qId:string; option:string; jobId:string} | null>(null);
   const [editVal, setEditVal] = useState('');
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generateMsg, setGenerateMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const jobIds = Object.keys(funnel.job_surveys || {});
 
+  const fetchAll = async () => {
+    setLoading(true);
+    const results: SurveyDetail[] = [];
+    for (const s of funnel.generated_surveys.filter(s => s.type === 'screening')) {
+      try {
+        const res = await fetch(`${apiBase}/api/surveys/${s.survey_id}`, { headers: authHeaders() });
+        if (res.ok) {
+          const data = await res.json();
+          results.push({ id: s.survey_id, title: s.name, questions: data.questions || [] });
+        }
+      } catch {}
+    }
+    setSurveys(results);
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const fetchAll = async () => {
-      setLoading(true);
-      const results: SurveyDetail[] = [];
-      for (const s of funnel.generated_surveys.filter(s => s.type === 'screening')) {
-        try {
-          const res = await fetch(`${apiBase}/api/surveys/${s.survey_id}`, { headers: authHeaders() });
-          if (res.ok) {
-            const data = await res.json();
-            results.push({ id: s.survey_id, title: s.name, questions: data.questions || [] });
-          }
-        } catch {}
-      }
-      setSurveys(results);
-      setLoading(false);
-    };
     fetchAll();
   }, [funnel.funnel_id]);
+
+  const generateScoring = async () => {
+    setGenerating(true);
+    setGenerateMsg(null);
+    try {
+      // Kick off background job — returns immediately with a job_id
+      const res = await fetch(`${apiBase}/api/funnels/${funnel.funnel_id}/regenerate-scoring`, {
+        method: 'POST',
+        headers: authHeaders(),
+      });
+      const data = await res.json();
+
+      if (data.error) {
+        setGenerateMsg({ type: 'error', text: data.error });
+        setGenerating(false);
+        return;
+      }
+
+      const jobId = data.job_id;
+      setGenerateMsg({ type: 'success', text: 'Scoring generation started — this may take 1–2 minutes for large funnels…' });
+
+      // Poll every 3 seconds until done or error
+      const poll = async () => {
+        try {
+          const pollRes = await fetch(
+            `${apiBase}/api/funnels/${funnel.funnel_id}/scoring-job/${jobId}`,
+            { headers: authHeaders() }
+          );
+          const pollData = await pollRes.json();
+
+          if (pollData.status === 'done') {
+            setGenerateMsg({ type: 'success', text: `Scoring generated — ${pollData.entries_applied} entries applied across ${pollData.surveys_updated} survey(s). Refreshing…` });
+            await fetchAll();
+            setGenerating(false);
+            setTimeout(() => setGenerateMsg(null), 5000);
+          } else if (pollData.status === 'error') {
+            setGenerateMsg({ type: 'error', text: pollData.error || 'Generation failed. Please try again.' });
+            setGenerating(false);
+          } else {
+            // Still running — poll again in 3 s
+            setTimeout(poll, 3000);
+          }
+        } catch {
+          setGenerateMsg({ type: 'error', text: 'Lost connection while waiting for scoring. Refresh the page to check if it completed.' });
+          setGenerating(false);
+        }
+      };
+
+      setTimeout(poll, 3000);
+
+    } catch (e: any) {
+      setGenerateMsg({ type: 'error', text: `Network error: ${String(e).slice(0, 120)}` });
+      setGenerating(false);
+    }
+  };
 
   const saveScore = async (surveyId: string, qId: string, option: string, jobId: string, val: number) => {
     setSaving(true);
@@ -325,7 +383,7 @@ const ScoringDetailsPanel: React.FC<{ funnel: Funnel; isDarkMode: boolean; apiBa
 
   return (
     <div className="space-y-6">
-      {/* Info + Color Legend */}
+      {/* Info + Color Legend + Generate Scoring button */}
       <div className={`rounded-xl border p-3 text-xs ${isDarkMode ? 'bg-blue-950/30 border-blue-800/40 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <span><Info size={12} className="inline mr-1" />Points per answer per destination. Click any cell to edit.</span>
@@ -343,7 +401,34 @@ const ScoringDetailsPanel: React.FC<{ funnel: Funnel; isDarkMode: boolean; apiBa
               </span>
             ))}
           </div>
+          {/* Generate Scoring button — right-aligned */}
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={generateScoring}
+              disabled={generating}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${
+                generating
+                  ? 'bg-purple-200 text-purple-400 cursor-not-allowed'
+                  : 'bg-purple-600 hover:bg-purple-700 text-white'
+              }`}
+            >
+              {generating
+                ? <><Loader2 size={11} className="animate-spin" /> Generating…</>
+                : <><Sparkles size={11} /> Generate Scoring</>
+              }
+            </button>
+          </div>
         </div>
+        {/* Feedback message */}
+        {generateMsg && (
+          <div className={`mt-2 px-3 py-1.5 rounded-lg text-[11px] font-medium ${
+            generateMsg.type === 'success'
+              ? 'bg-green-100 text-green-700 border border-green-200'
+              : 'bg-red-100 text-red-700 border border-red-200'
+          }`}>
+            {generateMsg.type === 'success' ? '✓ ' : '✕ '}{generateMsg.text}
+          </div>
+        )}
       </div>
       {surveys.map(sv => (
         <div key={sv.id}>
@@ -383,7 +468,12 @@ const ScoringDetailsPanel: React.FC<{ funnel: Funnel; isDarkMode: boolean; apiBa
                         <td className={`px-3 py-1.5 ${textMain}`}>{opt}</td>
                         {jobIds.map(jid => {
                           const rawScore = q.option_scores?.[opt]?.[jid];
-                          const pts = rawScore ?? null;  // null = not scored, number = scored (even if 0)
+                          // Guard: rawScore must be a number — if it's an object the data
+                          // has an extra nesting level from a malformed AI response.
+                          const pts: number | null =
+                            rawScore === undefined || rawScore === null ? null
+                            : typeof rawScore === 'object' ? null   // corrupt — ignore
+                            : Number(rawScore);
                           const isEditing = editingCell?.surveyId === sv.id && editingCell?.qId === q.id && editingCell?.option === opt && editingCell?.jobId === jid;
                           return (
                             <td key={jid} className="px-2 py-1.5 text-center">
@@ -710,7 +800,7 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
     const firstScreening = funnel.screening_surveys?.[0];
     if (!firstScreening) return;
     const host = window.location.hostname === 'localhost' ? 'http://localhost:5173' : 'https://survey.pepperwahl.com';
-    const link = `${host}/survey/${firstScreening.survey_id}?funnel=${funnel.funnel_id}&layer=0&session=new`;
+    const link = `${host}/survey/${firstScreening.survey_id}?f=${funnel.funnel_id}&ly=0&sn=new`;
     navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
