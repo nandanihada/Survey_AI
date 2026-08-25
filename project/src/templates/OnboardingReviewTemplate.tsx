@@ -7,9 +7,10 @@ import { buildRedirectUrl, createSessionContext } from '../utils/redirectBuilder
 import { getQuestionVariants, getAnswerVariants } from '../utils/animationConfig';
 import { getMoustacheleadsPayload } from '../utils/moustacheleads';
 import { QuestionImage, wrapOptionLabel } from '../utils/questionImages';
+import SurveyVideoPlayer from '../components/SurveyVideoPlayer';
 
-interface Question { id: string; question: string; questionDescription?: string; answerDescription?: string; type: 'text' | 'radio' | 'range'; options?: string[]; questionImage?: string; questionImagePosition?: 'above' | 'below'; optionImages?: Record<string, string>; optionImageMode?: 'with-text' | 'replace-text'; }
-interface RawQuestion { id: string; question: string; questionDescription?: string; answerDescription?: string; type: string; options?: string[]; questionImage?: string; questionImagePosition?: 'above' | 'below'; optionImages?: Record<string, string>; optionImageMode?: 'with-text' | 'replace-text'; }
+interface Question { id: string; question: string; questionDescription?: string; answerDescription?: string; type: 'text' | 'radio' | 'range'; options?: string[]; questionImage?: string; questionImages?: string[]; questionImagePosition?: 'above' | 'below'; optionImages?: Record<string, string>; optionImageMode?: 'with-text' | 'replace-text'; }
+interface RawQuestion { id: string; question: string; questionDescription?: string; answerDescription?: string; type: string; options?: string[]; questionImage?: string; questionImages?: string[]; questionImagePosition?: 'above' | 'below'; optionImages?: Record<string, string>; optionImageMode?: 'with-text' | 'replace-text'; }
 interface Props { survey: Survey; previewMode?: boolean; }
 
 const OnboardingReviewTemplate: React.FC<Props> = ({ survey, previewMode = false }) => {
@@ -29,9 +30,9 @@ const OnboardingReviewTemplate: React.FC<Props> = ({ survey, previewMode = false
   };
 
   const normalizedQuestions: Question[] = (survey.questions || []).map((q: RawQuestion, i) => ({
-    id: q.id || `q${i}`, question: q.question, questionDescription: q.questionDescription,
+    id: q.id || `q${i}`, question: (q.question || '').replace(/https?:\/\/[^\s]+/g, '').replace(/\s{2,}/g, ' ').trim(), questionDescription: q.questionDescription,
     answerDescription: q.answerDescription, type: normalizeType(q.type), options: q.options || [],
-    questionImage: q.questionImage, questionImagePosition: q.questionImagePosition,
+    questionImage: q.questionImage, questionImages: (q as any).questionImages, questionImagePosition: q.questionImagePosition, questionVideo: (q as any).questionVideo, questionVideoTitle: (q as any).questionVideoTitle,
     optionImages: q.optionImages, optionImageMode: q.optionImageMode,
   }));
 
@@ -106,7 +107,8 @@ const OnboardingReviewTemplate: React.FC<Props> = ({ survey, previewMode = false
         <div className="or-bubble or-bot">
           <div className="or-avatar">🤖</div>
           <div className="or-msg">
-            <QuestionImage q={q} position="above" />
+            {q.questionVideo && !previewMode && (<SurveyVideoPlayer videos={[{ url: q.questionVideo, title: q.questionVideoTitle || 'Video' }]} replayEnabled={(survey as any).video_replay_enabled === true} onDisqualify={() => {}} />)}
+        <QuestionImage q={q} position="above" />
             {!previewMode ? (
               <motion.p className="or-msg-text" variants={qVariants} initial="initial" animate="animate" exit="exit">{q.question}</motion.p>
             ) : (

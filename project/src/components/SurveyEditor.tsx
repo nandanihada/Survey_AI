@@ -1531,77 +1531,12 @@ const SurveyEditor: React.FC = () => {
                 </div>
               </div>
 
-              {/* ── Video Settings ── */}
-              <div className="mt-5 pt-5 border-t border-gray-100 space-y-3">
-                <p className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
-                  <span>▶</span> Survey Videos
-                  <span className="text-[10px] font-normal text-gray-400">up to 3</span>
-                </p>
-                <p className="text-[11px] text-gray-400 leading-relaxed">
-                  Videos appear at the start of <strong className="text-gray-600">this survey only</strong>, before any questions. Each survey has its own independent video list.
-                </p>
-
-                {/* Existing videos */}
-                {((survey as any).survey_videos || []).map((v: { url: string; title?: string }, idx: number) => (
-                  <div key={idx} className="flex items-center gap-2 px-2.5 py-2 bg-gray-50 border border-gray-200 rounded-lg">
-                    <span className="text-[10px] bg-gray-200 text-gray-600 font-bold px-1.5 py-0.5 rounded flex-shrink-0">#{idx + 1}</span>
-                    <p className="text-[11px] text-gray-700 flex-1 truncate font-medium">{v.title || `Video ${idx + 1}`}</p>
-                    <button
-                      onClick={() => {
-                        const vids = [...((survey as any).survey_videos || [])];
-                        vids.splice(idx, 1);
-                        setSurvey({ ...survey, survey_videos: vids } as any);
-                      }}
-                      className="text-red-400 hover:text-red-600 text-[11px] font-bold flex-shrink-0"
-                      title="Remove"
-                    >✕</button>
-                  </div>
-                ))}
-
-                {/* Upload new video */}
-                {((survey as any).survey_videos?.length ?? 0) < 3 && (
-                  <label className={`w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-[11px] font-semibold cursor-pointer transition-colors ${
-                    uploadingFor === 'video'
-                      ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-wait'
-                      : 'border-dashed border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50'
-                  }`}>
-                    <input
-                      type="file"
-                      accept="video/mp4,video/webm,video/quicktime,video/x-msvideo"
-                      className="hidden"
-                      disabled={uploadingFor === 'video'}
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        if (file.size > 100 * 1024 * 1024) {
-                          alert('Video is too large. Maximum size is 100 MB.');
-                          return;
-                        }
-                        setUploadingFor('video');
-                        try {
-                          const fd = new FormData();
-                          fd.append('video', file);
-                          const res = await fetch(`${apiBaseUrl}/api/upload-video`, { method: 'POST', body: fd });
-                          if (!res.ok) { const err = await res.json(); alert(`Upload failed: ${err.error || res.statusText}`); return; }
-                          const data = await res.json();
-                          const existing = (survey as any).survey_videos || [];
-                          setSurvey({ ...survey, survey_videos: [...existing, { url: data.url, title: file.name.replace(/\.[^.]+$/, '') }] } as any);
-                        } catch { alert('Upload failed. Please check your connection.'); }
-                        finally { setUploadingFor(null); e.target.value = ''; }
-                      }}
-                    />
-                    {uploadingFor === 'video'
-                      ? <><span className="animate-spin inline-block w-3 h-3 border-2 border-gray-300 border-t-blue-500 rounded-full" /> Uploading…</>
-                      : <>🎬 Upload video ({(survey as any).survey_videos?.length ?? 0}/3)</>
-                    }
-                  </label>
-                )}
-
-                {/* Replay toggle */}
-                <div className="flex items-center justify-between pt-1">
+              {/* ── Video Replay Setting ── */}
+              <div className="mt-5 pt-5 border-t border-gray-100">
+                <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-[11px] font-medium text-gray-700">Allow video replay</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">Off by default. When off the play button is disabled after first view.</p>
+                    <p className="text-xs font-medium text-gray-700">Allow video replay</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Off by default. When off, the play button is disabled after the video has been watched once.</p>
                   </div>
                   <button
                     type="button"
@@ -2941,17 +2876,7 @@ const SurveyEditor: React.FC = () => {
 
               {/* ── Images & Videos ── */}
               <div className="pt-3 border-t border-gray-100">
-                <div className="flex items-center justify-between mb-3">
-                  <label className="block text-xs font-medium text-gray-500">Images</label>
-                  <button
-                    type="button"
-                    onClick={() => setShowSettings(true)}
-                    className="flex items-center gap-1 text-[10px] font-semibold text-blue-500 hover:text-blue-700 transition-colors"
-                    title="Open Survey Settings to manage videos"
-                  >
-                    🎬 Videos → Settings
-                  </button>
-                </div>
+                <label className="block text-xs font-medium text-gray-500 mb-3">Images & Video</label>
 
                 {/* Question Images — up to 4, full picture (no crop) */}
                 <div className="mb-3">
@@ -3038,14 +2963,18 @@ const SurveyEditor: React.FC = () => {
                             type="text"
                             placeholder={`Paste image URL (${existingImgs.length}/4 added)…`}
                             className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-[11px] focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent mb-1.5"
+                            onClick={(e) => e.stopPropagation()}
                             onBlur={(e) => {
+                              e.stopPropagation();
                               const val = e.target.value.trim();
-                              if (val) { addImage(val); e.target.value = ''; }
+                              if (val && val.startsWith('http')) { addImage(val); e.target.value = ''; }
                             }}
                             onKeyDown={(e) => {
+                              e.stopPropagation();
                               if (e.key === 'Enter') {
+                                e.preventDefault();
                                 const val = (e.target as HTMLInputElement).value.trim();
-                                if (val) { addImage(val); (e.target as HTMLInputElement).value = ''; }
+                                if (val && val.startsWith('http')) { addImage(val); (e.target as HTMLInputElement).value = ''; }
                               }
                             }}
                           />
@@ -3112,6 +3041,70 @@ const SurveyEditor: React.FC = () => {
                       </>
                     );
                   })()}
+                </div>
+
+                {/* Question Video — per question, appears as a play button above the question */}
+                <div className="mb-3">
+                  <p className="text-[11px] font-semibold text-gray-600 mb-1 flex items-center gap-1">
+                    🎬 Question Video
+                    <span className="text-[10px] font-normal text-gray-400 ml-1">optional</span>
+                  </p>
+                  {(activeQ as any).questionVideo ? (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2 px-2.5 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+                        <span className="text-blue-600 text-[11px] flex-shrink-0">▶</span>
+                        <p className="text-[11px] text-blue-700 flex-1 truncate font-medium">
+                          {(activeQ as any).questionVideoTitle || 'Video attached'}
+                        </p>
+                        <button
+                          onClick={() => {
+                            const updated = { ...survey };
+                            updated.questions = [...updated.questions];
+                            (updated.questions[activeQuestionIndex] as any).questionVideo = undefined;
+                            (updated.questions[activeQuestionIndex] as any).questionVideoTitle = undefined;
+                            setSurvey(updated);
+                          }}
+                          className="text-red-400 hover:text-red-600 text-[11px] font-bold flex-shrink-0"
+                        >✕</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <label className={`w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-semibold cursor-pointer transition-colors ${
+                      uploadingFor === 'video'
+                        ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-wait'
+                        : 'border-dashed border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50'
+                    }`}>
+                      <input
+                        type="file"
+                        accept="video/mp4,video/webm,video/quicktime,video/x-msvideo"
+                        className="hidden"
+                        disabled={uploadingFor === 'video'}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          if (file.size > 100 * 1024 * 1024) { alert('Video too large — max 100 MB.'); return; }
+                          setUploadingFor('video');
+                          try {
+                            const fd = new FormData();
+                            fd.append('video', file);
+                            const res = await fetch(`${apiBaseUrl}/api/upload-video`, { method: 'POST', body: fd });
+                            if (!res.ok) { const err = await res.json(); alert(`Upload failed: ${err.error || res.statusText}`); return; }
+                            const data = await res.json();
+                            const updated = { ...survey };
+                            updated.questions = [...updated.questions];
+                            (updated.questions[activeQuestionIndex] as any).questionVideo = data.url;
+                            (updated.questions[activeQuestionIndex] as any).questionVideoTitle = file.name.replace(/\.[^.]+$/, '');
+                            setSurvey(updated);
+                          } catch { alert('Upload failed. Check your connection.'); }
+                          finally { setUploadingFor(null); e.target.value = ''; }
+                        }}
+                      />
+                      {uploadingFor === 'video'
+                        ? <><span className="animate-spin inline-block w-3 h-3 border-2 border-gray-300 border-t-blue-500 rounded-full" /> Uploading…</>
+                        : <>🎬 Upload question video</>
+                      }
+                    </label>
+                  )}
                 </div>
 
                 {/* Option Images — only for choice questions */}

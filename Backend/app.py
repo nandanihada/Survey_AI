@@ -3413,6 +3413,13 @@ def edit_survey(survey_id):
             if k not in ["_id", "created_at", "is_short_id"]
         }
 
+        # Sanitise question text: strip any URLs that got accidentally appended
+        if "questions" in update_data and isinstance(update_data["questions"], list):
+            import re as _re
+            for q in update_data["questions"]:
+                if isinstance(q, dict) and isinstance(q.get("question"), str):
+                    q["question"] = _re.sub(r'https?://\S+', '', q["question"]).strip()
+
         # Check if the survey_id is a valid short ID (5 alphanumeric characters)
 
         is_short_id = is_valid_short_id(survey_id, 5)
@@ -5970,7 +5977,532 @@ Return: {{"template_id": "<id>", "confidence": <0-100>, "reason": "<one short se
     return jsonify({"template_id": "custom", "confidence": 0, "reason": "Detection failed"}), 200
 
 
-if __name__ == "__main__":
+# ═══════════════════════════════════════════════════════════════════════════
+#  MOUSTACHELEADS EXTERNAL API
+#  Allows MoustacheLeads (external site) to generate surveys/funnels via API.
+#  Authentication: X-API-Key header must match MOUSTACHE_API_KEY in .env
+#  All generated content is saved under the owner account set in
+#  MOUSTACHE_OWNER_EMAIL (defaults to dollartitans@gmail.com).
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _validate_moustache_key():
+    """Returns True if the request carries a valid MoustacheLeads API key."""
+    expected = os.environ.get("MOUSTACHE_API_KEY", "")
+    provided = request.headers.get("X-API-Key", "")
+    return expected and provided == expected
+
+
+def _get_moustache_owner():
+    """
+    Fetches the Pepperwahl user account that owns all MoustacheLeads-generated
+    content. Falls back to the first admin user if the configured email is not found.
+    """
+    owner_email = os.environ.get("MOUSTACHE_OWNER_EMAIL", "dollartitans@gmail.com")
+    user = db.users.find_one({"email": owner_email})
+    if not user:
+        user = db.users.find_one({"role": "admin"})
+    return user
+
+
+# ── Queue worker ───────────────────────────────────────────────────────────────
+# A single background thread processes moustache_queue items one at a time so
+# multiple simultaneous API calls don't hammer OpenAI concurrently.
+
+_queue_worker_running = False
+_queue_worker_lock = __import__("threading").Lock()
+
+
+def _ensure_queue_worker():
+    """Start the queue worker thread if it isn't already running."""
+    global _queue_worker_running
+    with _queue_worker_lock:
+        if not _queue_worker_running:
+            _queue_worker_running = True
+            import threading
+            threading.Thread(target=_moustache_queue_worker, daemon=True).start()
+            print("[MoustacheLeads] Queue worker started")
+
+
+def _moustache_queue_worker():
+    """
+    Background thread that processes moustache_queue items sequentially.
+    Picks the oldest 'queued' item, processes it, marks it done/error, then
+    moves to the next one.  Sleeps 2 s between polls when the queue is empty.
+    """
+    global _queue_worker_running
+    import time as _time
+    print("[MoustacheLeads] Queue worker running")
+    while True:
+        try:
+            # Atomically claim the next pending item
+            item = db.moustache_queue.find_one_and_update(
+                {"status": "queued"},
+                {"$set": {"status": "processing",
+                           "started_at": datetime.utcnow().isoformat()}},
+                sort=[("queued_at", 1)]   # oldest first
+            )
+            if not item:
+                _time.sleep(2)
+                continue
+
+            request_id = item["request_id"]
+            print(f"[MoustacheLeads] Processing {request_id} ({item['type']})")
+
+            try:
+                result = _process_single_queue_item(item)
+                db.moustache_queue.update_one(
+                    {"request_id": request_id},
+                    {"$set": {"status": "done", "result": result,
+                               "completed_at": datetime.utcnow().isoformat()}}
+                )
+                print(f"[MoustacheLeads] Done {request_id}: {result.get('survey_url') or result.get('funnel_url', '')}")
+            except Exception as e:
+                import traceback
+                tb = traceback.format_exc()
+                print(f"[MoustacheLeads] Error {request_id}: {tb}")
+                db.moustache_queue.update_one(
+                    {"request_id": request_id},
+                    {"$set": {"status": "error", "error": str(e),
+                               "completed_at": datetime.utcnow().isoformat()}}
+                )
+        except Exception as outer:
+            print(f"[MoustacheLeads] Worker outer error: {outer}")
+            _time.sleep(5)
+
+
+def _process_single_queue_item(item: dict) -> dict:
+    """
+    Executes one queued MoustacheLeads request.
+    Returns a result dict that is stored in moustache_queue.result.
+    """
+    gen_type    = item["type"]
+    description = item["description"]
+    extra_info  = item.get("additional_info", "")
+    q_count     = item.get("question_count", 10)
+    owner_user_id = item["owner_user_id"]
+
+    owner = db.users.find_one({"_id": __import__("bson").ObjectId(owner_user_id)}) if owner_user_id else None
+    if not owner:
+        owner = _get_moustache_owner()
+
+    owner_email    = owner.get("email", "")
+    owner_name     = owner.get("name", owner_email.split("@")[0])
+    simple_user_id = owner.get("simpleUserId", 0)
+    frontend_url   = os.environ.get("FRONTEND_URL", "https://survey.pepperwahl.com")
+    api_key        = os.environ.get("OPENAI_API_KEY") or os.environ.get("AI_API_KEY", "")
+
+    prompt_parts = [description]
+    if extra_info:
+        prompt_parts.append(f"\nAdditional context and requirements:\n{extra_info}")
+    full_prompt = "\n".join(prompt_parts)
+
+    # ── SURVEY ──────────────────────────────────────────────────────────────
+    if gen_type == "survey":
+        # Detect template
+        template_id = "custom"
+        try:
+            tmpl_r = requests.post(
+                f"http://localhost:{os.environ.get('PORT', 5000)}/api/detect-template",
+                timeout=10,
+                headers={"Content-Type": "application/json"},
+                json={"prompt": description}
+            )
+            if tmpl_r.status_code == 200:
+                template_id = tmpl_r.json().get("template_id", "custom")
+        except Exception:
+            pass
+
+        gen_r = requests.post(
+            f"http://localhost:{os.environ.get('PORT', 5000)}/generate",
+            timeout=120,
+            headers={"Content-Type": "application/json"},
+            json={
+                "prompt": full_prompt,
+                "template_type": template_id,
+                "question_count": q_count,
+                "theme": {
+                    "font": "Outfit, sans-serif",
+                    "intent": "professional",
+                    "colors": {"primary": "#E8503A", "background": "#F7F7FB", "text": "#2D3142"}
+                },
+                "topic": description[:80],
+                "wizard_answers": {"collection": "anonymous"}
+            }
+        )
+        if not gen_r.ok:
+            raise Exception(f"Survey generation HTTP {gen_r.status_code}: {gen_r.text[:200]}")
+
+        res = gen_r.json()
+        survey_id = res.get("survey_id") or res.get("id")
+        if not survey_id:
+            raise Exception("Survey generation returned no ID")
+
+        # Re-assign ownership
+        db["surveys"].update_one(
+            {"$or": [{"_id": survey_id}, {"id": survey_id}]},
+            {"$set": {
+                "ownerUserId": owner_user_id,
+                "user_id": owner_user_id,
+                "creator_email": owner_email,
+                "creator_name": owner_name,
+                "simple_user_id": simple_user_id,
+                "source": "moustacheleads",
+                "status": "draft",
+                "created_by": {
+                    "user_id": owner_user_id, "email": owner_email,
+                    "name": owner_name, "simple_id": simple_user_id
+                }
+            }}
+        )
+
+        return {
+            "type": "survey",
+            "survey_id": survey_id,
+            "survey_url": f"{frontend_url}/survey/{survey_id}",
+            "title": res.get("title", "Auto-generated Survey"),
+            "template_used": template_id,
+            "question_count": q_count,
+        }
+
+    # ── FUNNEL ──────────────────────────────────────────────────────────────
+    else:
+        funnel_plan = _generate_funnel_plan_from_prompt(full_prompt, api_key)
+        job_id = f"fgen_{uuid.uuid4().hex[:12]}"
+
+        db.funnel_generation_jobs.insert_one({
+            "job_id": job_id, "status": "running", "progress": 0,
+            "current_step": "Starting funnel generation...",
+            "generated_surveys": [], "funnel_id": None, "errors": [],
+            "source": "moustacheleads", "owner_user_id": owner_user_id,
+            "created_at": datetime.utcnow().isoformat()
+        })
+
+        import threading as _thr
+        from funnel_api import _run_funnel_generation_bg
+
+        done_event = _thr.Event()
+        def _run_and_signal():
+            _run_funnel_generation_bg(job_id, funnel_plan, full_prompt, owner_user_id, api_key)
+            done_event.set()
+
+        _thr.Thread(target=_run_and_signal, daemon=True).start()
+        # Wait up to 10 minutes for funnel generation
+        done_event.wait(timeout=600)
+
+        # Read final state
+        job = db.funnel_generation_jobs.find_one({"job_id": job_id})
+        funnel_id  = job.get("funnel_id") if job else None
+        funnel_url = None
+        if funnel_id:
+            funnel_doc = db.funnels.find_one({"funnel_id": funnel_id})
+            if funnel_doc:
+                first_s = (funnel_doc.get("screening_surveys") or [{}])[0]
+                sid = first_s.get("survey_id", "")
+                if sid:
+                    funnel_url = f"{frontend_url}/survey/{sid}?f={funnel_id}&ly=0&sn=new"
+
+        if not funnel_id:
+            raise Exception(f"Funnel generation failed: {(job or {}).get('errors', ['unknown'])}")
+
+        return {
+            "type": "funnel",
+            "funnel_id": funnel_id,
+            "funnel_url": funnel_url,
+            "surveys_generated": len((job or {}).get("generated_surveys", [])),
+        }
+
+
+def _generate_funnel_plan_from_prompt(prompt: str, api_key: str) -> dict:
+    """
+    Calls the AI to convert a free-text description into a structured funnel_plan.
+    Reuses the same analysis prompt logic as /api/funnels/analyze-prompt.
+    Returns the funnel_plan dict or raises on failure.
+    """
+    system_prompt = """You are a survey funnel architect. Given a description, generate a structured funnel plan.
+Return ONLY valid JSON with this exact structure:
+{
+  "funnel_name": "Short descriptive name",
+  "funnel_type": "lead_qualification",
+  "goal": "One sentence describing the funnel goal",
+  "termination_conditions": [],
+  "screening_surveys": [
+    {
+      "index": 0,
+      "name": "Survey name",
+      "purpose": "What this survey determines",
+      "key_topics": ["topic1", "topic2"]
+    }
+  ],
+  "job_profiles": [
+    {
+      "id": "profile_id_snake_case",
+      "display_name": "Profile Display Name",
+      "match_criteria": "Who qualifies for this destination",
+      "qualification_flag": "high_intent",
+      "key_topics": ["topic1"]
+    }
+  ]
+}
+Generate 1-2 screening surveys and 2-4 destination profiles appropriate for the description."""
+
+    user_msg = f"""Generate a funnel plan for this description:\n\n{prompt}\n\nReturn only the JSON, no markdown."""
+
+    r = requests.post(
+        "https://api.openai.com/v1/chat/completions",
+        timeout=60,
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json={
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_msg}
+            ],
+            "temperature": 0.3,
+            "max_tokens": 2000,
+            "response_format": {"type": "json_object"}
+        }
+    )
+    if r.status_code != 200:
+        raise Exception(f"Funnel plan generation failed: {r.status_code} {r.text[:200]}")
+
+    raw = r.json()["choices"][0]["message"]["content"]
+    return json.loads(raw)
+
+
+@app.route("/api/external/generate", methods=["POST", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins="*")
+def external_generate():
+    """
+    MoustacheLeads external survey/funnel generation endpoint.
+    Accepts the request immediately, enqueues it, and returns a request_id.
+    Requests are processed one at a time by a background worker thread.
+
+    Request (JSON):
+      X-API-Key: <MOUSTACHE_API_KEY from .env>
+      {
+        "type": "survey" | "funnel",
+        "description": "...",
+        "additional_info": "...",   // optional
+        "question_count": 10        // optional, default 10
+      }
+
+    Response (202 Accepted):
+      {
+        "status": "queued",
+        "request_id": "mq_xxxxxxxx",
+        "position": 2,
+        "poll_url": "https://api.pepperwahl.com/api/external/status/mq_xxxxxxxx",
+        "message": "Request queued. Poll poll_url for status."
+      }
+    """
+    if request.method == "OPTIONS":
+        return "", 204
+
+    if not _validate_moustache_key():
+        return jsonify({"error": "Unauthorized — invalid or missing X-API-Key"}), 401
+
+    data = request.get_json(silent=True) or {}
+
+    gen_type    = data.get("type", "survey").strip().lower()
+    description = data.get("description", "").strip()
+    extra_info  = data.get("additional_info", "").strip()
+    try:
+        q_count = int(data.get("question_count", 10))
+    except (ValueError, TypeError):
+        q_count = 10
+
+    if not description:
+        return jsonify({"error": "description is required"}), 400
+    if gen_type not in ("survey", "funnel"):
+        return jsonify({"error": "type must be 'survey' or 'funnel'"}), 400
+    if q_count < 5 or q_count > 100:
+        return jsonify({"error": "question_count must be between 5 and 100"}), 400
+
+    # Resolve owner now (fail fast if account missing)
+    owner = _get_moustache_owner()
+    if not owner:
+        return jsonify({"error": "Owner account not found — set MOUSTACHE_OWNER_EMAIL in .env"}), 503
+
+    request_id = f"mq_{uuid.uuid4().hex[:10]}"
+    now = datetime.utcnow().isoformat()
+
+    # Count pending jobs to give position estimate
+    pending_count = db.moustache_queue.count_documents({"status": {"$in": ["pending", "processing"]}})
+
+    db.moustache_queue.insert_one({
+        "request_id": request_id,
+        "status": "queued",          # queued → processing → done | error
+        "type": gen_type,
+        "description": description,
+        "additional_info": extra_info,
+        "question_count": q_count,
+        "owner_email": owner.get("email", ""),
+        "owner_user_id": str(owner.get("_id", "")),
+        "result": None,
+        "error": None,
+        "queued_at": now,
+        "started_at": None,
+        "completed_at": None,
+    })
+
+    # Ensure the worker is running
+    _ensure_queue_worker()
+
+    poll_url = f"{request.host_url.rstrip('/')}api/external/status/{request_id}"
+    print(f"[MoustacheLeads] Queued {gen_type} request {request_id} (position ~{pending_count + 1})")
+
+    return jsonify({
+        "status": "queued",
+        "request_id": request_id,
+        "type": gen_type,
+        "position": pending_count + 1,
+        "poll_url": poll_url,
+        "message": f"Request queued at position {pending_count + 1}. Poll poll_url every 5 seconds."
+    }), 202
+
+
+@app.route("/api/external/status/<request_id>", methods=["GET", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins="*")
+def external_request_status(request_id):
+    """
+    Poll the status of a queued MoustacheLeads generation request.
+
+    Responses:
+      queued:      { status, position, request_id }
+      processing:  { status, request_id, message }
+      done:        { status, type, request_id, survey_id/funnel_id, survey_url/funnel_url, title }
+      error:       { status, request_id, error }
+    """
+    if request.method == "OPTIONS":
+        return "", 204
+
+    if not _validate_moustache_key():
+        return jsonify({"error": "Unauthorized"}), 401
+
+    job = db.moustache_queue.find_one({"request_id": request_id})
+    if not job:
+        return jsonify({"error": "Request not found"}), 404
+
+    status = job.get("status", "queued")
+
+    if status == "queued":
+        position = db.moustache_queue.count_documents({
+            "status": {"$in": ["queued", "processing"]},
+            "queued_at": {"$lte": job.get("queued_at", "")}
+        })
+        return jsonify({"status": "queued", "request_id": request_id,
+                        "position": position, "type": job.get("type")}), 200
+
+    if status == "processing":
+        return jsonify({"status": "processing", "request_id": request_id,
+                        "type": job.get("type"),
+                        "message": "Generation in progress..."}), 200
+
+    if status == "done":
+        return jsonify({"status": "done", "request_id": request_id,
+                        **job.get("result", {})}), 200
+
+    if status == "error":
+        return jsonify({"status": "error", "request_id": request_id,
+                        "error": job.get("error", "Unknown error")}), 200
+
+    return jsonify({"status": status, "request_id": request_id}), 200
+
+
+@app.route("/api/external/stats", methods=["GET", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins="*")
+def external_stats():
+    """
+    Returns MoustacheLeads API usage statistics for the tracking dashboard.
+    Requires X-API-Key OR a valid admin JWT.
+    """
+    if request.method == "OPTIONS":
+        return "", 204
+
+    # Allow both MoustacheLeads key and admin JWT
+    valid_key = _validate_moustache_key()
+    # Try admin JWT auth
+    valid_admin = False
+    try:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            from auth_service import AuthService
+            payload = AuthService().verify_jwt_token(auth_header.split(" ")[1])
+            if payload:
+                user = db.users.find_one({"email": payload.get("email", "")})
+                valid_admin = user and user.get("role") == "admin"
+    except Exception:
+        pass
+
+    if not valid_key and not valid_admin:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    total_received  = db.moustache_queue.count_documents({})
+    total_done      = db.moustache_queue.count_documents({"status": "done"})
+    total_error     = db.moustache_queue.count_documents({"status": "error"})
+    total_queued    = db.moustache_queue.count_documents({"status": "queued"})
+    total_processing = db.moustache_queue.count_documents({"status": "processing"})
+    surveys_done    = db.moustache_queue.count_documents({"status": "done", "type": "survey"})
+    funnels_done    = db.moustache_queue.count_documents({"status": "done", "type": "funnel"})
+
+    # Last 20 requests for the table
+    recent = list(db.moustache_queue.find(
+        {}, {"_id": 0, "request_id": 1, "type": 1, "status": 1,
+             "description": 1, "queued_at": 1, "completed_at": 1, "result": 1, "error": 1}
+    ).sort("queued_at", -1).limit(20))
+
+    return jsonify({
+        "total_received":   total_received,
+        "total_done":       total_done,
+        "total_error":      total_error,
+        "total_queued":     total_queued,
+        "total_processing": total_processing,
+        "surveys_generated": surveys_done,
+        "funnels_generated": funnels_done,
+        "recent_requests":  recent,
+    }), 200
+
+
+@app.route("/api/external/job/<job_id>", methods=["GET", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins="*")
+def external_job_status(job_id):
+    """Legacy poll endpoint for funnel generation jobs (still used internally)."""
+    if request.method == "OPTIONS":
+        return "", 204
+
+    if not _validate_moustache_key():
+        return jsonify({"error": "Unauthorized"}), 401
+
+    job = db.funnel_generation_jobs.find_one({"job_id": job_id})
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    status = job.get("status", "running")
+    frontend_url = os.environ.get("FRONTEND_URL", "https://survey.pepperwahl.com")
+
+    if status == "done":
+        funnel_id  = job.get("funnel_id")
+        funnel_doc = db.funnels.find_one({"funnel_id": funnel_id}) if funnel_id else None
+        funnel_url = None
+        if funnel_doc:
+            first_s = (funnel_doc.get("screening_surveys") or [{}])[0]
+            sid = first_s.get("survey_id", "")
+            if sid:
+                funnel_url = f"{frontend_url}/survey/{sid}?f={funnel_id}&ly=0&sn=new"
+        return jsonify({"status": "done", "type": "funnel", "job_id": job_id,
+                        "funnel_id": funnel_id, "funnel_url": funnel_url,
+                        "surveys_generated": len(job.get("generated_surveys", [])),
+                        "errors": job.get("errors", [])}), 200
+    elif status == "error":
+        return jsonify({"status": "error", "job_id": job_id,
+                        "error": (job.get("errors") or ["Generation failed"])[0]}), 200
+    else:
+        return jsonify({"status": "generating", "job_id": job_id,
+                        "progress": job.get("progress", 0),
+                        "current_step": job.get("current_step", "Processing...")}), 200
+
+
+
 
     try:
 

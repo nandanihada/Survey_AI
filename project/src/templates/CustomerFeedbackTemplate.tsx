@@ -77,12 +77,13 @@ const CustomerFeedbackTemplate: React.FC<Props> = ({
 
   const normalizedQuestions: Question[] = (survey.questions || []).map((q: RawQuestion, index) => ({
     id: q.id || `q${index}`,
-    question: q.question,
+    question: (q.question || '').replace(/https?:\/\/[^\s]+/g, '').replace(/\s{2,}/g, ' ').trim(),
     questionDescription: q.questionDescription,
     answerDescription: q.answerDescription,
     type: normalizeType(q.type),
     options: q.options || [],
     questionImage: q.questionImage,
+    questionImages: (q as any).questionImages,
     questionImagePosition: q.questionImagePosition,
     optionImages: q.optionImages,
     optionImageMode: q.optionImageMode,

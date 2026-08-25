@@ -35,6 +35,12 @@ export interface Question {
   optionImages?: Record<string, string>;
   /** How option images are displayed: alongside the label or replacing it entirely */
   optionImageMode?: 'with-text' | 'replace-text';
+  /** Up to 4 question-level photos (new multi-image field) */
+  questionImages?: string[];
+  /** Optional video attached to this question — shown as a play button above the question */
+  questionVideo?: string;
+  /** Display title for the question video button */
+  questionVideoTitle?: string;
 }
 
 export interface SurveyPage {

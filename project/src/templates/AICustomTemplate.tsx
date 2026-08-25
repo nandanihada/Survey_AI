@@ -8,6 +8,7 @@ import {
   createSessionContext
 } from '../utils/redirectBuilder';
 import { QuestionImage, wrapOptionLabel } from '../utils/questionImages';
+import SurveyVideoPlayer from '../components/SurveyVideoPlayer';
 
 interface Question {
   id: string;
@@ -17,6 +18,7 @@ interface Question {
   type: 'text' | 'radio' | 'range';
   options?: string[];
   questionImage?: string;
+  questionImages?: string[];
   questionImagePosition?: 'above' | 'below';
   optionImages?: Record<string, string>;
   optionImageMode?: 'with-text' | 'replace-text';
@@ -30,6 +32,7 @@ interface RawQuestion {
   type: string;
   options?: string[];
   questionImage?: string;
+  questionImages?: string[];
   questionImagePosition?: 'above' | 'below';
   optionImages?: Record<string, string>;
   optionImageMode?: 'with-text' | 'replace-text';
@@ -73,13 +76,16 @@ const AICustomTemplate: React.FC<Props> = ({
 
   const normalizedQuestions: Question[] = (survey.questions || []).map((q: RawQuestion, index) => ({
     id: q.id || `q${index}`,
-    question: q.question,
+    question: (q.question || '').replace(/https?:\/\/[^\s]+/g, '').replace(/\s{2,}/g, ' ').trim(),
     questionDescription: q.questionDescription,
     answerDescription: q.answerDescription,
     type: normalizeType(q.type),
     options: q.options || [],
     questionImage: q.questionImage,
+    questionImages: (q as any).questionImages,
     questionImagePosition: q.questionImagePosition,
+    questionVideo: (q as any).questionVideo,
+    questionVideoTitle: (q as any).questionVideoTitle,
     optionImages: q.optionImages,
     optionImageMode: q.optionImageMode,
   }));
@@ -345,7 +351,8 @@ const AICustomTemplate: React.FC<Props> = ({
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.5 }}
           >
-            <QuestionImage q={question} position="above" />
+            {question.questionVideo && !previewMode && (<SurveyVideoPlayer videos={[{ url: question.questionVideo, title: question.questionVideoTitle || 'Video' }]} replayEnabled={(survey as any).video_replay_enabled === true} onDisqualify={() => {}} />)}
+        <QuestionImage q={question} position="above" />
             <span className="question-number">{index + 1}</span>
             {editMode ? (
               <input

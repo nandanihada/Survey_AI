@@ -240,36 +240,39 @@ const SurveyVideoPlayer: React.FC<Props> = ({
             justifyContent: 'center',
             flexDirection: 'column',
             padding: '20px',
-            // Prevent accidental close on backdrop click — overlay IS the player
           }}
-          // Close only via the X button, not by clicking backdrop
         >
-          {/* Close button — fixed top-right, always above video */}
-          <button
-            type="button"
-            onClick={closeOverlay}
-            aria-label="Close video"
-            style={{
-              position: 'fixed',
-              top: 16, right: 16,
-              width: 44, height: 44,
-              borderRadius: '50%',
-              border: '2px solid rgba(255,255,255,0.6)',
-              background: 'rgba(0,0,0,0.7)',
-              color: '#fff',
-              fontSize: 22,
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              lineHeight: 1,
-              zIndex: 100001,
-              boxShadow: '0 2px 12px rgba(0,0,0,0.5)',
-            }}
-          >
-            ×
-          </button>
+          {/* Close button — rendered INSIDE the overlay flex container, self-aligned top-right */}
+          <div style={{
+            position: 'absolute',
+            top: 16,
+            right: 16,
+            zIndex: 10,
+          }}>
+            <button
+              type="button"
+              onClick={closeOverlay}
+              aria-label="Close video"
+              style={{
+                width: 48, height: 48,
+                borderRadius: '50%',
+                border: '2.5px solid #fff',
+                background: '#e53e3e',
+                color: '#fff',
+                fontSize: 26,
+                fontWeight: 900,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                lineHeight: 1,
+                boxShadow: '0 0 0 4px rgba(229,62,62,0.35), 0 4px 16px rgba(0,0,0,0.5)',
+                padding: 0,
+              }}
+            >
+              ×
+            </button>
+          </div>
 
           {/* Title */}
           <p style={{

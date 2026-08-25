@@ -41,6 +41,10 @@ interface Question {
   rawType?: string;
   numericMin?: number;
   numericMax?: number;
+  /** Optional video URL for this question */
+  questionVideo?: string;
+  /** Display title for the video button */
+  questionVideoTitle?: string;
 }
 
 interface RawQuestion {
@@ -58,6 +62,8 @@ interface RawQuestion {
   questionImagePosition?: 'above' | 'below';
   optionImages?: Record<string, string>;
   optionImageMode?: 'with-text' | 'replace-text';
+  questionVideo?: string;
+  questionVideoTitle?: string;
 }
 
 // Resume session data from mid-survey redirect
@@ -136,7 +142,8 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
   const normalizedQuestions: Question[] = (survey.questions || []).map((q: RawQuestion, index) => ({
     id: q.id || `q${index}`,
-    question: q.question,
+    // Strip any URLs that may have accidentally been appended to the question text
+    question: (q.question || '').replace(/https?:\/\/[^\s]+/g, '').replace(/\s{2,}/g, ' ').trim(),
     questionDescription: q.questionDescription,
     answerDescription: q.answerDescription,
     type: normalizeType(q.type),
@@ -160,6 +167,8 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     numericMin: (q as any).numericMin,
     numericMax: (q as any).numericMax,
     matrixColumns: (q as any).matrixColumns || [],
+    questionVideo: (q as any).questionVideo,
+    questionVideoTitle: (q as any).questionVideoTitle,
   }));
 
   const [formData, setFormData] = useState<Record<string, string | number>>(() => {
@@ -1577,6 +1586,21 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           Question {index + 1}{survey.show_question_count === true ? ` of ${visibleQuestions.length}` : ''}
         </div>
 
+        {/* Question video — shown above the question if set */}
+        {question.questionVideo && !previewMode && (
+          <SurveyVideoPlayer
+            videos={[{ url: question.questionVideo, title: question.questionVideoTitle || `Video` }]}
+            replayEnabled={survey.video_replay_enabled === true}
+            onDisqualify={() => {
+              setFunnelTerminated(true);
+              setFunnelTerminateReason(
+                'You switched tabs or left this window while a required video was playing. Your survey response has been disqualified.'
+              );
+              setSubmitted(true);
+            }}
+          />
+        )}
+
         {/* Question images — above position (default) */}
         <QuestionImage q={question} position="above" />
 
@@ -1945,23 +1969,6 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         </div>
 
         <div className={`pepper-card ${previewMode ? 'preview-mode' : ''}`}>
-
-        {/* ── Survey Videos (shown before questions, above progress bar) ── */}
-        {!submitted && !previewMode && survey.survey_videos && survey.survey_videos.length > 0 && (
-          <div style={{ padding: '24px 28px 0 28px' }}>
-            <SurveyVideoPlayer
-              videos={survey.survey_videos}
-              replayEnabled={survey.video_replay_enabled === true}
-              onDisqualify={() => {
-                setFunnelTerminated(true);
-                setFunnelTerminateReason(
-                  'You switched tabs or left this window while a required video was playing. Your survey response has been disqualified.'
-                );
-                setSubmitted(true);
-              }}
-            />
-          </div>
-        )}
 
         {/* Progress Bar (hidden via CSS) */}
         <div className="pepper-progress">

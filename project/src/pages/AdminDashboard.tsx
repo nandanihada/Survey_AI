@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import PublishToMoustacheModal from '../components/PublishToMoustacheModal';
 import BulkPublishToMoustacheModal from '../components/BulkPublishToMoustacheModal';
+import MoustacheLeadsTab from '../components/admin/MoustacheLeadsTab';
 import { getApiBaseUrl } from '../utils/deploymentFix';
 
 interface User {
@@ -135,7 +136,7 @@ const AdminDashboard: React.FC = () => {
   const [selectedSurveyIds, setSelectedSurveyIds] = useState<string[]>([]);
   const [filters, setFilters] = useState<Filter[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking' | 'tracking' | 'contacts' | 'deletions' | 'referrals' | 'earnings-config' | 'survey-report' | 'survey-flow-tracking' | 'funnel-tracking' | 'location-control' | 'survey-settings' | 'back-exits' | 'plan-features' | 'resubmit-policy' | 'survey-click-tracking'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking' | 'tracking' | 'contacts' | 'deletions' | 'referrals' | 'earnings-config' | 'survey-report' | 'survey-flow-tracking' | 'funnel-tracking' | 'location-control' | 'survey-settings' | 'back-exits' | 'plan-features' | 'resubmit-policy' | 'survey-click-tracking' | 'moustache-leads'>('users');
   const [showNotifModal, setShowNotifModal] = useState(false);
   // Sidebar collapse state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -664,6 +665,7 @@ const AdminDashboard: React.FC = () => {
       { id: 'survey-click-tracking',  icon: <MousePointerClick size={14}/>, label: 'Survey Clicks' },
       { id: 'contacts',               icon: <Mail size={14} />,            label: 'Contacts' },
       { id: 'link-masking',           icon: <Shield size={14} />,          label: 'Link Masking' },
+      { id: 'moustache-leads',        icon: <span style={{ fontWeight: 800, fontSize: 13, lineHeight: 1 }}>M</span>, label: 'MoustacheLeads API' },
     ]},
     { label: 'System',     items: [
       { id: 'location-control',icon: <MapPin size={14} />,          label: 'Location' },
@@ -800,6 +802,7 @@ const AdminDashboard: React.FC = () => {
                 {activeTab === 'survey-click-tracking' && 'Track survey link clicks, visit counts and completion status'}
                 {!['users','surveys','filters','plan-features','survey-flow-tracking','survey-click-tracking'].includes(activeTab) && 'Manage settings and configuration'}
                 {activeTab === 'survey-flow-tracking' && 'Full session flow — questions answered, mid-survey redirects & outcomes'}
+                {activeTab === 'moustache-leads' && 'External API integration — requests received from MoustacheLeads and generation status'}
               </p>
             </div>
 
@@ -1797,6 +1800,11 @@ const AdminDashboard: React.FC = () => {
                 {/* Resubmit Policy Tab */}
                 {activeTab === 'resubmit-policy' && (
                   <ResubmitPolicyTab />
+                )}
+
+                {/* MoustacheLeads API Tracking Tab */}
+                {activeTab === 'moustache-leads' && (
+                  <MoustacheLeadsTab />
                 )}
 
                 </>
