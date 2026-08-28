@@ -273,6 +273,7 @@ def generate_funnel():
     data = request.get_json() or {}
     funnel_plan = data.get("funnel_plan")
     original_prompt = data.get("original_prompt", "")
+    anchor_config = data.get("anchor_config")  # optional anchor question config
 
     if not funnel_plan:
         return jsonify({"error": "funnel_plan is required"}), 400
@@ -302,7 +303,7 @@ def generate_funnel():
     import threading
     thread = threading.Thread(
         target=_run_funnel_generation_bg,
-        args=(job_id, funnel_plan, original_prompt, owner_user_id, api_key),
+        args=(job_id, funnel_plan, original_prompt, owner_user_id, api_key, anchor_config),
         daemon=True
     )
     thread.start()
@@ -310,7 +311,7 @@ def generate_funnel():
     return jsonify({"job_id": job_id, "status": "running"}), 202
 
 
-def _run_funnel_generation_bg(job_id, funnel_plan, original_prompt, owner_user_id, api_key):
+def _run_funnel_generation_bg(job_id, funnel_plan, original_prompt, owner_user_id, api_key, anchor_config=None):
     """Runs the actual funnel generation in a background thread. Updates DB with progress."""
 
     def update_job(status=None, progress=None, step=None, surveys=None, funnel_id=None, errors=None):
@@ -335,6 +336,7 @@ def _run_funnel_generation_bg(job_id, funnel_plan, original_prompt, owner_user_i
 
         # ── Screening surveys ──
         screening_survey_ids = []
+        router_survey_ids = []   # surveys that contain the anchor question
         for s_meta in funnel_plan.get("screening_surveys", []):
             update_job(step=f"Generating: {s_meta['name']}...", progress=int(done / max(total_surveys, 1) * 80))
             try:
@@ -354,8 +356,33 @@ def _run_funnel_generation_bg(job_id, funnel_plan, original_prompt, owner_user_i
                 for q in survey_doc.get("questions", []):
                     if isinstance(q, dict):  # guard: skip any non-dict items saved by AI
                         questions_asked_so_far.append({"topic": q.get("question", "")[:80], "survey": s_meta["name"]})
-                screening_survey_ids.append({"survey_id": survey_doc["id"], "name": s_meta["name"], "index": s_meta["index"], "purpose": s_meta["purpose"]})
-                generated_surveys.append({"type": "screening", "index": s_meta["index"], "survey_id": survey_doc["id"], "name": s_meta["name"], "question_count": len(survey_doc.get("questions", []))})
+
+                # ── Inject anchor question into this survey ──
+                # We inject into every screening survey so the answer is always captured,
+                # regardless of which screening layer the user reaches last.
+                # The flag evaluation happens only at the end (all_failed / no_match).
+                is_router = False
+                if anchor_config and anchor_config.get("enabled") and anchor_config.get("question_text"):
+                    _inject_anchor_question_into_survey(survey_doc["id"], anchor_config)
+                    is_router = True
+                    router_survey_ids.append(survey_doc["id"])
+
+                s_entry = {
+                    "survey_id": survey_doc["id"],
+                    "name": s_meta["name"],
+                    "index": s_meta["index"],
+                    "purpose": s_meta["purpose"],
+                    "is_router": is_router,
+                }
+                screening_survey_ids.append(s_entry)
+                generated_surveys.append({
+                    "type": "screening",
+                    "index": s_meta["index"],
+                    "survey_id": survey_doc["id"],
+                    "name": s_meta["name"],
+                    "question_count": len(survey_doc.get("questions", [])),
+                    "is_router": is_router,
+                })
                 done += 1
                 update_job(surveys=list(generated_surveys), progress=int(done / max(total_surveys, 1) * 80))
                 print(f"✅ [BG Funnel] Screening survey: {s_meta['name']}")
@@ -449,7 +476,10 @@ def _run_funnel_generation_bg(job_id, funnel_plan, original_prompt, owner_user_i
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat(),
             "generated_surveys": generated_surveys,
-            "generation_errors": errors
+            "generation_errors": errors,
+            # ── Anchor question config ──────────────────────────────────────
+            "anchor_config": anchor_config if (anchor_config and anchor_config.get("enabled")) else None,
+            "router_survey_ids": router_survey_ids if router_survey_ids else [],
         }
         db.funnels.insert_one(funnel_doc)
         print(f"✅ [BG Funnel] Saved funnel: {funnel_id}")
@@ -488,6 +518,103 @@ def get_generation_status(job_id):
         return jsonify({"error": "Job not found"}), 404
     job.pop("_id", None)
     return jsonify(job), 200
+
+
+# ═══════════════════════════════════════════════════════
+#  ANCHOR QUESTION — AI GENERATION ENDPOINT
+# ═══════════════════════════════════════════════════════
+
+@funnel_bp.route("/api/funnels/generate-anchor-question", methods=["POST", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins=ALLOWED_ORIGINS)
+@requireAuth
+def generate_anchor_question():
+    """
+    Generates an anchor question (text + options + suggested correct answers)
+    from the user's plain-language description.
+    """
+    if request.method == "OPTIONS":
+        return "", 200
+
+    data = request.get_json() or {}
+    description = data.get("description", "").strip()
+    funnel_goal = data.get("funnel_goal", "").strip()
+
+    if not description:
+        return jsonify({"error": "description is required"}), 400
+
+    api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("AI_API_KEY", "")
+    if not api_key:
+        return jsonify({"error": "AI service not configured"}), 503
+
+    prompt = f"""Generate a survey anchor question based on this description:
+"{description}"
+
+Funnel context: {funnel_goal or "General funnel"}
+
+Return ONLY valid JSON with this structure:
+{{
+  "question_text": "The exact question text",
+  "options": ["Option A", "Option B", "Option C"],
+  "suggested_correct_answers": ["Option A"]
+}}
+
+Rules:
+- question_text must be a clear, natural survey question
+- options: 2–5 answer choices, mutually exclusive and exhaustive
+- suggested_correct_answers: which options indicate the user qualifies (based on the description)
+- Return only JSON, no explanation"""
+
+    try:
+        resp = http_requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            timeout=20,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": "gpt-4o-mini",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.2,
+                "max_tokens": 400,
+                "response_format": {"type": "json_object"}
+            }
+        )
+        if resp.status_code != 200:
+            return jsonify({"error": f"AI error {resp.status_code}"}), 502
+        result = json.loads(resp.json()["choices"][0]["message"]["content"])
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ═══════════════════════════════════════════════════════
+#  ANCHOR QUESTION — INJECT INTO SURVEY
+# ═══════════════════════════════════════════════════════
+
+def _inject_anchor_question_into_survey(survey_id: str, anchor_config: dict) -> None:
+    """
+    Appends the anchor question as the last question in the given survey.
+    Marks it with is_anchor=True so the scoring engine can identify it.
+    """
+    import uuid as _uuid
+    anchor_q_id = f"anchor_{_uuid.uuid4().hex[:8]}"
+    anchor_question = {
+        "id": anchor_q_id,
+        "question": anchor_config["question_text"],
+        "type": "multiple_choice",
+        "options": anchor_config.get("options", []),
+        "required": True,
+        "funnel_role": "neutral",
+        "screening_rule": None,
+        "option_scores": {},
+        "is_anchor": True,                                      # marker flag
+        "anchor_correct_answers": anchor_config.get("correct_answers", []),
+        "show_if": None,
+        "allowMultiple": False,
+    }
+    db.surveys.update_one(
+        {"$or": [{"id": survey_id}, {"short_id": survey_id}]},
+        {"$push": {"questions": anchor_question}}
+    )
+    print(f"✅ [Anchor] Injected anchor question '{anchor_q_id}' into survey {survey_id}")
 
 
 def _generate_single_survey(
@@ -1030,7 +1157,12 @@ def get_funnels():
     skip = (page - 1) * per_page
 
     # -- Build MongoDB query -------------------------------------------------
-    query = {} if is_admin else {"owner_user_id": user_id}
+    query = {} if is_admin else {
+        "$or": [
+            {"owner_user_id": user_id},
+            {"shared_with": user_id},
+        ]
+    }
     if search:
         query["name"] = {"$regex": search, "$options": "i"}
     if date_from or date_to:
@@ -1059,7 +1191,10 @@ def get_funnels():
             "screening_surveys": f.get("screening_surveys", []),
             "job_surveys":       f.get("job_surveys", {}),
             "generated_surveys": f.get("generated_surveys", []),
-            "total_surveys":     len(f.get("generated_surveys", []))
+            "total_surveys":     len(f.get("generated_surveys", [])),
+            "anchor_config":     f.get("anchor_config"),
+            "router_survey_ids": f.get("router_survey_ids", []),
+            "fallback_url":      f.get("fallback_url", ""),
         })
 
     return jsonify({
@@ -1101,13 +1236,129 @@ def update_funnel(funnel_id):
     data = request.get_json() or {}
     allowed_fields = [
         "name", "fallback_url", "min_score_threshold",
-        "job_surveys", "job_priority_order", "status"
+        "job_surveys", "job_priority_order", "status",
+        "anchor_config", "router_survey_ids"
     ]
     update = {k: data[k] for k in allowed_fields if k in data}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
 
     db.funnels.update_one({"funnel_id": funnel_id}, {"$set": update})
     return jsonify({"success": True}), 200
+
+
+# ═══════════════════════════════════════════════════════
+#  FUNNEL COLLABORATORS
+# ═══════════════════════════════════════════════════════
+
+@funnel_bp.route("/api/funnels/<funnel_id>/collaborators", methods=["GET", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins=ALLOWED_ORIGINS)
+@requireAuth
+def get_funnel_collaborators(funnel_id):
+    """Return the list of collaborators for a funnel."""
+    if request.method == "OPTIONS":
+        return "", 200
+
+    current_user = g.current_user
+    user_id = str(current_user.get("_id", ""))
+    is_admin = current_user.get("role") == "admin"
+
+    funnel = db.funnels.find_one({"funnel_id": funnel_id})
+    if not funnel:
+        return jsonify({"error": "Funnel not found"}), 404
+
+    owner_id = str(funnel.get("owner_user_id", ""))
+    if owner_id != user_id and not is_admin:
+        return jsonify({"error": "Access denied"}), 403
+
+    collaborators = []
+    for uid in funnel.get("shared_with", []):
+        try:
+            from bson import ObjectId
+            u = db.users.find_one({"_id": ObjectId(uid)}, {"_id": 1, "name": 1, "email": 1})
+            if u:
+                collaborators.append({"id": str(u["_id"]), "name": u.get("name", ""), "email": u.get("email", "")})
+        except Exception:
+            pass
+
+    return jsonify({"collaborators": collaborators}), 200
+
+
+@funnel_bp.route("/api/funnels/<funnel_id>/collaborators", methods=["POST", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins=ALLOWED_ORIGINS)
+@requireAuth
+def add_funnel_collaborator(funnel_id):
+    """Add a user to the funnel's shared_with list."""
+    if request.method == "OPTIONS":
+        return "", 200
+
+    current_user = g.current_user
+    user_id = str(current_user.get("_id", ""))
+    is_admin = current_user.get("role") == "admin"
+    data = request.get_json() or {}
+    collaborator_id = data.get("user_id", "").strip()
+
+    if not collaborator_id:
+        return jsonify({"error": "user_id is required"}), 400
+
+    funnel = db.funnels.find_one({"funnel_id": funnel_id})
+    if not funnel:
+        return jsonify({"error": "Funnel not found"}), 404
+
+    owner_id = str(funnel.get("owner_user_id", ""))
+    if owner_id != user_id and not is_admin:
+        return jsonify({"error": "Access denied"}), 403
+
+    if collaborator_id == user_id:
+        return jsonify({"error": "You already own this funnel"}), 400
+
+    try:
+        from bson import ObjectId
+        target_user = db.users.find_one({"_id": ObjectId(collaborator_id)})
+    except Exception:
+        target_user = None
+    if not target_user:
+        return jsonify({"error": "Target user not found"}), 404
+
+    db.funnels.update_one(
+        {"funnel_id": funnel_id},
+        {"$addToSet": {"shared_with": collaborator_id}}
+    )
+
+    return jsonify({
+        "message": f'{target_user.get("name", target_user.get("email"))} added as collaborator',
+        "collaborator": {
+            "id": collaborator_id,
+            "name": target_user.get("name", ""),
+            "email": target_user.get("email", ""),
+        }
+    }), 200
+
+
+@funnel_bp.route("/api/funnels/<funnel_id>/collaborators/<collaborator_id>", methods=["DELETE", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins=ALLOWED_ORIGINS)
+@requireAuth
+def remove_funnel_collaborator(funnel_id, collaborator_id):
+    """Remove a user from the funnel's shared_with list."""
+    if request.method == "OPTIONS":
+        return "", 200
+
+    current_user = g.current_user
+    user_id = str(current_user.get("_id", ""))
+    is_admin = current_user.get("role") == "admin"
+
+    funnel = db.funnels.find_one({"funnel_id": funnel_id})
+    if not funnel:
+        return jsonify({"error": "Funnel not found"}), 404
+
+    owner_id = str(funnel.get("owner_user_id", ""))
+    if owner_id != user_id and not is_admin:
+        return jsonify({"error": "Access denied"}), 403
+
+    db.funnels.update_one(
+        {"funnel_id": funnel_id},
+        {"$pull": {"shared_with": collaborator_id}}
+    )
+    return jsonify({"message": "Collaborator removed"}), 200
 
 
 # ═══════════════════════════════════════════════════════

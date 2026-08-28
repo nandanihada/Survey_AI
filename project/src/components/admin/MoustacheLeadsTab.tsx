@@ -18,6 +18,8 @@ interface QueueItem {
   description: string;
   queued_at: string;
   completed_at?: string;
+  redirect?: boolean;
+  offer_url?: string;
   result?: {
     survey_url?: string;
     funnel_url?: string;
@@ -200,7 +202,7 @@ const MoustacheLeadsTab: React.FC = () => {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead>
                     <tr style={{ background: '#FAF8F5', borderBottom: '1px solid #EBE8E3' }}>
-                      {['Request ID', 'Type', 'Status', 'Description', 'Queued At', 'Completed At', 'Result'].map(h => (
+                      {['Request ID', 'Type', 'Status', 'Description', 'Redirect', 'Offer URL', 'Queued At', 'Completed At', 'Result'].map(h => (
                         <th key={h} style={{ padding: '9px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9B9189', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -265,12 +267,47 @@ const MoustacheLeadsTab: React.FC = () => {
                             )}
                           </td>
 
+                          {/* Redirect */}
+                          <td style={{ padding: '11px 14px', whiteSpace: 'nowrap' }}>
+                            {item.redirect ? (
+                              <span style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 3,
+                                fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+                                background: '#F0FDF4', color: '#16A34A',
+                              }}>✓ Yes</span>
+                            ) : (
+                              <span style={{ color: '#C4A99A', fontSize: 10 }}>—</span>
+                            )}
+                          </td>
+
+                          {/* Offer URL */}
+                          <td style={{ padding: '11px 14px', maxWidth: 180 }}>
+                            {item.offer_url ? (
+                              <a
+                                href={item.offer_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                title={item.offer_url}
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                                  fontSize: 10, fontWeight: 600, color: '#2563EB',
+                                  textDecoration: 'none',
+                                }}
+                              >
+                                <ExternalLink size={10} style={{ flexShrink: 0 }} />
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>
+                                  {item.offer_url.replace(/^https?:\/\//, '')}
+                                </span>
+                              </a>
+                            ) : (
+                              <span style={{ color: '#C4A99A', fontSize: 10 }}>—</span>
+                            )}
+                          </td>
+
                           {/* Queued At */}
                           <td style={{ padding: '11px 14px', color: '#9B9189', whiteSpace: 'nowrap', fontSize: 11 }}>
                             {fmt(item.queued_at)}
                           </td>
-
-                          {/* Completed At */}
                           <td style={{ padding: '11px 14px', color: '#9B9189', whiteSpace: 'nowrap', fontSize: 11 }}>
                             {fmt(item.completed_at)}
                           </td>

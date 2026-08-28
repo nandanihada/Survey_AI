@@ -3406,11 +3406,16 @@ def edit_survey(survey_id):
     try:
 
         # Clean the data to remove fields that shouldn't be updated
-
+        PROTECTED_FIELDS = {
+            "_id", "created_at", "is_short_id",
+            # Funnel-specific fields that must never be overwritten by the editor
+            "status", "is_funnel_survey", "funnel_id",
+            "funnel_job_id", "funnel_layer_index", "funnel_survey_type",
+        }
         update_data = {
             k: v
             for k, v in data.items()
-            if k not in ["_id", "created_at", "is_short_id"]
+            if k not in PROTECTED_FIELDS
         }
 
         # Sanitise question text: strip any URLs that got accidentally appended
@@ -6080,6 +6085,8 @@ def _process_single_queue_item(item: dict) -> dict:
     extra_info  = item.get("additional_info", "")
     q_count     = item.get("question_count", 10)
     owner_user_id = item["owner_user_id"]
+    redirect    = bool(item.get("redirect", False))
+    offer_url   = item.get("offer_url", "").strip()
 
     owner = db.users.find_one({"_id": __import__("bson").ObjectId(owner_user_id)}) if owner_user_id else None
     if not owner:
@@ -6155,6 +6162,36 @@ def _process_single_queue_item(item: dict) -> dict:
             }}
         )
 
+        # ── Redirect rule: if MoustacheLeads wants users redirected to offer_url ──
+        if redirect and offer_url:
+            endpoint_id = f"ml_offer_{uuid.uuid4().hex[:8]}"
+            rule_id     = f"ml_rule_{uuid.uuid4().hex[:8]}"
+            db.redirect_rules_config.update_one(
+                {"survey_id": survey_id},
+                {"$set": {
+                    "survey_id": survey_id,
+                    "redirect_endpoints": [{
+                        "id": endpoint_id,
+                        "name": "MoustacheLeads Offer",
+                        "url": offer_url,
+                        "status_code": 1,
+                    }],
+                    "redirect_rules": [{
+                        "id": rule_id,
+                        "name": "Always redirect to offer",
+                        "condition_type": "always",
+                        "redirect_endpoint_id": endpoint_id,
+                        "priority": 0,
+                        "is_active": True,
+                        "fire_s2s": False,
+                    }],
+                    "default_redirect_endpoint_id": endpoint_id,
+                    "updated_at": datetime.utcnow().isoformat(),
+                }},
+                upsert=True
+            )
+            print(f"[MoustacheLeads] Redirect rule created: {survey_id} → {offer_url}")
+
         return {
             "type": "survey",
             "survey_id": survey_id,
@@ -6162,6 +6199,8 @@ def _process_single_queue_item(item: dict) -> dict:
             "title": res.get("title", "Auto-generated Survey"),
             "template_used": template_id,
             "question_count": q_count,
+            "redirect": redirect,
+            "offer_url": offer_url if redirect else None,
         }
 
     # ── FUNNEL ──────────────────────────────────────────────────────────────
@@ -6306,6 +6345,8 @@ def external_generate():
     gen_type    = data.get("type", "survey").strip().lower()
     description = data.get("description", "").strip()
     extra_info  = data.get("additional_info", "").strip()
+    redirect    = bool(data.get("redirect", False))
+    offer_url   = data.get("offer_url", "").strip()
     try:
         q_count = int(data.get("question_count", 10))
     except (ValueError, TypeError):
@@ -6331,11 +6372,13 @@ def external_generate():
 
     db.moustache_queue.insert_one({
         "request_id": request_id,
-        "status": "queued",          # queued → processing → done | error
+        "status": "queued",
         "type": gen_type,
         "description": description,
         "additional_info": extra_info,
         "question_count": q_count,
+        "redirect": redirect,
+        "offer_url": offer_url,
         "owner_email": owner.get("email", ""),
         "owner_user_id": str(owner.get("_id", "")),
         "result": None,
@@ -6448,7 +6491,8 @@ def external_stats():
     # Last 20 requests for the table
     recent = list(db.moustache_queue.find(
         {}, {"_id": 0, "request_id": 1, "type": 1, "status": 1,
-             "description": 1, "queued_at": 1, "completed_at": 1, "result": 1, "error": 1}
+             "description": 1, "queued_at": 1, "completed_at": 1, "result": 1, "error": 1,
+             "redirect": 1, "offer_url": 1}
     ).sort("queued_at", -1).limit(20))
 
     return jsonify({
@@ -6502,23 +6546,12 @@ def external_job_status(job_id):
                         "current_step": job.get("current_step", "Processing...")}), 200
 
 
-
-
+if __name__ == '__main__':
     try:
-
-        app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
-
+        app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
     except KeyboardInterrupt:
-
-        print("\nServer stopped by user")
-
+        print('\nServer stopped by user')
     except Exception as e:
-
-        print(f"Server error: {e}")
-
+        print(f'Server error: {e}')
     finally:
-
-        print("Cleaning up...")
-
-
-
+        print('Cleaning up...')

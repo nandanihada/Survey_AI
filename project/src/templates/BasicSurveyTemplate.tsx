@@ -152,6 +152,14 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       if ((q.type === 'yes_no') && (!q.options || q.options.length === 0)) {
         return ['Yes', 'No'];
       }
+      // Funnel scoring/screen questions sometimes arrive with empty options array
+      // Fall back to Yes/No so respondents always see something clickable
+      if (!q.options || q.options.length === 0) {
+        const role = (q as any).funnel_role;
+        if (role === 'score' || role === 'screen' || role === 'both') {
+          return ['Yes', 'No'];
+        }
+      }
       return q.options || [];
     })(),
     answerStyle: (q as any).answerStyle || undefined,

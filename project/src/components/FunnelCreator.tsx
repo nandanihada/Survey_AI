@@ -6,7 +6,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Sparkles, ChevronRight, ChevronDown, Check, Loader2,
   BarChart3, Filter, GitBranch, AlertCircle, RefreshCw,
-  Layers, Target, Info, Edit3, X, HelpCircle
+  Layers, Target, Info, Edit3, X, HelpCircle, Anchor, Plus, Trash2
 } from 'lucide-react';
 import { getApiBaseUrl } from '../utils/deploymentFix';
 import { useAuth } from '../contexts/AuthContext';
@@ -62,6 +62,20 @@ interface GeneratedSurvey {
 
 type Step = 'prompt' | 'clarifying' | 'plan' | 'generating' | 'done';
 
+// ─── Anchor Question Types ────────────────────────────────
+
+interface AnchorQuestionConfig {
+  enabled: boolean;
+  /** 'manual' = user typed question+options themselves, 'ai' = user described what they want */
+  mode: 'manual' | 'ai';
+  question_text: string;
+  options: string[];
+  /** Which options count as "qualified" — if user's answer matches any of these, flag = true */
+  correct_answers: string[];
+  redirect_url: string;
+  ai_description: string; // only used when mode='ai'
+}
+
 interface Props {
   onFunnelCreated?: (funnelId: string) => void;
   onCancel?: () => void;
@@ -110,6 +124,20 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
   // Error
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Anchor question
+  const [anchorConfig, setAnchorConfig] = useState<AnchorQuestionConfig>({
+    enabled: false,
+    mode: 'manual',
+    question_text: '',
+    options: [''],
+    correct_answers: [],
+    redirect_url: '',
+    ai_description: '',
+  });
+  const [anchorSectionOpen, setAnchorSectionOpen] = useState(false);
+  const [anchorOptionInput, setAnchorOptionInput] = useState('');
+  const [generatingAnchorQuestion, setGeneratingAnchorQuestion] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -230,7 +258,8 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
         headers: authHeaders(),
         body: JSON.stringify({
           funnel_plan: funnelPlan,
-          original_prompt: prompt.trim()
+          original_prompt: prompt.trim(),
+          anchor_config: anchorConfig.enabled ? anchorConfig : null,
         })
       });
 
@@ -439,7 +468,278 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
     </div>
   );
 
-  // ─── Render: Plan preview step ───────────────────────────
+  // ─── AI: Generate anchor question from description ────────
+
+  const generateAnchorQuestionFromAI = async () => {
+    if (!anchorConfig.ai_description.trim()) return;
+    setGeneratingAnchorQuestion(true);
+    try {
+      const apiKey = ''; // not exposed to frontend — call our own backend endpoint
+      const res = await fetch(`${apiBase}/api/funnels/generate-anchor-question`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          description: anchorConfig.ai_description.trim(),
+          funnel_goal: funnelPlan?.goal || '',
+        })
+      });
+      if (!res.ok) throw new Error('Failed to generate anchor question');
+      const data = await res.json();
+      setAnchorConfig(prev => ({
+        ...prev,
+        question_text: data.question_text || '',
+        options: data.options || [],
+        correct_answers: data.suggested_correct_answers || [],
+      }));
+    } catch (e: any) {
+      setError(e.message || 'Failed to generate anchor question');
+    } finally {
+      setGeneratingAnchorQuestion(false);
+    }
+  };
+
+  // ─── Render: Anchor question section (inside plan step) ──
+
+  const renderAnchorSection = () => {
+    const ac = anchorConfig;
+    const setAc = (patch: Partial<AnchorQuestionConfig>) =>
+      setAnchorConfig(prev => ({ ...prev, ...patch }));
+
+    return (
+      <div className={`rounded-xl border ${anchorConfig.enabled ? (isDarkMode ? 'border-amber-700/60 bg-amber-950/20' : 'border-amber-300 bg-amber-50') : (isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white')}`}>
+        {/* Header toggle */}
+        <button
+          type="button"
+          onClick={() => {
+            if (!anchorConfig.enabled) { setAc({ enabled: true }); setAnchorSectionOpen(true); }
+            else { setAnchorSectionOpen(o => !o); }
+          }}
+          className="w-full flex items-center gap-3 px-4 py-3 text-left"
+        >
+          <Anchor size={16} className={anchorConfig.enabled ? 'text-amber-500' : (isDarkMode ? 'text-gray-500' : 'text-gray-400')} />
+          <div className="flex-1">
+            <p className={`text-sm font-semibold ${anchorConfig.enabled ? (isDarkMode ? 'text-amber-300' : 'text-amber-800') : (isDarkMode ? 'text-gray-300' : 'text-gray-700')}`}>
+              Anchor Question
+              {anchorConfig.enabled && <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${isDarkMode ? 'bg-amber-800/50 text-amber-300' : 'bg-amber-200 text-amber-800'}`}>Enabled</span>}
+            </p>
+            <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+              If a user fails all surveys in the funnel, check this question and redirect qualified users to a special link
+            </p>
+          </div>
+          {anchorConfig.enabled ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); setAc({ enabled: false }); setAnchorSectionOpen(false); }}
+                className={`text-xs px-2 py-1 rounded-lg ${isDarkMode ? 'bg-gray-700 text-gray-400 hover:bg-gray-600' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+              >
+                Disable
+              </button>
+              <ChevronDown size={14} className={`transition-transform ${anchorSectionOpen ? 'rotate-180' : ''} ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+            </div>
+          ) : (
+            <span className={`text-xs px-2 py-1 rounded-lg ${isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>Click to enable</span>
+          )}
+        </button>
+
+        {anchorConfig.enabled && anchorSectionOpen && (
+          <div className={`px-4 pb-4 space-y-4 border-t ${isDarkMode ? 'border-amber-800/40' : 'border-amber-200'}`}>
+
+            {/* Mode selector */}
+            <div className="pt-3">
+              <p className={`text-xs font-semibold mb-2 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>How do you want to define the anchor question?</p>
+              <div className="flex gap-2">
+                {(['manual', 'ai'] as const).map(m => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setAc({ mode: m })}
+                    className={`flex-1 py-2 rounded-lg text-xs font-medium border transition ${
+                      ac.mode === m
+                        ? 'bg-amber-500 border-amber-500 text-white'
+                        : isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-300 hover:border-amber-600' : 'bg-white border-gray-300 text-gray-600 hover:border-amber-400'
+                    }`}
+                  >
+                    {m === 'manual' ? '✏️ Write manually' : '✨ Describe to AI'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Manual mode */}
+            {ac.mode === 'manual' && (
+              <div className="space-y-3">
+                <div>
+                  <p className={`text-xs font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Question text</p>
+                  <input
+                    value={ac.question_text}
+                    onChange={e => setAc({ question_text: e.target.value })}
+                    placeholder="e.g. Do you own a car?"
+                    className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'}`}
+                  />
+                </div>
+
+                <div>
+                  <p className={`text-xs font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Answer options</p>
+                  <div className="space-y-2">
+                    {ac.options.map((opt, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <input
+                          value={opt}
+                          onChange={e => {
+                            const newOpts = [...ac.options];
+                            const oldVal = newOpts[i];
+                            newOpts[i] = e.target.value;
+                            // Keep correct_answers in sync if renamed
+                            const newCorrect = ac.correct_answers.map(ca => ca === oldVal ? e.target.value : ca);
+                            setAc({ options: newOpts, correct_answers: newCorrect });
+                          }}
+                          placeholder={`Option ${i + 1}`}
+                          className={`flex-1 rounded-lg border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newOpts = ac.options.filter((_, idx) => idx !== i);
+                            setAc({ options: newOpts, correct_answers: ac.correct_answers.filter(ca => ca !== opt) });
+                          }}
+                          className={`p-1.5 rounded-lg ${isDarkMode ? 'text-gray-500 hover:text-red-400' : 'text-gray-400 hover:text-red-500'}`}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setAc({ options: [...ac.options, ''] })}
+                      className={`flex items-center gap-1.5 text-xs ${isDarkMode ? 'text-amber-400 hover:text-amber-300' : 'text-amber-600 hover:text-amber-700'}`}
+                    >
+                      <Plus size={12} /> Add option
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* AI mode */}
+            {ac.mode === 'ai' && (
+              <div className="space-y-3">
+                <div>
+                  <p className={`text-xs font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Describe the anchor question you want</p>
+                  <textarea
+                    rows={3}
+                    value={ac.ai_description}
+                    onChange={e => setAc({ ai_description: e.target.value })}
+                    placeholder="e.g. A yes/no question about whether the user owns a vehicle"
+                    className={`w-full rounded-lg border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-500 ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'}`}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={generateAnchorQuestionFromAI}
+                  disabled={generatingAnchorQuestion || !ac.ai_description.trim()}
+                  className="flex items-center gap-2 px-3 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-lg text-xs font-medium"
+                >
+                  {generatingAnchorQuestion ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                  {generatingAnchorQuestion ? 'Generating...' : 'Generate question'}
+                </button>
+
+                {/* Show generated result (same fields as manual) */}
+                {ac.question_text && (
+                  <div className={`rounded-lg border p-3 space-y-2 ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'}`}>
+                    <p className={`text-xs font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{ac.question_text}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {ac.options.map(o => (
+                        <span key={o} className={`text-xs px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-700'}`}>{o}</span>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAc({ question_text: '', options: [''], correct_answers: [] })}
+                      className={`text-xs ${isDarkMode ? 'text-gray-500 hover:text-red-400' : 'text-gray-400 hover:text-red-500'}`}
+                    >
+                      Clear & re-generate
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Correct answers selector — shown when options are available */}
+            {ac.options.filter(o => o.trim()).length > 0 && (
+              <div>
+                <p className={`text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Which answer(s) qualify the user? <span className={`font-normal ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>(select all that apply)</span>
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {ac.options.filter(o => o.trim()).map(opt => {
+                    const selected = ac.correct_answers.includes(opt);
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => {
+                          const next = selected
+                            ? ac.correct_answers.filter(ca => ca !== opt)
+                            : [...ac.correct_answers, opt];
+                          setAc({ correct_answers: next });
+                        }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition ${
+                          selected
+                            ? 'bg-green-500 border-green-500 text-white'
+                            : isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-300 hover:border-green-500' : 'bg-white border-gray-300 text-gray-700 hover:border-green-400'
+                        }`}
+                      >
+                        {selected && <Check size={11} />}
+                        {opt}
+                      </button>
+                    );
+                  })}
+                </div>
+                {ac.correct_answers.length > 0 && (
+                  <p className={`text-xs mt-1.5 ${isDarkMode ? 'text-green-400' : 'text-green-700'}`}>
+                    ✓ {ac.correct_answers.length} qualifying answer{ac.correct_answers.length > 1 ? 's' : ''} selected
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Redirect URL */}
+            <div>
+              <p className={`text-xs font-semibold mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Redirect URL for qualified users</p>
+              <input
+                value={ac.redirect_url}
+                onChange={e => setAc({ redirect_url: e.target.value })}
+                placeholder="https://yoursite.com/special-offer"
+                className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'}`}
+              />
+              <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                Users who fail all surveys but answered this question correctly will be sent here instead of the fallback.
+              </p>
+            </div>
+
+            {/* Validation summary */}
+            {ac.enabled && (
+              <div className={`rounded-lg p-2.5 text-xs space-y-1 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                <p className={`font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Anchor question summary:</p>
+                <p className={ac.question_text ? (isDarkMode ? 'text-green-400' : 'text-green-700') : (isDarkMode ? 'text-red-400' : 'text-red-600')}>
+                  {ac.question_text ? `✓ Question: "${ac.question_text.slice(0, 60)}${ac.question_text.length > 60 ? '...' : ''}"` : '✗ Question not set'}
+                </p>
+                <p className={ac.correct_answers.length > 0 ? (isDarkMode ? 'text-green-400' : 'text-green-700') : (isDarkMode ? 'text-red-400' : 'text-red-600')}>
+                  {ac.correct_answers.length > 0 ? `✓ Qualifying answers: ${ac.correct_answers.join(', ')}` : '✗ No qualifying answers selected'}
+                </p>
+                <p className={ac.redirect_url ? (isDarkMode ? 'text-green-400' : 'text-green-700') : (isDarkMode ? 'text-amber-400' : 'text-amber-600')}>
+                  {ac.redirect_url ? `✓ Redirect: ${ac.redirect_url.slice(0, 50)}${ac.redirect_url.length > 50 ? '...' : ''}` : '⚠ Redirect URL not set (will use funnel fallback)'}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+
 
   const renderPlanStep = () => {
     if (!funnelPlan) return null;
@@ -561,6 +861,9 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
             </p>
           )}
         </div>
+
+        {/* ── Anchor Question ── */}
+        {renderAnchorSection()}
 
         {error && <p className="text-red-500 text-sm flex items-center gap-2"><AlertCircle size={14} />{error}</p>}
 

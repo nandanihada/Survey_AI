@@ -285,8 +285,74 @@ Return ONLY valid JSON, no markdown:
 
 
 # ─────────────────────────────────────────────
-#  FULL SCREENING SURVEY SUBMISSION PROCESSOR
+#  ANCHOR QUESTION CHECK
 # ─────────────────────────────────────────────
+
+def _check_anchor_redirect(funnel: dict, funnel_session_id: str) -> Optional[str]:
+    """
+    Checks whether the user qualified via the anchor question.
+
+    Logic:
+    - Funnel must have anchor_config with enabled=True
+    - Load the session's layers_completed to find the user's answer to the anchor question
+    - The anchor question is identified by is_anchor=True on the question document
+      OR by matching the anchor question text
+    - If the user's answer is in anchor_config.correct_answers → flag = True → return redirect_url
+    - Otherwise return None (fall through to normal fallback)
+    """
+    anchor_config = funnel.get("anchor_config")
+    if not anchor_config or not anchor_config.get("enabled"):
+        return None
+
+    correct_answers = [str(a).strip().lower() for a in anchor_config.get("correct_answers", [])]
+    redirect_url = anchor_config.get("redirect_url", "").strip()
+
+    if not correct_answers or not redirect_url:
+        return None
+
+    # Load the session to get all collected answers across all layers
+    session = db.funnel_sessions.find_one({"funnel_session_id": funnel_session_id})
+    if not session:
+        return None
+
+    # Walk all completed layers to find the anchor question answer
+    for layer in session.get("layers_completed", []):
+        layer_answers: dict = layer.get("answers", {})
+        survey_id = layer.get("survey_id", "")
+
+        # Fetch the survey to find which question id has is_anchor=True
+        if survey_id:
+            survey_doc = db.surveys.find_one(
+                {"$or": [{"id": survey_id}, {"short_id": survey_id}]},
+                {"questions": 1}
+            )
+            if survey_doc:
+                for q in survey_doc.get("questions", []):
+                    if isinstance(q, dict) and q.get("is_anchor"):
+                        q_id = q.get("id", "")
+                        user_answer = str(layer_answers.get(q_id, "")).strip().lower()
+                        if user_answer in correct_answers:
+                            print(f"⚓ [Anchor] Qualified! Answer '{user_answer}' in correct_answers {correct_answers}")
+                            # Record anchor_qualified flag in session
+                            db.funnel_sessions.update_one(
+                                {"funnel_session_id": funnel_session_id},
+                                {"$set": {"anchor_qualified": True, "anchor_answer": user_answer}}
+                            )
+                            return _ensure_https(redirect_url)
+                        else:
+                            print(f"⚓ [Anchor] Not qualified. Answer '{user_answer}' not in {correct_answers}")
+                            db.funnel_sessions.update_one(
+                                {"funnel_session_id": funnel_session_id},
+                                {"$set": {"anchor_qualified": False, "anchor_answer": user_answer}}
+                            )
+                            return None  # found the anchor question but answer doesn't qualify
+
+    # Anchor question was never answered (user may have been terminated before reaching it)
+    print(f"⚓ [Anchor] Anchor question not found in any completed layer")
+    return None
+
+
+
 
 def process_screening_survey_submission(
     funnel_id: str,
@@ -384,13 +450,18 @@ def process_screening_survey_submission(
 
     if not job_queue:
         fallback_url = funnel.get("fallback_url", "")
+        # ── Check anchor flag before sending to fallback ──
+        anchor_redirect = _check_anchor_redirect(funnel, funnel_session_id)
+        final_url = anchor_redirect if anchor_redirect else _ensure_https(fallback_url)
+
         db.funnel_sessions.update_one(
             {"funnel_session_id": funnel_session_id},
             {"$set": {"status": "no_match", "job_queue": [], "queue_position": 0}}
         )
         return {
             "action": "no_match",
-            "redirect_url": _ensure_https(fallback_url),
+            "redirect_url": final_url,
+            "anchor_qualified": bool(anchor_redirect),
             "cumulative_scores": cumulative
         }
 
@@ -560,16 +631,20 @@ def process_job_survey_submission(
     )
 
     if next_pos >= len(queue):
-        # All jobs exhausted
+        # All jobs exhausted — check anchor flag before final fallback
         fallback_url = funnel.get("fallback_url", "")
+        anchor_redirect = _check_anchor_redirect(funnel, funnel_session_id)
+        final_url = anchor_redirect if anchor_redirect else _ensure_https(fallback_url)
+
         db.funnel_sessions.update_one(
             {"funnel_session_id": funnel_session_id},
             {"$set": {"status": "no_match", "completed_at": datetime.now(timezone.utc).isoformat()}}
         )
         return {
             "action": "all_failed",
-            "redirect_url": _ensure_https(fallback_url),
+            "redirect_url": final_url,
             "failed_jobs": failed_jobs,
+            "anchor_qualified": bool(anchor_redirect),
             "ai_reason": eval_result["reason"]
         }
 

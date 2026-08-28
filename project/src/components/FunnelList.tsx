@@ -48,6 +48,7 @@ interface GeneratedSurvey {
   survey_id: string;
   name: string;
   question_count: number;
+  is_router?: boolean;
 }
 
 interface Funnel {
@@ -60,6 +61,14 @@ interface Funnel {
   fallback_url?: string;
   generated_surveys: GeneratedSurvey[];
   screening_surveys: Array<{ survey_id: string; name: string; index: number }>;
+  anchor_config?: {
+    enabled: boolean;
+    question_text: string;
+    options: string[];
+    correct_answers: string[];
+    redirect_url: string;
+  } | null;
+  router_survey_ids?: string[];
   job_surveys: Record<string, {
     survey_id: string;
     display_name: string;
@@ -742,6 +751,155 @@ const QuestionsPanel: React.FC<{ funnel: Funnel; isDarkMode: boolean; apiBase: s
   );
 };
 
+// ─── Router Surveys Panel ─────────────────────────────────
+
+const RouterSurveysPanel: React.FC<{ funnel: Funnel; isDarkMode: boolean; apiBase: string; authHeaders: () => Record<string, string>; onRefresh: () => void }> = ({
+  funnel, isDarkMode, onRefresh, apiBase, authHeaders
+}) => {
+  const textMuted = isDarkMode ? 'text-gray-400' : 'text-gray-500';
+  const textMain  = isDarkMode ? 'text-gray-100' : 'text-gray-900';
+  const inputClass = `w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-2 focus:ring-amber-500 ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'}`;
+
+  const anchor = funnel.anchor_config;
+  const routerIds: string[] = funnel.router_survey_ids || [];
+
+  // router surveys = screening surveys that are marked is_router
+  const routerSurveys = funnel.generated_surveys.filter(s =>
+    s.type === 'screening' && ((s as any).is_router || routerIds.includes(s.survey_id))
+  );
+
+  // Local state for editing anchor redirect URL
+  const [editingRedirect, setEditingRedirect] = useState(false);
+  const [redirectUrl, setRedirectUrl] = useState((anchor?.redirect_url) || '');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const saveRedirectUrl = async () => {
+    setSaving(true);
+    try {
+      const newAnchor = { ...(anchor || {}), redirect_url: redirectUrl };
+      await fetch(`${apiBase}/api/funnels/${funnel.funnel_id}`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify({ anchor_config: newAnchor })
+      });
+      setSaved(true);
+      setEditingRedirect(false);
+      setTimeout(() => setSaved(false), 2000);
+      onRefresh();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!anchor || !anchor.enabled) {
+    return (
+      <div className={`rounded-xl border border-dashed px-5 py-8 text-center ${isDarkMode ? 'border-gray-600' : 'border-gray-300'}`}>
+        <div className="text-3xl mb-2">⚓</div>
+        <p className={`text-sm font-medium ${textMain}`}>No anchor question configured</p>
+        <p className={`text-xs mt-1 ${textMuted}`}>
+          An anchor question can be added when creating a new funnel. It lets you redirect users who fail all surveys but qualify on a key question.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Anchor question summary card */}
+      <div className={`rounded-xl border p-4 space-y-3 ${isDarkMode ? 'border-amber-700/50 bg-amber-950/20' : 'border-amber-200 bg-amber-50'}`}>
+        <div className="flex items-center gap-2">
+          <span className="text-lg">⚓</span>
+          <p className={`text-sm font-semibold ${isDarkMode ? 'text-amber-300' : 'text-amber-800'}`}>Anchor Question</p>
+          <span className={`ml-auto text-xs px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-green-900/50 text-green-400' : 'bg-green-100 text-green-700'}`}>Active</span>
+        </div>
+
+        <div className={`rounded-lg p-3 ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+          <p className={`text-sm font-medium ${textMain}`}>{anchor.question_text}</p>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {(anchor.options || []).map((opt: string) => {
+              const isCorrect = (anchor.correct_answers || []).includes(opt);
+              return (
+                <span key={opt} className={`text-xs px-2 py-0.5 rounded-full border ${
+                  isCorrect
+                    ? isDarkMode ? 'bg-green-900/50 border-green-700 text-green-300' : 'bg-green-100 border-green-300 text-green-700'
+                    : isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-400' : 'bg-gray-100 border-gray-200 text-gray-600'
+                }`}>
+                  {isCorrect && '✓ '}{opt}
+                </span>
+              );
+            })}
+          </div>
+          <p className={`text-xs mt-2 ${textMuted}`}>
+            Qualifying answers: <span className={`font-medium ${isDarkMode ? 'text-green-400' : 'text-green-700'}`}>{(anchor.correct_answers || []).join(', ') || '(none set)'}</span>
+          </p>
+        </div>
+
+        {/* Redirect URL */}
+        <div>
+          <p className={`text-xs font-semibold mb-1 ${textMuted}`}>Redirect URL for qualified users</p>
+          {editingRedirect ? (
+            <div className="flex gap-2">
+              <input value={redirectUrl} onChange={e => setRedirectUrl(e.target.value)} placeholder="https://yoursite.com/special-offer" className={inputClass} />
+              <button onClick={saveRedirectUrl} disabled={saving} className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs rounded-lg font-medium disabled:opacity-50">
+                {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+              </button>
+              <button onClick={() => setEditingRedirect(false)} className={`px-2 py-1.5 text-xs rounded-lg ${isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600'}`}><X size={12} /></button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <p className={`flex-1 text-xs truncate ${anchor.redirect_url ? (isDarkMode ? 'text-amber-300' : 'text-amber-700') : textMuted}`}>
+                {anchor.redirect_url || '(not set)'}
+              </p>
+              {saved && <span className="text-xs text-green-500">Saved ✓</span>}
+              <button onClick={() => { setEditingRedirect(true); setRedirectUrl(anchor.redirect_url || ''); }} className={`text-xs ${textMuted} hover:text-amber-500`}>
+                <Edit3 size={12} />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Router surveys list */}
+      <div>
+        <p className={`text-xs font-semibold uppercase tracking-wide mb-2 flex items-center gap-2 ${textMuted}`}>
+          <span>⚓</span> Router Surveys (contain the anchor question)
+        </p>
+        {routerSurveys.length === 0 ? (
+          <div className={`rounded-xl border border-dashed px-4 py-3 text-center ${isDarkMode ? 'border-gray-600 text-gray-500' : 'border-gray-300 text-gray-400'}`}>
+            <p className="text-xs">No router surveys found. The anchor question is injected into all screening surveys at creation time.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {routerSurveys.map(s => (
+              <div key={s.survey_id} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${isDarkMode ? 'border-amber-700/40 bg-amber-950/10' : 'border-amber-200 bg-amber-50/50'}`}>
+                <span className="text-base">⚓</span>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium truncate ${textMain}`}>{s.name}</p>
+                  <p className={`text-xs ${textMuted}`}>{(s as any).question_count || 0} questions (includes anchor)</p>
+                </div>
+                <button onClick={() => window.open(`/edit/${s.survey_id}`, '_blank')}
+                  className={`flex items-center gap-1 text-xs shrink-0 ${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}>
+                  <Edit3 size={12} /> Edit ↗
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* How it works explainer */}
+      <div className={`rounded-xl border p-3 text-xs space-y-1.5 ${isDarkMode ? 'bg-gray-800 border-gray-700 text-gray-400' : 'bg-gray-50 border-gray-200 text-gray-500'}`}>
+        <p className={`font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>How anchor routing works</p>
+        <p>1. The anchor question is embedded in every router survey and shown to all respondents.</p>
+        <p>2. The answer is captured alongside all other answers during screening.</p>
+        <p>3. If the user fails all destination surveys (or scores no match), the system checks their anchor answer.</p>
+        <p>4. If the answer matches a qualifying answer → redirect to the anchor URL instead of the fallback.</p>
+      </div>
+    </div>
+  );
+};
+
 // ─── Funnel Row ───────────────────────────────────────────
 
 const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () => void; autoExpand?: boolean }> = ({
@@ -750,7 +908,7 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
   const navigate = useNavigate();
   const apiBase = getApiBaseUrl();
   const [expanded, setExpanded] = useState(autoExpand);
-  const [activeDetailTab, setActiveDetailTab] = useState<'overview' | 'scoring' | 'questions'>('overview');
+  const [activeDetailTab, setActiveDetailTab] = useState<'overview' | 'scoring' | 'questions' | 'router'>('overview');
   const [savingJobId, setSavingJobId] = useState<string | null>(null);
   const [editingTransitionJobId, setEditingTransitionJobId] = useState<string | null>(null);
   const [tempTransition, setTempTransition] = useState<any>({});
@@ -759,6 +917,59 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
   const [analytics, setAnalytics] = useState<any>(null);
   const [copied, setCopied] = useState(false);
   const [deletingFunnel, setDeletingFunnel] = useState(false);
+
+  // ── Collaborators ──────────────────────────────────────────────────────────
+  const [collaborators, setCollaborators] = useState<{id: string; name: string; email: string}[]>([]);
+  const [collabEmail, setCollabEmail] = useState('');
+  const [collabLookup, setCollabLookup] = useState<{id: string; name: string; email: string} | null>(null);
+  const [collabLookupError, setCollabLookupError] = useState('');
+  const [collabLookupLoading, setCollabLookupLoading] = useState(false);
+  const [collabAdding, setCollabAdding] = useState(false);
+  const [collabLoaded, setCollabLoaded] = useState(false);
+
+  const loadCollaborators = async () => {
+    if (collabLoaded) return;
+    try {
+      const res = await fetch(`${apiBase}/api/funnels/${funnel.funnel_id}/collaborators`, { headers: authHeaders() });
+      if (res.ok) { const data = await res.json(); setCollaborators(data.collaborators || []); }
+    } catch { /* silent */ }
+    setCollabLoaded(true);
+  };
+
+  const lookupCollabUser = async () => {
+    const email = collabEmail.trim().toLowerCase();
+    if (!email) return;
+    setCollabLookupLoading(true); setCollabLookup(null); setCollabLookupError('');
+    try {
+      const res = await fetch(`${apiBase}/api/surveys/user-lookup?email=${encodeURIComponent(email)}`, { headers: authHeaders() });
+      const data = await res.json();
+      if (!res.ok || !data.found) setCollabLookupError(data.message || 'No account found');
+      else if (collaborators.some(c => c.id === data.user.id)) setCollabLookupError('Already added');
+      else setCollabLookup(data.user);
+    } catch { setCollabLookupError('Lookup failed'); }
+    finally { setCollabLookupLoading(false); }
+  };
+
+  const addCollaborator = async () => {
+    if (!collabLookup) return;
+    setCollabAdding(true);
+    try {
+      const res = await fetch(`${apiBase}/api/funnels/${funnel.funnel_id}/collaborators`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ user_id: collabLookup.id }),
+      });
+      if (res.ok) { setCollaborators(prev => [...prev, collabLookup]); setCollabLookup(null); setCollabEmail(''); }
+      else { const d = await res.json(); setCollabLookupError(d.error || 'Failed to add'); }
+    } catch { setCollabLookupError('Failed to add'); }
+    finally { setCollabAdding(false); }
+  };
+
+  const removeCollaborator = async (collaboratorId: string) => {
+    try {
+      await fetch(`${apiBase}/api/funnels/${funnel.funnel_id}/collaborators/${collaboratorId}`, { method: 'DELETE', headers: authHeaders() });
+      setCollaborators(prev => prev.filter(c => c.id !== collaboratorId));
+    } catch { /* silent */ }
+  };
 
   const authHeaders = () => {
     const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt_token') || '';
@@ -827,6 +1038,7 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
   };
 
   useEffect(() => { if (expanded && !analytics) fetchAnalytics(); }, [expanded]);
+  useEffect(() => { if (expanded && activeDetailTab === 'overview') loadCollaborators(); }, [expanded, activeDetailTab]);
 
   const cardBg = isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200';
   const textMuted = isDarkMode ? 'text-gray-400' : 'text-gray-500';
@@ -873,10 +1085,10 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
 
           {/* Detail tabs */}
           <div className={`inline-flex rounded-xl border p-1 gap-1 ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-100 border-gray-200'}`}>
-            {(['overview', 'scoring', 'questions'] as const).map(tab => (
+            {(['overview', 'scoring', 'questions', 'router'] as const).map(tab => (
               <button key={tab} onClick={() => setActiveDetailTab(tab)}
                 className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${activeDetailTab === tab ? 'bg-blue-600 text-white' : isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>
-                {tab === 'overview' ? '📋 Overview' : tab === 'scoring' ? '📊 AI Scoring' : '❓ Questions'}
+                {tab === 'overview' ? '📋 Overview' : tab === 'scoring' ? '📊 AI Scoring' : tab === 'questions' ? '❓ Questions' : '⚓ Router Surveys'}
               </button>
             ))}
           </div>
@@ -1079,6 +1291,71 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
           </div>
           )}
 
+          {/* ── COLLABORATORS section (inside overview) ── */}
+          {activeDetailTab === 'overview' && (
+            <div className={`rounded-xl border p-4 space-y-3 ${isDarkMode ? 'border-gray-700 bg-gray-750' : 'border-gray-200 bg-gray-50'}`}>
+              <p className={`text-xs font-semibold flex items-center gap-1.5 ${textMain}`}>
+                👥 Share this funnel
+              </p>
+              <p className={`text-[11px] ${textMuted}`}>Add a registered user — this funnel will appear in their dashboard too.</p>
+
+              {/* Email lookup */}
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={collabEmail}
+                  onChange={e => { setCollabEmail(e.target.value); setCollabLookup(null); setCollabLookupError(''); }}
+                  onKeyDown={e => e.key === 'Enter' && lookupCollabUser()}
+                  placeholder="Enter email address"
+                  className={`flex-1 text-xs rounded-lg px-3 py-2 border focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'}`}
+                />
+                <button
+                  onClick={lookupCollabUser}
+                  disabled={collabLookupLoading || !collabEmail.trim()}
+                  className="px-3 py-2 bg-gray-800 text-white text-xs rounded-lg hover:bg-gray-700 disabled:bg-gray-400 transition-colors"
+                >{collabLookupLoading ? '…' : 'Find'}</button>
+              </div>
+
+              {collabLookupError && <p className="text-[11px] text-red-500">{collabLookupError}</p>}
+
+              {collabLookup && (
+                <div className={`flex items-center justify-between px-3 py-2.5 rounded-lg border ${isDarkMode ? 'bg-green-900/20 border-green-800/40' : 'bg-green-50 border-green-200'}`}>
+                  <div>
+                    <p className={`text-xs font-semibold ${textMain}`}>{collabLookup.name || collabLookup.email}</p>
+                    <p className={`text-[11px] ${textMuted}`}>{collabLookup.email}</p>
+                  </div>
+                  <button
+                    onClick={addCollaborator}
+                    disabled={collabAdding}
+                    className="px-3 py-1.5 bg-green-600 text-white text-[11px] font-semibold rounded-lg hover:bg-green-700 disabled:bg-gray-300 transition-colors"
+                  >{collabAdding ? 'Adding…' : '+ Add'}</button>
+                </div>
+              )}
+
+              {/* Current collaborators */}
+              {collaborators.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  <p className={`text-[11px] font-medium ${textMuted}`}>Shared with:</p>
+                  {collaborators.map(c => (
+                    <div key={c.id} className={`flex items-center justify-between px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-100'}`}>
+                      <div>
+                        <p className={`text-xs font-medium ${textMain}`}>{c.name || c.email}</p>
+                        <p className={`text-[11px] ${textMuted}`}>{c.email}</p>
+                      </div>
+                      <button
+                        onClick={() => removeCollaborator(c.id)}
+                        className={`p-1 rounded transition-colors ${isDarkMode ? 'text-gray-500 hover:text-red-400 hover:bg-red-900/30' : 'text-gray-400 hover:text-red-500 hover:bg-red-50'}`}
+                        title="Remove"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ── SCORING TAB ── */}
           {activeDetailTab === 'scoring' && (
             <ScoringDetailsPanel funnel={funnel} isDarkMode={isDarkMode} apiBase={apiBase} authHeaders={authHeaders} />
@@ -1087,6 +1364,11 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
           {/* ── QUESTIONS TAB ── */}
           {activeDetailTab === 'questions' && (
             <QuestionsPanel funnel={funnel} isDarkMode={isDarkMode} apiBase={apiBase} authHeaders={authHeaders} />
+          )}
+
+          {/* ── ROUTER SURVEYS TAB ── */}
+          {activeDetailTab === 'router' && (
+            <RouterSurveysPanel funnel={funnel} isDarkMode={isDarkMode} apiBase={apiBase} authHeaders={authHeaders} onRefresh={onRefresh} />
           )}
         </div>
       )}
