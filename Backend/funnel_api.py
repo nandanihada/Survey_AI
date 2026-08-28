@@ -1569,19 +1569,70 @@ def get_funnel_analytics(funnel_id):
 @cross_origin(supports_credentials=True, origins=ALLOWED_ORIGINS)
 @requireAuth
 def get_funnel_sessions(funnel_id):
-    """Get all sessions for a funnel — for admin tracking tab."""
+    """
+    Get sessions for a funnel with pagination, search, and date filtering.
+    Query params: page, per_page, search, date_from (YYYY-MM-DD), date_to (YYYY-MM-DD)
+    Sorted newest first (created_at desc).
+    """
     if request.method == "OPTIONS":
         return "", 200
 
+    try:
+        page     = max(int(request.args.get("page",     1)),  1)
+        per_page = min(int(request.args.get("per_page", 20)), 100)
+    except (ValueError, TypeError):
+        page, per_page = 1, 20
+
+    search    = request.args.get("search",    "").strip()
+    date_from = request.args.get("date_from", "").strip()
+    date_to   = request.args.get("date_to",   "").strip()
+    skip      = (page - 1) * per_page
+
+    query: dict = {"funnel_id": funnel_id}
+
+    # ── Date filter on created_at ──────────────────────────────────────────
+    if date_from or date_to:
+        from datetime import datetime, timedelta
+        date_q: dict = {}
+        if date_from:
+            try: date_q["$gte"] = datetime.strptime(date_from, "%Y-%m-%d").isoformat()
+            except ValueError: pass
+        if date_to:
+            try:
+                dt_end = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+                date_q["$lt"] = dt_end.isoformat()
+            except ValueError: pass
+        if date_q:
+            query["created_at"] = date_q
+
+    # ── Text search across key fields ─────────────────────────────────────
+    if search:
+        q = search.lower()
+        query["$or"] = [
+            {"funnel_session_id":  {"$regex": search, "$options": "i"}},
+            {"user_info.email":    {"$regex": search, "$options": "i"}},
+            {"user_info.username": {"$regex": search, "$options": "i"}},
+            {"status":             {"$regex": search, "$options": "i"}},
+            {"matched_job":        {"$regex": search, "$options": "i"}},
+        ]
+
+    total    = db.funnel_sessions.count_documents(query)
     sessions = list(
-        db.funnel_sessions.find({"funnel_id": funnel_id})
-        .sort("updated_at", -1)
-        .limit(500)
+        db.funnel_sessions.find(query)
+        .sort("created_at", -1)
+        .skip(skip)
+        .limit(per_page)
     )
     for s in sessions:
         s["_id"] = str(s["_id"])
 
-    return jsonify({"sessions": sessions, "total": len(sessions)}), 200
+    return jsonify({
+        "sessions":    sessions,
+        "total":       total,
+        "page":        page,
+        "per_page":    per_page,
+        "total_pages": -(-total // per_page),
+    }), 200
 
 
 # ═══════════════════════════════════════════════════════
