@@ -917,6 +917,9 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
   const [analytics, setAnalytics] = useState<any>(null);
   const [copied, setCopied] = useState(false);
   const [deletingFunnel, setDeletingFunnel] = useState(false);
+  // Phase 1 spinner config
+  const [editingSpinnerSurveyId, setEditingSpinnerSurveyId] = useState<string | null>(null);
+  const [tempSpinner, setTempSpinner] = useState<any>({});
 
   // ── Collaborators ──────────────────────────────────────────────────────────
   const [collaborators, setCollaborators] = useState<{id: string; name: string; email: string}[]>([]);
@@ -989,6 +992,19 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
       });
       onRefresh();
     } finally { setSavingJobId(null); }
+  };
+
+  const saveScreeningSpinner = async (surveyId: string, spinnerCfg: any) => {
+    // Store spinner config per screening survey under funnel.screening_spinner_configs
+    const existing = (funnel as any).screening_spinner_configs || {};
+    const updated = { ...existing, [surveyId]: spinnerCfg };
+    try {
+      await fetch(`${apiBase}/api/funnels/${funnel.funnel_id}`, {
+        method: 'PUT', headers: authHeaders(),
+        body: JSON.stringify({ screening_spinner_configs: updated })
+      });
+      onRefresh();
+    } catch { /* silent */ }
   };
 
   const saveFallback = async () => {
@@ -1172,20 +1188,100 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
                     );
                   }
                   return displayList.map(s => (
-                    <div key={s.survey_id} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${isDarkMode ? 'bg-gray-750 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
-                      <div className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${isDarkMode ? 'bg-blue-900 text-blue-300' : 'bg-blue-100 text-blue-700'}`}>
-                        {(s.index ?? 0) + 1}
+                    <div key={s.survey_id} className={`rounded-xl border p-3 space-y-2.5 ${isDarkMode ? 'bg-gray-750 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                      {/* Survey header */}
+                      <div className="flex items-center gap-3">
+                        <div className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center flex-shrink-0 ${isDarkMode ? 'bg-blue-900 text-blue-300' : 'bg-blue-100 text-blue-700'}`}>
+                          {(s.index ?? 0) + 1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium truncate ${textMain}`}>{s.name}</p>
+                          {'question_count' in s && (s as any).question_count > 0 && (
+                            <p className={`text-xs ${textMuted}`}>{(s as any).question_count} questions</p>
+                          )}
+                        </div>
+                        <button onClick={() => window.open(`/edit/${s.survey_id}`, '_blank')}
+                          className={`flex items-center gap-1 text-xs flex-shrink-0 ${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}>
+                          <Edit3 size={12} /> Edit ↗
+                        </button>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium truncate ${textMain}`}>{s.name}</p>
-                        {'question_count' in s && (s as any).question_count > 0 && (
-                          <p className={`text-xs ${textMuted}`}>{(s as any).question_count} questions</p>
-                        )}
+
+                      {/* Between-survey spinner config */}
+                      <div>
+                        <button onClick={() => { setEditingSpinnerSurveyId(editingSpinnerSurveyId === s.survey_id ? null : s.survey_id); setTempSpinner({}); }}
+                          className={`flex items-center gap-1.5 text-xs ${textMuted} hover:text-gray-700`}>
+                          <span>⟳</span> Loading style when moving to next survey
+                          <ChevronDown size={12} className={`transition-transform ${editingSpinnerSurveyId === s.survey_id ? 'rotate-180' : ''}`} />
+                        </button>
+                        {editingSpinnerSurveyId === s.survey_id && (() => {
+                          const existingCfg = ((funnel as any).screening_spinner_configs || {})[s.survey_id] || {};
+                          const currentStyle = tempSpinner.loading_style ?? existingCfg.loading_style ?? 'spinner';
+                          return (
+                            <div className={`mt-2 space-y-2 rounded-xl border p-3 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                              <p className={`text-xs font-semibold ${textMuted} mb-1.5`}>Loading style</p>
+                              <div className="grid grid-cols-2 gap-1.5">
+                                {([
+                                  { v:'spinner',  l:'Spinner',      icon:'⟳', desc:'Rotating ring' },
+                                  { v:'progress', l:'Progress bar', icon:'▬', desc:'Fill bar' },
+                                  { v:'message',  l:'Message',      icon:'💬', desc:'Text only' },
+                                  { v:'skeleton', l:'Skeleton',     icon:'▒', desc:'Placeholder' },
+                                ] as const).map(st => {
+                                  const active = currentStyle === st.v;
+                                  return (
+                                    <button key={st.v} type="button"
+                                      onClick={() => setTempSpinner((p: any) => ({ ...p, loading_style: st.v }))}
+                                      className={`flex items-center gap-2 px-2.5 py-2 rounded-lg border text-xs font-medium transition-colors ${
+                                        active
+                                          ? isDarkMode ? 'bg-indigo-900/60 border-indigo-500 text-indigo-300' : 'bg-indigo-50 border-indigo-400 text-indigo-700'
+                                          : isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-400' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                                      }`}
+                                    >
+                                      <span className="text-sm leading-none">{st.icon}</span>
+                                      <span className="flex flex-col items-start leading-tight">
+                                        <span>{st.l}</span>
+                                        <span className={`text-[10px] font-normal ${active ? 'opacity-70' : isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>{st.desc}</span>
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {/* Mini preview */}
+                              <div className={`rounded-lg border flex items-center justify-center ${isDarkMode ? 'bg-gray-900 border-gray-700' : 'bg-gray-50 border-gray-200'}`} style={{ height: 56 }}>
+                                {currentStyle === 'spinner' && (
+                                  <div style={{ position:'relative',width:28,height:28 }}>
+                                    <div style={{ position:'absolute',inset:0,borderRadius:'50%',border:'3px solid #e5e7eb',borderTopColor:'#6366f1',animation:'spin 1s linear infinite' }} />
+                                    <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+                                  </div>
+                                )}
+                                {currentStyle === 'progress' && (
+                                  <div style={{ width:'70%',height:6,background:'#e5e7eb',borderRadius:99,overflow:'hidden' }}>
+                                    <div style={{ width:'60%',height:'100%',background:'linear-gradient(90deg,#6366f1,#8b5cf6)',borderRadius:99,animation:'progressAnim 1.5s ease-in-out infinite' }} />
+                                    <style>{`@keyframes progressAnim{0%{width:0%}100%{width:100%}}`}</style>
+                                  </div>
+                                )}
+                                {currentStyle === 'message' && (
+                                  <div style={{ display:'flex',gap:5,alignItems:'center' }}>
+                                    {[0,1,2].map(i=><div key={i} style={{ width:8,height:8,borderRadius:'50%',background:'#6366f1',animation:`dotBounce 0.9s ${i*0.18}s ease-in-out infinite` }}/>)}
+                                    <style>{`@keyframes dotBounce{0%,100%{transform:translateY(0);opacity:.4}50%{transform:translateY(-8px);opacity:1}}`}</style>
+                                  </div>
+                                )}
+                                {currentStyle === 'skeleton' && (
+                                  <div style={{ width:'70%',display:'flex',flexDirection:'column',gap:5 }}>
+                                    {[100,80,60].map((w,i)=><div key={i} style={{ height:i===0?10:7,width:`${w}%`,background:'#e5e7eb',borderRadius:4,animation:`skeletonPulse 1.4s ${i*0.2}s ease-in-out infinite` }}/>)}
+                                    <style>{`@keyframes skeletonPulse{0%,100%{opacity:.4}50%{opacity:.9}}`}</style>
+                                  </div>
+                                )}
+                              </div>
+                              <button
+                                onClick={async () => { await saveScreeningSpinner(s.survey_id, { ...existingCfg, ...tempSpinner }); setEditingSpinnerSurveyId(null); setTempSpinner({}); }}
+                                className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded-lg font-medium"
+                              >
+                                Save loading style
+                              </button>
+                            </div>
+                          );
+                        })()}
                       </div>
-                      <button onClick={() => window.open(`/edit/${s.survey_id}`, '_blank')}
-                        className={`flex items-center gap-1 text-xs ${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}>
-                        <Edit3 size={12} /> Edit ↗
-                      </button>
                     </div>
                   ));
                 })()}
@@ -1255,6 +1351,72 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
                               <div className="w-24">
                                 <p className={`text-xs ${textMuted} mb-1`}>Auto-redirect (s)</p>
                                 <input type="number" min={0} max={30} defaultValue={transition.auto_redirect_seconds ?? 5} onChange={e => setTempTransition((p: any) => ({ ...p, auto_redirect_seconds: parseInt(e.target.value) }))} className={inputClass} />
+                              </div>
+                            </div>
+                            {/* ── Between-survey loading style ── */}
+                            <div>
+                              <p className={`text-xs font-semibold ${textMuted} mb-1.5`}>Loading style between surveys</p>
+                              <div className="grid grid-cols-2 gap-1.5">
+                                {([
+                                  { v: 'spinner',  l: 'Spinner',      icon: '⟳', desc: 'Rotating ring' },
+                                  { v: 'progress', l: 'Progress bar', icon: '▬', desc: 'Fill bar' },
+                                  { v: 'message',  l: 'Message',      icon: '💬', desc: 'Text only' },
+                                  { v: 'skeleton', l: 'Skeleton',     icon: '▒', desc: 'Placeholder' },
+                                ] as const).map(s => {
+                                  const current = tempTransition.loading_style ?? transition.loading_style ?? 'spinner';
+                                  const active = current === s.v;
+                                  return (
+                                    <button key={s.v} type="button"
+                                      onClick={() => setTempTransition((p: any) => ({ ...p, loading_style: s.v }))}
+                                      className={`flex items-center gap-2 px-2.5 py-2 rounded-lg border text-xs font-medium transition-colors ${
+                                        active
+                                          ? isDarkMode ? 'bg-indigo-900/60 border-indigo-500 text-indigo-300' : 'bg-indigo-50 border-indigo-400 text-indigo-700'
+                                          : isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-400 hover:bg-gray-650' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                                      }`}
+                                    >
+                                      <span className="text-base leading-none">{s.icon}</span>
+                                      <span className="flex flex-col items-start leading-tight">
+                                        <span>{s.l}</span>
+                                        <span className={`text-[10px] font-normal ${active ? 'opacity-70' : isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>{s.desc}</span>
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {/* Live mini-preview */}
+                              <div className={`mt-2 rounded-lg border flex items-center justify-center ${isDarkMode ? 'bg-gray-900 border-gray-700' : 'bg-gray-50 border-gray-200'}`} style={{ height: 64 }}>
+                                {(() => {
+                                  const style = tempTransition.loading_style ?? transition.loading_style ?? 'spinner';
+                                  if (style === 'spinner') return (
+                                    <div style={{ position: 'relative', width: 30, height: 30 }}>
+                                      <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '3px solid #e5e7eb', borderTopColor: '#6366f1', animation: 'spin 1s linear infinite' }} />
+                                      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+                                    </div>
+                                  );
+                                  if (style === 'progress') return (
+                                    <div style={{ width: '70%', height: 6, background: '#e5e7eb', borderRadius: 99, overflow: 'hidden' }}>
+                                      <div style={{ width: '60%', height: '100%', background: 'linear-gradient(90deg,#6366f1,#8b5cf6)', borderRadius: 99, animation: 'progressAnim 1.5s ease-in-out infinite' }} />
+                                      <style>{`@keyframes progressAnim{0%{width:0%}100%{width:100%}}`}</style>
+                                    </div>
+                                  );
+                                  if (style === 'message') return (
+                                    <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+                                      {[0,1,2].map(i => (
+                                        <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: '#6366f1', animation: `dotBounce 0.9s ${i*0.18}s ease-in-out infinite` }} />
+                                      ))}
+                                      <style>{`@keyframes dotBounce{0%,100%{transform:translateY(0);opacity:.4}50%{transform:translateY(-8px);opacity:1}}`}</style>
+                                    </div>
+                                  );
+                                  // skeleton
+                                  return (
+                                    <div style={{ width: '70%', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                      {[100, 80, 60].map((w, i) => (
+                                        <div key={i} style={{ height: i === 0 ? 10 : 7, width: `${w}%`, background: '#e5e7eb', borderRadius: 4, animation: 'skeletonPulse 1.4s ease-in-out infinite', animationDelay: `${i*0.2}s` }} />
+                                      ))}
+                                      <style>{`@keyframes skeletonPulse{0%,100%{opacity:.4}50%{opacity:.9}}`}</style>
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             </div>
                             <button onClick={async () => { await saveJobConfig(jobId, { transition_page: { ...transition, ...tempTransition } }); setEditingTransitionJobId(null); setTempTransition({}); }}

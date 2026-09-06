@@ -265,6 +265,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       'editor_branching', 'branching_redirect_chain', 'branching_survey_end',
       'branching_survey_chain', 'branching_multi_layer', 'branching_flow_diagram',
       'editor_ai_generate', 'editor_ai_refine', 'editor_ai_options', 'editor_ai_assistant',
+      // special pages
+      'editor_description_page', 'editor_summary_page', 'editor_ending_page',
+      // rating styles
+      'rating_style_stars', 'rating_style_faces', 'rating_style_slider', 'rating_style_numeric', 'rating_style_dots',
+      // funnel
+      'funnel_spinner_style', 'funnel_ending_styles',
     ];
 
     const PREMIUM_FEATURES = [
@@ -285,6 +291,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       'editor_branching', 'branching_redirect_chain', 'branching_survey_end',
       'branching_flow_diagram',
       'editor_ai_generate', 'editor_ai_refine', 'editor_ai_options', 'editor_ai_assistant',
+      // special pages
+      'editor_description_page', 'editor_summary_page', 'editor_ending_page',
+      // rating styles
+      'rating_style_stars', 'rating_style_faces', 'rating_style_slider', 'rating_style_numeric',
+      // funnel
+      'funnel_spinner_style', 'funnel_ending_styles',
     ];
 
     const FREE_FEATURES = [
@@ -298,6 +310,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       'editor_anim_fadeSlideUp',
       'survey_responses',
       'editor_ai_generate',
+      // free special pages and rating
+      'editor_ending_page',
+      'rating_style_stars',
     ];
 
     if (user.role === 'enterprise') return ENTERPRISE_FEATURES.includes(feature);

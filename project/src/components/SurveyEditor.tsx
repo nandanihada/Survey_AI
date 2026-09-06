@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿﻿﻿﻿import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import OptimizedLoader from './OptimizedLoader';
 import TemplateSelector from './TemplateSelector';
@@ -520,6 +520,10 @@ const SurveyEditor: React.FC = () => {
   const [isRefining, setIsRefining] = useState(false);
   const [isGeneratingOptions, setIsGeneratingOptions] = useState(false);
 
+  // ── Special page AI generation state (hoisted to top level — cannot be inside conditional) ──
+  const [spAiLoading, setSpAiLoading] = useState(false);
+  const [spAiMsg, setSpAiMsg] = useState('');
+
   // ── Image upload state ───────────────────────────────────────────────────
   const [uploadingFor, setUploadingFor] = useState<string | null>(null); // 'question' | option text
 
@@ -832,10 +836,17 @@ const SurveyEditor: React.FC = () => {
       type: 'short_answer',
       required: false,
     };
-    const updated = { ...survey, questions: [...survey.questions, newQuestion] };
+    // Insert after the currently active question (not always at end)
+    const insertAt = activeQuestionIndex + 1;
+    const newQuestions = [
+      ...survey.questions.slice(0, insertAt),
+      newQuestion,
+      ...survey.questions.slice(insertAt),
+    ];
+    const updated = { ...survey, questions: newQuestions };
     setSurvey(updated);
-    setActiveQuestionIndex(updated.questions.length - 1);
-  }, [survey]);
+    setActiveQuestionIndex(insertAt);
+  }, [survey, activeQuestionIndex]);
 
   const copyToClipboard = async () => {
     try {
@@ -1557,6 +1568,180 @@ const SurveyEditor: React.FC = () => {
                 </div>
               </div>
 
+              {/* ── Completion Page ── */}
+              <div className="mt-5 pt-5 border-t border-gray-100">
+                <p className="text-xs font-semibold text-gray-700 mb-1 flex items-center gap-1.5">
+                  <CheckCircle size={12} /> Completion Page
+                </p>
+                <p className="text-[11px] text-gray-400 mb-3">
+                  Choose what respondents see after submitting.
+                </p>
+
+                {/* ── Ending style dropdown ── */}
+                <div className="mb-3">
+                  <label className="block text-[11px] font-medium text-gray-600 mb-1.5">Ending style</label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {([
+                      { value: 'thank_you',       label: 'Thank you',       icon: '🎉', desc: 'Animated celebration' },
+                      { value: 'reward_code',      label: 'Reward code',     icon: '🎁', desc: 'Show a coupon / code' },
+                      { value: 'redirect_notice',  label: 'Redirect notice', icon: '↗',  desc: 'Countdown + redirect' },
+                      { value: 'screen_out',       label: 'Screen-out',      icon: '🚫', desc: 'Disqualification page' },
+                    ] as { value: string; label: string; icon: string; desc: string }[]).map(s => {
+                      const current = (survey as any).completion_page?.style || 'thank_you';
+                      const active = current === s.value;
+                      return (
+                        <button
+                          key={s.value}
+                          type="button"
+                          onClick={() => setSurvey({ ...survey, completion_page: { ...(survey as any).completion_page, style: s.value } } as any)}
+                          className={`flex flex-col items-start px-2.5 py-2 rounded-lg border text-left transition-colors ${
+                            active
+                              ? 'bg-gray-900 text-white border-gray-900'
+                              : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          <span className="text-sm mb-0.5">{s.icon} <span className="font-semibold text-[11px]">{s.label}</span></span>
+                          <span className={`text-[10px] ${active ? 'text-gray-300' : 'text-gray-400'}`}>{s.desc}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* ── Common: Heading + Message ── */}
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                      {(survey as any).completion_page?.style === 'screen_out' ? 'Heading' : 'Heading'}
+                    </label>
+                    <input
+                      type="text"
+                      value={(survey as any).completion_page?.heading ?? ''}
+                      onChange={e => setSurvey({ ...survey, completion_page: { ...(survey as any).completion_page, heading: e.target.value } } as any)}
+                      placeholder={
+                        (survey as any).completion_page?.style === 'reward_code'     ? 'Here is your reward!' :
+                        (survey as any).completion_page?.style === 'redirect_notice' ? 'Taking you there…' :
+                        (survey as any).completion_page?.style === 'screen_out'      ? "We're sorry…" :
+                        "You're awesome!"
+                      }
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-600 mb-1">Message</label>
+                    <textarea
+                      rows={2}
+                      value={(survey as any).completion_page?.message ?? ''}
+                      onChange={e => setSurvey({ ...survey, completion_page: { ...(survey as any).completion_page, message: e.target.value } } as any)}
+                      placeholder={
+                        (survey as any).completion_page?.style === 'reward_code'     ? 'Use the code below to claim your reward.' :
+                        (survey as any).completion_page?.style === 'redirect_notice' ? 'You will be redirected in a moment.' :
+                        (survey as any).completion_page?.style === 'screen_out'      ? "Unfortunately you don't meet the criteria for this survey." :
+                        'Your responses are in. Thanks for taking a moment to share your thoughts!'
+                      }
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+                    />
+                  </div>
+
+                  {/* ── reward_code: code field ── */}
+                  {(survey as any).completion_page?.style === 'reward_code' && (
+                    <div>
+                      <label className="block text-[11px] font-medium text-gray-600 mb-1">Reward code</label>
+                      <input
+                        type="text"
+                        value={(survey as any).completion_page?.reward_code ?? ''}
+                        onChange={e => setSurvey({ ...survey, completion_page: { ...(survey as any).completion_page, reward_code: e.target.value } } as any)}
+                        placeholder="SAVE20"
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-red-400"
+                      />
+                      <p className="text-[10px] text-gray-400 mt-1">Shown in a copyable box.</p>
+                    </div>
+                  )}
+
+                  {/* ── redirect_notice: URL + countdown ── */}
+                  {(survey as any).completion_page?.style === 'redirect_notice' && (
+                    <>
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-600 mb-1">Redirect URL</label>
+                        <input
+                          type="url"
+                          value={(survey as any).completion_page?.redirect_url ?? ''}
+                          onChange={e => setSurvey({ ...survey, completion_page: { ...(survey as any).completion_page, redirect_url: e.target.value } } as any)}
+                          placeholder="https://yoursite.com/thank-you"
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                          Countdown (seconds)
+                          <span className="ml-1 text-gray-400 font-normal">{(survey as any).completion_page?.redirect_seconds ?? 5}s</span>
+                        </label>
+                        <input
+                          type="range"
+                          min={2} max={15}
+                          value={(survey as any).completion_page?.redirect_seconds ?? 5}
+                          onChange={e => setSurvey({ ...survey, completion_page: { ...(survey as any).completion_page, redirect_seconds: parseInt(e.target.value) } } as any)}
+                          className="w-full accent-red-500"
+                        />
+                        <div className="flex justify-between text-[10px] text-gray-400 mt-0.5"><span>2s</span><span>15s</span></div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* ── thank_you / screen_out: optional CTA button ── */}
+                  {((survey as any).completion_page?.style === 'thank_you' || !(survey as any).completion_page?.style || (survey as any).completion_page?.style === 'screen_out') && (
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <label className="block text-[11px] font-medium text-gray-600 mb-1">Button label</label>
+                        <input
+                          type="text"
+                          value={(survey as any).completion_page?.cta_text ?? ''}
+                          onChange={e => setSurvey({ ...survey, completion_page: { ...(survey as any).completion_page, cta_text: e.target.value } } as any)}
+                          placeholder="Leave blank to hide"
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-400"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-[11px] font-medium text-gray-600 mb-1">Button URL</label>
+                        <input
+                          type="url"
+                          value={(survey as any).completion_page?.cta_url ?? ''}
+                          onChange={e => setSurvey({ ...survey, completion_page: { ...(survey as any).completion_page, cta_url: e.target.value } } as any)}
+                          placeholder="https://..."
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-400"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Summary Page ── */}
+              <div className="mt-5 pt-5 border-t border-gray-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-gray-700">Show summary before submit</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Adds a review screen so respondents can check all their answers before submitting.</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={survey.show_summary_page === true}
+                    onClick={() => setSurvey({ ...survey, show_summary_page: survey.show_summary_page !== true })}
+                    className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 ${
+                      survey.show_summary_page === true ? 'bg-red-500' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        survey.show_summary_page === true ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
               {/* ── Collaborators ── */}
               <div className="mt-5 pt-5 border-t border-gray-100">
                 <p className="text-xs font-semibold text-gray-700 mb-1 flex items-center gap-1.5">
@@ -1938,18 +2123,101 @@ const SurveyEditor: React.FC = () => {
         `} style={{ top: 'auto' }}>
           <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between shrink-0">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Questions</span>
-            <button
-              onClick={addNewQuestion}
-              className="flex items-center gap-1 px-2 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors text-xs font-medium"
-            >
-              <Plus size={12} /> Add
-            </button>
+            <div className="flex items-center gap-1">
+              {/* Add special page button */}
+              <div className="relative" ref={(el) => { if (el) (el as any)._specialMenu = el; }}>
+                <button
+                  id="special-page-menu-btn"
+                  onClick={() => setSurvey(prev => { (window as any).__specialMenuOpen = !(window as any).__specialMenuOpen; document.getElementById('special-page-menu')?.classList.toggle('hidden'); return prev!; })}
+                  className="flex items-center gap-0.5 px-1.5 py-1 text-purple-600 border border-purple-200 rounded-md hover:bg-purple-50 transition-colors text-xs font-medium"
+                  title="Add a special page"
+                >
+                  <Plus size={11} /> <span className="hidden sm:inline">Page</span>
+                </button>
+                <div id="special-page-menu" className="hidden absolute right-0 top-full mt-1 z-50 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 min-w-[180px]">
+                  {([
+                    { type: '__description_page', label: 'Description page', icon: '📝', color: 'text-cyan-700', desc: 'Explain next questions' },
+                    { type: '__summary_page',     label: 'Summary page',     icon: '📋', color: 'text-violet-700', desc: 'Review answers so far' },
+                    { type: '__ending_page',      label: 'Ending page',      icon: '🎯', color: 'text-rose-700',   desc: 'Thank you / redirect' },
+                  ] as const).map(sp => (
+                    <button key={sp.type}
+                      onClick={() => {
+                        document.getElementById('special-page-menu')?.classList.add('hidden');
+                        if (!survey) return;
+                        const newItem: Question = {
+                          id: `${sp.type}_${Date.now()}`,
+                          question: sp.label,
+                          type: sp.type as any,
+                          required: false,
+                        };
+                        // Insert after the currently active question
+                        const insertAt = activeQuestionIndex + 1;
+                        const newQuestions = [
+                          ...survey.questions.slice(0, insertAt),
+                          newItem,
+                          ...survey.questions.slice(insertAt),
+                        ];
+                        const updated = { ...survey, questions: newQuestions };
+                        setSurvey(updated);
+                        setActiveQuestionIndex(insertAt);
+                        setMobilePanel('editor');
+                      }}
+                      className="w-full text-left px-3 py-2 flex items-start gap-2.5 hover:bg-gray-50 transition-colors"
+                    >
+                      <span className="text-base mt-0.5 flex-shrink-0">{sp.icon}</span>
+                      <div>
+                        <p className={`text-xs font-semibold ${sp.color}`}>{sp.label}</p>
+                        <p className="text-[10px] text-gray-400">{sp.desc}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={addNewQuestion}
+                className="flex items-center gap-1 px-2 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors text-xs font-medium"
+              >
+                <Plus size={12} /> Add
+              </button>
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto py-1 scrollbar-transparent">
             {(survey.questions || []).map((q, index) => {
+              const isSpecial = (q.type as string).startsWith('__');
+              const specialMeta: Record<string, { icon: string; label: string; bg: string; border: string; text: string; activeBg: string; activeBorder: string }> = {
+                __description_page: { icon: '📝', label: 'Description',  bg: 'bg-cyan-50',    border: 'border-l-cyan-400',    text: 'text-cyan-700',    activeBg: 'bg-cyan-50',    activeBorder: 'border-l-cyan-500' },
+                __summary_page:     { icon: '📋', label: 'Summary',      bg: 'bg-violet-50',  border: 'border-l-violet-400',  text: 'text-violet-700',  activeBg: 'bg-violet-50',  activeBorder: 'border-l-violet-500' },
+                __ending_page:      { icon: '🎯', label: 'Ending',       bg: 'bg-rose-50',    border: 'border-l-rose-400',    text: 'text-rose-700',    activeBg: 'bg-rose-50',    activeBorder: 'border-l-rose-500' },
+              };
+              const sm = isSpecial ? specialMeta[q.type as string] : null;
               const qTypeIcon = QUESTION_TYPES.find(t => t.value === q.type)?.icon || '✎';
               const bInfo = branchMap[q.id];
               const hasBranch = bInfo && (bInfo.hasRedirect || bInfo.hasEndHere || bInfo.hasCondition);
+
+              if (isSpecial && sm) {
+                const isActive = index === activeQuestionIndex;
+                return (
+                  <button
+                    key={q.id || index}
+                    onClick={() => { setActiveQuestionIndex(index); setMobilePanel('editor'); }}
+                    className={`text-left px-4 py-2.5 flex items-center gap-2.5 transition-colors w-full border-l-[3px] ${
+                      isActive ? `${sm.activeBg} ${sm.activeBorder}` : `hover:${sm.bg} border-l-transparent`
+                    }`}
+                  >
+                    <span className="text-base flex-shrink-0">{sm.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-semibold truncate ${isActive ? sm.text : 'text-gray-600'}`}>
+                        {(q as any).title || sm.label}
+                      </p>
+                      <p className={`text-[10px] mt-0.5 ${sm.text} opacity-70`}>{sm.label} page</p>
+                    </div>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0 ${isActive ? `${sm.bg} ${sm.text} border border-current` : 'bg-gray-100 text-gray-400'}`}>
+                      PAGE
+                    </span>
+                  </button>
+                );
+              }
+
               return (
                 <button
                   key={q.id || index}
@@ -1973,66 +2241,26 @@ const SurveyEditor: React.FC = () => {
                       <span className="text-[10px] text-gray-400 flex items-center gap-1">
                         {qTypeIcon} {QUESTION_TYPES.find(t => t.value === q.type)?.label || q.type}
                       </span>
-                      {/* ── Branch indicators ── */}
                       {bInfo?.hasCondition && (
-                        <span
-                          title="Conditional display — this question only shows based on a previous answer"
-                          onClick={e => { e.stopPropagation(); setBranchFocusQuestionId(q.id); setShowBranchingEditor(true); setBranchingViewMode('simple'); }}
-                          className="branch-indicator branch-indicator--condition"
-                        >
-                          ⤷ Conditional
-                        </span>
+                        <span title="Conditional display" onClick={e => { e.stopPropagation(); setBranchFocusQuestionId(q.id); setShowBranchingEditor(true); setBranchingViewMode('simple'); }} className="branch-indicator branch-indicator--condition">⤷ Conditional</span>
                       )}
                       {bInfo?.hasRedirect && (
-                        <span
-                          title="Redirect — user is sent to an external URL after answering"
-                          onClick={e => { e.stopPropagation(); setBranchFocusQuestionId(q.id); setShowBranchingEditor(true); setBranchingViewMode('simple'); }}
-                          className="branch-indicator branch-indicator--redirect"
-                        >
-                          ↗ Redirect
-                        </span>
+                        <span title="Redirect" onClick={e => { e.stopPropagation(); setBranchFocusQuestionId(q.id); setShowBranchingEditor(true); setBranchingViewMode('simple'); }} className="branch-indicator branch-indicator--redirect">↗ Redirect</span>
                       )}
                       {bInfo?.hasEndHere && (
-                        <span
-                          title="End survey — survey stops after this question"
-                          onClick={e => { e.stopPropagation(); setBranchFocusQuestionId(q.id); setShowBranchingEditor(true); setBranchingViewMode('simple'); }}
-                          className="branch-indicator branch-indicator--end"
-                        >
-                          ⊡ Ends
-                        </span>
+                        <span title="End survey" onClick={e => { e.stopPropagation(); setBranchFocusQuestionId(q.id); setShowBranchingEditor(true); setBranchingViewMode('simple'); }} className="branch-indicator branch-indicator--end">⊡ Ends</span>
                       )}
-                      {/* ── Funnel role badge ── */}
                       {(q as any).funnel_role && (q as any).funnel_role !== 'neutral' && (
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold shrink-0 ${
-                          (q as any).funnel_role === 'screen'
-                            ? 'bg-red-100 text-red-700'
-                            : (q as any).funnel_role === 'both'
-                            ? 'bg-purple-100 text-purple-700'
-                            : 'bg-blue-100 text-blue-700'
-                        }`}
-                          title={
-                            (q as any).funnel_role === 'screen' ? 'Screening — hard fail terminates the funnel' :
-                            (q as any).funnel_role === 'both' ? 'Screens + Scores — does both' :
-                            'Scoring — adds points to job profiles'
-                          }
-                        >
-                          {(q as any).funnel_role === 'screen' ? '🛡 Screen' :
-                           (q as any).funnel_role === 'both'   ? '🔀 Both' :
-                                                                 '📊 Score'}
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold shrink-0 ${(q as any).funnel_role === 'screen' ? 'bg-red-100 text-red-700' : (q as any).funnel_role === 'both' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {(q as any).funnel_role === 'screen' ? '🛡 Screen' : (q as any).funnel_role === 'both' ? '🔀 Both' : '📊 Score'}
                         </span>
                       )}
-                      {/* ── Neutral funnel question ── */}
                       {(q as any).funnel_role === 'neutral' && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-gray-100 text-gray-400" title="Neutral — collected but not used in scoring or screening">
-                          ○ Neutral
-                        </span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-gray-100 text-gray-400">○ Neutral</span>
                       )}
                     </div>
                   </div>
-                  {/* Right-side dot if any branching is set */}
-                  {hasBranch && (
-                    <span className="branch-dot flex-shrink-0" title="Has branching rules" />
-                  )}
+                  {hasBranch && <span className="branch-dot flex-shrink-0" title="Has branching rules" />}
                 </button>
               );
             })}
@@ -2076,6 +2304,129 @@ const SurveyEditor: React.FC = () => {
               />
             </div>
           ) : activeQ ? (
+            /* ── Special page preview (Description / Summary / Ending) ── */
+            (activeQ.type as string).startsWith('__') ? (() => {
+              const spType = activeQ.type as string;
+              const title = (activeQ as any).title || '';
+              const body  = (activeQ as any).body  || '';
+              const ctaText = (activeQ as any).cta_text || '';
+
+              if (spType === '__description_page') return (() => {
+                const ps = (activeQ as any).page_style || 'standard';
+                const SM: Record<string,{bg:string;border:string;accentColor:string;headColor:string;textColor:string;btnBg:string;labelColor:string}> = {
+                  standard: {bg:'#ffffff',border:'#e5e7eb',accentColor:'#111827',headColor:'#111827',textColor:'#6b7280',btnBg:'#111827',labelColor:'#9ca3af'},
+                  ocean:    {bg:'#ecfeff',border:'#a5f3fc',accentColor:'#0891b2',headColor:'#164e63',textColor:'#374151',btnBg:'#0891b2',labelColor:'#0891b2'},
+                  sunset:   {bg:'#fff7ed',border:'#fed7aa',accentColor:'#ea580c',headColor:'#431407',textColor:'#374151',btnBg:'#ea580c',labelColor:'#ea580c'},
+                  forest:   {bg:'#f0fdf4',border:'#bbf7d0',accentColor:'#16a34a',headColor:'#14532d',textColor:'#374151',btnBg:'#16a34a',labelColor:'#16a34a'},
+                  dark:     {bg:'#1f2937',border:'#374151',accentColor:'#a78bfa',headColor:'#f9fafb',textColor:'rgba(255,255,255,0.55)',btnBg:'#7c3aed',labelColor:'#a78bfa'},
+                };
+                const st = SM[ps] || SM.standard;
+                return (
+                  <div style={{ position:'relative', maxWidth:540, width:'100%', margin:'24px 12px 24px' }} className="sm:mx-6 sm:my-10">
+                    <div style={{ background:st.bg, borderRadius:20, border:`2px solid ${st.border}`, padding:'36px 32px', boxShadow:'0 4px 28px rgba(0,0,0,0.08)' }}>
+                      <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:20 }}>
+                        <div style={{ width:40,height:40,borderRadius:12,background:st.btnBg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0 }}>📝</div>
+                        <div>
+                          <p style={{ margin:0,fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:1.2,color:st.labelColor }}>Description Page</p>
+                          <p style={{ margin:0,fontSize:11,color:st.textColor }}>Shown between questions</p>
+                        </div>
+                      </div>
+                      <h2 style={{ margin:'0 0 12px',fontSize:22,fontWeight:800,color:st.headColor,lineHeight:1.25,fontFamily:"'Playfair Display',Georgia,serif" }}>
+                        {title || <span style={{ color:'#94a3b8',fontStyle:'italic',fontFamily:"'Outfit',sans-serif",fontWeight:400 }}>Add a title in settings →</span>}
+                      </h2>
+                      <p style={{ margin:'0 0 28px',fontSize:14.5,color:st.textColor,lineHeight:1.75 }}>
+                        {body || <span style={{ color:'#94a3b8',fontStyle:'italic' }}>Add body text in settings →</span>}
+                      </p>
+                      <div style={{ display:'inline-flex',alignItems:'center',gap:8,padding:'11px 24px',borderRadius:10,background:st.btnBg,color:'#fff',fontSize:14,fontWeight:600,fontFamily:"'Outfit',sans-serif" }}>
+                        {ctaText || 'Continue →'}
+                      </div>
+                    </div>
+                    <p style={{ textAlign:'center',fontSize:11,color:'#9ca3af',marginTop:12,fontFamily:"'Outfit',sans-serif" }}>Preview — edit content in the right panel</p>
+                  </div>
+                );
+              })();
+
+              if (spType === '__summary_page') return (() => {
+                const ps = (activeQ as any).page_style || 'standard';
+                const SM2: Record<string,{bg:string;border:string;accentColor:string;headColor:string;textColor:string;btnBg:string;labelColor:string;rowOdd:string;rowEven:string;rowBorder:string}> = {
+                  standard: {bg:'#ffffff',border:'#e5e7eb',accentColor:'#111827',headColor:'#111827',textColor:'#6b7280',btnBg:'#111827',labelColor:'#374151',rowOdd:'#f9fafb',rowEven:'#ffffff',rowBorder:'#f3f4f6'},
+                  ocean:    {bg:'#ecfeff',border:'#a5f3fc',accentColor:'#0891b2',headColor:'#164e63',textColor:'#374151',btnBg:'#0891b2',labelColor:'#0891b2',rowOdd:'#f0fdff',rowEven:'#ffffff',rowBorder:'#cffafe'},
+                  sunset:   {bg:'#fff7ed',border:'#fed7aa',accentColor:'#ea580c',headColor:'#431407',textColor:'#374151',btnBg:'#ea580c',labelColor:'#ea580c',rowOdd:'#fff3e8',rowEven:'#ffffff',rowBorder:'#fed7aa'},
+                  forest:   {bg:'#f0fdf4',border:'#bbf7d0',accentColor:'#16a34a',headColor:'#14532d',textColor:'#374151',btnBg:'#16a34a',labelColor:'#16a34a',rowOdd:'#f0fdf4',rowEven:'#ffffff',rowBorder:'#bbf7d0'},
+                  dark:     {bg:'#111827',border:'#374151',accentColor:'#a78bfa',headColor:'#f9fafb',textColor:'rgba(255,255,255,0.55)',btnBg:'#7c3aed',labelColor:'#a78bfa',rowOdd:'#1f2937',rowEven:'#111827',rowBorder:'#374151'},
+                };
+                const st2 = SM2[ps] || SM2.standard;
+                return (
+                  <div style={{ position:'relative', maxWidth:540, width:'100%', margin:'24px 12px 24px' }} className="sm:mx-6 sm:my-10">
+                    <div style={{ background:st2.bg, borderRadius:20, border:`2px solid ${st2.border}`, padding:'36px 32px', boxShadow:'0 4px 28px rgba(0,0,0,0.08)' }}>
+                      <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:20 }}>
+                        <div style={{ width:40,height:40,borderRadius:12,background:st2.btnBg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0 }}>📋</div>
+                        <div>
+                          <p style={{ margin:0,fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:1.2,color:st2.labelColor }}>Summary Page</p>
+                          <p style={{ margin:0,fontSize:11,color:st2.textColor }}>Shows answers collected so far</p>
+                        </div>
+                      </div>
+                      <h2 style={{ margin:'0 0 8px',fontSize:22,fontWeight:800,color:st2.headColor,lineHeight:1.25,fontFamily:"'Playfair Display',Georgia,serif" }}>
+                        {title || 'So far, here is what you told us'}
+                      </h2>
+                      <p style={{ margin:'0 0 16px',fontSize:14,color:st2.textColor }}>{body || 'Change anything that is wrong.'}</p>
+                      <div style={{ borderRadius:12,border:`1px solid ${st2.rowBorder}`,overflow:'hidden',marginBottom:20 }}>
+                        {[
+                          ['What is your age?','25–34'],
+                          ['Where do you live?','Urban area'],
+                          ['How often do you shop?','Weekly or more'],
+                        ].map(([q,a],i) => (
+                          <div key={i} style={{ display:'flex',justifyContent:'space-between',alignItems:'center',padding:'11px 16px',background:i%2===0?st2.rowEven:st2.rowOdd,borderBottom:i<2?`1px solid ${st2.rowBorder}`:'none' }}>
+                            <span style={{ fontSize:13,color:st2.textColor,flex:1 }}>{q}</span>
+                            <span style={{ fontSize:13,fontWeight:600,color:st2.headColor,marginLeft:16 }}>{a}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ display:'inline-flex',alignItems:'center',padding:'11px 24px',borderRadius:10,background:st2.btnBg,color:'#fff',fontSize:14,fontWeight:600,fontFamily:"'Outfit',sans-serif" }}>
+                        {ctaText || 'That is right, continue →'}
+                      </div>
+                    </div>
+                    <p style={{ textAlign:'center',fontSize:11,color:'#9ca3af',marginTop:12,fontFamily:"'Outfit',sans-serif" }}>Preview — edit content in the right panel</p>
+                  </div>
+                );
+              })();
+
+              // __ending_page
+              const endStyle = (activeQ as any).ending_style || 'thank_you';
+              const endColors: Record<string,{bg:string;border:string;iconBg:string;icon:string;title:string;text:string}> = {
+                thank_you:       { bg:'linear-gradient(135deg,#0a0a0a,#1a0a0a)', border:'#374151', iconBg:'#10b981', icon:'✓', title:'#fff', text:'rgba(255,255,255,0.6)' },
+                reward_code:     { bg:'linear-gradient(135deg,#1c1400,#2d1f00)', border:'#78350f', iconBg:'#f59e0b', icon:'🎁', title:'#fff', text:'rgba(255,255,255,0.6)' },
+                redirect_notice: { bg:'linear-gradient(135deg,#0f172a,#1e293b)', border:'#334155', iconBg:'#6366f1', icon:'↗', title:'#fff', text:'rgba(255,255,255,0.6)' },
+                screen_out:      { bg:'linear-gradient(135deg,#1c1917,#292524)', border:'#44403c', iconBg:'#ef4444', icon:'✕', title:'#fff', text:'rgba(255,255,255,0.6)' },
+              };
+              const ec = endColors[endStyle] || endColors.thank_you;
+              return (
+                <div style={{ position:'relative', maxWidth:540, width:'100%', margin:'24px 12px 24px' }} className="sm:mx-6 sm:my-10">
+                  <div style={{ background:ec.bg, borderRadius:20, border:`2px solid ${ec.border}`, padding:'36px 32px', boxShadow:'0 4px 28px rgba(0,0,0,0.25)' }}>
+                    <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:24 }}>
+                      <div style={{ width:40,height:40,borderRadius:12,background:'rgba(255,255,255,0.1)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,color:'#fff' }}>🎯</div>
+                      <div>
+                        <p style={{ margin:0,fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:1.2,color:'rgba(255,255,255,0.5)' }}>Ending Page</p>
+                        <p style={{ margin:0,fontSize:11,color:'rgba(255,255,255,0.35)' }}>
+                          {endStyle === 'thank_you' ? 'Thank you screen' : endStyle === 'reward_code' ? 'Reward code' : endStyle === 'redirect_notice' ? 'Redirect notice' : 'Screen-out'}
+                        </p>
+                      </div>
+                    </div>
+                    <div style={{ textAlign:'center' }}>
+                      <div style={{ width:64,height:64,borderRadius:'50%',background:ec.iconBg,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 20px',fontSize:endStyle==='reward_code'?28:22,color:'#fff',fontWeight:800 }}>{ec.icon}</div>
+                      <h2 style={{ margin:'0 0 10px',fontSize:22,fontWeight:700,color:ec.title,fontFamily:"'Outfit',sans-serif" }}>{title || (endStyle==='thank_you' ? "You're awesome!" : endStyle==='reward_code' ? 'Here is your reward!' : endStyle==='redirect_notice' ? 'Taking you there…' : "We're sorry…")}</h2>
+                      <p style={{ margin:'0 0 28px',fontSize:14,color:ec.text }}>{body || 'Your message will appear here.'}</p>
+                      {endStyle === 'reward_code' && (
+                        <div style={{ background:'rgba(255,255,255,0.08)',border:'2px dashed rgba(255,255,255,0.25)',borderRadius:12,padding:'16px 24px',marginBottom:20,display:'inline-block' }}>
+                          <span style={{ fontSize:20,fontWeight:800,letterSpacing:4,color:'#fff',fontFamily:'monospace' }}>{(activeQ as any).reward_code || 'SAVE20'}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <p style={{ textAlign:'center',fontSize:11,color:'#9ca3af',marginTop:12,fontFamily:"'Outfit',sans-serif" }}>Preview — edit content in the right panel</p>
+                </div>
+              );
+            })() : (
             <div style={{ position: 'relative', maxWidth: 580, width: '100%', margin: '24px 12px 24px' }} className="sm:mx-6 sm:my-10">
               {/* Pin icon */}
               <div style={{
@@ -2441,25 +2792,55 @@ const SurveyEditor: React.FC = () => {
 
                   {/* Rating */}
                   {activeQ.type === 'rating' && (() => {
+                    const ratingStyle = (activeQ as any).ratingStyle || 'stars';
                     const qStyle = activeQ.answerStyle || survey.answerStyle || 'classic';
+                    if (ratingStyle === 'stars') return (
+                      <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                        {[1,2,3,4,5].map(n => (
+                          <svg key={n} width="32" height="32" viewBox="0 0 24 24" fill={n <= 3 ? '#f59e0b' : 'none'} stroke={n <= 3 ? '#f59e0b' : theme.border} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                          </svg>
+                        ))}
+                      </div>
+                    );
+                    if (ratingStyle === 'faces') return (
+                      <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                        {['😞','😕','😐','😊','😄'].map((f,i) => (
+                          <div key={i} style={{ display:'flex',flexDirection:'column',alignItems:'center',gap:3,padding:'8px 10px',borderRadius:10,border:`2px solid ${i===3?theme.accent:theme.border}`,background:i===3?'#eef2ff':theme.paperInner }}>
+                            <span style={{ fontSize: 22 }}>{f}</span>
+                            <span style={{ fontSize: 9, color: theme.textLight, fontFamily:"'Outfit',sans-serif" }}>{['Terrible','Bad','Okay','Good','Great'][i]}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                    if (ratingStyle === 'slider') return (
+                      <div style={{ marginTop: 4, padding: '0 2px' }}>
+                        <input type="range" min={1} max={5} defaultValue={3} readOnly className="w-full" style={{ accentColor: theme.accent }} />
+                        <div style={{ display:'flex',justifyContent:'space-between',marginTop:4,fontSize:10,color:theme.textLight,fontFamily:"'Outfit',sans-serif" }}>
+                          {[1,2,3,4,5].map(n=><span key={n}>{n}</span>)}
+                        </div>
+                      </div>
+                    );
+                    if (ratingStyle === 'numeric') return (
+                      <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                        {[1,2,3,4,5].map(n => (
+                          <div key={n} style={{ width:46,height:46,borderRadius:10,border:`2px solid ${n===3?theme.accent:theme.border}`,background:n===3?theme.accent:theme.paperInner,display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,fontWeight:700,color:n===3?'#fff':theme.textLight,fontFamily:"'Outfit',sans-serif" }}>{n}</div>
+                        ))}
+                      </div>
+                    );
+                    // dots
                     const circleStyles: Record<string, React.CSSProperties> = {
-                      classic: { border: `2px solid ${theme.border}`, borderRadius: '50%', background: theme.paperInner, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' },
+                      classic:   { border: `2px solid ${theme.border}`, borderRadius: '50%', background: theme.paperInner, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' },
                       underline: { border: 'none', borderBottom: `2px solid ${theme.accent}`, borderRadius: 0, background: 'transparent' },
-                      card: { border: 'none', borderRadius: 12, background: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.06)' },
-                      pill: { border: `1.5px solid ${theme.border}`, borderRadius: '50%', background: theme.paperInner },
-                      flat: { border: 'none', borderRadius: 8, background: '#f3f2ef' },
+                      card:      { border: 'none', borderRadius: 12, background: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.06)' },
+                      pill:      { border: `1.5px solid ${theme.border}`, borderRadius: '50%', background: theme.paperInner },
+                      flat:      { border: 'none', borderRadius: 8, background: '#f3f2ef' },
                     };
                     return (
                       <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                        {[1, 2, 3, 4, 5].map(n => (
-                          <div key={n} style={{
-                            width: 48, height: 48,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 16, fontWeight: 700, color: theme.textLight,
-                            fontFamily: "'Outfit', sans-serif",
-                            ...circleStyles[qStyle],
-                          }}>
-                            {n}
+                        {[1,2,3,4,5].map(n => (
+                          <div key={n} style={{ width:48,height:48,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,fontWeight:700,color:theme.textLight,fontFamily:"'Outfit',sans-serif",...circleStyles[qStyle] }}>
+                            <span style={{ width:10,height:10,borderRadius:'50%',background:theme.border }} />
                           </div>
                         ))}
                       </div>
@@ -2600,6 +2981,7 @@ const SurveyEditor: React.FC = () => {
                 Powered by <span style={{ color: theme.accent, fontWeight: 600 }}>Pepperwahl</span>
               </div>
             </div>
+            )  /* end of non-special-page branch */
           ) : (
             <div style={{ textAlign: 'center', color: theme.textLight, fontFamily: "'Outfit', sans-serif" }}>
               <p style={{ fontSize: 18, marginBottom: 12 }}>No questions yet</p>
@@ -2624,6 +3006,239 @@ const SurveyEditor: React.FC = () => {
             md:w-72 md:h-full
             ${mobilePanel === 'settings' ? 'flex w-full' : 'hidden md:flex'}
           `}>
+            {/* ── Special page settings panel ── */}
+            {(activeQ.type as string).startsWith('__') ? (() => {
+              const spType = activeQ.type as string;
+              const updateSP = (field: string, value: any) => {
+                const updated = { ...survey };
+                updated.questions = [...updated.questions];
+                (updated.questions[activeQuestionIndex] as any)[field] = value;
+                setSurvey(updated);
+              };
+              // aiGenLoading and aiGenMsg are declared at the top of SurveyEditor (Rules of Hooks)
+              const aiGenLoading = spAiLoading;
+              const aiGenMsg     = spAiMsg;
+
+              const generateWithAI = async (targetField: 'title' | 'body') => {
+                if (!survey) return;
+                setSpAiLoading(true);
+                setSpAiMsg('');
+                try {
+                  // Collect the 4 real questions surrounding this special page for context
+                  const realQs = survey.questions.filter(q => !(q.type as string).startsWith('__'));
+                  const nearbyIdx = survey.questions
+                    .slice(Math.max(0, activeQuestionIndex - 4), activeQuestionIndex)
+                    .filter(q => !(q.type as string).startsWith('__'))
+                    .map(q => q.question);
+                  const contextQuestions = nearbyIdx.join('; ') || realQs.slice(0, 4).map(q => q.question).join('; ');
+
+                  const surveyId = (survey as any).short_id || survey.id;
+                  const res = await fetch(`${apiBaseUrl}/api/surveys/${surveyId}/ai-generate-page-text`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                    },
+                    body: JSON.stringify({
+                      page_type: spType,
+                      field: targetField,
+                      context_questions: contextQuestions,
+                      ending_style: (activeQ as any).ending_style || 'thank_you',
+                    }),
+                  });
+                  if (!res.ok) throw new Error(`AI request failed (${res.status})`);
+                  const data = await res.json();
+                  const text = data.text || '';
+                  if (text) {
+                    updateSP(targetField, text);
+                    setSpAiMsg('Generated!');
+                  } else {
+                    setSpAiMsg('Could not generate — try again');
+                  }
+                } catch (err: any) {
+                  setSpAiMsg(`Generation failed: ${err.message || 'unknown error'}`);
+                } finally {
+                  setSpAiLoading(false);
+                  setTimeout(() => setSpAiMsg(''), 4000);
+                }
+              };
+
+              const labelColor = spType === '__description_page' ? 'text-cyan-700' : spType === '__summary_page' ? 'text-violet-700' : 'text-rose-700';
+              const accentBg   = spType === '__description_page' ? 'bg-cyan-600'   : spType === '__summary_page' ? 'bg-violet-600'   : 'bg-rose-600';
+              const pageIcon   = spType === '__description_page' ? '📝' : spType === '__summary_page' ? '📋' : '🎯';
+              const pageLabel  = spType === '__description_page' ? 'Description Page' : spType === '__summary_page' ? 'Summary Page' : 'Ending Page';
+
+              return (
+                <div className="flex flex-col flex-1">
+                  <div className="px-4 md:px-5 py-3 md:py-4 border-b border-gray-100">
+                    <h3 className={`text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5 ${labelColor}`}>
+                      <span>{pageIcon}</span> {pageLabel} Settings
+                    </h3>
+                  </div>
+                  <div className="px-4 md:px-5 py-4 space-y-4 flex-1">
+                    {/* Ending style selector (only for ending page) */}
+                    {spType === '__ending_page' && (
+                      <div>
+                        <label className="block text-[11px] font-semibold text-gray-600 mb-2 uppercase tracking-wide">Ending style</label>
+                        <div className="grid grid-cols-1 gap-1.5">
+                          {([
+                            { v:'thank_you',       l:'Thank you',       icon:'🎉', desc:'Animated celebration' },
+                            { v:'reward_code',     l:'Reward code',     icon:'🎁', desc:'Copyable code/link' },
+                            { v:'redirect_notice', l:'Redirect notice', icon:'↗',  desc:'Countdown + redirect' },
+                            { v:'screen_out',      l:'Screen-out',      icon:'🚫', desc:'Disqualification' },
+                          ] as const).map(s => {
+                            const active = ((activeQ as any).ending_style || 'thank_you') === s.v;
+                            return (
+                              <button key={s.v} type="button"
+                                onClick={() => updateSP('ending_style', s.v)}
+                                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border text-left transition-colors ${active ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                              >
+                                <span className="text-base">{s.icon}</span>
+                                <span className="flex-1">
+                                  <span className="block text-[11px] font-semibold">{s.l}</span>
+                                  <span className={`block text-[10px] ${active ? 'text-gray-400' : 'text-gray-400'}`}>{s.desc}</span>
+                                </span>
+                                {active && <span className="w-2 h-2 rounded-full bg-white opacity-80 flex-shrink-0" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Page style */}
+                    {(spType === '__description_page' || spType === '__summary_page') && (
+                      <div>
+                        <label className="block text-[11px] font-semibold text-gray-600 mb-2 uppercase tracking-wide">Page style</label>
+                        <div className="grid grid-cols-1 gap-1.5">
+                          {([
+                            { v:'standard', l:'Standard',  bg:'#ffffff',        accent:'#111827',  preview:'⬜ White card' },
+                            { v:'ocean',    l:'Ocean',     bg:'#ecfeff',        accent:'#0891b2',  preview:'🩵 Cyan card' },
+                            { v:'sunset',   l:'Sunset',    bg:'#fff7ed',        accent:'#ea580c',  preview:'🧡 Orange card' },
+                            { v:'forest',   l:'Forest',    bg:'#f0fdf4',        accent:'#16a34a',  preview:'💚 Green card' },
+                            { v:'dark',     l:'Dark',      bg:'#111827',        accent:'#a78bfa',  preview:'🖤 Dark card' },
+                          ] as { v:string; l:string; bg:string; accent:string; preview:string }[]).map(s => {
+                            const current = (activeQ as any).page_style || 'standard';
+                            const isActive = current === s.v;
+                            return (
+                              <button key={s.v} type="button"
+                                onClick={() => updateSP('page_style', s.v)}
+                                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border text-left transition-colors text-xs ${isActive ? 'border-gray-800 bg-gray-900 text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
+                              >
+                                <span style={{ width:18,height:18,borderRadius:5,background:s.bg,border:'1.5px solid #e5e7eb',flexShrink:0,display:'inline-block' }} />
+                                <span className="font-semibold">{s.l}</span>
+                                <span className={`text-[10px] ml-auto ${isActive ? 'text-gray-400' : 'text-gray-400'}`}>{s.preview}</span>
+                                {isActive && <span className="w-1.5 h-1.5 rounded-full bg-white flex-shrink-0" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Title */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Title / Heading</label>
+                        <button onClick={() => generateWithAI('title')} disabled={aiGenLoading}
+                          className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md transition-colors ${accentBg} text-white disabled:opacity-50`}>
+                          <Sparkles size={9} /> {aiGenLoading ? '…' : 'AI'}
+                        </button>
+                      </div>
+                      <input type="text" value={(activeQ as any).title || ''}
+                        onChange={e => updateSP('title', e.target.value)}
+                        placeholder={spType === '__description_page' ? 'Just a moment…' : spType === '__summary_page' ? 'So far, here is what you told us' : "You're awesome!"}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-400"
+                      />
+                    </div>
+
+                    {/* Body */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide">
+                          {spType === '__description_page' ? 'Body text' : spType === '__summary_page' ? 'Body text' : 'Message'}
+                        </label>
+                        <button onClick={() => generateWithAI('body')} disabled={aiGenLoading}
+                          className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md transition-colors ${accentBg} text-white disabled:opacity-50`}>
+                          <Sparkles size={9} /> {aiGenLoading ? '…' : 'AI'}
+                        </button>
+                      </div>
+                      <textarea rows={3} value={(activeQ as any).body || ''}
+                        onChange={e => updateSP('body', e.target.value)}
+                        placeholder={spType === '__description_page' ? 'The next questions are about…' : spType === '__summary_page' ? 'Change anything that is wrong.' : 'Thank you for your time.'}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+                      />
+                    </div>
+
+                    {/* CTA button label */}
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-600 uppercase tracking-wide mb-1">Button label</label>
+                      <input type="text" value={(activeQ as any).cta_text || ''}
+                        onChange={e => updateSP('cta_text', e.target.value)}
+                        placeholder={spType === '__ending_page' ? 'Leave blank to hide' : 'Continue →'}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-400"
+                      />
+                    </div>
+
+                    {/* Reward code field — only for ending page with reward_code style */}
+                    {spType === '__ending_page' && (activeQ as any).ending_style === 'reward_code' && (
+                      <div>
+                        <label className="block text-[11px] font-semibold text-gray-600 uppercase tracking-wide mb-1">Reward code</label>
+                        <input type="text" value={(activeQ as any).reward_code || ''}
+                          onChange={e => updateSP('reward_code', e.target.value)}
+                          placeholder="SAVE20"
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-red-400"
+                        />
+                      </div>
+                    )}
+
+                    {/* Redirect URL — only for ending page with redirect_notice style */}
+                    {spType === '__ending_page' && (activeQ as any).ending_style === 'redirect_notice' && (
+                      <>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-gray-600 uppercase tracking-wide mb-1">Redirect URL</label>
+                          <input type="url" value={(activeQ as any).redirect_url || ''}
+                            onChange={e => updateSP('redirect_url', e.target.value)}
+                            placeholder="https://yoursite.com"
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-gray-600 uppercase tracking-wide mb-1">
+                            Countdown (s) — {(activeQ as any).redirect_seconds ?? 5}s
+                          </label>
+                          <input type="range" min={2} max={15} value={(activeQ as any).redirect_seconds ?? 5}
+                            onChange={e => updateSP('redirect_seconds', parseInt(e.target.value))}
+                            className="w-full accent-red-500"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {aiGenMsg && (
+                      <p className={`text-[11px] font-medium ${aiGenMsg.includes('fail') || aiGenMsg.includes('not') ? 'text-red-500' : 'text-green-600'}`}>
+                        {aiGenMsg}
+                      </p>
+                    )}
+
+                    {/* Delete this page */}
+                    <div className="pt-3 border-t border-gray-100">
+                      <button
+                        onClick={() => {
+                          const updated = { ...survey, questions: survey.questions.filter((_, i) => i !== activeQuestionIndex) };
+                          setSurvey(updated);
+                          setActiveQuestionIndex(Math.max(0, activeQuestionIndex - 1));
+                        }}
+                        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 size={12} /> Remove this page
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })() : (
+            <>
             <div className="px-4 md:px-5 py-3 md:py-4 border-b border-gray-100">
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Question Settings</h3>
             </div>
@@ -2699,6 +3314,97 @@ const SurveyEditor: React.FC = () => {
                       }`} />
                     </div>
                   </label>
+                </div>
+              )}
+
+              {/* Rating style selector — only for rating type */}
+              {activeQ.type === 'rating' && (
+                <div className="pt-3 border-t border-gray-100">
+                  <label className="block text-xs font-medium text-gray-500 mb-2">Rating Style</label>
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {([
+                      { value: 'stars',   label: 'Stars',       icon: '★', desc: '5 gold star buttons', locked: false },
+                      { value: 'faces',   label: 'Faces',       icon: '😊', desc: '5 emoji expressions', locked: false },
+                      { value: 'slider',  label: 'Slider',      icon: '⟷', desc: 'Drag range 1–5',      locked: !hasFeature('rating_style_slider') },
+                      { value: 'numeric', label: 'Numeric',     icon: '1', desc: '5 numbered buttons',  locked: !hasFeature('rating_style_numeric') },
+                      { value: 'dots',    label: 'Classic dots','icon': '●', desc: '5 circle buttons',  locked: !hasFeature('rating_style_dots') },
+                    ] as { value: string; label: string; icon: string; desc: string; locked: boolean }[]).map(s => {
+                      const current = (activeQ as any).ratingStyle || 'stars';
+                      const active = current === s.value;
+                      return (
+                        <button key={s.value}
+                          onClick={() => {
+                            if (s.locked) return;
+                            const updated = { ...survey };
+                            updated.questions = [...updated.questions];
+                            (updated.questions[activeQuestionIndex] as any).ratingStyle = s.value;
+                            setSurvey(updated);
+                          }}
+                          title={s.locked ? 'Upgrade your plan to use this rating style' : s.desc}
+                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors border ${
+                            s.locked
+                              ? 'opacity-50 cursor-not-allowed text-gray-400 border-transparent'
+                              : active
+                                ? 'bg-amber-50 text-amber-700 font-medium border-amber-200'
+                                : 'text-gray-600 hover:bg-gray-50 border-transparent'
+                          }`}
+                        >
+                          <span className="text-base w-5 text-center flex-shrink-0">{s.icon}</span>
+                          <span className="flex-1 text-left">
+                            <span className="block text-[12px] font-semibold leading-tight">{s.label}</span>
+                            <span className="block text-[10px] text-gray-400 font-normal">{s.desc}</span>
+                          </span>
+                          {s.locked && <Lock size={10} className="ml-auto text-red-400 flex-shrink-0" />}
+                          {active && !s.locked && <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Inline preview of selected style */}
+                  <div className="mt-3 rounded-xl border border-gray-100 bg-gray-50 p-3 flex items-center justify-center" style={{ minHeight: 56 }}>
+                    {(() => {
+                      const rs = (activeQ as any).ratingStyle || 'stars';
+                      if (rs === 'stars') return (
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {[1,2,3,4,5].map(n => (
+                            <svg key={n} width="22" height="22" viewBox="0 0 24 24" fill={n <= 3 ? '#f59e0b' : 'none'} stroke={n <= 3 ? '#f59e0b' : '#d1d5db'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                            </svg>
+                          ))}
+                        </div>
+                      );
+                      if (rs === 'faces') return (
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          {['😞','😕','😐','😊','😄'].map((f,i) => (
+                            <span key={i} style={{ fontSize: 20, opacity: i === 3 ? 1 : 0.45 }}>{f}</span>
+                          ))}
+                        </div>
+                      );
+                      if (rs === 'slider') return (
+                        <div style={{ width: '100%', padding: '0 8px' }}>
+                          <input type="range" min={1} max={5} defaultValue={3} readOnly className="w-full" style={{ accentColor: '#ef4444' }} />
+                        </div>
+                      );
+                      if (rs === 'numeric') return (
+                        <div style={{ display: 'flex', gap: 5 }}>
+                          {[1,2,3,4,5].map(n => (
+                            <div key={n} style={{ width: 28, height: 28, borderRadius: 6, border: `2px solid ${n === 3 ? '#ef4444' : '#e5e7eb'}`, background: n === 3 ? '#ef4444' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: n === 3 ? '#fff' : '#6b7280' }}>{n}</div>
+                          ))}
+                        </div>
+                      );
+                      // dots
+                      return (
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          {[1,2,3,4,5].map(n => (
+                            <div key={n} style={{ width: 28, height: 28, borderRadius: '50%', border: `2px solid ${n <= 3 ? '#ef4444' : '#e5e7eb'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <span style={{ width: 8, height: 8, borderRadius: '50%', background: n <= 3 ? '#ef4444' : '#d1d5db' }} />
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
                 </div>
               )}
 
@@ -3303,6 +4009,8 @@ const SurveyEditor: React.FC = () => {
                 </button>
               </div>
             </div>
+            </>
+            )} {/* end special-page ternary */}
           </div>
         )}
       </div>

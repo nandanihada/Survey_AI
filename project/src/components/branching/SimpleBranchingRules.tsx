@@ -70,7 +70,7 @@ interface BranchingRule {
   }>;
   // Layers (result pages, spinners, chain surveys, end survey)
   layers: Array<{
-    type: 'result_page' | 'spinner' | 'chain_survey' | 'end_survey';
+    type: 'result_page' | 'spinner' | 'chain_survey' | 'end_survey' | 'info_page';
     variant?: 'pass' | 'fail';         // for result_page
     condition: string;                  // 'always' | answer value
     // result_page fields
@@ -80,6 +80,9 @@ interface BranchingRule {
     // spinner fields
     duration?: number;
     text?: string;
+    spinner_style?: 'spinner' | 'progress' | 'message' | 'skeleton';
+    // info_page fields
+    body?: string;
     // chain_survey fields
     survey_url?: string;
     chain_mode?: 'direct' | 'ask';
@@ -1289,12 +1292,13 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
                             const LAYER_TYPES = [
                               { type: 'result_page', variant: 'pass' as const, label: 'Pass Page', color: '#16a34a', bg: '#f0fdf4', border: '#86efac', icon: '✓' },
                               { type: 'result_page', variant: 'fail' as const, label: 'Fail Page', color: '#dc2626', bg: '#fff5f5', border: '#fecaca', icon: '✗' },
+                              { type: 'info_page', variant: undefined, label: 'Info Page', color: '#0891b2', bg: '#ecfeff', border: '#a5f3fc', icon: 'ℹ' },
                               { type: 'spinner', variant: undefined, label: 'Spinner', color: '#6366f1', bg: '#eef2ff', border: '#c7d2fe', icon: '⟳' },
                               { type: 'chain_survey', variant: undefined, label: 'Chain Survey', color: '#0369a1', bg: '#f0f9ff', border: '#bae6fd', icon: '→' },
                               { type: 'end_survey', variant: undefined, label: 'End Survey', color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe', icon: '⊙' },
                             ] as const;
-                            const getLayerDef = (layer: any) => LAYER_TYPES.find(t => t.type === layer.type && (t.type !== 'result_page' || t.variant === layer.variant)) || LAYER_TYPES[0];
-                            const getLayerSummary = (layer: any) => { if (layer.type==='result_page') return layer.title||(layer.variant==='pass'?'You qualify!':'Not this time'); if (layer.type==='spinner') return layer.text||'Verifying...'; if (layer.type==='chain_survey') return layer.chain_mode==='direct'?'Direct → survey':layer.chain_message||'Another survey waiting'; return 'Survey ends here'; };
+                            const getLayerDef = (layer: any) => (LAYER_TYPES as any[]).find((t: any) => t.type === layer.type && (t.type !== 'result_page' || t.variant === layer.variant)) || LAYER_TYPES[0];
+                            const getLayerSummary = (layer: any) => { if (layer.type==='result_page') return layer.title||(layer.variant==='pass'?'You qualify!':'Not this time'); if (layer.type==='info_page') return layer.title||'Info screen'; if (layer.type==='spinner') return layer.text||'Verifying...'; if (layer.type==='chain_survey') return layer.chain_mode==='direct'?'Direct → survey':layer.chain_message||'Another survey waiting'; return 'Survey ends here'; };
                             const layers = rule.layers || [];
                             const expandedLi = expandedLayerIdx[index] ?? null;
                             return (
@@ -1349,10 +1353,37 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
                                                   <div className="field-row"><label>Subtitle</label><input type="text" className="url-input" value={layer.subtitle||''} onChange={(e)=>{const u=[...layers];u[li]={...u[li],subtitle:e.target.value};updateRule(index,'layers',u);}} placeholder={layer.variant==='pass'?'You meet all requirements.':"You don't meet the criteria."}/></div>
                                                   <div className="field-row"><label>Button label</label><input type="text" className="url-input" value={layer.cta_text||''} style={{maxWidth:180}} onChange={(e)=>{const u=[...layers];u[li]={...u[li],cta_text:e.target.value};updateRule(index,'layers',u);}} placeholder="Continue"/></div>
                                                 </>)}
+                                                {layer.type==='info_page'&&(<>
+                                                  <div className="field-row"><label>Title</label><input type="text" className="url-input" value={layer.title||''} onChange={(e)=>{const u=[...layers];u[li]={...u[li],title:e.target.value};updateRule(index,'layers',u);}} placeholder="Just a moment…"/></div>
+                                                  <div className="field-row"><label>Body text</label><textarea className="url-input" rows={3} style={{resize:'vertical'}} value={layer.body||''} onChange={(e)=>{const u=[...layers];u[li]={...u[li],body:e.target.value};updateRule(index,'layers',u);}} placeholder="Add context or instructions between questions."/></div>
+                                                  <div className="field-row"><label>Continue button label</label><input type="text" className="url-input" value={layer.cta_text||''} style={{maxWidth:200}} onChange={(e)=>{const u=[...layers];u[li]={...u[li],cta_text:e.target.value};updateRule(index,'layers',u);}} placeholder="Continue →"/></div>
+                                                </>)}
                                                 {layer.type==='spinner'&&(
-                                                  <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
-                                                    <div className="field-row" style={{flex:1,minWidth:140}}><label>Text shown</label><input type="text" className="url-input" value={layer.text||''} onChange={(e)=>{const u=[...layers];u[li]={...u[li],text:e.target.value};updateRule(index,'layers',u);}} placeholder="Verifying..."/></div>
-                                                    <div className="field-row" style={{width:90}}><label>Duration (s)</label><input type="number" className="url-input" min={1} max={30} value={layer.duration??3} onChange={(e)=>{const u=[...layers];u[li]={...u[li],duration:Number(e.target.value)};updateRule(index,'layers',u);}}/></div>
+                                                  <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                                                    <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+                                                      <div className="field-row" style={{flex:1,minWidth:140}}><label>Text shown</label><input type="text" className="url-input" value={layer.text||''} onChange={(e)=>{const u=[...layers];u[li]={...u[li],text:e.target.value};updateRule(index,'layers',u);}} placeholder="Verifying..."/></div>
+                                                      <div className="field-row" style={{width:90}}><label>Duration (s)</label><input type="number" className="url-input" min={1} max={30} value={layer.duration??3} onChange={(e)=>{const u=[...layers];u[li]={...u[li],duration:Number(e.target.value)};updateRule(index,'layers',u);}}/></div>
+                                                    </div>
+                                                    <div className="field-row">
+                                                      <label>Loading style</label>
+                                                      <div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:4}}>
+                                                        {([
+                                                          {v:'spinner',    l:'Spinner',      icon:'⟳', desc:'Rotating ring'},
+                                                          {v:'progress',   l:'Progress bar', icon:'▬', desc:'Animated bar'},
+                                                          {v:'message',    l:'Message',      icon:'💬', desc:'Text only'},
+                                                          {v:'skeleton',   l:'Skeleton',     icon:'▒', desc:'Placeholder blocks'},
+                                                        ] as {v:string;l:string;icon:string;desc:string}[]).map(s=>{
+                                                          const active=(layer.spinner_style||'spinner')===s.v;
+                                                          return (
+                                                            <button key={s.v} type="button"
+                                                              title={s.desc}
+                                                              style={{padding:'5px 10px',borderRadius:7,border:`1.5px solid ${active?'#6366f1':'#e5e7eb'}`,background:active?'#eef2ff':'#fff',color:active?'#6366f1':'#6b7280',fontSize:11,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',gap:4}}
+                                                              onClick={()=>{const u=[...layers];u[li]={...u[li],spinner_style:s.v};updateRule(index,'layers',u);}}
+                                                            ><span>{s.icon}</span>{s.l}</button>
+                                                          );
+                                                        })}
+                                                      </div>
+                                                    </div>
                                                   </div>
                                                 )}
                                                 {layer.type==='chain_survey'&&(
@@ -1393,7 +1424,8 @@ const SimpleBranchingRules: React.FC<Props> = ({ surveyId, onClose, onRulesSaved
                                         onClick={()=>{
                                           const nl: any={type:t.type,condition:'always'};
                                           if(t.type==='result_page'){nl.variant=t.variant;nl.title='';nl.subtitle='';nl.cta_text='Continue';}
-                                          if(t.type==='spinner'){nl.text='Verifying...';nl.duration=3;}
+                                          if(t.type==='info_page'){nl.title='';nl.body='';nl.cta_text='Continue →';}
+                                          if(t.type==='spinner'){nl.text='Verifying...';nl.duration=3;nl.spinner_style='spinner';}
                                           if(t.type==='chain_survey'){nl.survey_url='';nl.chain_mode='ask';nl.chain_message='Another survey is waiting!';nl.chain_yes_label='Continue';nl.chain_no_label='No thanks';}
                                           updateRule(index,'layers',[...layers,nl]);
                                           setExpandedLayerIdx(prev=>({...prev,[index]:layers.length}));

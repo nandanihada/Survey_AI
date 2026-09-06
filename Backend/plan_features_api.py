@@ -299,6 +299,72 @@ DEFAULT_PLAN_FEATURES = {
         "category": "editor_ai",
         "free": False, "premium": True, "enterprise": True
     },
+
+    # ── Editor: Special pages ──────────────────────────────────────────────────
+    "editor_description_page": {
+        "label": "Special Page: Description",
+        "description": "Add a description / interstitial page between questions",
+        "category": "editor_special_pages",
+        "free": False, "premium": True, "enterprise": True
+    },
+    "editor_summary_page": {
+        "label": "Special Page: Summary",
+        "description": "Add a mid-survey summary page showing answers so far",
+        "category": "editor_special_pages",
+        "free": False, "premium": True, "enterprise": True
+    },
+    "editor_ending_page": {
+        "label": "Special Page: Ending",
+        "description": "Add a custom ending / thank-you page inline in the survey",
+        "category": "editor_special_pages",
+        "free": True, "premium": True, "enterprise": True
+    },
+
+    # ── Rating styles ──────────────────────────────────────────────────────────
+    "rating_style_stars": {
+        "label": "Rating Style: Stars",
+        "description": "Gold star rating buttons (1–5)",
+        "category": "editor_rating_styles",
+        "free": True, "premium": True, "enterprise": True
+    },
+    "rating_style_faces": {
+        "label": "Rating Style: Faces",
+        "description": "Emoji expression rating (1–5)",
+        "category": "editor_rating_styles",
+        "free": False, "premium": True, "enterprise": True
+    },
+    "rating_style_slider": {
+        "label": "Rating Style: Slider",
+        "description": "Drag range slider rating (1–5)",
+        "category": "editor_rating_styles",
+        "free": False, "premium": True, "enterprise": True
+    },
+    "rating_style_numeric": {
+        "label": "Rating Style: Numeric",
+        "description": "Numbered button rating (1–5)",
+        "category": "editor_rating_styles",
+        "free": False, "premium": True, "enterprise": True
+    },
+    "rating_style_dots": {
+        "label": "Rating Style: Classic Dots",
+        "description": "Circle dot rating buttons (1–5)",
+        "category": "editor_rating_styles",
+        "free": False, "premium": False, "enterprise": True
+    },
+
+    # ── Funnel features ───────────────────────────────────────────────────────
+    "funnel_spinner_style": {
+        "label": "Funnel: Between-Survey Spinner",
+        "description": "Customize the loading style shown between funnel surveys",
+        "category": "funnel",
+        "free": False, "premium": True, "enterprise": True
+    },
+    "funnel_ending_styles": {
+        "label": "Funnel: Ending Page Styles",
+        "description": "Reward code, redirect notice, screen-out ending pages",
+        "category": "funnel",
+        "free": False, "premium": True, "enterprise": True
+    },
 }
 
 PLAN_FEATURES_CONFIG_ID = "global_plan_features"

@@ -29,6 +29,9 @@ const CATEGORY_LABELS: Record<string, string> = {
   editor_images: '🖼 Image Settings',
   editor_branching: '🔀 Branching',
   editor_ai: '🤖 AI Features',
+  editor_special_pages: '📄 Special Pages',
+  editor_rating_styles: '⭐ Rating Styles',
+  funnel: '🔁 Funnel Features',
   other: '⚙️ Other',
 };
 

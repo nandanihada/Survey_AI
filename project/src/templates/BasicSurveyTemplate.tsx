@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useCallback, useMemo } from 'react';
+﻿﻿﻿﻿﻿﻿﻿import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import './BasicSurveyTemplate.css';
@@ -177,6 +177,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     matrixColumns: (q as any).matrixColumns || [],
     questionVideo: (q as any).questionVideo,
     questionVideoTitle: (q as any).questionVideoTitle,
+    ratingStyle: (q as any).ratingStyle,
   }));
 
   const [formData, setFormData] = useState<Record<string, string | number>>(() => {
@@ -200,6 +201,8 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [transitionCountdown, setTransitionCountdown] = useState(0);
+  // Summary page — shown before final submit when survey.show_summary_page is true
+  const [showSummary, setShowSummary] = useState(false);
   // Chain survey state — shown mid-survey or post-completion
   const [chainSurveyPrompt, setChainSurveyPrompt] = useState<{
     url: string;
@@ -210,13 +213,15 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   } | null>(null);
   // Layer queue state
   const [layerQueue, setLayerQueue] = useState<Array<{
-    type: 'result_page' | 'spinner' | 'chain_survey' | 'end_survey';
+    type: 'result_page' | 'spinner' | 'chain_survey' | 'end_survey' | 'info_page';
     variant?: 'pass' | 'fail';
     title?: string;
     subtitle?: string;
     cta_text?: string;
     duration?: number;
     text?: string;
+    spinner_style?: 'dual-ring' | 'dots' | 'pulse' | 'bar';
+    body?: string;
     survey_url?: string;
     chain_mode?: 'direct' | 'ask';
     chain_message?: string;
@@ -546,8 +551,11 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   };
 
   const currentQuestion = visibleQuestions[currentQuestionIndex];
+  // Special pages (description, summary, ending) are always "answered" — they just need a Continue click
   const isCurrentAnswered = currentQuestion
-    ? currentQuestion.type === 'range'
+    ? ((currentQuestion as any).rawType?.startsWith('__'))
+      ? true
+      : currentQuestion.type === 'range'
       ? formData[currentQuestion.id] !== undefined && formData[currentQuestion.id] !== ''
       : currentQuestion.type === 'matrix'
         ? (() => {
@@ -915,6 +923,8 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     // (end_here may have stopped us before all questions were answered)
     const questionsToValidate = visibleQuestions.slice(0, currentQuestionIndex + 1);
     const unanswered = questionsToValidate.find(q => {
+      // Skip special virtual pages — they have no answer
+      if ((q as any).rawType?.startsWith('__')) return false;
       const val = formData[q.id];
       if (q.type === 'range') {
         return val === undefined || val === '';
@@ -1277,6 +1287,148 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           rows={1}
         />
       </motion.div>
+    );
+  };
+
+  const renderRating = (question: Question) => {
+    const style = (question as any).ratingStyle || 'stars';
+    const selected = Number(formData[question.id]) || 0;
+
+    if (style === 'stars') {
+      return (
+        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          {[1, 2, 3, 4, 5].map(n => {
+            const filled = n <= selected;
+            const aVariants = getAnswerVariants(survey.animation, n - 1);
+            return (
+              <motion.button key={n} type="button"
+                variants={aVariants} initial="initial" animate="animate"
+                whileTap={{ scale: 0.85 }}
+                onClick={() => handleAnswer(question.id, n)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}
+                aria-label={`${n} star${n > 1 ? 's' : ''}`}
+              >
+                <svg width="36" height="36" viewBox="0 0 24 24" fill={filled ? '#f59e0b' : 'none'}
+                  stroke={filled ? '#f59e0b' : '#d1d5db'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+              </motion.button>
+            );
+          })}
+        </div>
+      );
+    }
+
+    if (style === 'faces') {
+      const faces = ['😞', '😕', '😐', '😊', '😄'];
+      const labels = ['Terrible', 'Bad', 'Okay', 'Good', 'Great'];
+      return (
+        <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+          {faces.map((face, i) => {
+            const val = i + 1;
+            const isSelected = selected === val;
+            const aVariants = getAnswerVariants(survey.animation, i);
+            return (
+              <motion.button key={val} type="button"
+                variants={aVariants} initial="initial" animate="animate"
+                whileTap={{ scale: 0.88 }}
+                onClick={() => handleAnswer(question.id, val)}
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  padding: '10px 14px', borderRadius: 12, border: `2px solid ${isSelected ? '#6366f1' : '#e5e7eb'}`,
+                  background: isSelected ? '#eef2ff' : '#fff', cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+                aria-label={labels[i]}
+              >
+                <span style={{ fontSize: 28, lineHeight: 1 }}>{face}</span>
+                <span style={{ fontSize: 10, fontWeight: 600, color: isSelected ? '#6366f1' : '#9ca3af', fontFamily: "'Outfit', sans-serif" }}>{labels[i]}</span>
+              </motion.button>
+            );
+          })}
+        </div>
+      );
+    }
+
+    if (style === 'slider') {
+      const sliderVal = selected || 3;
+      return (
+        <div style={{ marginTop: 8, padding: '0 4px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 11, color: '#9ca3af', fontFamily: "'Outfit', sans-serif" }}>
+            <span>1 — Terrible</span><span>5 — Excellent</span>
+          </div>
+          <input
+            type="range" min={1} max={5} step={1}
+            value={sliderVal}
+            onChange={e => handleAnswer(question.id, parseInt(e.target.value))}
+            style={{ width: '100%', accentColor: '#ef4444', height: 6, cursor: 'pointer' }}
+            aria-label="Rating slider"
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+            {[1,2,3,4,5].map(n => (
+              <span key={n} style={{ fontSize: 11, fontWeight: sliderVal === n ? 700 : 400, color: sliderVal === n ? '#ef4444' : '#9ca3af', fontFamily: "'Outfit', sans-serif" }}>{n}</span>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (style === 'numeric') {
+      return (
+        <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+          {[1, 2, 3, 4, 5].map(n => {
+            const isSelected = selected === n;
+            const aVariants = getAnswerVariants(survey.animation, n - 1);
+            return (
+              <motion.button key={n} type="button"
+                variants={aVariants} initial="initial" animate="animate"
+                whileTap={{ scale: 0.88 }}
+                onClick={() => handleAnswer(question.id, n)}
+                style={{
+                  width: 52, height: 52, borderRadius: 10,
+                  border: `2px solid ${isSelected ? '#ef4444' : '#e5e7eb'}`,
+                  background: isSelected ? '#ef4444' : '#fff',
+                  color: isSelected ? '#fff' : '#374151',
+                  fontSize: 18, fontWeight: 700, cursor: 'pointer',
+                  fontFamily: "'Outfit', sans-serif",
+                  boxShadow: isSelected ? '0 4px 14px rgba(239,68,68,0.3)' : '0 1px 3px rgba(0,0,0,0.05)',
+                  transition: 'all 0.15s',
+                }}
+                aria-label={`Rate ${n}`}
+              >
+                {n}
+              </motion.button>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // style === 'dots' (classic dots / nps-style circles)
+    return (
+      <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+        {[1, 2, 3, 4, 5].map(n => {
+          const isSelected = selected === n;
+          const aVariants = getAnswerVariants(survey.animation, n - 1);
+          return (
+            <motion.button key={n} type="button"
+              variants={aVariants} initial="initial" animate="animate"
+              whileTap={{ scale: 0.88 }}
+              onClick={() => handleAnswer(question.id, n)}
+              style={{
+                width: 44, height: 44, borderRadius: '50%',
+                border: `2px solid ${isSelected ? '#ef4444' : '#e5e7eb'}`,
+                background: isSelected ? '#ef4444' : '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', transition: 'all 0.15s',
+              }}
+              aria-label={`Rate ${n}`}
+            >
+              <span style={{ width: 10, height: 10, borderRadius: '50%', background: isSelected ? '#fff' : '#d1d5db' }} />
+            </motion.button>
+          );
+        })}
+      </div>
     );
   };
 
@@ -1677,7 +1829,8 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         {question.type === 'radio' && question.rawType !== 'likert' && renderRadioOptions(question)}
         {question.type === 'text' && question.rawType === 'numeric' && renderNumeric(question)}
         {question.type === 'text' && question.rawType !== 'numeric' && renderTextInput(question)}
-        {question.type === 'range' && renderScale(question)}
+        {question.type === 'range' && question.rawType === 'rating' && renderRating(question)}
+        {question.type === 'range' && question.rawType !== 'rating' && renderScale(question)}
         {question.type === 'ranking' && renderRanking(question)}
         {question.type === 'dropdown' && renderDropdown(question)}
         {question.type === 'dropdown_multi' && renderDropdownMulti(question)}
@@ -1968,333 +2121,265 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         </h1>
       </div>
 
+      {/* ── Special pages: Description / Summary — full-screen fixed overlay ── */}
+      {currentQuestion && (currentQuestion as any).rawType?.startsWith('__') && (() => {
+        const spCurrent = (currentQuestion as any).rawType as string;
+        const spTitle   = (currentQuestion as any).title    || '';
+        const spBody    = (currentQuestion as any).body     || '';
+        const spCta     = (currentQuestion as any).cta_text || 'Continue →';
+        const ps        = (currentQuestion as any).page_style || 'standard';
+
+        // Style map — 5 themes matching the editor picker
+        const STYLES: Record<string,{outerBg:string;cardBg:string;border:string;accent:string;headColor:string;textColor:string;btnBg:string;labelColor:string;rowOdd:string;rowEven:string;rowBorder:string}> = {
+          standard: {outerBg:'#eef0f3',cardBg:'#ffffff',border:'#e5e7eb',accent:'#111827',headColor:'#111827',textColor:'#6b7280',btnBg:'#111827',labelColor:'#9ca3af',rowOdd:'#f9fafb',rowEven:'#ffffff',rowBorder:'#f3f4f6'},
+          ocean:    {outerBg:'#e0f7fa',cardBg:'#ffffff',border:'#a5f3fc',accent:'#0891b2',headColor:'#164e63',textColor:'#374151',btnBg:'#0891b2',labelColor:'#0891b2',rowOdd:'#f0fdff',rowEven:'#ffffff',rowBorder:'#cffafe'},
+          sunset:   {outerBg:'#fff3e8',cardBg:'#ffffff',border:'#fed7aa',accent:'#ea580c',headColor:'#431407',textColor:'#374151',btnBg:'#ea580c',labelColor:'#ea580c',rowOdd:'#fff3e8',rowEven:'#ffffff',rowBorder:'#fed7aa'},
+          forest:   {outerBg:'#e8f5e9',cardBg:'#ffffff',border:'#bbf7d0',accent:'#16a34a',headColor:'#14532d',textColor:'#374151',btnBg:'#16a34a',labelColor:'#16a34a',rowOdd:'#f0fdf4',rowEven:'#ffffff',rowBorder:'#bbf7d0'},
+          dark:     {outerBg:'#111827',cardBg:'#1f2937',border:'#374151',accent:'#a78bfa',headColor:'#f9fafb',textColor:'rgba(255,255,255,0.65)',btnBg:'#7c3aed',labelColor:'#a78bfa',rowOdd:'#111827',rowEven:'#1f2937',rowBorder:'#374151'},
+        };
+        const st = STYLES[ps] || STYLES.standard;
+
+        const advanceSP = () => {
+          if (currentQuestionIndex < visibleQuestions.length - 1) {
+            setCurrentQuestionIndex(prev => prev + 1);
+          } else if (formRef.current) { formRef.current.requestSubmit(); }
+        };
+
+        if (spCurrent === '__description_page') return (
+          <motion.div
+            key={currentQuestion.id}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 9996,
+              background: st.outerBg,
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+              padding: '40px 20px',
+              fontFamily: "'Outfit', sans-serif",
+            }}
+          >
+            <div style={{ flex: 1 }} />
+            <motion.div
+              initial={{ scale: 0.93, y: 24, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 220, damping: 26, delay: 0.06 }}
+              style={{ width: '100%', maxWidth: 460, background: st.cardBg, borderRadius: 20, boxShadow: '0 4px 32px rgba(0,0,0,0.10)', padding: '44px 40px 40px', border: `2px solid ${st.border}` }}
+            >
+              <motion.div
+                initial={{ scale: 0 }} animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 260, damping: 20, delay: 0.12 }}
+                style={{ width: 64, height: 64, borderRadius: 16, background: st.btnBg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 24, fontSize: 28 }}
+              >
+                📝
+              </motion.div>
+              <motion.p initial={{ opacity:0,y:8 }} animate={{ opacity:1,y:0 }} transition={{ delay:0.2 }}
+                style={{ margin:'0 0 10px', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:1.4, color:st.labelColor }}>
+                Description
+              </motion.p>
+              <motion.h2 initial={{ opacity:0,y:10 }} animate={{ opacity:1,y:0 }} transition={{ delay:0.26 }}
+                style={{ margin:'0 0 16px', fontSize:26, fontWeight:800, color:st.headColor, lineHeight:1.2, fontFamily:"'Playfair Display',Georgia,serif", letterSpacing:'-0.01em' }}>
+                {spTitle || 'Just a moment'}
+              </motion.h2>
+              {spBody && (
+                <motion.p initial={{ opacity:0,y:8 }} animate={{ opacity:1,y:0 }} transition={{ delay:0.34 }}
+                  style={{ margin:'0 0 32px', fontSize:15, color:st.textColor, lineHeight:1.7 }}>
+                  {spBody}
+                </motion.p>
+              )}
+              <motion.button
+                type="button" onClick={advanceSP}
+                initial={{ opacity:0,y:8 }} animate={{ opacity:1,y:0 }} transition={{ delay:0.42 }}
+                whileHover={{ scale:1.02, y:-1 }} whileTap={{ scale:0.98 }}
+                style={{ padding:'13px 32px', borderRadius:10, border:'none', background:st.btnBg, color:'#fff', fontWeight:600, fontSize:15, cursor:'pointer', fontFamily:"'Outfit',sans-serif", boxShadow:`0 4px 18px rgba(0,0,0,0.18)` }}
+              >
+                {spCta}
+              </motion.button>
+            </motion.div>
+            <div style={{ flex: 1 }} />
+            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay:0.55 }}
+              style={{ display:'flex',alignItems:'center',gap:8,marginTop:24 }}>
+              <img src="/logo.png" alt="Pepperwahl" style={{ width:18,height:18,borderRadius:4,opacity:0.55 }} />
+              <span style={{ fontSize:11,fontWeight:700,letterSpacing:2,textTransform:'uppercase',color:'#9ca3af',fontFamily:"'Outfit',sans-serif" }}>Powered by Pepperwahl</span>
+            </motion.div>
+          </motion.div>
+        );
+
+        if (spCurrent === '__summary_page') {
+          const answeredSP = visibleQuestions.slice(0, currentQuestionIndex).filter((vq: any) => !vq.rawType?.startsWith('__'));
+          return (
+            <motion.div
+              key={currentQuestion.id}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}
+              style={{
+                position: 'fixed', inset: 0, zIndex: 9996,
+                background: st.outerBg,
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center',
+                padding: '40px 20px',
+                fontFamily: "'Outfit', sans-serif",
+              }}
+            >
+              <div style={{ flex: 1 }} />
+              <motion.div
+                initial={{ scale: 0.93, y: 24, opacity: 0 }}
+                animate={{ scale: 1, y: 0, opacity: 1 }}
+                transition={{ type: 'spring', stiffness: 220, damping: 26, delay: 0.06 }}
+                style={{ width: '100%', maxWidth: 500, background: st.cardBg, borderRadius: 20, boxShadow: '0 4px 32px rgba(0,0,0,0.10)', padding: '36px 36px 32px', maxHeight: '72vh', display: 'flex', flexDirection: 'column', border: `2px solid ${st.border}` }}
+              >
+                <motion.div
+                  initial={{ scale: 0 }} animate={{ scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 260, damping: 20, delay: 0.12 }}
+                  style={{ width:56, height:56, borderRadius:14, background:st.btnBg, display:'flex', alignItems:'center', justifyContent:'center', marginBottom:20, fontSize:24, flexShrink:0 }}
+                >
+                  📋
+                </motion.div>
+                <motion.p initial={{ opacity:0,y:6 }} animate={{ opacity:1,y:0 }} transition={{ delay:0.2 }}
+                  style={{ margin:'0 0 8px',fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:1.4,color:st.labelColor }}>
+                  Your answers so far
+                </motion.p>
+                <motion.h2 initial={{ opacity:0,y:8 }} animate={{ opacity:1,y:0 }} transition={{ delay:0.26 }}
+                  style={{ margin:'0 0 4px',fontSize:22,fontWeight:800,color:st.headColor,lineHeight:1.2,fontFamily:"'Playfair Display',Georgia,serif" }}>
+                  {spTitle || 'So far, here is what you told us'}
+                </motion.h2>
+                <motion.p initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay:0.3 }}
+                  style={{ margin:'0 0 16px',fontSize:13,color:st.textColor }}>
+                  {spBody || 'Change anything that is wrong.'}
+                </motion.p>
+                <div style={{ overflowY:'auto', flex:1, border:`1px solid ${st.rowBorder}`, borderRadius:12, marginBottom:20 }}>
+                  {answeredSP.length === 0 ? (
+                    <p style={{ padding:'16px',fontSize:13,color:'#9ca3af',margin:0,textAlign:'center' }}>No answers yet before this page.</p>
+                  ) : answeredSP.map((aq: any, ai: number) => {
+                    const rawVal = formData[aq.id];
+                    const displayVal = rawVal !== undefined && rawVal !== null && rawVal !== '' ? String(rawVal) : '—';
+                    return (
+                      <div key={aq.id} style={{ display:'flex',justifyContent:'space-between',alignItems:'center',padding:'11px 16px',background:ai%2===0?st.rowEven:st.rowOdd,borderBottom:ai<answeredSP.length-1?`1px solid ${st.rowBorder}`:'none' }}>
+                        <span style={{ fontSize:13,color:st.textColor,flex:1,marginRight:12,lineHeight:1.4 }}>{aq.question}</span>
+                        <span style={{ fontSize:13,fontWeight:600,color:st.headColor,maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flexShrink:0 }}>{displayVal}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <motion.button
+                  type="button" onClick={advanceSP}
+                  initial={{ opacity:0,y:8 }} animate={{ opacity:1,y:0 }} transition={{ delay:0.44 }}
+                  whileHover={{ scale:1.02, y:-1 }} whileTap={{ scale:0.98 }}
+                  style={{ padding:'13px 32px',borderRadius:10,border:'none',background:st.btnBg,color:'#fff',fontWeight:600,fontSize:15,cursor:'pointer',fontFamily:"'Outfit',sans-serif",boxShadow:'0 4px 18px rgba(0,0,0,0.18)',flexShrink:0 }}
+                >
+                  {spCta}
+                </motion.button>
+              </motion.div>
+              <div style={{ flex: 1 }} />
+              <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay:0.55 }}
+                style={{ display:'flex',alignItems:'center',gap:8,marginTop:24 }}>
+                <img src="/logo.png" alt="Pepperwahl" style={{ width:18,height:18,borderRadius:4,opacity:0.55 }} />
+                <span style={{ fontSize:11,fontWeight:700,letterSpacing:2,textTransform:'uppercase',color:'#9ca3af',fontFamily:"'Outfit',sans-serif" }}>Powered by Pepperwahl</span>
+              </motion.div>
+            </motion.div>
+          );
+        }
+        return null; // __ending_page handled by success overlay
+      })()}
+
+
+      {/* ── Paper card (hidden when a special page is active) ── */}
+      {!(currentQuestion && (currentQuestion as any).rawType?.startsWith('__')) && (<>
       <div className="pepper-card-wrapper">
-        {/* Clip � just above the paper card top edge */}
+        {/* Clip – just above the paper card top edge */}
         <div style={{ position: 'absolute', top: '-18px', left: '30px', zIndex: 20, width: '36px', height: '36px', transform: 'rotate(-20deg)', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))' }}>
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="36" height="36">
             <path fill="#2D2520" d="M288.6 76.8C344.8 20.6 436 20.6 492.2 76.8C548.4 133 548.4 224.2 492.2 280.4L328.2 444.4C293.8 478.8 238.1 478.8 203.7 444.4C169.3 410 169.3 354.3 203.7 319.9L356.5 167.3C369 154.8 389.3 154.8 401.8 167.3C414.3 179.8 414.3 200.1 401.8 212.6L249 365.3C239.6 374.7 239.6 389.9 249 399.2C258.4 408.5 273.6 408.6 282.9 399.2L446.9 235.2C478.1 204 478.1 153.3 446.9 122.1C415.7 90.9 365 90.9 333.8 122.1L169.8 286.1C116.7 339.2 116.7 425.3 169.8 478.4C222.9 531.5 309 531.5 362.1 478.4L492.3 348.3C504.8 335.8 525.1 335.8 537.6 348.3C550.1 360.8 550.1 381.1 537.6 393.6L407.4 523.6C329.3 601.7 202.7 601.7 124.6 523.6C46.5 445.5 46.5 318.9 124.6 240.8L288.6 76.8z"/>
           </svg>
         </div>
-
         <div className={`pepper-card ${previewMode ? 'preview-mode' : ''}`}>
-
-        {/* Progress Bar (hidden via CSS) */}
-        <div className="pepper-progress">
-          <div className="pepper-progress-track" style={{ '--progress-width': `${((currentQuestionIndex + 1) / visibleQuestions.length) * 100}%` } as React.CSSProperties}>
+          {/* Progress Bar */}
+          <div className="pepper-progress">
+            <div className="pepper-progress-track" style={{ '--progress-width': `${((currentQuestionIndex + 1) / visibleQuestions.length) * 100}%` } as React.CSSProperties}>
+            </div>
+            <span className="pepper-progress-counter">
+              {currentQuestionIndex + 1}/{visibleQuestions.length}
+            </span>
           </div>
-          <span className="pepper-progress-counter">
-            {currentQuestionIndex + 1}/{visibleQuestions.length}
-          </span>
+          {/* Questions */}
+          <form onSubmit={handleSubmit} ref={formRef}>
+            {chainSurveyPrompt && chainSurveyPrompt.mode === 'inline' ? (
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ type: 'spring', stiffness: 240, damping: 22 }}
+                style={{ padding: '8px 0 16px', textAlign: 'center' }}
+              >
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 20, padding: '4px 14px', marginBottom: 20 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', letterSpacing: 1, fontFamily: "'Outfit', sans-serif" }}>Continue Your Journey</span>
+                </div>
+                <div style={{ fontSize: 40, marginBottom: 16 }}>📋</div>
+                <h3 style={{ margin: '0 0 10px', fontSize: 22, fontWeight: 800, color: '#111827', lineHeight: 1.3, fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.02em' }}>
+                  {chainSurveyPrompt.message}
+                </h3>
+                <p style={{ margin: '0 0 28px', fontSize: 14, color: '#6b7280', lineHeight: 1.6, fontFamily: "'Outfit', sans-serif" }}>
+                  A short survey awaits — it takes just a few minutes.
+                </p>
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'center', maxWidth: 380, margin: '0 auto' }}>
+                  <motion.button type="button" whileHover={{ scale: 1.03, y: -1 }} whileTap={{ scale: 0.97 }}
+                    onClick={() => { window.location.href = chainSurveyPrompt.url; }}
+                    style={{ flex: 1, padding: '14px 20px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer', fontFamily: "'Outfit', sans-serif", boxShadow: '0 4px 16px rgba(239,68,68,0.35)' }}>
+                    {chainSurveyPrompt.yesLabel} →
+                  </motion.button>
+                  <motion.button type="button" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                    onClick={() => setChainSurveyPrompt(null)}
+                    style={{ flex: 1, padding: '14px 20px', borderRadius: 14, border: '1.5px solid #e5e7eb', background: '#f9fafb', color: '#374151', fontWeight: 600, fontSize: 15, cursor: 'pointer', fontFamily: "'Outfit', sans-serif" }}>
+                    {chainSurveyPrompt.noLabel}
+                  </motion.button>
+                </div>
+              </motion.div>
+            ) : (
+              <AnimatePresence mode="wait">
+                {visibleQuestions.map((q, i) => renderQuestion(q, i))}
+              </AnimatePresence>
+            )}
+            {/* Footer Navigation */}
+            {!previewMode && (
+              <div className="pepper-footer">
+                {currentQuestionIndex > 0 && backButtonEnabled ? (
+                  <button type="button" className="pepper-btn pepper-btn-back" onClick={handlePrev} disabled={isTransitioning}>
+                    <span className="arrow">←</span> Back
+                  </button>
+                ) : (<div />)}
+                {currentQuestionIndex < visibleQuestions.length - 1 ? (
+                  <button type="button" className="pepper-btn pepper-btn-next" onClick={handleNext} disabled={!isCurrentAnswered || isTransitioning}>
+                    {isTransitioning ? (
+                      <><span className="pepper-transition-spinner" />{transitionCountdown > 0 ? `${transitionCountdown}s` : '…'}</>
+                    ) : (<>Next <span className="arrow">→</span></>)}
+                  </button>
+                ) : (
+                  <button type="submit" className="pepper-btn pepper-btn-submit" disabled={!isCurrentAnswered || isTransitioning}
+                    onClick={(e) => { if (survey.show_summary_page && !showSummary && !previewMode) { e.preventDefault(); setShowSummary(true); } }}>
+                    Submit
+                  </button>
+                )}
+              </div>
+            )}
+            {previewMode && (
+              <div className="pepper-footer">
+                {currentQuestionIndex > 0 ? (
+                  <button type="button" className="pepper-btn pepper-btn-back" onClick={handlePrev}><span className="arrow">←</span> Back</button>
+                ) : (<div />)}
+                {currentQuestionIndex < visibleQuestions.length - 1 ? (
+                  <button type="button" className="pepper-btn pepper-btn-next" onClick={() => setCurrentQuestionIndex(prev => prev + 1)}>Next <span className="arrow">→</span></button>
+                ) : (<button type="submit" className="pepper-btn pepper-btn-submit">Submit</button>)}
+              </div>
+            )}
+            {!previewMode && isCurrentAnswered && currentQuestionIndex < visibleQuestions.length - 1 && (
+              <div className="pepper-keyboard-hint">Press <kbd>Enter ↵</kbd> to continue</div>
+            )}
+          </form>
         </div>
-
-        {/* Questions */}
-        <form onSubmit={handleSubmit} ref={formRef}>
-          {/* ── Inline chain survey card — replaces the question area ── */}
-          {chainSurveyPrompt && chainSurveyPrompt.mode === 'inline' ? (
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ type: 'spring', stiffness: 240, damping: 22 }}
-              style={{ padding: '8px 0 16px', textAlign: 'center' }}
-            >
-              {/* Red badge */}
-              <div style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                background: '#fef2f2', border: '1px solid #fecaca',
-                borderRadius: 20, padding: '4px 14px', marginBottom: 20,
-              }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', letterSpacing: 1, fontFamily: "'Outfit', sans-serif" }}>
-                  Continue Your Journey
-                </span>
-              </div>
-
-              <div style={{ fontSize: 40, marginBottom: 16 }}>📋</div>
-
-              <h3 style={{
-                margin: '0 0 10px', fontSize: 22, fontWeight: 800,
-                color: '#111827', lineHeight: 1.3, fontFamily: "'Outfit', sans-serif",
-                letterSpacing: '-0.02em',
-              }}>
-                {chainSurveyPrompt.message}
-              </h3>
-              <p style={{
-                margin: '0 0 28px', fontSize: 14, color: '#6b7280',
-                lineHeight: 1.6, fontFamily: "'Outfit', sans-serif",
-              }}>
-                A short survey awaits — it takes just a few minutes.
-              </p>
-
-              <div style={{ display: 'flex', gap: 12, justifyContent: 'center', maxWidth: 380, margin: '0 auto' }}>
-                <motion.button
-                  type="button"
-                  whileHover={{ scale: 1.03, y: -1 }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => { window.location.href = chainSurveyPrompt.url; }}
-                  style={{
-                    flex: 1, padding: '14px 20px', borderRadius: 14, border: 'none',
-                    background: 'linear-gradient(135deg, #ef4444, #dc2626)',
-                    color: '#fff', fontWeight: 700, fontSize: 15,
-                    cursor: 'pointer', fontFamily: "'Outfit', sans-serif",
-                    boxShadow: '0 4px 16px rgba(239,68,68,0.35)',
-                  }}
-                >
-                  {chainSurveyPrompt.yesLabel} →
-                </motion.button>
-                <motion.button
-                  type="button"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setChainSurveyPrompt(null)}
-                  style={{
-                    flex: 1, padding: '14px 20px', borderRadius: 14,
-                    border: '1.5px solid #e5e7eb', background: '#f9fafb',
-                    color: '#374151', fontWeight: 600, fontSize: 15,
-                    cursor: 'pointer', fontFamily: "'Outfit', sans-serif",
-                  }}
-                >
-                  {chainSurveyPrompt.noLabel}
-                </motion.button>
-              </div>
-            </motion.div>
-          ) : (
-            <AnimatePresence mode="wait">
-              {visibleQuestions.map((q, i) => renderQuestion(q, i))}
-            </AnimatePresence>
-          )}
-
-          {/* Footer Navigation */}
-          {!previewMode && (
-            <div className="pepper-footer">
-              {currentQuestionIndex > 0 && backButtonEnabled ? (
-                <button
-                  type="button"
-                  className="pepper-btn pepper-btn-back"
-                  onClick={handlePrev}
-                  disabled={isTransitioning}
-                >
-                  <span className="arrow">←</span> Back
-                </button>
-              ) : (
-                <div />
-              )}
-
-              {currentQuestionIndex < visibleQuestions.length - 1 ? (
-                <button
-                  type="button"
-                  className="pepper-btn pepper-btn-next"
-                  onClick={handleNext}
-                  disabled={!isCurrentAnswered || isTransitioning}
-                >
-                  {isTransitioning ? (
-                    <>
-                      <span className="pepper-transition-spinner" />
-                      {transitionCountdown > 0 ? `${transitionCountdown}s` : '…'}
-                    </>
-                  ) : (
-                    <>Next <span className="arrow">→</span></>
-                  )}
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  className="pepper-btn pepper-btn-submit"
-                  disabled={!isCurrentAnswered || isTransitioning}
-                >
-                  Submit
-                </button>
-              )}
-            </div>
-          )}
-
-          {previewMode && (
-            <div className="pepper-footer">
-              {currentQuestionIndex > 0 && backButtonEnabled !== false ? (
-                <button
-                  type="button"
-                  className="pepper-btn pepper-btn-back"
-                  onClick={handlePrev}
-                >
-                  <span className="arrow">←</span> Back
-                </button>
-              ) : (
-                <div />
-              )}
-              {currentQuestionIndex < visibleQuestions.length - 1 ? (
-                <button
-                  type="button"
-                  className="pepper-btn pepper-btn-next"
-                  onClick={() => setCurrentQuestionIndex(prev => prev + 1)}
-                >
-                  Next <span className="arrow">→</span>
-                </button>
-              ) : (
-                <button type="submit" className="pepper-btn pepper-btn-submit">
-                  Submit
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Keyboard hint */}
-          {!previewMode && isCurrentAnswered && currentQuestionIndex < visibleQuestions.length - 1 && (
-            <div className="pepper-keyboard-hint">
-              Press <kbd>Enter ?</kbd> to continue
-            </div>
-          )}
-        </form>
       </div>
-      </div>{/* close pepper-card-wrapper */}
-
       {/* Powered by */}
       <div className="pepper-powered">
         Powered by <a href="#">Pepperwahl</a>
       </div>
-
-      {/* ── Active Layer Renderer ── */}
-      {activeLayer && activeLayer.type === 'result_page' && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.35 }}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 9996,
-            fontFamily: "'Outfit', sans-serif",
-            display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'space-between',
-            padding: '40px 20px 32px',
-            background: '#eef0f3',
-          }}
-        >
-          {/* Spacer top */}
-          <div style={{ flex: 1 }} />
-
-          {/* Card */}
-          <motion.div
-            initial={{ scale: 0.92, y: 24, opacity: 0 }}
-            animate={{ scale: 1, y: 0, opacity: 1 }}
-            transition={{ type: 'spring', stiffness: 220, damping: 26, delay: 0.08 }}
-            style={{
-              width: '100%', maxWidth: 440,
-              background: '#ffffff',
-              borderRadius: 20,
-              boxShadow: '0 4px 32px rgba(0,0,0,0.08)',
-              padding: '48px 36px 40px',
-              textAlign: 'center',
-            }}
-          >
-            {/* Icon tile */}
-            <motion.div
-              initial={{ scale: 0, rotate: -20 }}
-              animate={{ scale: 1, rotate: 0 }}
-              transition={{ type: 'spring', stiffness: 280, damping: 20, delay: 0.18 }}
-              style={{
-                width: 88, height: 88, borderRadius: 20, margin: '0 auto 28px',
-                background: activeLayer.variant === 'pass' ? '#e6f4ec' : '#fce8e8',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              <div style={{
-                width: 52, height: 52, borderRadius: '50%',
-                background: activeLayer.variant === 'pass' ? '#22c55e' : '#e53e3e',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: activeLayer.variant === 'pass'
-                  ? '0 4px 16px rgba(34,197,94,0.35)'
-                  : '0 4px 16px rgba(229,62,62,0.35)',
-              }}>
-                {activeLayer.variant === 'pass' ? (
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <motion.polyline points="20 6 9 17 4 12" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.45, delay: 0.3 }} />
-                  </svg>
-                ) : (
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <motion.line x1="18" y1="6" x2="6" y2="18" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.28, delay: 0.28 }} />
-                    <motion.line x1="6" y1="6" x2="18" y2="18" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.28, delay: 0.42 }} />
-                  </svg>
-                )}
-              </div>
-            </motion.div>
-
-            {/* Title */}
-            <motion.h2
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.32 }}
-              style={{
-                margin: '0 0 12px', fontSize: 28, fontWeight: 800,
-                color: '#111827', lineHeight: 1.15, letterSpacing: '-0.01em',
-                fontFamily: "'Playfair Display', Georgia, serif",
-              }}
-            >
-              {activeLayer.title || (activeLayer.variant === 'pass' ? "You're Qualified!" : 'Not Quite Yet')}
-            </motion.h2>
-
-            {/* Subtitle */}
-            <motion.p
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.42 }}
-              style={{
-                margin: '0 0 32px', fontSize: 14.5,
-                color: '#6b7280', lineHeight: 1.65,
-                fontFamily: "'Outfit', sans-serif",
-              }}
-            >
-              {activeLayer.subtitle || (
-                activeLayer.variant === 'pass'
-                  ? "Congratulations! You've met all the requirements for the Pepperwahl program. We're excited to have you on board."
-                  : "Unfortunately, you don't meet the current criteria for this round. Don't worry—you can try again in 30 days or explore our resources."
-              )}
-            </motion.p>
-
-            {/* CTA button */}
-            <motion.button
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-              whileHover={{ scale: 1.02, y: -1 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => { setActiveLayer(null); processNextLayer(layerQueueRef.current); }}
-              style={{
-                padding: '13px 32px',
-                borderRadius: 10, border: 'none',
-                background: activeLayer.variant === 'pass' ? '#22c55e' : '#111827',
-                color: '#fff', fontWeight: 600, fontSize: 15,
-                cursor: 'pointer', fontFamily: "'Outfit', sans-serif",
-                letterSpacing: '0.01em',
-                boxShadow: activeLayer.variant === 'pass'
-                  ? '0 4px 18px rgba(34,197,94,0.35)'
-                  : '0 4px 18px rgba(0,0,0,0.25)',
-              }}
-            >
-              {activeLayer.cta_text || (activeLayer.variant === 'pass' ? 'Get Started' : 'View Resources')}
-            </motion.button>
-          </motion.div>
-
-          {/* Spacer bottom */}
-          <div style={{ flex: 1 }} />
-
-          {/* Powered by Pepperwahl footer */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.6 }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              marginTop: 28,
-            }}
-          >
-            <img src="/logo.png" alt="Pepperwahl" style={{ width: 18, height: 18, borderRadius: 4, opacity: 0.65 }} />
-            <span style={{
-              fontSize: 11, fontWeight: 700, letterSpacing: 2,
-              textTransform: 'uppercase', color: '#9ca3af',
-              fontFamily: "'Outfit', sans-serif",
-            }}>
-              Powered by Pepperwahl
-            </span>
-          </motion.div>
-        </motion.div>
-      )}
+      </>)}
       {/* ── Spinner Layer ── */}
       {activeLayer && activeLayer.type === 'spinner' && (
         <motion.div
@@ -2308,35 +2393,143 @@ const BasicSurveyTemplate: React.FC<Props> = ({
             fontFamily: "'Outfit', sans-serif",
           }}
         >
-          {/* Dual-ring spinner */}
-          <div style={{ position: 'relative', width: 64, height: 64, marginBottom: 28 }}>
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-              style={{
-                position: 'absolute', inset: 0,
-                borderRadius: '50%',
-                border: '4px solid #f3f4f6',
-                borderTopColor: '#ef4444',
-              }}
-            />
-            <motion.div
-              animate={{ rotate: -360 }}
-              transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
-              style={{
-                position: 'absolute', inset: 8,
-                borderRadius: '50%',
-                border: '3px solid #fef2f2',
-                borderBottomColor: '#f97316',
-              }}
-            />
-          </div>
-          <p style={{ fontSize: 17, fontWeight: 600, color: '#1f2937', margin: '0 0 6px' }}>
+          {/* ── progress bar style ── */}
+          {(activeLayer as any).spinner_style === 'progress' ? (
+            <div style={{ width: '100%', maxWidth: 320, marginBottom: 28, padding: '0 20px' }}>
+              <div style={{ height: 6, background: '#f3f4f6', borderRadius: 99, overflow: 'hidden' }}>
+                <motion.div
+                  initial={{ width: '0%' }}
+                  animate={{ width: '100%' }}
+                  transition={{ duration: (activeLayer.duration ?? 3), ease: 'linear' }}
+                  style={{ height: '100%', background: 'linear-gradient(90deg, #ef4444, #f97316)', borderRadius: 99 }}
+                />
+              </div>
+            </div>
+          ) : (activeLayer as any).spinner_style === 'message' ? (
+            <div style={{ marginBottom: 28, display: 'flex', alignItems: 'center', gap: 6 }}>
+              {[0,1,2].map(i => (
+                <motion.span key={i}
+                  animate={{ opacity: [0.2, 1, 0.2] }}
+                  transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.3 }}
+                  style={{ fontSize: 28, color: '#ef4444', fontWeight: 900, lineHeight: 1 }}
+                >•</motion.span>
+              ))}
+            </div>
+          ) : (activeLayer as any).spinner_style === 'skeleton' ? (
+            <div style={{ width: '100%', maxWidth: 320, marginBottom: 28, padding: '0 20px' }}>
+              {[80, 100, 60].map((w, i) => (
+                <motion.div key={i}
+                  animate={{ opacity: [0.4, 0.8, 0.4] }}
+                  transition={{ duration: 1.4, repeat: Infinity, delay: i * 0.2 }}
+                  style={{
+                    height: i === 0 ? 20 : 14, width: `${w}%`,
+                    background: '#e5e7eb', borderRadius: 6,
+                    marginBottom: i < 2 ? 10 : 0,
+                  }}
+                />
+              ))}
+            </div>
+          ) : (
+            /* ── default: spinner (rotating ring) ── */
+            <div style={{ position: 'relative', width: 64, height: 64, marginBottom: 28 }}>
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '4px solid #f3f4f6', borderTopColor: '#ef4444' }}
+              />
+              <motion.div
+                animate={{ rotate: -360 }}
+                transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+                style={{ position: 'absolute', inset: 8, borderRadius: '50%', border: '3px solid #fef2f2', borderBottomColor: '#f97316' }}
+              />
+            </div>
+          )}
+          <p style={{ fontSize: 17, fontWeight: 600, color: '#1f2937', margin: '0 0 6px', textAlign: 'center', maxWidth: 280 }}>
             {activeLayer.text || 'Verifying your answers...'}
           </p>
-          <p style={{ fontSize: 13, color: '#9ca3af', margin: 0 }}>
-            Please wait
-          </p>
+          {(activeLayer as any).spinner_style !== 'message' && (
+            <p style={{ fontSize: 13, color: '#9ca3af', margin: 0 }}>Please wait</p>
+          )}
+        </motion.div>
+      )}
+
+      {/* ── Info Page Layer ── */}
+      {activeLayer && (activeLayer as any).type === 'info_page' && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9996,
+            background: '#eef0f3',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            padding: '40px 20px 32px',
+            fontFamily: "'Outfit', sans-serif",
+          }}
+        >
+          <div style={{ flex: 1 }} />
+          <motion.div
+            initial={{ scale: 0.92, y: 24, opacity: 0 }}
+            animate={{ scale: 1, y: 0, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 220, damping: 26, delay: 0.06 }}
+            style={{
+              width: '100%', maxWidth: 460,
+              background: '#ffffff', borderRadius: 20,
+              boxShadow: '0 4px 32px rgba(0,0,0,0.08)',
+              padding: '44px 36px 40px', textAlign: 'center',
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 20, delay: 0.14 }}
+              style={{
+                width: 64, height: 64, borderRadius: 16, margin: '0 auto 24px',
+                background: '#ecfeff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#0891b2" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+            </motion.div>
+            <motion.h2
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.22 }}
+              style={{ margin: '0 0 14px', fontSize: 24, fontWeight: 800, color: '#111827', lineHeight: 1.2, fontFamily: "'Playfair Display', Georgia, serif" }}
+            >
+              {(activeLayer as any).title || 'Just a moment'}
+            </motion.h2>
+            {(activeLayer as any).body && (
+              <motion.p
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.32 }}
+                style={{ margin: '0 0 30px', fontSize: 14.5, color: '#6b7280', lineHeight: 1.7 }}
+              >
+                {(activeLayer as any).body}
+              </motion.p>
+            )}
+            <motion.button
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.42 }}
+              whileHover={{ scale: 1.02, y: -1 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => { setActiveLayer(null); processNextLayer(layerQueueRef.current); }}
+              style={{
+                padding: '13px 32px', borderRadius: 10, border: 'none',
+                background: '#0891b2', color: '#fff', fontWeight: 600, fontSize: 15,
+                cursor: 'pointer', fontFamily: "'Outfit', sans-serif",
+                boxShadow: '0 4px 18px rgba(8,145,178,0.3)',
+              }}
+            >
+              {(activeLayer as any).cta_text || 'Continue →'}
+            </motion.button>
+          </motion.div>
+          <div style={{ flex: 1 }} />
         </motion.div>
       )}
 
@@ -2506,137 +2699,351 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       )}
 
       {/* Success Overlay */}
-      {(submitted || funnelTerminated) && (
+      {(submitted || funnelTerminated) && (() => {
+        const cp = (survey as any).completion_page || {};
+        const endStyle: string = cp.style || 'thank_you';
+
+        /* ─── SCREEN-OUT ──────────────────────────────────────────────── */
+        if (endStyle === 'screen_out' || funnelTerminated) {
+          return (
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }}
+              style={{
+                position: 'fixed', inset: 0, zIndex: 9999,
+                background: 'linear-gradient(135deg, #1c1917 0%, #292524 100%)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                padding: 24, fontFamily: "'Outfit', sans-serif",
+              }}
+            >
+              <motion.div
+                initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.15, type: 'spring', stiffness: 200, damping: 22 }}
+                style={{ textAlign: 'center', maxWidth: 400, position: 'relative', zIndex: 1 }}
+              >
+                <motion.div
+                  initial={{ scale: 0 }} animate={{ scale: 1 }}
+                  transition={{ delay: 0.25, type: 'spring', stiffness: 280, damping: 18 }}
+                  style={{ width: 72, height: 72, borderRadius: '50%', background: 'rgba(239,68,68,0.15)', border: '2.5px solid rgba(239,68,68,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}
+                >
+                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+                  </svg>
+                </motion.div>
+                <motion.h2 initial={{ y: 16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.38 }}
+                  style={{ fontSize: 26, fontWeight: 700, color: '#fff', margin: '0 0 12px', lineHeight: 1.2, fontFamily: "'Playfair Display', Georgia, serif" }}>
+                  {cp.heading || (funnelTerminated ? 'Thank You for Participating' : "We're sorry…")}
+                </motion.h2>
+                <motion.p initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.5 }}
+                  style={{ fontSize: 15, color: 'rgba(255,255,255,0.65)', lineHeight: 1.7, margin: '0 0 8px' }}>
+                  {cp.message || (funnelTerminated ? funnelTerminateReason : "Unfortunately you don't meet the criteria for this survey.")}
+                </motion.p>
+                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.65 }}
+                  style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)', marginBottom: cp.cta_text ? 32 : 0 }}>
+                  We appreciate your time and interest.
+                </motion.p>
+                {cp.cta_text && cp.cta_url && (
+                  <motion.a href={cp.cta_url} target="_blank" rel="noopener noreferrer"
+                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.75 }}
+                    style={{ display: 'inline-block', padding: '12px 28px', borderRadius: 10, background: '#ef4444', color: '#fff', fontWeight: 600, fontSize: 14, textDecoration: 'none', fontFamily: "'Outfit', sans-serif" }}>
+                    {cp.cta_text}
+                  </motion.a>
+                )}
+              </motion.div>
+            </motion.div>
+          );
+        }
+
+        /* ─── REWARD CODE ─────────────────────────────────────────────── */
+        if (endStyle === 'reward_code') {
+          const [codeCopied, setCodeCopied] = React.useState(false);
+          const code = cp.reward_code || '';
+          return (
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }}
+              style={{
+                position: 'fixed', inset: 0, zIndex: 9999,
+                background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 50%, #2d0a0a 100%)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                padding: 24, fontFamily: "'Outfit', sans-serif",
+              }}
+            >
+              {/* confetti */}
+              <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+                {[...Array(18)].map((_, i) => (
+                  <motion.div key={i}
+                    initial={{ opacity: 0, y: -20, x: Math.random() * (typeof window !== 'undefined' ? window.innerWidth : 400) }}
+                    animate={{ opacity: [0, 1, 0], y: [0, (typeof window !== 'undefined' ? window.innerHeight : 600) + 50] }}
+                    transition={{ duration: 3 + Math.random() * 2, delay: Math.random() * 2, repeat: Infinity }}
+                    style={{ position: 'absolute', top: 0, width: 7, height: 7, borderRadius: '50%', background: ['#ef4444','#f59e0b','#10b981','#3b82f6','#8b5cf6'][i%5] }}
+                  />
+                ))}
+              </div>
+              <motion.div
+                initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.15, type: 'spring', stiffness: 200, damping: 22 }}
+                style={{ textAlign: 'center', maxWidth: 420, position: 'relative', zIndex: 1 }}
+              >
+                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.25, type: 'spring', stiffness: 300, damping: 15 }}
+                  style={{ width: 80, height: 80, borderRadius: '50%', background: 'linear-gradient(135deg, #f59e0b, #ef4444)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', boxShadow: '0 10px 40px rgba(245,158,11,0.35)', fontSize: 34 }}>
+                  🎁
+                </motion.div>
+                <motion.h2 initial={{ y: 16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.38 }}
+                  style={{ fontSize: 28, fontWeight: 700, color: '#fff', margin: '0 0 10px', fontFamily: "'Outfit', sans-serif" }}>
+                  {cp.heading || 'Here is your reward!'}
+                </motion.h2>
+                <motion.p initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.48 }}
+                  style={{ fontSize: 15, color: 'rgba(255,255,255,0.6)', margin: '0 0 28px', lineHeight: 1.5 }}>
+                  {cp.message || 'Use the code below to claim your reward.'}
+                </motion.p>
+                {code && (
+                  <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.6 }}
+                    style={{ background: 'rgba(255,255,255,0.08)', border: '2px dashed rgba(255,255,255,0.25)', borderRadius: 14, padding: '20px 28px', marginBottom: 24, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14 }}
+                    onClick={() => { navigator.clipboard?.writeText(code).then(() => { setCodeCopied(true); setTimeout(() => setCodeCopied(false), 2500); }); }}
+                  >
+                    <span style={{ fontSize: 22, fontWeight: 800, letterSpacing: 4, color: '#fff', fontFamily: 'monospace' }}>{code}</span>
+                    <span style={{ fontSize: 11, color: codeCopied ? '#10b981' : 'rgba(255,255,255,0.5)', fontWeight: 600, transition: 'color 0.2s' }}>
+                      {codeCopied ? '✓ Copied!' : 'Tap to copy'}
+                    </span>
+                  </motion.div>
+                )}
+              </motion.div>
+            </motion.div>
+          );
+        }
+
+        /* ─── REDIRECT NOTICE ─────────────────────────────────────────── */
+        if (endStyle === 'redirect_notice') {
+          const totalSecs = cp.redirect_seconds ?? 5;
+          const redirectUrl = cp.redirect_url || cp.cta_url || '';
+          // Fire redirect via useEffect when this renders
+          React.useEffect(() => {
+            if (!redirectUrl) return;
+            const t = setTimeout(() => { window.location.href = redirectUrl; }, totalSecs * 1000);
+            return () => clearTimeout(t);
+          }, [redirectUrl, totalSecs]);
+
+          const [secLeft, setSecLeft] = React.useState(totalSecs);
+          React.useEffect(() => {
+            if (secLeft <= 0) return;
+            const t = setTimeout(() => setSecLeft(s => s - 1), 1000);
+            return () => clearTimeout(t);
+          }, [secLeft]);
+
+          const progress = ((totalSecs - secLeft) / totalSecs) * 100;
+
+          return (
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }}
+              style={{
+                position: 'fixed', inset: 0, zIndex: 9999,
+                background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 50%, #2d0a0a 100%)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                padding: 24, fontFamily: "'Outfit', sans-serif",
+              }}
+            >
+              <motion.div
+                initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.15, type: 'spring', stiffness: 200, damping: 22 }}
+                style={{ textAlign: 'center', maxWidth: 400, position: 'relative', zIndex: 1 }}
+              >
+                {/* Circular countdown */}
+                <div style={{ position: 'relative', width: 88, height: 88, margin: '0 auto 24px' }}>
+                  <svg width="88" height="88" viewBox="0 0 88 88" style={{ position: 'absolute', inset: 0, transform: 'rotate(-90deg)' }}>
+                    <circle cx="44" cy="44" r="38" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="5"/>
+                    <motion.circle cx="44" cy="44" r="38" fill="none" stroke="#ef4444" strokeWidth="5"
+                      strokeDasharray={`${2 * Math.PI * 38}`}
+                      strokeDashoffset={`${2 * Math.PI * 38 * (1 - progress / 100)}`}
+                      strokeLinecap="round"
+                      style={{ transition: 'stroke-dashoffset 1s linear' }}
+                    />
+                  </svg>
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontSize: 26, fontWeight: 800, color: '#fff' }}>{secLeft}</span>
+                  </div>
+                </div>
+                <motion.h2 initial={{ y: 16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.38 }}
+                  style={{ fontSize: 26, fontWeight: 700, color: '#fff', margin: '0 0 12px', fontFamily: "'Outfit', sans-serif" }}>
+                  {cp.heading || 'Taking you there…'}
+                </motion.h2>
+                <motion.p initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.5 }}
+                  style={{ fontSize: 15, color: 'rgba(255,255,255,0.6)', margin: '0 0 24px', lineHeight: 1.5 }}>
+                  {cp.message || 'You will be redirected in a moment.'}
+                </motion.p>
+                {redirectUrl && (
+                  <motion.a href={redirectUrl} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.65 }}
+                    style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', textDecoration: 'underline', textUnderlineOffset: 3, cursor: 'pointer' }}>
+                    Click here if not redirected
+                  </motion.a>
+                )}
+              </motion.div>
+            </motion.div>
+          );
+        }
+
+        /* ─── THANK YOU (default) ─────────────────────────────────────── */
+        return (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 9999,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 50%, #2d0a0a 100%)',
+              padding: 24,
+            }}
+          >
+            {/* confetti */}
+            <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+              {[...Array(20)].map((_, i) => (
+                <motion.div key={i}
+                  initial={{ opacity: 0, y: -20, x: Math.random() * (typeof window !== 'undefined' ? window.innerWidth : 400) }}
+                  animate={{ opacity: [0, 1, 0], y: [0, (typeof window !== 'undefined' ? window.innerHeight : 600) + 50] }}
+                  transition={{ duration: 3 + Math.random() * 2, delay: Math.random() * 2, repeat: Infinity }}
+                  style={{ position: 'absolute', top: 0, width: 6 + Math.random() * 6, height: 6 + Math.random() * 6, borderRadius: '50%', background: ['#ef4444','#f59e0b','#10b981','#3b82f6','#8b5cf6'][Math.floor(Math.random()*5)] }}
+                />
+              ))}
+            </div>
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.2, duration: 0.5, type: 'spring', stiffness: 200 }}
+              style={{ textAlign: 'center', position: 'relative', zIndex: 1 }}
+            >
+              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.3, type: 'spring', stiffness: 300, damping: 15 }}
+                style={{ width: 80, height: 80, borderRadius: '50%', background: 'linear-gradient(135deg, #10b981, #059669)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', boxShadow: '0 10px 40px rgba(16,185,129,0.3)' }}>
+                <motion.svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                  initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ delay: 0.6, duration: 0.5 }}>
+                  <polyline points="20 6 9 17 4 12" />
+                </motion.svg>
+              </motion.div>
+              <motion.h2 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.5 }}
+                style={{ fontSize: 28, fontWeight: 700, color: '#fff', margin: '0 0 8px', fontFamily: "'Outfit', sans-serif" }}>
+                {cp.heading || "You're awesome!"}
+              </motion.h2>
+              <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.65 }}
+                style={{ fontSize: 15, color: 'rgba(255,255,255,0.6)', margin: '0 0 40px', maxWidth: 320, lineHeight: 1.5 }}>
+                {cp.message || 'Your responses are in. Thanks for taking a moment to share your thoughts!'}
+              </motion.p>
+              {/* Custom CTA or default PepperWahl link */}
+              {cp.cta_text && cp.cta_url ? (
+                <motion.a href={cp.cta_url} target="_blank" rel="noopener noreferrer"
+                  initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 1.0 }}
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '14px 32px', background: '#ef4444', borderRadius: 14, border: 'none', textDecoration: 'none', fontSize: 15, fontWeight: 600, color: '#fff', boxShadow: '0 4px 20px rgba(239,68,68,0.4)', fontFamily: "'Outfit', sans-serif" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background='#dc2626'; e.currentTarget.style.transform='translateY(-2px)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background='#ef4444'; e.currentTarget.style.transform='translateY(0)'; }}>
+                  {cp.cta_text}
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </motion.a>
+              ) : (
+                <motion.a href="https://survey.pepperwahl.com/create-survey" target="_blank" rel="noopener noreferrer"
+                  initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 1.2 }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 12, padding: '14px 24px', background: 'rgba(255,255,255,0.08)', borderRadius: 14, border: '1px solid rgba(255,255,255,0.12)', textDecoration: 'none', transition: 'all 0.25s', backdropFilter: 'blur(10px)' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background='rgba(255,255,255,0.15)'; e.currentTarget.style.transform='translateY(-2px)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background='rgba(255,255,255,0.08)'; e.currentTarget.style.transform='translateY(0)'; }}>
+                  <img src="/logo.png" alt="PepperWahl" style={{ width: 32, height: 32, borderRadius: 8 }}/>
+                  <div style={{ textAlign: 'left' }}>
+                    <span style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#fff' }}>Create your own in 2 minutes</span>
+                    <span style={{ display: 'block', fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>Powered by PepperWahl — Free</span>
+                  </div>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </motion.a>
+              )}
+            </motion.div>
+          </motion.div>
+        );
+      })()}
+      {/* ── Summary Page Overlay ── */}
+      {showSummary && !submitted && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: 0.3 }}
           style={{
-            position: 'fixed', inset: 0, zIndex: 9999,
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            background: funnelTerminated
-              ? 'linear-gradient(135deg, #111 0%, #1a0808 100%)'
-              : 'linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 50%, #2d0a0a 100%)',
-            padding: 24,
+            position: 'fixed', inset: 0, zIndex: 9997,
+            background: 'rgba(0,0,0,0.6)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 20, fontFamily: "'Outfit', sans-serif",
           }}
         >
-          {/* Funnel not eligible page */}
-          {funnelTerminated && (
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.2, duration: 0.5 }}
-              style={{ textAlign: 'center', maxWidth: 420 }}
-            >
-              <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(239,68,68,0.15)', border: '2px solid rgba(239,68,68,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
-                </svg>
-              </div>
-              <h2 style={{ color: '#fff', fontSize: 24, fontWeight: 700, marginBottom: 14, fontFamily: "'Outfit', sans-serif" }}>
-                Thank You for Participating
-              </h2>
-              <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 1.7, marginBottom: 10 }}>
-                {funnelTerminateReason}
-              </p>
-              <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 13 }}>
-                We appreciate your time and interest.
-              </p>
-            </motion.div>
-          )}
-          {/* Animated confetti dots */}
-          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
-            {[...Array(20)].map((_, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: -20, x: Math.random() * (typeof window !== 'undefined' ? window.innerWidth : 400) }}
-                animate={{ opacity: [0, 1, 0], y: [0, (typeof window !== 'undefined' ? window.innerHeight : 600) + 50] }}
-                transition={{ duration: 3 + Math.random() * 2, delay: Math.random() * 2, repeat: Infinity }}
-                style={{
-                  position: 'absolute', top: 0,
-                  width: 6 + Math.random() * 6, height: 6 + Math.random() * 6,
-                  borderRadius: '50%',
-                  background: ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'][Math.floor(Math.random() * 5)],
-                }}
-              />
-            ))}
-          </div>
-
-          {/* Main content */}
           <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.2, duration: 0.5, type: 'spring', stiffness: 200 }}
-            style={{ textAlign: 'center', position: 'relative', zIndex: 1 }}
+            initial={{ scale: 0.93, y: 24, opacity: 0 }}
+            animate={{ scale: 1, y: 0, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 240, damping: 26, delay: 0.05 }}
+            style={{
+              width: '100%', maxWidth: 520,
+              background: '#ffffff', borderRadius: 20,
+              boxShadow: '0 8px 48px rgba(0,0,0,0.22)',
+              maxHeight: '88vh', display: 'flex', flexDirection: 'column',
+              overflow: 'hidden',
+            }}
           >
-            {/* Animated checkmark circle */}
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.3, type: 'spring', stiffness: 300, damping: 15 }}
-              style={{
-                width: 80, height: 80, borderRadius: '50%',
-                background: 'linear-gradient(135deg, #10b981, #059669)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                margin: '0 auto 24px', boxShadow: '0 10px 40px rgba(16,185,129,0.3)',
-              }}
-            >
-              <motion.svg
-                width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-                initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ delay: 0.6, duration: 0.5 }}
-              >
-                <polyline points="20 6 9 17 4 12" />
-              </motion.svg>
-            </motion.div>
-
-            <motion.h2
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.5 }}
-              style={{ fontSize: 28, fontWeight: 700, color: '#fff', margin: '0 0 8px', fontFamily: "'Outfit', sans-serif" }}
-            >
-              You're awesome!
-            </motion.h2>
-            <motion.p
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.65 }}
-              style={{ fontSize: 15, color: 'rgba(255,255,255,0.6)', margin: '0 0 40px', maxWidth: 320, lineHeight: 1.5 }}
-            >
-              Your responses are in. Thanks for taking a moment to share your thoughts!
-            </motion.p>
-
-            {/* PepperWahl CTA */}
-            <motion.a
-              href="https://survey.pepperwahl.com/create-survey"
-              target="_blank"
-              rel="noopener noreferrer"
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 1.2 }}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 12,
-                padding: '14px 24px',
-                background: 'rgba(255,255,255,0.08)', borderRadius: 14,
-                border: '1px solid rgba(255,255,255,0.12)',
-                textDecoration: 'none', transition: 'all 0.25s',
-                backdropFilter: 'blur(10px)',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; e.currentTarget.style.transform = 'translateY(0)'; }}
-            >
-              <img src="/logo.png" alt="PepperWahl" style={{ width: 32, height: 32, borderRadius: 8 }} />
-              <div style={{ textAlign: 'left' }}>
-                <span style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#fff' }}>Create your own in 2 minutes</span>
-                <span style={{ display: 'block', fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>Powered by PepperWahl � Free</span>
+            {/* Header */}
+            <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#111827' }}>Review your answers</h2>
+                <p style={{ margin: '3px 0 0', fontSize: 12, color: '#9ca3af' }}>Check everything looks right before submitting.</p>
               </div>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            </motion.a>
+              <button
+                onClick={() => setShowSummary(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, borderRadius: 8, color: '#9ca3af', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                aria-label="Close summary"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+
+            {/* Answer list */}
+            <div style={{ overflowY: 'auto', padding: '12px 24px 8px', flex: 1 }}>
+              {visibleQuestions.map((q, qi) => {
+                const raw = formData[q.id];
+                const displayVal = raw !== undefined && raw !== null && raw !== ''
+                  ? String(raw)
+                  : '—';
+                return (
+                  <div key={q.id} style={{ padding: '12px 0', borderBottom: qi < visibleQuestions.length - 1 ? '1px solid #f3f4f6' : 'none' }}>
+                    <p style={{ margin: '0 0 4px', fontSize: 12, fontWeight: 600, color: '#6b7280' }}>
+                      {qi + 1}. {q.question}
+                    </p>
+                    <p style={{ margin: 0, fontSize: 13.5, color: '#111827', lineHeight: 1.5 }}>
+                      {displayVal}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer buttons */}
+            <div style={{ padding: '16px 24px', borderTop: '1px solid #f3f4f6', display: 'flex', gap: 10, flexShrink: 0 }}>
+              <button
+                onClick={() => setShowSummary(false)}
+                style={{
+                  flex: 1, padding: '12px 16px', borderRadius: 12,
+                  border: '1.5px solid #e5e7eb', background: '#fff',
+                  fontSize: 13.5, fontWeight: 600, color: '#374151',
+                  cursor: 'pointer', fontFamily: "'Outfit', sans-serif",
+                }}
+              >
+                ← Edit answers
+              </button>
+              <button
+                onClick={() => {
+                  setShowSummary(false);
+                  if (formRef.current) formRef.current.requestSubmit();
+                }}
+                style={{
+                  flex: 2, padding: '12px 16px', borderRadius: 12,
+                  border: 'none', background: '#ef4444',
+                  fontSize: 13.5, fontWeight: 700, color: '#fff',
+                  cursor: 'pointer', fontFamily: "'Outfit', sans-serif",
+                  boxShadow: '0 4px 14px rgba(239,68,68,0.35)',
+                }}
+              >
+                Confirm & Submit →
+              </button>
+            </div>
           </motion.div>
         </motion.div>
       )}
+
       {/* Submission Loading Overlay */}
       {isSubmitting && (
         <div className="pepper-submitting-overlay">

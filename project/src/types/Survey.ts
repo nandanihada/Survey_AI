@@ -9,7 +9,7 @@ export interface Question {
   question: string;
   questionDescription?: string;
   answerDescription?: string;
-  type: 'text' | 'radio' | 'checkbox' | 'dropdown' | 'dropdown_multi' | 'range' | 'multiple_choice' | 'yes_no' | 'short_answer' | 'rating' | 'matrix' | 'list';
+  type: 'text' | 'radio' | 'checkbox' | 'dropdown' | 'dropdown_multi' | 'range' | 'multiple_choice' | 'yes_no' | 'short_answer' | 'rating' | 'matrix' | 'list' | '__description_page' | '__summary_page' | '__ending_page';
   options?: string[];
   required?: boolean;
   answerStyle?: string;
@@ -103,6 +103,38 @@ export interface Survey {
   survey_videos?: SurveyVideo[];
   /** When true, respondents can replay videos. Defaults to false. */
   video_replay_enabled?: boolean;
+  /**
+   * Custom completion/thank-you page shown after survey submission.
+   * When not set, the default dark animated screen is shown.
+   */
+  completion_page?: {
+    /**
+     * Which ending style to show:
+     * - 'thank_you'       — animated dark celebration screen (default)
+     * - 'reward_code'     — shows a copyable reward/coupon code
+     * - 'redirect_notice' — countdown then auto-redirects to a URL
+     * - 'screen_out'      — disqualification / screen-out message
+     */
+    style?: 'thank_you' | 'reward_code' | 'redirect_notice' | 'screen_out';
+    /** Main heading. Default: "You're awesome!" */
+    heading?: string;
+    /** Body text. Default: "Your responses are in. Thanks for taking a moment to share your thoughts!" */
+    message?: string;
+    /** Optional CTA button label. When empty, no button is shown. */
+    cta_text?: string;
+    /** Optional CTA button URL. */
+    cta_url?: string;
+    /** reward_code style: the code string to display */
+    reward_code?: string;
+    /** redirect_notice style: URL to redirect to */
+    redirect_url?: string;
+    /** redirect_notice style: countdown in seconds before redirect fires (default 5) */
+    redirect_seconds?: number;
+  };
+  /**
+   * When true, show a summary screen with all answers before the final Submit button.
+   */
+  show_summary_page?: boolean;
   [key: string]: unknown;
 }
 

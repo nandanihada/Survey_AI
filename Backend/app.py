@@ -5548,6 +5548,56 @@ User instruction: {prompt}"""
 
 
 # ═══════════════════════════════════════════════════════════
+# AI TEXT GENERATION FOR SPECIAL PAGES (description/summary/ending)
+# ═══════════════════════════════════════════════════════════
+@app.route("/api/surveys/<survey_id>/ai-generate-page-text", methods=["POST", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins="*")
+def ai_generate_page_text(survey_id):
+    """
+    Generates a short heading or body text for a description/summary/ending page.
+    Expects: { page_type, field, context_questions }
+    Returns: { text }
+    """
+    if request.method == "OPTIONS":
+        return "", 200
+    try:
+        data = request.get_json() or {}
+        page_type = data.get("page_type", "__description_page")
+        field = data.get("field", "title")          # 'title' or 'body'
+        context_qs = data.get("context_questions", "")
+
+        if not OPENAI_API_KEY:
+            return jsonify({"error": "AI not configured"}), 503
+
+        if page_type == "__description_page":
+            if field == "title":
+                prompt = f'Write a short, friendly heading (max 10 words) for a survey interstitial page that introduces the upcoming questions. Context: "{context_qs}". Be clear, encouraging. Return only the heading text, no quotes.'
+            else:
+                prompt = f'Write a friendly description (2-3 sentences) for a survey interstitial page that introduces the upcoming questions. Context: "{context_qs}". Be warm and conversational. Return only the text, no quotes.'
+        elif page_type == "__summary_page":
+            if field == "title":
+                prompt = f'Write a short heading (max 10 words) for a survey summary page where respondents review their answers before submitting. Context: "{context_qs}". Make it warm. Return only the heading, no quotes.'
+            else:
+                prompt = f'Write a short subtitle (1-2 sentences) for a survey summary/review page. Context: "{context_qs}". Make it reassuring. Return only the text, no quotes.'
+        else:
+            ending_style = data.get("ending_style", "thank_you")
+            style_label = {"thank_you": "thank you", "reward_code": "reward code", "redirect_notice": "redirect", "screen_out": "screen-out"}.get(ending_style, "thank you")
+            if field == "title":
+                prompt = f'Write a short, warm heading (max 8 words) for a survey {style_label} ending page. Return only the heading text, no quotes.'
+            else:
+                prompt = f'Write a short message (1-2 sentences) for a survey {style_label} ending page. Make it warm and friendly. Return only the text, no quotes.'
+
+        text = generate_ai_content(prompt, temperature=0.7, max_tokens=120)
+        # Clean up any surrounding quotes or newlines
+        text = text.strip().strip('"').strip("'").strip()
+        return jsonify({"text": text}), 200
+
+    except Exception as e:
+        print(f"ai_generate_page_text error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+# ═══════════════════════════════════════════════════════════
 # AI QUESTION REFINEMENT
 # ═══════════════════════════════════════════════════════════
 @app.route("/api/refine-question", methods=["POST", "OPTIONS"])
