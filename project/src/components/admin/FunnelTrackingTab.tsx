@@ -256,7 +256,7 @@ const SessionTimeline: React.FC<{ session: FunnelSession; meta: FunnelMeta }> = 
           <TimelineStep
             dot={{ bg: '#fee2e2', border: '#dc2626', text: '#991b1b' }}
             dotIcon={<X size={8} color="#dc2626" />}
-            header={<span style={{ fontSize: 12, fontWeight: 700, color: '#dc2626' }}>Terminated</span>}
+            header={<span style={{ fontSize: 12, fontWeight: 700, color: '#dc2626' }}>Screened out</span>}
           >
             <div style={{ padding: '6px 10px', fontSize: 11, color: '#9b9189' }}>{session.terminate_reason}</div>
           </TimelineStep>
@@ -372,7 +372,7 @@ const SessionTimeline: React.FC<{ session: FunnelSession; meta: FunnelMeta }> = 
           <TimelineStep
             dot={{ bg: '#fef9c3', border: '#ca8a04', text: '#854d0e' }}
             dotIcon={<AlertCircle size={8} color="#ca8a04" />}
-            header={<span style={{ fontSize: 12, fontWeight: 700, color: '#854d0e' }}>No Match — Sent to Fallback</span>}
+            header={<span style={{ fontSize: 12, fontWeight: 700, color: '#854d0e' }}>Unrouted — Sent to Fallback</span>}
           >
             {(session.failed_jobs || []).length > 0 && (
               <div style={{ padding: '6px 10px', fontSize: 11, color: '#9b9189' }}>
@@ -632,10 +632,10 @@ const FunnelTrackingTab: React.FC<{ isDarkMode?: boolean }> = ({ isDarkMode = fa
                 {/* Stats pills */}
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {[
-                    { label: 'Total',      val: selectedFunnel.total_sessions, bg: '#f3f4f6', color: '#374151' },
-                    { label: 'Completed',  val: selectedFunnel.completed,      bg: '#dcfce7', color: '#166534' },
-                    { label: 'Terminated', val: selectedFunnel.terminated,     bg: '#fee2e2', color: '#991b1b' },
-                    { label: 'No match',   val: selectedFunnel.no_match,       bg: '#fef9c3', color: '#854d0e' },
+                    { label: 'Total',        val: selectedFunnel.total_sessions, bg: '#f3f4f6', color: '#374151' },
+                    { label: 'Completed',    val: selectedFunnel.completed,      bg: '#dcfce7', color: '#166534' },
+                    { label: 'Screened out', val: selectedFunnel.terminated,     bg: '#fee2e2', color: '#991b1b' },
+                    { label: 'Unrouted',     val: selectedFunnel.no_match,       bg: '#fef9c3', color: '#854d0e' },
                   ].map(s => (
                     <span key={s.label} style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: s.bg, color: s.color }}>
                       {s.val} {s.label}

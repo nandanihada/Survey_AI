@@ -365,6 +365,36 @@ DEFAULT_PLAN_FEATURES = {
         "category": "funnel",
         "free": False, "premium": True, "enterprise": True
     },
+    "journey_favourites": {
+        "label": "Journeys: Favourites & Folders",
+        "description": "Star journeys as favourites, assign folders and tags",
+        "category": "funnel",
+        "free": True, "premium": True, "enterprise": True
+    },
+    "journey_clone": {
+        "label": "Journeys: Clone (Duplicate)",
+        "description": "Duplicate a journey as an exact copy",
+        "category": "funnel",
+        "free": False, "premium": True, "enterprise": True
+    },
+    "journey_clone_rewrite": {
+        "label": "Journeys: Clone (Duplicate & Rewrite)",
+        "description": "Duplicate a journey and rewrite it for a new subject using AI",
+        "category": "funnel",
+        "free": False, "premium": False, "enterprise": True
+    },
+    "journey_bulk_edit": {
+        "label": "Journeys: Bulk Edit",
+        "description": "Apply settings to all surveys in a journey at once",
+        "category": "funnel",
+        "free": False, "premium": False, "enterprise": True
+    },
+    "journey_redirects_tab": {
+        "label": "Journeys: Redirects Tab",
+        "description": "See all redirect slots across the journey in one view",
+        "category": "funnel",
+        "free": True, "premium": True, "enterprise": True
+    },
 }
 
 PLAN_FEATURES_CONFIG_ID = "global_plan_features"

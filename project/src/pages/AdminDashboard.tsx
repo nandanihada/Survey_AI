@@ -50,6 +50,13 @@ interface User {
   pending_ref_code?: string;
   /** Location from most recent login event */
   last_login_location?: { city?: string; region?: string; country?: string; ip_address?: string };
+  /** Time-limited access grant fields */
+  grant_role?: string;
+  grant_expires_at?: string;
+  grant_granted_by?: string;
+  grant_note?: string;
+  grant_granted_at?: string;
+  base_role?: string;
 }
 
 interface Survey {
@@ -114,6 +121,20 @@ const AdminDashboard: React.FC = () => {
   const baseUrl = getApiBaseUrl();
 
   const [users, setUsers] = useState<User[]>([]);
+
+  // ── Grant access state ────────────────────────────────────────────────────
+  const [grantModal, setGrantModal] = useState<User | null>(null);
+  const [grantTier, setGrantTier] = useState<'premium' | 'enterprise'>('premium');
+  const [grantDays, setGrantDays] = useState<number | null>(30);
+  const [grantCustomDate, setGrantCustomDate] = useState('');
+  const [grantNote, setGrantNote] = useState('');
+  const [grantEmailThem, setGrantEmailThem] = useState(true);
+  const [grantRemind, setGrantRemind] = useState(true);
+  const [grantLoading, setGrantLoading] = useState(false);
+  const [grantStats, setGrantStats] = useState<{ on_a_grant: number; ending_soon: number; expired: number } | null>(null);
+  const [userGrantFilter, setUserGrantFilter] = useState<'all' | 'on_grant' | 'ending_soon' | 'expired'>('all');
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [bulkGrantLoading, setBulkGrantLoading] = useState(false);
   const [surveys, setSurveys] = useState<any[]>([]);
   // ── Surveys tab — server-side pagination ──────────────────────────────────
   const [surveyPage, setSurveyPage] = useState(1);
@@ -344,6 +365,98 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  // ── Grant functions ──────────────────────────────────────────────────────
+  const fetchGrantStats = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${baseUrl}/api/admin/users/grant-stats`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (res.ok) setGrantStats(await res.json());
+    } catch { /* silent */ }
+  };
+
+  const submitGrant = async (userId: string) => {
+    setGrantLoading(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      let expires_at: string | undefined;
+      let duration_days: number | undefined;
+      if (grantCustomDate) {
+        expires_at = new Date(grantCustomDate).toISOString();
+      } else if (grantDays) {
+        duration_days = grantDays;
+      }
+      const res = await fetch(`${baseUrl}/api/admin/users/${userId}/grant-access`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: grantTier, duration_days, expires_at, note: grantNote, email_them: grantEmailThem, remind_3_days: grantRemind }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(`Error: ${data.error}`); return; }
+      setUsers(prev => prev.map(u =>
+        (u._id || u.uid) === userId
+          ? { ...u, role: grantTier as any, grant_role: grantTier, grant_expires_at: data.grant_expires_at, grant_granted_by: grantNote, grant_note: grantNote }
+          : u
+      ));
+      await fetchGrantStats();
+      setGrantModal(null);
+    } catch (e: any) {
+      alert(`Failed: ${e.message}`);
+    } finally {
+      setGrantLoading(false);
+    }
+  };
+
+  const revokeAccess = async (userId: string) => {
+    if (!window.confirm('Revoke this grant? The account will revert to its base plan immediately.')) return;
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${baseUrl}/api/admin/users/${userId}/revoke-access`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(`Error: ${data.error}`); return; }
+      setUsers(prev => prev.map(u =>
+        (u._id || u.uid) === userId
+          ? { ...u, role: data.reverted_to as any, grant_role: undefined, grant_expires_at: undefined, grant_note: undefined }
+          : u
+      ));
+      await fetchGrantStats();
+    } catch (e: any) {
+      alert(`Failed: ${e.message}`);
+    }
+  };
+
+  const bulkGrant = async () => {
+    if (selectedUserIds.length === 0) return;
+    const msg = `Grant ${grantTier} for ${grantDays ?? '?'} days to ${selectedUserIds.length} users?`;
+    if (!window.confirm(msg)) return;
+    setBulkGrantLoading(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      await Promise.all(selectedUserIds.map(uid =>
+        fetch(`${baseUrl}/api/admin/users/${uid}/grant-access`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role: grantTier, duration_days: grantDays || 30, note: grantNote }),
+        })
+      ));
+      await fetchUsers();
+      await fetchGrantStats();
+      setSelectedUserIds([]);
+    } finally {
+      setBulkGrantLoading(false); }
+  };
+
+  // Grant filter helper
+  const daysLeft = (expiresAt?: string): number => {
+    if (!expiresAt) return -1;
+    const ms = new Date(expiresAt).getTime() - Date.now();
+    return Math.ceil(ms / 86400000);
+  };
+
   // Survey functions
   const fetchAllSurveys = async (page = 1, search = '', sourceType: 'surveys'|'funnels'|'all' = 'surveys') => {
     try {
@@ -549,6 +662,7 @@ const AdminDashboard: React.FC = () => {
       
       if (activeTab === 'users') {
         await fetchUsers();
+        await fetchGrantStats();
       } else if (activeTab === 'surveys') {
         await fetchAllSurveys(1, surveySearch, surveySourceType);
       } else if (activeTab === 'filters') {
@@ -817,108 +931,310 @@ const AdminDashboard: React.FC = () => {
                 <>
                 {/* Users Tab */}
                 {activeTab === 'users' && (
-                  <div style={{ borderRadius: 14, overflow: 'hidden' }}>
-                    {users.map((user) => {
-                      const userId = user._id || user.uid || '';
-                      // Format date
-                      const joinedDate = user.createdAt
-                        ? new Date(user.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-                        : null;
-                      const joinedTime = user.createdAt
-                        ? new Date(user.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
-                        : null;
-                      const lastLoginStr = user.lastLogin
-                        ? new Date(user.lastLogin).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-                        : null;
-                      // Auth provider label + colour
-                      const provider = (user.authProvider || 'email').toLowerCase();
-                      const isGoogle = provider === 'google';
-                      const isMicrosoft = provider === 'microsoft';
-                      const providerLabel = isGoogle ? 'Google' : isMicrosoft ? 'Microsoft' : 'Email';
-                      const providerBg = isGoogle ? '#FEF0EB' : isMicrosoft ? '#EFF6FF' : '#F0FDF4';
-                      const providerColor = isGoogle ? '#EA4335' : isMicrosoft ? '#2563EB' : '#16A34A';
-                      return (
-                        <div key={userId} style={{ borderBottom: '1px solid #F5F1E8', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, transition: 'background 0.1s' }}
-                          onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = '#FEF9F7'}
-                          onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}>
-                          {/* Avatar + basic info */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0, flex: '0 0 auto', maxWidth: 320 }}>
+                  <div>
+                    {/* ── Header stats bar ── */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 20px', borderBottom: '1px solid #EBE8E3', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#6B6158' }}>{users.length} registered · grants shown below</span>
+                      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        {grantStats && (
+                          <>
+                            <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 20, background: '#EEF2FF', color: '#4F46E5' }}>
+                              {grantStats.on_a_grant} on a grant
+                            </span>
+                            {grantStats.ending_soon > 0 && (
+                              <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 20, background: '#FEF3C7', color: '#B45309' }}>
+                                {grantStats.ending_soon} ending within 7 days
+                              </span>
+                            )}
+                          </>
+                        )}
+                        <button
+                          onClick={() => setShowNotifModal(true)}
+                          style={{ fontSize: 12, fontWeight: 700, padding: '7px 16px', borderRadius: 10, background: '#C4785C', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+                        >
+                          Send notification
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* ── Filter tabs + bulk action ── */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px', borderBottom: '1px solid #EBE8E3', flexWrap: 'wrap', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {([
+                          { id: 'all',          label: `All ${users.length}` },
+                          { id: 'on_grant',     label: `On a grant ${grantStats?.on_a_grant ?? ''}` },
+                          { id: 'ending_soon',  label: `Ending soon ${grantStats?.ending_soon ?? ''}` },
+                          { id: 'expired',      label: `Expired ${grantStats?.expired ?? ''}` },
+                        ] as const).map(f => (
+                          <button key={f.id} onClick={() => setUserGrantFilter(f.id as any)}
+                            style={{ fontSize: 11, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: '1px solid', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                              background: userGrantFilter === f.id ? '#EEF2FF' : 'transparent',
+                              color: userGrantFilter === f.id ? '#4F46E5' : '#9B9189',
+                              borderColor: userGrantFilter === f.id ? '#C7D2FE' : '#EBE8E3',
+                            }}>
+                            {f.label}
+                          </button>
+                        ))}
+                      </div>
+                      {selectedUserIds.length > 0 && (
+                        <button onClick={bulkGrant} disabled={bulkGrantLoading}
+                          style={{ fontSize: 12, fontWeight: 700, padding: '6px 14px', borderRadius: 9, background: '#4F46E5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', opacity: bulkGrantLoading ? 0.6 : 1 }}>
+                          {bulkGrantLoading ? 'Granting…' : `Grant to ${selectedUserIds.length} selected`}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* ── User rows ── */}
+                    {(() => {
+                      const now = Date.now();
+                      const filteredUsers = users.filter(u => {
+                        const hasGrant = !!u.grant_role && !!u.grant_expires_at;
+                        const dl = daysLeft(u.grant_expires_at);
+                        if (userGrantFilter === 'on_grant') return hasGrant && dl > 0;
+                        if (userGrantFilter === 'ending_soon') return hasGrant && dl > 0 && dl <= 7;
+                        if (userGrantFilter === 'expired') return hasGrant && dl <= 0;
+                        return true;
+                      });
+
+                      if (filteredUsers.length === 0) {
+                        return <div style={{ padding: '60px 0', textAlign: 'center', color: '#9B9189', fontSize: 13 }}>No users in this filter</div>;
+                      }
+
+                      return filteredUsers.map(user => {
+                        const userId = user._id || user.uid || '';
+                        const joinedDate = user.createdAt
+                          ? new Date(user.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                          : null;
+                        const lastLoginStr = user.lastLogin
+                          ? new Date(user.lastLogin).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                          : null;
+                        const provider = (user.authProvider || 'email').toLowerCase();
+                        const isGoogle = provider === 'google';
+                        const isMicrosoft = provider === 'microsoft';
+                        const providerLabel = isGoogle ? 'Google' : isMicrosoft ? 'Microsoft' : 'Email';
+                        const providerBg = isGoogle ? '#FEF0EB' : isMicrosoft ? '#EFF6FF' : '#F0FDF4';
+                        const providerColor = isGoogle ? '#EA4335' : isMicrosoft ? '#2563EB' : '#16A34A';
+
+                        // Grant status
+                        const hasGrant = !!user.grant_role && !!user.grant_expires_at;
+                        const dl = daysLeft(user.grant_expires_at);
+                        const grantActive = hasGrant && dl > 0;
+                        const grantExpired = hasGrant && dl <= 0;
+                        const grantBadgeBg = dl <= 7 ? '#FEF3C7' : '#EEF2FF';
+                        const grantBadgeColor = dl <= 7 ? '#B45309' : '#4F46E5';
+
+                        const isSelected = selectedUserIds.includes(userId);
+
+                        return (
+                          <div key={userId}
+                            style={{ borderBottom: '1px solid #F5F1E8', padding: '14px 20px', display: 'flex', alignItems: 'flex-start', gap: 12, transition: 'background 0.1s', background: isSelected ? '#F8F5FF' : undefined }}
+                            onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = '#FEF9F7'; }}
+                            onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}>
+
+                            {/* Checkbox */}
+                            <input type="checkbox" checked={isSelected}
+                              onChange={e => setSelectedUserIds(prev => e.target.checked ? [...prev, userId] : prev.filter(id => id !== userId))}
+                              style={{ width: 14, height: 14, marginTop: 4, cursor: 'pointer', accentColor: '#4F46E5', flexShrink: 0 }}
+                            />
+
+                            {/* Avatar */}
                             {user.photo_url ? (
                               <img style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', border: '2px solid #EBE8E3', flexShrink: 0 }} src={user.photo_url} alt={user.name} />
                             ) : (
                               <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'linear-gradient(135deg, #D4917A, #C4785C)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 4px rgba(196,120,92,0.25)', flexShrink: 0 }}>
-                                <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{user.name?.charAt(0).toUpperCase()}</span>
+                                <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{(user.name || user.email)?.charAt(0).toUpperCase()}</span>
                               </div>
                             )}
-                            <div style={{ minWidth: 0 }}>
-                              <p style={{ fontSize: 13, fontWeight: 600, color: '#2D2520', margin: 0, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                {user.name}
-                                {user.simpleUserId && (
-                                  <span style={{ fontSize: 9, color: '#C4A99A', fontWeight: 500, background: '#F5F1E8', padding: '1px 5px', borderRadius: 4 }}>#{user.simpleUserId}</span>
-                                )}
-                              </p>
-                              <p style={{ fontSize: 11, color: '#9B9189', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</p>
-                              {/* Joined + provider + location row */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                                {joinedDate && (
-                                  <span style={{ fontSize: 10, color: '#9B9189', display: 'flex', alignItems: 'center', gap: 3 }}>
-                                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}><rect x="1" y="3" width="14" height="12" rx="2" stroke="#C4A99A" strokeWidth="1.5"/><path d="M5 1v4M11 1v4M1 7h14" stroke="#C4A99A" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                                    {joinedDate}{joinedTime && <>, {joinedTime}</>}
+
+                            {/* Info block */}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              {/* Name + id + grant badge */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: 13, fontWeight: 600, color: '#2D2520' }}>{user.name}</span>
+                                {user.simpleUserId && <span style={{ fontSize: 9, color: '#C4A99A', fontWeight: 500, background: '#F5F1E8', padding: '1px 5px', borderRadius: 4 }}>#{user.simpleUserId}</span>}
+                                {grantActive && (
+                                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: grantBadgeBg, color: grantBadgeColor }}>
+                                    {user.grant_role?.charAt(0).toUpperCase()}{user.grant_role?.slice(1)} · {dl} day{dl !== 1 ? 's' : ''} left
                                   </span>
                                 )}
-                                {!joinedDate && <span style={{ fontSize: 10, color: '#C4A99A' }}>No join date</span>}
-                                <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 10, background: providerBg, color: providerColor }}>
-                                  {isGoogle && '🔵 '}{isMicrosoft && '🟦 '}{!isGoogle && !isMicrosoft && '📧 '}{providerLabel}
-                                </span>
-                                {lastLoginStr && (
-                                  <span style={{ fontSize: 10, color: '#C4A99A' }}>Last login: {lastLoginStr}</span>
+                                {grantExpired && (
+                                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: '#F3F4F6', color: '#9CA3AF' }}>
+                                    Expired {user.grant_expires_at ? new Date(user.grant_expires_at).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) : ''}
+                                  </span>
                                 )}
-                                {/* Location from last login */}
-                                {(() => {
-                                  const loc = user.last_login_location;
-                                  if (!loc) return null;
-                                  const parts = [loc.city, loc.country].filter(Boolean);
-                                  if (parts.length === 0) return null;
-                                  return (
-                                    <span style={{ fontSize: 10, color: '#6B9E8A', display: 'flex', alignItems: 'center', gap: 3, background: '#F0FAF5', padding: '1px 7px', borderRadius: 10 }}>
-                                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="#6B9E8A"/></svg>
-                                      {parts.join(', ')}
-                                    </span>
-                                  );
-                                })()}
                               </div>
+
+                              {/* Email */}
+                              <p style={{ fontSize: 11, color: '#9B9189', margin: '2px 0 0' }}>{user.email}</p>
+
+                              {/* Metadata row */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                                {joinedDate && <span style={{ fontSize: 10, color: '#9B9189' }}>Joined {joinedDate}</span>}
+                                <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 10, background: providerBg, color: providerColor }}>{providerLabel}</span>
+                                <span style={{ fontSize: 10, color: '#C4A99A' }}>Last login {lastLoginStr || '—'}</span>
+                              </div>
+
+                              {/* Grant info line */}
+                              {hasGrant && user.grant_granted_by && (
+                                <p style={{ fontSize: 10, color: '#9B9189', margin: '3px 0 0' }}>
+                                  Granted by {user.grant_granted_by}
+                                  {user.grant_granted_at ? ` · ${new Date(user.grant_granted_at).toLocaleDateString('en-IN', { day:'2-digit', month:'short' })}` : ''}
+                                  {user.grant_expires_at ? ` to ${new Date(user.grant_expires_at).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })}` : ''}
+                                  {user.grant_note ? ` · ${user.grant_note}` : ''}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Controls */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, flexWrap: 'wrap' }}>
+                              {/* Role pill + select */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600,
+                                  background: user.role === 'admin' ? '#FEF0EC' : user.role === 'enterprise' ? '#EEF2FF' : user.role === 'premium' ? '#ECFDF5' : '#F5F1E8',
+                                  color: user.role === 'admin' ? '#C4785C' : user.role === 'enterprise' ? '#4F46E5' : user.role === 'premium' ? '#059669' : '#6B6158' }}>
+                                  {user.role}
+                                </span>
+                                <select value={user.role} onChange={e => updateUserRole(userId, e.target.value as any)}
+                                  style={{ fontSize: 11, border: '1px solid #EBE8E3', borderRadius: 7, padding: '4px 8px', background: '#FDFCFA', color: '#3D3530', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                  <option value="basic">Basic</option>
+                                  <option value="premium">Premium</option>
+                                  <option value="enterprise">Enterprise</option>
+                                  <option value="admin">Admin</option>
+                                </select>
+                              </div>
+
+                              {/* Status pill + select */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600,
+                                  background: (user.status || 'approved') === 'approved' ? '#ECFDF5' : (user.status || 'approved') === 'disapproved' ? '#FEF2F2' : '#FFFBEB',
+                                  color: (user.status || 'approved') === 'approved' ? '#059669' : (user.status || 'approved') === 'disapproved' ? '#DC2626' : '#D97706' }}>
+                                  {user.status === 'pending_confirmation' ? 'pending' : (user.status || 'approved')}
+                                </span>
+                                <select value={user.status || 'approved'} onChange={e => updateUserStatus(userId, e.target.value as any)}
+                                  style={{ fontSize: 11, border: '1px solid #EBE8E3', borderRadius: 7, padding: '4px 8px', background: '#FDFCFA', color: '#3D3530', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                  <option value="approved">Approved</option>
+                                  <option value="disapproved">Disapproved</option>
+                                  <option value="locked">Locked</option>
+                                </select>
+                              </div>
+
+                              {/* Grant / Change / Revoke */}
+                              {grantActive ? (
+                                <>
+                                  <button onClick={() => { setGrantModal(user); setGrantTier((user.grant_role as any) || 'premium'); setGrantDays(30); setGrantCustomDate(''); setGrantNote(user.grant_note || ''); }}
+                                    style={{ fontSize: 11, fontWeight: 700, padding: '5px 12px', borderRadius: 8, border: '1.5px solid #C4785C', color: '#C4785C', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                    Change access
+                                  </button>
+                                  <button onClick={() => revokeAccess(userId)}
+                                    style={{ fontSize: 11, fontWeight: 600, padding: '5px 12px', borderRadius: 8, border: '1px solid #EBE8E3', color: '#9B9189', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                    Revoke
+                                  </button>
+                                </>
+                              ) : (
+                                <button onClick={() => { setGrantModal(user); setGrantTier('premium'); setGrantDays(30); setGrantCustomDate(''); setGrantNote(''); }}
+                                  style={{ fontSize: 11, fontWeight: 700, padding: '5px 14px', borderRadius: 8, border: '1.5px solid #C4785C', color: '#C4785C', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                  Grant access
+                                </button>
+                              )}
                             </div>
                           </div>
-                          {/* Role + Status controls */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600, background: user.role === 'admin' ? '#FEF0EC' : user.role === 'enterprise' ? '#EEF2FF' : user.role === 'premium' ? '#ECFDF5' : '#F5F1E8', color: user.role === 'admin' ? '#C4785C' : user.role === 'enterprise' ? '#4F46E5' : user.role === 'premium' ? '#059669' : '#6B6158' }}>
-                                {user.role}
-                              </span>
-                              <select value={user.role} onChange={(e) => updateUserRole(userId, e.target.value as 'basic' | 'premium' | 'enterprise' | 'admin')} style={{ fontSize: 11, border: '1px solid #EBE8E3', borderRadius: 7, padding: '4px 8px', background: '#FDFCFA', color: '#3D3530', cursor: 'pointer', fontFamily: 'inherit' }}>
-                                <option value="basic">Basic</option>
-                                <option value="premium">Premium</option>
-                                <option value="enterprise">Enterprise</option>
-                                <option value="admin">Admin</option>
-                              </select>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600,
-                                background: (user.status || 'approved') === 'approved' ? '#ECFDF5' : (user.status || 'approved') === 'disapproved' ? '#FEF2F2' : (user.status || 'approved') === 'pending_confirmation' ? '#FFF7ED' : '#FFFBEB',
-                                color: (user.status || 'approved') === 'approved' ? '#059669' : (user.status || 'approved') === 'disapproved' ? '#DC2626' : (user.status || 'approved') === 'pending_confirmation' ? '#EA580C' : '#D97706' }}>
-                                {user.status === 'pending_confirmation' ? 'pending' : (user.status || 'approved')}
-                              </span>
-                              <select value={user.status || 'approved'} onChange={(e) => updateUserStatus(userId, e.target.value as 'approved' | 'disapproved' | 'locked')} style={{ fontSize: 11, border: '1px solid #EBE8E3', borderRadius: 7, padding: '4px 8px', background: '#FDFCFA', color: '#3D3530', cursor: 'pointer', fontFamily: 'inherit' }}>
-                                <option value="approved">Approved</option>
-                                <option value="disapproved">Disapproved</option>
-                                <option value="locked">Locked</option>
-                              </select>
-                            </div>
+                        );
+                      });
+                    })()}
+
+                    {users.length === 0 && <div style={{ padding: '60px 0', textAlign: 'center', color: '#9B9189', fontSize: 13 }}>No users found</div>}
+
+                    {/* ── Grant Access Modal ── */}
+                    {grantModal && (
+                      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+                        onClick={() => setGrantModal(null)}>
+                        <div style={{ background: '#fff', borderRadius: 18, padding: '28px 28px 24px', width: '100%', maxWidth: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.18)', position: 'relative' }}
+                          onClick={e => e.stopPropagation()}>
+
+                          {/* Close */}
+                          <button onClick={() => setGrantModal(null)}
+                            style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', cursor: 'pointer', color: '#9B9189', fontSize: 18, lineHeight: 1 }}>×</button>
+
+                          <h3 style={{ fontSize: 16, fontWeight: 700, color: '#2D2520', margin: '0 0 20px' }}>
+                            Access for {grantModal.name}
+                          </h3>
+
+                          {/* Tier */}
+                          <p style={{ fontSize: 11, fontWeight: 700, color: '#9B9189', textTransform: 'uppercase', letterSpacing: 0.8, margin: '0 0 8px' }}>Tier</p>
+                          <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+                            {(['premium', 'enterprise'] as const).map(t => (
+                              <button key={t} onClick={() => setGrantTier(t)}
+                                style={{ flex: 1, padding: '10px', borderRadius: 10, border: `2px solid ${grantTier === t ? '#C4785C' : '#EBE8E3'}`, background: grantTier === t ? '#FEF0EB' : '#fff', color: grantTier === t ? '#C4785C' : '#9B9189', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' }}>
+                                {t.charAt(0).toUpperCase() + t.slice(1)}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Duration */}
+                          <p style={{ fontSize: 11, fontWeight: 700, color: '#9B9189', textTransform: 'uppercase', letterSpacing: 0.8, margin: '0 0 8px' }}>For how long</p>
+                          <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+                            {[7, 14, 30, 90].map(d => (
+                              <button key={d} onClick={() => { setGrantDays(d); setGrantCustomDate(''); }}
+                                style={{ padding: '7px 14px', borderRadius: 8, border: `2px solid ${grantDays === d && !grantCustomDate ? '#C4785C' : '#EBE8E3'}`, background: grantDays === d && !grantCustomDate ? '#FEF0EB' : '#fff', color: grantDays === d && !grantCustomDate ? '#C4785C' : '#9B9189', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+                                {d} days
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Custom date */}
+                          <input type="date" value={grantCustomDate}
+                            onChange={e => { setGrantCustomDate(e.target.value); setGrantDays(null); }}
+                            style={{ width: '100%', border: '1px solid #EBE8E3', borderRadius: 9, padding: '8px 12px', fontSize: 12, color: '#2D2520', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', marginBottom: 8 }}
+                          />
+
+                          {/* Human-readable "Ends on" */}
+                          {(grantDays || grantCustomDate) && (() => {
+                            const d = grantCustomDate ? new Date(grantCustomDate) : new Date(Date.now() + (grantDays! * 86400000));
+                            const days = grantDays || Math.ceil((d.getTime() - Date.now()) / 86400000);
+                            return (
+                              <p style={{ fontSize: 11, color: '#9B9189', margin: '0 0 16px' }}>
+                                Ends {d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })} — {days} days from today.
+                              </p>
+                            );
+                          })()}
+
+                          {/* Reason */}
+                          <p style={{ fontSize: 11, fontWeight: 700, color: '#9B9189', textTransform: 'uppercase', letterSpacing: 0.8, margin: '0 0 6px' }}>Reason (kept on the account)</p>
+                          <input type="text" value={grantNote} onChange={e => setGrantNote(e.target.value)}
+                            placeholder="Trial for pilot study"
+                            style={{ width: '100%', border: '1px solid #EBE8E3', borderRadius: 9, padding: '8px 12px', fontSize: 12, color: '#2D2520', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', marginBottom: 14 }}
+                          />
+
+                          {/* Checkboxes */}
+                          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, color: '#2D2520', marginBottom: 8, cursor: 'pointer' }}>
+                            <input type="checkbox" checked={grantEmailThem} onChange={e => setGrantEmailThem(e.target.checked)} style={{ marginTop: 2, accentColor: '#C4785C' }} />
+                            <span><strong>Email them about it</strong><br /><span style={{ color: '#9B9189', fontSize: 11 }}>Says what they got, until when, and what happens after.</span></span>
+                          </label>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#2D2520', marginBottom: 16, cursor: 'pointer' }}>
+                            <input type="checkbox" checked={grantRemind} onChange={e => setGrantRemind(e.target.checked)} style={{ accentColor: '#C4785C' }} />
+                            Remind them 3 days before it ends
+                          </label>
+
+                          {/* Expiry info box */}
+                          <div style={{ background: '#FEF9F7', border: '1px solid #F0DDD5', borderRadius: 10, padding: '10px 14px', fontSize: 11, color: '#9B9189', marginBottom: 20, lineHeight: 1.6 }}>
+                            On expiry the account drops back to its own plan automatically. Journeys and data stay; the paid controls lock again.
+                          </div>
+
+                          {/* Buttons */}
+                          <div style={{ display: 'flex', gap: 10 }}>
+                            <button onClick={() => submitGrant(grantModal._id || grantModal.uid || '')}
+                              disabled={grantLoading || (!grantDays && !grantCustomDate)}
+                              style={{ flex: 2, padding: '11px', borderRadius: 10, border: 'none', background: '#C4785C', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', opacity: grantLoading || (!grantDays && !grantCustomDate) ? 0.6 : 1 }}>
+                              {grantLoading ? 'Saving…' : 'Give access'}
+                            </button>
+                            <button onClick={() => setGrantModal(null)} disabled={grantLoading}
+                              style={{ flex: 1, padding: '11px', borderRadius: 10, border: '1px solid #EBE8E3', background: '#fff', color: '#9B9189', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+                              Cancel
+                            </button>
                           </div>
                         </div>
-                      );
-                    })}
-                    {users.length === 0 && <div style={{ padding: '60px 0', textAlign: 'center', color: '#9B9189', fontSize: 13 }}>No users found</div>}
+                      </div>
+                    )}
                   </div>
                 )}
 

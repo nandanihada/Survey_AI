@@ -9,7 +9,8 @@ import {
   Layers, Plus, ChevronDown, ChevronRight, ExternalLink, Search, Calendar,
   Settings, BarChart3, Copy, Loader2, AlertCircle, ChevronLeft,
   Filter, Target, GitBranch, Edit3, Check, X, Trash2,
-  ArrowRight, RefreshCw, Eye, Link2, Zap, Info, Sparkles
+  ArrowRight, RefreshCw, Eye, Link2, Zap, Info, Sparkles,
+  Star, Tag, Folder, Copy as CopyIcon, GitFork, Shuffle
 } from 'lucide-react';
 import { getApiBaseUrl } from '../utils/deploymentFix';
 import { useAuth } from '../contexts/AuthContext';
@@ -59,6 +60,16 @@ interface Funnel {
   created_at: string;
   total_surveys: number;
   fallback_url?: string;
+  /** New: favourited by user */
+  is_favourite?: boolean;
+  /** New: exclusive folder */
+  folder?: 'live' | 'client' | 'drafts' | 'archive' | null;
+  /** New: tags list */
+  tags?: string[];
+  /** New: sent indicator — fielded journey */
+  is_sent?: boolean;
+  /** New: parent journey id for clone lineage */
+  parent_funnel_id?: string | null;
   generated_surveys: GeneratedSurvey[];
   screening_surveys: Array<{ survey_id: string; name: string; index: number }>;
   anchor_config?: {
@@ -902,13 +913,13 @@ const RouterSurveysPanel: React.FC<{ funnel: Funnel; isDarkMode: boolean; apiBas
 
 // ─── Funnel Row ───────────────────────────────────────────
 
-const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () => void; autoExpand?: boolean }> = ({
-  funnel, isDarkMode, onRefresh, autoExpand = false
+const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () => void; autoExpand?: boolean; allFunnels?: Funnel[] }> = ({
+  funnel, isDarkMode, onRefresh, autoExpand = false, allFunnels = []
 }) => {
   const navigate = useNavigate();
   const apiBase = getApiBaseUrl();
   const [expanded, setExpanded] = useState(autoExpand);
-  const [activeDetailTab, setActiveDetailTab] = useState<'overview' | 'scoring' | 'questions' | 'router'>('overview');
+  const [activeDetailTab, setActiveDetailTab] = useState<'overview' | 'scoring' | 'questions' | 'router' | 'redirects'>('overview');
   const [savingJobId, setSavingJobId] = useState<string | null>(null);
   const [editingTransitionJobId, setEditingTransitionJobId] = useState<string | null>(null);
   const [tempTransition, setTempTransition] = useState<any>({});
@@ -920,6 +931,201 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
   // Phase 1 spinner config
   const [editingSpinnerSurveyId, setEditingSpinnerSurveyId] = useState<string | null>(null);
   const [tempSpinner, setTempSpinner] = useState<any>({});
+
+  // ── Favourite ─────────────────────────────────────────────────────────────
+  const [isFav, setIsFav] = useState<boolean>(funnel.is_favourite ?? false);
+  const toggleFav = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = !isFav;
+    setIsFav(next);
+    try {
+      await fetch(`${apiBase}/api/funnels/${funnel.funnel_id}/favourite`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ is_favourite: next }),
+      });
+    } catch { setIsFav(!next); /* revert on error */ }
+  };
+
+  // ── Folder ────────────────────────────────────────────────────────────────
+  const [folder, setFolder] = useState<string>(funnel.folder || '');
+  const [showFolderPicker, setShowFolderPicker] = useState(false);
+  const FOLDERS = [
+    { id: 'live',    label: 'Live studies' },
+    { id: 'client',  label: 'Client work'  },
+    { id: 'drafts',  label: 'Drafts'       },
+    { id: 'archive', label: 'Archive'      },
+  ] as const;
+  const saveFolder = async (f: string) => {
+    setFolder(f);
+    setShowFolderPicker(false);
+    try {
+      await fetch(`${apiBase}/api/funnels/${funnel.funnel_id}/folder`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ folder: f }),
+      });
+    } catch { /* silent */ }
+  };
+
+  // ── Tags ──────────────────────────────────────────────────────────────────
+  const [tags, setTags] = useState<string[]>(funnel.tags || []);
+  const [tagInput, setTagInput] = useState('');
+  const [showTagInput, setShowTagInput] = useState(false);
+  const addTag = async () => {
+    const t = tagInput.trim().toLowerCase();
+    if (!t || tags.includes(t)) { setTagInput(''); return; }
+    const next = [...tags, t];
+    setTags(next);
+    setTagInput('');
+    try {
+      await fetch(`${apiBase}/api/funnels/${funnel.funnel_id}/tags`, {
+        method: 'PUT', headers: authHeaders(),
+        body: JSON.stringify({ tags: next }),
+      });
+    } catch { setTags(tags); /* revert */ }
+  };
+  const removeTag = async (t: string) => {
+    const next = tags.filter(x => x !== t);
+    setTags(next);
+    try {
+      await fetch(`${apiBase}/api/funnels/${funnel.funnel_id}/tags`, {
+        method: 'PUT', headers: authHeaders(),
+        body: JSON.stringify({ tags: next }),
+      });
+    } catch { setTags(tags); }
+  };
+
+  // ── Clone modal ───────────────────────────────────────────────────────────
+  const [showCloneModal, setShowCloneModal] = useState(false);
+  const [cloneMode, setCloneMode] = useState<'duplicate' | 'rewrite'>('duplicate');
+  const [showClonesDropdown, setShowClonesDropdown] = useState(false);
+  // Clones of this journey (child funnels from allFunnels list)
+  const clones = allFunnels.filter(f => f.parent_funnel_id === funnel.funnel_id);
+
+  // ── Quick set-up + Bulk edit ─────────────────────────────────────────────
+  // State shape: { [iconId]: 'off' | 'fixed' | 'shuffled' }
+  // iconId = 'template' | 'motion' | 'pages' | 'intro' | 'answer_type' | 'security' | 'images' | 'anchor'
+  type QuickState = 'off' | 'fixed' | 'shuffled';
+  type QuickSettings = Record<string, QuickState>;
+  const QUICK_CYCLE: QuickState[] = ['off', 'fixed', 'shuffled'];
+  const QUICK_ICONS = [
+    { id: 'template',    label: 'Template',    icon: '⊞', desc: 'Layout style per survey' },
+    { id: 'motion',      label: 'Motion',      icon: '◑', desc: 'Animation between questions' },
+    { id: 'pages',       label: 'Pages',       icon: '▣', desc: 'Loading, rating and ending pages' },
+    { id: 'intro',       label: 'Intro',       icon: '≡', desc: 'Description pages' },
+    { id: 'answer_type', label: 'Answer type', icon: '☰', desc: 'Question input types' },
+    { id: 'security',    label: 'Security',    icon: '✓', desc: 'Trap question settings' },
+    { id: 'images',      label: 'Images',      icon: '⊡', desc: 'Question images' },
+    { id: 'anchor',      label: 'Anchor',      icon: '⚓', desc: 'Fallback question' },
+  ] as const;  const DEFAULT_QUICK: QuickSettings = Object.fromEntries(QUICK_ICONS.map(ic => [ic.id, 'off']));
+  const [quickSettings, setQuickSettings] = useState<QuickSettings>(
+    (funnel as any).quick_settings || DEFAULT_QUICK
+  );
+  const [quickScope, setQuickScope] = useState<'screeners' | 'tore' | 'both'>('both');
+  const [quickHover, setQuickHover] = useState<string | null>(null);
+
+  const cycleQuick = (id: string, e: React.MouseEvent) => {
+    if (e.detail > 1) return; // guard: double/triple-tap does NOT cycle
+    const cur = quickSettings[id] || 'off';
+    const next = QUICK_CYCLE[(QUICK_CYCLE.indexOf(cur) + 1) % QUICK_CYCLE.length];
+    const updated = { ...quickSettings, [id]: next };
+    setQuickSettings(updated);
+    // Persist to backend
+    fetch(`${apiBase}/api/funnels/${funnel.funnel_id}`, {
+      method: 'PUT', headers: authHeaders(),
+      body: JSON.stringify({ quick_settings: updated, quick_scope: quickScope }),
+    }).catch(() => {});
+  };
+
+  const DOT_COLOR: Record<QuickState, string> = {
+    off:      '#9ca3af',
+    fixed:    '#16a34a',
+    shuffled: '#f59e0b',
+  };
+
+  // ── Bulk edit panel ───────────────────────────────────────────────────────
+  const [showBulkEdit, setShowBulkEdit] = useState(false);
+  const [bulkScope, setBulkScope] = useState<'screeners' | 'tore' | 'both'>('both');
+  type BulkSectionState = 'off' | 'fixed' | 'shuffled';
+  const BULK_SECTIONS = [
+    {
+      id: 'template', label: 'Template', icon: '⊞',
+      options: ['Classic', 'Card stack', 'One at a time', 'Chat style'],
+    },
+    {
+      id: 'motion', label: 'Motion', icon: '◑',
+      options: ['None', 'Fade', 'Slide', 'Spring'],
+    },
+    {
+      id: 'pages', label: 'Pages', icon: '▣',
+      desc: '4 loading · 4 rating · 4 ending',
+      options: ['Spinner', 'Progress bar', 'Message', 'Skeleton',
+                'Stars', 'Faces', 'Slider', 'Numeric',
+                'Thank you', 'Reward code', 'Redirect notice', 'Screen-out'],
+    },
+    {
+      id: 'intro', label: 'Intro', icon: '≡',
+      options: ['None', 'At start', 'Between', 'Both', 'Summary'],
+    },
+    {
+      id: 'answer_type', label: 'Answer type', icon: '☰',
+      options: ['Multiple choice', 'Yes/No', 'Short answer', 'Rating', 'Scale', 'Dropdown', 'Matrix', 'List'],
+    },
+    {
+      id: 'security', label: 'Security', icon: '✓',
+      options: ['Instant', 'This layer', 'All layers', 'Into Tor'],
+    },
+    {
+      id: 'images', label: 'Images', icon: '⊡',
+      options: ['None', 'Upload'],
+    },
+    {
+      id: 'anchor', label: 'Anchor', icon: '⚓',
+      options: ['Off', 'On'],
+    },
+  ] as const;
+  const [bulkSectionState, setBulkSectionState] = useState<Record<string, BulkSectionState>>(
+    Object.fromEntries(BULK_SECTIONS.map(s => [s.id, 'off']))
+  );
+  const [bulkSelections, setBulkSelections] = useState<Record<string, string>>({});
+  const [applyingBulk, setApplyingBulk] = useState(false);
+
+  const applyBulkEdit = async () => {
+    setApplyingBulk(true);
+    try {
+      await fetch(`${apiBase}/api/funnels/${funnel.funnel_id}`, {
+        method: 'PUT', headers: authHeaders(),
+        body: JSON.stringify({
+          bulk_settings: { scope: bulkScope, sections: bulkSectionState, selections: bulkSelections },
+        }),
+      });
+      onRefresh();
+      setShowBulkEdit(false);
+    } catch { /* silent */ }
+    finally { setApplyingBulk(false); }
+  };
+  const [clonePrompt, setClonePrompt] = useState('');
+  const [cloning, setCloning] = useState(false);
+  const [cloneResult, setCloneResult] = useState<{type:'success'|'error'; text:string} | null>(null);
+  const cloneJourney = async () => {
+    setCloning(true);
+    setCloneResult(null);
+    try {
+      const res = await fetch(`${apiBase}/api/funnels/${funnel.funnel_id}/clone`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ mode: cloneMode, rewrite_prompt: clonePrompt }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Clone failed');
+      const note = data.rewrite_note ? ` ${data.rewrite_note}` : '';
+      setCloneResult({ type: 'success', text: `Journey cloned successfully${note}. ${data.surveys_cloned} survey${data.surveys_cloned !== 1 ? 's' : ''} copied${data.redirect_slots_cleared ? `, ${data.redirect_slots_cleared} redirect slot${data.redirect_slots_cleared !== 1 ? 's' : ''} cleared` : ''}.` });
+      onRefresh();
+      setTimeout(() => { setShowCloneModal(false); setCloneResult(null); }, 2500);
+    } catch (err: any) {
+      setCloneResult({ type: 'error', text: err.message || 'Clone failed' });
+    } finally {
+      setCloning(false);
+    }
+  };
 
   // ── Collaborators ──────────────────────────────────────────────────────────
   const [collaborators, setCollaborators] = useState<{id: string; name: string; email: string}[]>([]);
@@ -1071,10 +1277,32 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
           <Layers size={18} className="text-blue-500" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className={`font-semibold text-sm truncate ${textMain}`}>{funnel.name}</p>
-          <p className={`text-xs truncate ${textMuted}`}>{funnel.goal}</p>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className={`font-semibold text-sm truncate ${textMain}`}>{funnel.name}</p>
+            {/* Sent indicator */}
+            {funnel.is_sent && (
+              <span title={`Sent · collecting responses`} className="text-blue-500 flex-shrink-0">✈️</span>
+            )}
+            {/* Folder chip */}
+            {folder && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0 ${isDarkMode ? 'bg-blue-900/40 text-blue-300' : 'bg-blue-100 text-blue-700'}`}>
+                {FOLDERS.find(f => f.id === folder)?.label || folder}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+            <p className={`text-xs ${textMuted}`}>{funnel.goal}</p>
+            {/* Tags */}
+            {tags.map(t => (
+              <span key={t} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${
+                t.startsWith('client:')
+                  ? isDarkMode ? 'bg-purple-900/50 text-purple-300' : 'bg-purple-100 text-purple-700'
+                  : isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
+              }`}>{t}</span>
+            ))}
+          </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           <span className={`text-xs px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>
             {funnel.total_surveys} surveys
           </span>
@@ -1084,10 +1312,77 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
           <span className={`text-xs px-2 py-0.5 rounded-full ${funnel.status === 'active' ? isDarkMode ? 'bg-green-900/50 text-green-400' : 'bg-green-100 text-green-700' : isDarkMode ? 'bg-gray-700 text-gray-500' : 'bg-gray-100 text-gray-500'}`}>
             {funnel.status}
           </span>
+          {/* Favourite star */}
+          <button
+            onClick={toggleFav}
+            title={isFav ? 'Remove from favourites' : 'Add to favourites'}
+            className={`p-1 rounded-lg transition flex-shrink-0 ${isFav ? 'text-amber-400' : isDarkMode ? 'text-gray-600 hover:text-amber-400' : 'text-gray-300 hover:text-amber-400'}`}
+          >
+            <Star size={14} fill={isFav ? 'currentColor' : 'none'} />
+          </button>
+          {/* Clone button */}
+          <button
+            onClick={e => { e.stopPropagation(); setShowCloneModal(true); }}
+            title="Clone journey"
+            className={`p-1 rounded-lg transition flex-shrink-0 ${isDarkMode ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-700' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+          >
+            <GitFork size={14} />
+          </button>
+          {/* Clones dropdown — shown when this journey has clones */}
+          {clones.length > 0 && (
+            <div className="relative flex-shrink-0">
+              <button
+                onClick={e => { e.stopPropagation(); setShowClonesDropdown(v => !v); }}
+                title={`${clones.length} clone${clones.length > 1 ? 's' : ''}`}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-bold transition border ${
+                  showClonesDropdown
+                    ? isDarkMode ? 'bg-blue-900/60 text-blue-300 border-blue-700' : 'bg-blue-100 text-blue-700 border-blue-300'
+                    : isDarkMode ? 'bg-gray-700 text-gray-400 border-gray-600 hover:bg-gray-600' : 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100'
+                }`}
+              >
+                <GitFork size={11} />
+                {clones.length} clone{clones.length > 1 ? 's' : ''}
+                <ChevronDown size={10} className={`transition-transform ${showClonesDropdown ? 'rotate-180' : ''}`} />
+              </button>
+              {showClonesDropdown && (
+                <div
+                  className={`absolute right-0 top-full mt-1 z-30 rounded-xl shadow-xl border py-1 min-w-[240px] ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}
+                  onClick={e => e.stopPropagation()}
+                >
+                  <p className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                    {clones.length} clone{clones.length > 1 ? 's' : ''} of this journey
+                  </p>
+                  {clones.map(c => (
+                    <div key={c.funnel_id}
+                      className={`px-3 py-2.5 flex items-start gap-2.5 border-l-2 border-l-blue-400 ml-2 mr-1 rounded-r-lg mb-0.5 ${isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-blue-50'}`}>
+                      <GitFork size={12} className={`mt-0.5 flex-shrink-0 ${isDarkMode ? 'text-blue-400' : 'text-blue-500'}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-xs font-semibold truncate ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{c.name}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${c.status === 'active' ? isDarkMode ? 'bg-green-900/40 text-green-400' : 'bg-green-100 text-green-700' : isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>
+                            {c.status}
+                          </span>
+                          <span className={`text-[10px] ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                            {c.created_at ? new Date(c.created_at).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) : ''}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => window.open(`/surveys?open=${c.funnel_id}`, '_blank')}
+                        className={`text-[10px] flex-shrink-0 mt-0.5 ${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}
+                      >
+                        Open ↗
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <button
             onClick={e => { e.stopPropagation(); deleteFunnel(); }}
             disabled={deletingFunnel}
-            title="Delete funnel"
+            title="Delete journey"
             className={`p-1 rounded-lg transition disabled:opacity-50 ${isDarkMode ? 'text-red-400 hover:bg-red-900/40 hover:text-red-300' : 'text-red-400 hover:bg-red-50 hover:text-red-600'}`}
           >
             {deletingFunnel ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
@@ -1101,10 +1396,10 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
 
           {/* Detail tabs */}
           <div className={`inline-flex rounded-xl border p-1 gap-1 ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-100 border-gray-200'}`}>
-            {(['overview', 'scoring', 'questions', 'router'] as const).map(tab => (
-              <button key={tab} onClick={() => setActiveDetailTab(tab)}
+            {(['overview', 'scoring', 'questions', 'router', 'redirects'] as const).map(tab => (
+              <button key={tab} onClick={() => setActiveDetailTab(tab as any)}
                 className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${activeDetailTab === tab ? 'bg-blue-600 text-white' : isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>
-                {tab === 'overview' ? '📋 Overview' : tab === 'scoring' ? '📊 AI Scoring' : tab === 'questions' ? '❓ Questions' : '⚓ Router Surveys'}
+                {tab === 'overview' ? '📋 Overview' : tab === 'scoring' ? '📊 Matching' : tab === 'questions' ? '❓ Questions' : tab === 'router' ? '⚓ Entry point' : '↗ Redirects'}
               </button>
             ))}
           </div>
@@ -1117,18 +1412,23 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
               <button onClick={copyFunnelLink}
                 className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border ${isDarkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
                 {copied ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
-                {copied ? 'Copied!' : 'Copy funnel link'}
+                {copied ? 'Copied!' : 'Copy journey link'}
               </button>
               <button onClick={fetchAnalytics}
                 className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border ${isDarkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
                 <BarChart3 size={12} /> Refresh analytics
+              </button>
+              {/* Clone journey */}
+              <button onClick={() => setShowCloneModal(true)}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border ${isDarkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+                <GitFork size={12} /> Clone journey
               </button>
               <button
                 onClick={deleteFunnel}
                 disabled={deletingFunnel}
                 className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border disabled:opacity-50 ${isDarkMode ? 'border-red-800/60 text-red-400 hover:bg-red-900/30' : 'border-red-200 text-red-600 hover:bg-red-50'}`}>
                 {deletingFunnel ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-                {deletingFunnel ? 'Deleting...' : 'Delete Funnel'}
+                {deletingFunnel ? 'Deleting...' : 'Delete journey'}
               </button>
               {/* Regenerate button — shown whenever Phase 1 screening is empty */}
               {funnel.generated_surveys.filter(s => s.type === 'screening').length === 0 && (
@@ -1140,12 +1440,141 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
                   compact
                 />
               )}
+              {/* Bulk edit — add to action row */}
+              <button onClick={() => setShowBulkEdit(true)}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-900 text-white hover:bg-gray-700 font-semibold">
+                <Shuffle size={12} /> Bulk edit
+              </button>
+            </div>
+
+            {/* Folder & Tags */}
+            <div className={`rounded-xl border p-3 space-y-3 ${isDarkMode ? 'border-gray-700 bg-gray-750' : 'border-gray-200 bg-gray-50'}`}>
+              {/* Folder picker */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`text-xs font-semibold ${textMuted} flex items-center gap-1`}><Folder size={12} /> Folder:</span>
+                {FOLDERS.map(f => (
+                  <button key={f.id} onClick={() => saveFolder(folder === f.id ? '' : f.id)}
+                    className={`text-[11px] px-2.5 py-1 rounded-full border font-semibold transition-colors ${
+                      folder === f.id
+                        ? isDarkMode ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-600 text-white border-blue-600'
+                        : isDarkMode ? 'border-gray-600 text-gray-400 hover:border-blue-500 hover:text-blue-400' : 'border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600'
+                    }`}
+                  >{f.label}</button>
+                ))}
+              </div>
+
+              {/* Tags */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className={`text-xs font-semibold ${textMuted} flex items-center gap-1`}><Tag size={12} /> Tags:</span>
+                {tags.map(t => (
+                  <span key={t} className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                    t.startsWith('client:')
+                      ? isDarkMode ? 'bg-purple-900/50 text-purple-300' : 'bg-purple-100 text-purple-700'
+                      : isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {t}
+                    <button onClick={() => removeTag(t)} className="ml-0.5 opacity-60 hover:opacity-100">
+                      <X size={9} />
+                    </button>
+                  </span>
+                ))}
+                {showTagInput ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      autoFocus
+                      value={tagInput}
+                      onChange={e => setTagInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') addTag(); if (e.key === 'Escape') { setShowTagInput(false); setTagInput(''); } }}
+                      placeholder="tag or client:name"
+                      className={`text-[11px] px-2 py-0.5 rounded-lg border w-32 focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-800'}`}
+                    />
+                    <button onClick={addTag} className="text-[11px] px-2 py-0.5 bg-blue-600 text-white rounded-lg">Add</button>
+                    <button onClick={() => { setShowTagInput(false); setTagInput(''); }} className={`text-[11px] px-1.5 py-0.5 rounded-lg ${isDarkMode ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'}`}><X size={11} /></button>
+                  </div>
+                ) : (
+                  <button onClick={() => setShowTagInput(true)} className={`text-[11px] px-2 py-0.5 rounded-full border border-dashed transition-colors ${isDarkMode ? 'border-gray-600 text-gray-500 hover:text-gray-300' : 'border-gray-300 text-gray-400 hover:text-gray-600'}`}>
+                    + tag
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* ── Quick set-up bar ── */}
+            <div className={`rounded-xl border p-3 space-y-2.5 ${isDarkMode ? 'border-gray-700 bg-gray-750' : 'border-gray-200 bg-white'}`}>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <p className={`text-xs font-semibold ${textMain} flex items-center gap-1.5`}>
+                  <Zap size={12} className="text-amber-500" /> Quick set-up
+                </p>
+                {/* Scope filter */}
+                <div className={`inline-flex rounded-lg border p-0.5 gap-0.5 ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-100 border-gray-200'}`}>
+                  {(['screeners', 'tore', 'both'] as const).map(sc => (
+                    <button key={sc} onClick={() => setQuickScope(sc)}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                        quickScope === sc ? 'bg-blue-600 text-white' : isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
+                      }`}>
+                      {sc === 'screeners' ? 'Screeners' : sc === 'tore' ? 'Tore' : 'Both'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 8 icon buttons */}
+              <div className="flex items-center gap-3 flex-wrap">
+                {QUICK_ICONS.map(ic => {
+                  const state = quickSettings[ic.id] || 'off';
+                  // Map each icon id to a lucide component
+                  const iconMap: Record<string, React.ReactNode> = {
+                    template:    <Settings size={16} />,
+                    motion:      <Zap size={16} />,
+                    pages:       <Eye size={16} />,
+                    intro:       <Info size={16} />,
+                    answer_type: <Layers size={16} />,
+                    security:    <GitBranch size={16} />,
+                    images:      <Link2 size={16} />,
+                    anchor:      <Target size={16} />,
+                  };
+                  return (
+                    <div key={ic.id} className="relative flex flex-col items-center"
+                      onMouseEnter={() => setQuickHover(ic.id)}
+                      onMouseLeave={() => setQuickHover(null)}>
+                      <button
+                        onClick={e => cycleQuick(ic.id, e)}
+                        title={`${ic.label} · ${state} · tap to cycle`}
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
+                          state !== 'off'
+                            ? isDarkMode ? 'bg-gray-600 text-white' : 'bg-gray-800 text-white'
+                            : isDarkMode ? 'bg-gray-700 text-gray-400 hover:bg-gray-600' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                        }`}
+                      >
+                        {iconMap[ic.id] || ic.icon}
+                      </button>
+                      {/* State dot */}
+                      <span className="w-1.5 h-1.5 rounded-full mt-0.5 flex-shrink-0"
+                        style={{ background: DOT_COLOR[state] }} />
+                      {/* Tooltip */}
+                      {quickHover === ic.id && (
+                        <div className={`absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 z-20 rounded-lg px-2 py-1 text-[10px] font-semibold whitespace-nowrap shadow-lg ${isDarkMode ? 'bg-gray-900 text-gray-100' : 'bg-gray-900 text-white'}`}>
+                          {ic.label}
+                          <br />
+                          <span className="font-normal opacity-75">{state}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {/* State legend */}
+                <div className={`ml-auto flex items-center gap-3 text-[10px] ${textMuted}`}>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-400 inline-block" /> Off</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-600 inline-block" /> Fixed</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" /> Shuffled</span>
+                </div>
+              </div>
             </div>
 
             {/* Analytics */}
             {analytics && (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[{ label: 'Total sessions', value: analytics.total_sessions }, { label: 'Completed', value: analytics.completed }, { label: 'Terminated', value: analytics.terminated }, { label: 'No match', value: analytics.no_match }]
+                {[{ label: 'Total sessions', value: analytics.total_sessions }, { label: 'Completed', value: analytics.completed }, { label: 'Screened out', value: analytics.terminated }, { label: 'Unrouted', value: analytics.no_match }]
                   .map(item => (
                     <div key={item.label} className={`rounded-xl p-3 text-center ${isDarkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
                       <p className={`text-xl font-bold ${textMain}`}>{item.value}</p>
@@ -1291,7 +1720,7 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
             {/* Job surveys */}
             <div>
               <p className={`text-xs font-semibold uppercase tracking-wide mb-2 flex items-center gap-2 ${textMuted}`}>
-                <Target size={12} /> Phase 2 — Destination Surveys
+                <Target size={12} /> Phase 2 — Tore
               </p>
               <div className="space-y-3">
                 {funnel.generated_surveys.filter(s => s.type === 'job').map((s, i) => {
@@ -1330,7 +1759,7 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
                       <div>
                         <button onClick={() => setEditingTransitionJobId(editingTransitionJobId === jobId ? null : jobId)}
                           className={`flex items-center gap-1.5 text-xs ${textMuted} hover:text-gray-700`}>
-                          <ArrowRight size={12} /> Transition page on fail
+                          <ArrowRight size={12} /> Screen-out page
                           <ChevronDown size={12} className={`transition-transform ${editingTransitionJobId === jobId ? 'rotate-180' : ''}`} />
                         </button>
                         {editingTransitionJobId === jobId && (
@@ -1421,7 +1850,7 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
                             </div>
                             <button onClick={async () => { await saveJobConfig(jobId, { transition_page: { ...transition, ...tempTransition } }); setEditingTransitionJobId(null); setTempTransition({}); }}
                               className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg font-medium">
-                              {savingJobId === jobId ? <Loader2 size={12} className="animate-spin inline" /> : 'Save transition page'}
+                              {savingJobId === jobId ? <Loader2 size={12} className="animate-spin inline" /> : 'Save screen-out page'}
                             </button>
                           </div>
                         )}
@@ -1435,7 +1864,7 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
             {/* Fallback URL */}
             <div>
               <p className={`text-xs font-semibold uppercase tracking-wide mb-2 flex items-center gap-2 ${textMuted}`}>
-                <X size={12} /> Fallback (no match / all fail)
+                <X size={12} /> Fallback (unrouted / all screened out)
               </p>
               {editingFallback ? (
                 <div className="flex gap-2">
@@ -1532,6 +1961,253 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
           {activeDetailTab === 'router' && (
             <RouterSurveysPanel funnel={funnel} isDarkMode={isDarkMode} apiBase={apiBase} authHeaders={authHeaders} onRefresh={onRefresh} />
           )}
+
+          {/* ── REDIRECTS TAB ── */}
+          {activeDetailTab === 'redirects' && (() => {
+            // Collect all redirect slots across all surveys in this journey
+            const rows: { surveyName: string; surveyId: string; onMatch: string; screenOut: string }[] = [];
+            const allSurveys = [
+              ...funnel.generated_surveys.filter(s => s.type === 'screening').map(s => ({ ...s, phase: 'screening' as const })),
+              ...funnel.generated_surveys.filter(s => s.type === 'job').map(s => ({ ...s, phase: 'job' as const })),
+            ];
+            allSurveys.forEach(s => {
+              const jobCfg = s.phase === 'job' ? (funnel.job_surveys?.[s.job_id || ''] || {} as any) : null;
+              rows.push({
+                surveyName: s.name,
+                surveyId: s.survey_id,
+                onMatch: s.phase === 'screening' ? '—' : (jobCfg?.redirect_url || ''),
+                screenOut: s.phase === 'screening' ? '' : (jobCfg?.transition_page?.screen_out_url || ''),
+              });
+            });
+            const filled = rows.filter(r => r.onMatch && r.onMatch !== '—').length;
+            const total_slots = rows.filter(r => r.onMatch !== '—').length;
+            const notSet = rows.filter(r => r.onMatch !== '—' && !r.onMatch).length;
+            return (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <p className={`text-xs font-semibold ${textMain}`}>{filled}/{total_slots} slots filled</p>
+                  {notSet > 0 && <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">{notSet} not set</span>}
+                </div>
+                <div className={`rounded-xl border overflow-hidden ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className={isDarkMode ? 'bg-gray-800' : 'bg-gray-50'}>
+                        <th className={`text-left px-3 py-2 font-semibold ${textMuted}`}>Survey</th>
+                        <th className={`text-left px-3 py-2 font-semibold ${textMuted}`}>On match</th>
+                        <th className={`text-right px-3 py-2`}>
+                          <button onClick={() => window.open(`/edit/${rows[0]?.surveyId}`, '_blank')} className="text-blue-500 text-[10px] hover:underline">Edit ↗</button>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((r, i) => (
+                        <tr key={i} className={`border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-100'}`}>
+                          <td className={`px-3 py-2 ${textMain}`}>{r.surveyName}</td>
+                          <td className="px-3 py-2">
+                            {r.onMatch === '—' ? (
+                              <span className={`${textMuted}`}>—</span>
+                            ) : r.onMatch ? (
+                              <a href={r.onMatch} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline truncate block max-w-[200px]">{r.onMatch}</a>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold">Not set</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <button onClick={() => window.open(`/edit/${r.surveyId}`, '_blank')} className={`text-[10px] ${isDarkMode ? 'text-blue-400' : 'text-blue-600'} hover:underline`}>Edit ↗</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* ── Bulk edit panel ── */}
+      {showBulkEdit && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => { if (!applyingBulk) setShowBulkEdit(false); }}>
+          <div
+            className={`w-full sm:max-w-2xl rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}
+            style={{ maxHeight: '90vh' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Sticky header */}
+            <div className={`flex items-center justify-between px-5 py-4 border-b flex-shrink-0 ${isDarkMode ? 'border-gray-700' : 'border-gray-100'}`}>
+              <div>
+                <h3 className={`text-base font-bold flex items-center gap-2 ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+                  <Shuffle size={16} className="text-blue-500" /> Bulk edit
+                </h3>
+                <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Applies to surveys still following the journey default. Individually-set surveys keep their settings.
+                </p>
+              </div>
+              <button onClick={() => setShowBulkEdit(false)} className={`p-1.5 rounded-lg ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}>
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Scope switcher */}
+            <div className={`px-5 py-3 border-b flex items-center gap-3 flex-shrink-0 ${isDarkMode ? 'border-gray-700' : 'border-gray-100'}`}>
+              <span className={`text-xs font-semibold ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Scope:</span>
+              <div className={`inline-flex rounded-xl border p-1 gap-1 ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-100 border-gray-200'}`}>
+                {(['screeners', 'tore', 'both'] as const).map(sc => {
+                  const count = sc === 'screeners'
+                    ? funnel.generated_surveys.filter(s => s.type === 'screening').length
+                    : sc === 'tore'
+                    ? funnel.generated_surveys.filter(s => s.type === 'job').length
+                    : funnel.generated_surveys.length;
+                  return (
+                    <button key={sc} onClick={() => setBulkScope(sc)}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
+                        bulkScope === sc ? 'bg-blue-600 text-white' : isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
+                      }`}>
+                      {sc === 'screeners' ? 'Screeners' : sc === 'tore' ? 'Tore' : 'Both'} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Scrollable settings list */}
+            <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+              {BULK_SECTIONS.map(section => {
+                const sState: BulkSectionState = bulkSectionState[section.id] || 'off';
+                const selected = bulkSelections[section.id] || '';
+                return (
+                  <div key={section.id} className={`rounded-xl border p-4 space-y-3 ${isDarkMode ? 'border-gray-700 bg-gray-750' : 'border-gray-200 bg-gray-50'}`}>
+                    {/* Section header */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">{section.icon}</span>
+                        <span className={`text-xs font-bold uppercase tracking-wide ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{section.label}</span>
+                        {'desc' in section && <span className={`text-[10px] ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>{(section as any).desc}</span>}
+                      </div>
+                      {/* Off / Fixed / Shuffled toggle */}
+                      <div className={`inline-flex rounded-lg border p-0.5 gap-0.5 ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'}`}>
+                        {(['off', 'fixed', 'shuffled'] as const).map(st => (
+                          <button key={st} onClick={() => setBulkSectionState(prev => ({ ...prev, [section.id]: st }))}
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide transition-colors ${
+                              sState === st
+                                ? st === 'off' ? 'bg-gray-500 text-white' : st === 'fixed' ? 'bg-green-600 text-white' : 'bg-amber-400 text-white'
+                                : isDarkMode ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
+                            }`}>
+                            {st}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* State explainer */}
+                    {sState === 'shuffled' && (
+                      <p className={`text-[11px] ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`}>
+                        A different option per respondent — selection below is ignored.
+                      </p>
+                    )}
+                    {sState === 'off' && (
+                      <p className={`text-[11px] ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Nothing applied — surveys use their own settings.</p>
+                    )}
+
+                    {/* Options — shown when fixed */}
+                    {sState === 'fixed' && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {section.options.map(opt => (
+                          <button key={opt} onClick={() => setBulkSelections(prev => ({ ...prev, [section.id]: opt }))}
+                            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors ${
+                              selected === opt
+                                ? isDarkMode ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-600 text-white border-blue-600'
+                                : isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-300 hover:border-blue-500' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-400'
+                            }`}>
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              <p className={`text-[11px] ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                Flow and Clone are not included — branching rules differ per survey and can't be bulk-applied.
+              </p>
+            </div>
+
+            {/* Sticky footer */}
+            <div className={`flex items-center gap-3 px-5 py-4 border-t flex-shrink-0 ${isDarkMode ? 'border-gray-700' : 'border-gray-100'}`}>
+              <button onClick={() => setShowBulkEdit(false)} disabled={applyingBulk}
+                className={`flex-1 py-2.5 rounded-xl text-xs font-semibold border transition-colors ${isDarkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                Cancel
+              </button>
+              <button onClick={applyBulkEdit} disabled={applyingBulk}
+                className="flex-[2] py-2.5 rounded-xl text-xs font-semibold bg-gray-900 hover:bg-gray-700 text-white disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5">
+                {applyingBulk ? <><Loader2 size={12} className="animate-spin" /> Applying…</> : `Apply to ${bulkScope === 'screeners' ? 'screeners' : bulkScope === 'tore' ? 'Tore' : 'all surveys'}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Clone modal ── */}
+      {showCloneModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => { if (!cloning) setShowCloneModal(false); }}>
+          <div className={`w-full max-w-md rounded-2xl shadow-2xl p-6 space-y-4 ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className={`text-base font-bold ${textMain}`}>Clone journey</h3>
+              <button onClick={() => setShowCloneModal(false)} className={`p-1 rounded-lg ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}><X size={16} /></button>
+            </div>
+
+            {/* Mode selector */}
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { id: 'duplicate', label: 'Duplicate', desc: 'Exact copy — questions, weights, flow, pages' },
+                { id: 'rewrite',   label: 'Duplicate & rewrite', desc: 'Same structure, new subject via a prompt' },
+              ] as const).map(m => (
+                <button key={m.id} onClick={() => setCloneMode(m.id)}
+                  className={`p-3 rounded-xl border text-left transition-colors ${cloneMode === m.id ? isDarkMode ? 'border-blue-500 bg-blue-900/30' : 'border-blue-500 bg-blue-50' : isDarkMode ? 'border-gray-600 hover:border-gray-500' : 'border-gray-200 hover:border-gray-300'}`}
+                >
+                  <p className={`text-xs font-semibold ${textMain}`}>{m.label}</p>
+                  <p className={`text-[10px] mt-0.5 ${textMuted}`}>{m.desc}</p>
+                </button>
+              ))}
+            </div>
+
+            {/* Rewrite prompt */}
+            {cloneMode === 'rewrite' && (
+              <div>
+                <label className={`block text-xs font-medium ${textMuted} mb-1`}>Rewrite subject</label>
+                <textarea
+                  rows={2}
+                  value={clonePrompt}
+                  onChange={e => setClonePrompt(e.target.value)}
+                  placeholder="e.g. Same study, but for Flipkart instead of Amazon"
+                  className={`w-full text-xs rounded-lg px-3 py-2 border resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'}`}
+                />
+              </div>
+            )}
+
+            {/* Info note */}
+            <div className={`rounded-lg p-3 text-[11px] ${isDarkMode ? 'bg-gray-700/60 text-gray-400' : 'bg-gray-50 text-gray-500'}`}>
+              ⚠️ Redirect slots arrive empty — fill them in the Redirects tab after cloning. Saved as <strong>draft</strong>, never active.
+            </div>
+
+            {cloneResult && (
+              <p className={`text-xs font-medium ${cloneResult.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>{cloneResult.text}</p>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setShowCloneModal(false)} disabled={cloning}
+                className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-colors ${isDarkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                Cancel
+              </button>
+              <button onClick={cloneJourney} disabled={cloning || (cloneMode === 'rewrite' && !clonePrompt.trim())}
+                className="flex-1 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5">
+                {cloning ? <><Loader2 size={12} className="animate-spin" /> {cloneMode === 'rewrite' ? 'Rewriting with AI…' : 'Cloning…'}</> : <><GitFork size={12} /> {cloneMode === 'rewrite' ? 'Duplicate & rewrite' : 'Clone'}</>}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -1551,6 +2227,8 @@ const FunnelList: React.FC<Props> = ({ isDarkMode = false, onCreateNew }) => {
   const [autoExpandFunnelId, setAutoExpandFunnelId] = useState<string | null>(
     searchParams.get('open') || null
   );
+  // ── Favourites filter ─────────────────────────────────────────────────────
+  const [favOnly, setFavOnly] = useState(false);
   // ── Pagination & filters ──────────────────────────────────────────────────
   const [page, setPage]               = useState(1);
   const [totalPages, setTotalPages]   = useState(1);
@@ -1606,8 +2284,8 @@ const FunnelList: React.FC<Props> = ({ isDarkMode = false, onCreateNew }) => {
         <div className={`max-w-2xl mx-auto rounded-2xl border p-6 ${cardBg}`}>
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className={`text-xl font-bold ${textMain}`}>Create Funnel Survey</h2>
-              <p className={`text-sm ${textMuted}`}>Describe your funnel and AI will build everything</p>
+              <h2 className={`text-xl font-bold ${textMain}`}>Create Journey</h2>
+              <p className={`text-sm ${textMuted}`}>Describe your journey and AI will build everything</p>
             </div>
             <button onClick={() => setShowCreator(false)} className={`p-2 rounded-lg ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}>
               <X size={20} />
@@ -1625,15 +2303,24 @@ const FunnelList: React.FC<Props> = ({ isDarkMode = false, onCreateNew }) => {
       {/* ── Header ── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className={`text-lg font-bold ${textMain}`}>Funnel Surveys</h2>
-          <p className={`text-sm ${textMuted}`}>{total} funnel{total !== 1 ? 's' : ''} · page {page} of {totalPages}</p>
+          <h2 className={`text-lg font-bold ${textMain}`}>Journeys</h2>
+          <p className={`text-sm ${textMuted}`}>{total} journey{total !== 1 ? 's' : ''} · page {page} of {totalPages}</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Favourites filter pill */}
+          <button onClick={() => setFavOnly(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+              favOnly
+                ? 'bg-amber-400 text-white border-amber-400'
+                : isDarkMode ? 'border-gray-600 text-gray-400 hover:border-amber-400 hover:text-amber-400' : 'border-gray-300 text-gray-500 hover:border-amber-400 hover:text-amber-500'
+            }`}>
+            <Star size={12} fill={favOnly ? 'currentColor' : 'none'} /> Favourites
+          </button>
           <button onClick={() => fetchFunnels(page, search, dateFrom, dateTo)} className={`p-2 rounded-lg ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}>
             <RefreshCw size={16} />
           </button>
           <button onClick={() => setShowCreator(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold">
-            <Plus size={16} /> New Funnel
+            <Plus size={16} /> New Journey
           </button>
         </div>
       </div>
@@ -1644,7 +2331,7 @@ const FunnelList: React.FC<Props> = ({ isDarkMode = false, onCreateNew }) => {
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           <input
             className={`w-full pl-8 pr-3 py-2 rounded-lg border text-sm ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-800'}`}
-            placeholder="Search funnels…"
+            placeholder="Search journeys…"
             value={searchInput}
             onChange={e => setSearchInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') { setSearch(searchInput); fetchFunnels(1, searchInput, dateFrom, dateTo); } }}
@@ -1697,13 +2384,13 @@ const FunnelList: React.FC<Props> = ({ isDarkMode = false, onCreateNew }) => {
         <div className={`rounded-2xl border-2 border-dashed p-12 text-center ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
           <Layers size={40} className={`mx-auto mb-4 ${isDarkMode ? 'text-gray-600' : 'text-gray-300'}`} />
           <p className={`font-semibold ${textMain}`}>
-            {search || dateFrom || dateTo ? 'No funnels match your filters' : 'No funnel surveys yet'}
+            {search || dateFrom || dateTo ? 'No journeys match your filters' : 'No journeys yet'}
           </p>
           {!search && !dateFrom && !dateTo && (
             <>
-              <p className={`text-sm mt-1 mb-4 ${textMuted}`}>Create your first funnel — AI builds all surveys, scoring, and routing automatically.</p>
+              <p className={`text-sm mt-1 mb-4 ${textMuted}`}>Create your first journey — AI builds all surveys, scoring, and routing automatically.</p>
               <button onClick={() => setShowCreator(true)} className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold">
-                <Plus size={16} /> Create Funnel Survey
+                <Plus size={16} /> Create Journey
               </button>
             </>
           )}
@@ -1713,15 +2400,21 @@ const FunnelList: React.FC<Props> = ({ isDarkMode = false, onCreateNew }) => {
       {/* ── Funnel rows ── */}
       {!loading && funnels.length > 0 && (
         <div className="space-y-3">
-          {funnels.map(f => (
+          {funnels
+            .filter(f => !favOnly || f.is_favourite)
+            .map(f => (
             <FunnelRow
               key={f.funnel_id}
               funnel={f}
               isDarkMode={isDarkMode}
               onRefresh={() => fetchFunnels(page, search, dateFrom, dateTo)}
               autoExpand={f.funnel_id === autoExpandFunnelId}
+              allFunnels={funnels}
             />
           ))}
+          {favOnly && funnels.filter(f => f.is_favourite).length === 0 && (
+            <div className={`text-center py-8 text-sm ${textMuted}`}>No favourite journeys yet — click the ⭐ on any journey.</div>
+          )}
         </div>
       )}
 

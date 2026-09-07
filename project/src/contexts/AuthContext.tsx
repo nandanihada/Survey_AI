@@ -271,6 +271,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       'rating_style_stars', 'rating_style_faces', 'rating_style_slider', 'rating_style_numeric', 'rating_style_dots',
       // funnel
       'funnel_spinner_style', 'funnel_ending_styles',
+      'journey_favourites', 'journey_clone', 'journey_clone_rewrite', 'journey_bulk_edit', 'journey_redirects_tab',
     ];
 
     const PREMIUM_FEATURES = [
@@ -297,6 +298,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       'rating_style_stars', 'rating_style_faces', 'rating_style_slider', 'rating_style_numeric',
       // funnel
       'funnel_spinner_style', 'funnel_ending_styles',
+      'journey_favourites', 'journey_clone', 'journey_redirects_tab',
     ];
 
     const FREE_FEATURES = [
@@ -313,6 +315,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // free special pages and rating
       'editor_ending_page',
       'rating_style_stars',
+      // journey basics free for all
+      'journey_favourites', 'journey_redirects_tab',
     ];
 
     if (user.role === 'enterprise') return ENTERPRISE_FEATURES.includes(feature);

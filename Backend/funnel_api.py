@@ -1195,6 +1195,12 @@ def get_funnels():
             "anchor_config":     f.get("anchor_config"),
             "router_survey_ids": f.get("router_survey_ids", []),
             "fallback_url":      f.get("fallback_url", ""),
+            # ── New fields ──────────────────────────────────────────────────
+            "is_favourite":      bool(f.get("is_favourite", False)),
+            "folder":            f.get("folder", None),
+            "tags":              f.get("tags", []),
+            "is_sent":           bool(f.get("is_sent", False)),
+            "parent_funnel_id":  f.get("parent_funnel_id", None),
         })
 
     return jsonify({
@@ -2276,3 +2282,244 @@ Return ONLY JSON: {{"is_funnel": true/false, "confidence": 0-100, "reason": "one
         print(f"⚠️ detect_funnel_prompt error: {e}")
 
     return jsonify({"is_funnel": False, "reason": "", "confidence": 0}), 200
+
+
+# ═══════════════════════════════════════════════════════
+#  FAVOURITE
+# ═══════════════════════════════════════════════════════
+
+@funnel_bp.route("/api/funnels/<funnel_id>/favourite", methods=["POST", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins=ALLOWED_ORIGINS)
+@requireAuth
+def toggle_favourite(funnel_id):
+    """Set or clear the favourite flag on a journey."""
+    if request.method == "OPTIONS":
+        return "", 200
+    data = request.get_json() or {}
+    is_fav = bool(data.get("is_favourite", False))
+    result = db.funnels.update_one(
+        {"funnel_id": funnel_id},
+        {"$set": {"is_favourite": is_fav, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    if result.matched_count == 0:
+        return jsonify({"error": "Journey not found"}), 404
+    return jsonify({"is_favourite": is_fav}), 200
+
+
+# ═══════════════════════════════════════════════════════
+#  FOLDER
+# ═══════════════════════════════════════════════════════
+
+@funnel_bp.route("/api/funnels/<funnel_id>/folder", methods=["POST", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins=ALLOWED_ORIGINS)
+@requireAuth
+def set_folder(funnel_id):
+    """Set the exclusive folder for a journey."""
+    if request.method == "OPTIONS":
+        return "", 200
+    data = request.get_json() or {}
+    folder = data.get("folder", "")
+    VALID = {"live", "client", "drafts", "archive", ""}
+    if folder not in VALID:
+        return jsonify({"error": f"Invalid folder. Must be one of: {', '.join(VALID)}"}), 400
+    db.funnels.update_one(
+        {"funnel_id": funnel_id},
+        {"$set": {"folder": folder or None, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return jsonify({"folder": folder}), 200
+
+
+# ═══════════════════════════════════════════════════════
+#  TAGS
+# ═══════════════════════════════════════════════════════
+
+@funnel_bp.route("/api/funnels/<funnel_id>/tags", methods=["PUT", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins=ALLOWED_ORIGINS)
+@requireAuth
+def update_tags(funnel_id):
+    """Replace the full tags list on a journey."""
+    if request.method == "OPTIONS":
+        return "", 200
+    data = request.get_json() or {}
+    tags = data.get("tags", [])
+    if not isinstance(tags, list):
+        return jsonify({"error": "tags must be a list"}), 400
+    # Sanitise: lowercase strings only, max 30 chars each, max 20 tags
+    tags = [str(t).strip().lower()[:30] for t in tags if t][:20]
+    db.funnels.update_one(
+        {"funnel_id": funnel_id},
+        {"$set": {"tags": tags, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return jsonify({"tags": tags}), 200
+
+
+# ═══════════════════════════════════════════════════════
+#  CLONE JOURNEY
+# ═══════════════════════════════════════════════════════
+
+@funnel_bp.route("/api/funnels/<funnel_id>/clone", methods=["POST", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins=ALLOWED_ORIGINS)
+@requireAuth
+def clone_journey(funnel_id):
+    """
+    Clone a journey.
+    mode = 'duplicate'  — exact copy of all surveys, weights, flow.
+    mode = 'rewrite'    — same structure, new subject rewritten by AI via rewrite_prompt.
+    Both: redirects arrive empty, saved as draft, linked to parent.
+    """
+    if request.method == "OPTIONS":
+        return "", 200
+
+    data = request.get_json() or {}
+    mode = data.get("mode", "duplicate")
+    rewrite_prompt = data.get("rewrite_prompt", "").strip()
+
+    current_user = g.current_user
+    owner_id = str(current_user.get("_id", ""))
+
+    # Load the source funnel
+    source = db.funnels.find_one({"funnel_id": funnel_id})
+    if not source:
+        return jsonify({"error": "Journey not found"}), 404
+
+    new_funnel_id = f"fnl_{uuid.uuid4().hex[:10]}"
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Deep-copy the funnel document
+    import copy
+    new_doc = copy.deepcopy(source)
+    new_doc.pop("_id", None)
+    new_doc["funnel_id"] = new_funnel_id
+    new_doc["name"] = f"{source['name']} (copy)"
+    new_doc["status"] = "draft"
+    new_doc["created_at"] = now
+    new_doc["updated_at"] = now
+    new_doc["owner_user_id"] = owner_id
+    new_doc["parent_funnel_id"] = funnel_id  # lineage link
+    new_doc["is_favourite"] = False
+
+    # Clear all redirect slots — a copy pointing at original URLs is always wrong
+    redirect_slots_cleared = 0
+    if new_doc.get("job_surveys"):
+        for job_id, cfg in new_doc["job_surveys"].items():
+            if cfg.get("redirect_url"):
+                cfg["redirect_url"] = ""
+                redirect_slots_cleared += 1
+            if cfg.get("redirect_rules"):
+                for rule in cfg["redirect_rules"]:
+                    if rule.get("url"):
+                        rule["url"] = ""
+                        redirect_slots_cleared += 1
+    new_doc["fallback_url"] = ""
+
+    # Clone each survey (create a new copy of each generated survey's document)
+    cloned_surveys = []
+    survey_id_map: dict = {}  # old_id → new_id
+    for gs in (new_doc.get("generated_surveys") or []):
+        old_sid = gs.get("survey_id", "")
+        old_survey = db.surveys.find_one({"$or": [{"id": old_sid}, {"short_id": old_sid}]})
+        if not old_survey:
+            cloned_surveys.append(gs)
+            continue
+        new_sid = f"sv_{uuid.uuid4().hex[:12]}"
+        survey_copy = copy.deepcopy(old_survey)
+        survey_copy.pop("_id", None)
+        survey_copy["id"] = new_sid
+        survey_copy["ownerUserId"] = owner_id
+        survey_copy["created_at"] = now
+
+        if mode == "rewrite" and rewrite_prompt:
+            # AI rewrite: keep structure, replace question text + options
+            api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("AI_API_KEY", "")
+            if api_key:
+                q_list = [{"id": q.get("id"), "question": q.get("question", ""), "options": q.get("options", [])}
+                          for q in survey_copy.get("questions", [])]
+                # Use a wrapper object (not bare array) to satisfy json_object format requirement
+                rewrite_prompt_text = f"""You are rewriting survey questions for a new subject.
+
+Original subject: {source.get('goal', '')}
+New subject/context: {rewrite_prompt}
+
+Keep EXACTLY the same number of questions and the same number of answer options per question.
+Keep the exact same question IDs.
+Only change the text of questions and options to match the new subject.
+Do NOT add or remove questions. Do NOT add or remove options.
+
+Original questions:
+{json.dumps(q_list, indent=2)}
+
+Return ONLY valid JSON in this exact format:
+{{"questions": [{{"id": "...", "question": "...", "options": ["..."]}}]}}"""
+
+                resp = http_requests.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    timeout=60,
+                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                    json={
+                        "model": "gpt-4o-mini",
+                        "messages": [{"role": "user", "content": rewrite_prompt_text}],
+                        "temperature": 0.4,
+                        "max_tokens": 3000,
+                        "response_format": {"type": "json_object"}
+                    }
+                )
+                if resp.status_code != 200:
+                    raise Exception(f"AI rewrite failed: HTTP {resp.status_code} — {resp.text[:200]}")
+
+                raw = resp.json()["choices"][0]["message"]["content"]
+                try:
+                    parsed = json.loads(raw)
+                except json.JSONDecodeError as je:
+                    raise Exception(f"AI returned invalid JSON: {je}")
+
+                rewritten = parsed.get("questions") or parsed.get("items") or []
+                if not rewritten:
+                    raise Exception("AI returned empty questions list")
+
+                rw_map = {r["id"]: r for r in rewritten if "id" in r}
+                applied = 0
+                for q in survey_copy.get("questions", []):
+                    if q.get("id") in rw_map:
+                        q["question"] = rw_map[q["id"]].get("question", q["question"])
+                        if rw_map[q["id"]].get("options"):
+                            q["options"] = rw_map[q["id"]]["options"]
+                        applied += 1
+                print(f"[clone rewrite] Survey {old_sid}: rewrote {applied}/{len(q_list)} questions")
+
+        db.surveys.insert_one(survey_copy)
+        survey_id_map[old_sid] = new_sid
+        gs_copy = dict(gs)
+        gs_copy["survey_id"] = new_sid
+        cloned_surveys.append(gs_copy)
+
+    new_doc["generated_surveys"] = cloned_surveys
+
+    # Update screening_surveys references
+    new_screening = []
+    for ss in (new_doc.get("screening_surveys") or []):
+        old_sid = ss.get("survey_id", "")
+        new_ss = dict(ss)
+        new_ss["survey_id"] = survey_id_map.get(old_sid, old_sid)
+        new_screening.append(new_ss)
+    new_doc["screening_surveys"] = new_screening
+
+    # Update job_surveys references
+    new_job_surveys = {}
+    for jid, cfg in (new_doc.get("job_surveys") or {}).items():
+        new_cfg = copy.deepcopy(cfg)
+        old_sid = new_cfg.get("survey_id", "")
+        new_cfg["survey_id"] = survey_id_map.get(old_sid, old_sid)
+        new_job_surveys[jid] = new_cfg
+    new_doc["job_surveys"] = new_job_surveys
+
+    db.funnels.insert_one(new_doc)
+
+    rewrite_note = f" (rewritten for: {rewrite_prompt[:60]})" if mode == "rewrite" and rewrite_prompt else ""
+    return jsonify({
+        "success": True,
+        "new_funnel_id": new_funnel_id,
+        "redirect_slots_cleared": redirect_slots_cleared,
+        "surveys_cloned": len(survey_id_map),
+        "mode": mode,
+        "rewrite_note": rewrite_note,
+    }), 201

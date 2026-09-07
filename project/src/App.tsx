@@ -153,7 +153,7 @@ function SurveysTabWithFunnels({ isDarkMode, onCreateNew }: { isDarkMode: boolea
           onClick={() => setSurveySubTab('funnels')}
           className={`px-4 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1.5 ${surveySubTab === 'funnels' ? activeClass : inactiveClass}`}
         >
-          <span>⛓</span> Funnel Surveys
+          <span>⛓</span> Journeys
         </button>
       </div>
 
@@ -163,7 +163,7 @@ function SurveysTabWithFunnels({ isDarkMode, onCreateNew }: { isDarkMode: boolea
         </Suspense>
       )}
       {surveySubTab === 'funnels' && (
-        <Suspense fallback={<OptimizedLoader type="page" message="Loading funnel surveys..." />}>
+        <Suspense fallback={<OptimizedLoader type="page" message="Loading journeys..." />}>
           <FunnelList isDarkMode={isDarkMode} />
         </Suspense>
       )}

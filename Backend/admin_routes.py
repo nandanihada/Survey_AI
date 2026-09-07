@@ -67,6 +67,8 @@ def get_all_users():
             user.pop('confirmationToken', None)
             user.pop('resetPasswordToken', None)
             user.pop('resetPasswordExpiry', None)
+            # Auto-expire stale grants on read
+            _check_and_expire_grant(user)
 
         return jsonify({'users': users, 'total': len(users)})
 
@@ -1454,3 +1456,151 @@ def bulk_publish_to_moustache():
     except Exception as e:
         print(f"Error in bulk_publish_to_moustache: {e}")
         return jsonify({'success': False, 'error': f'Internal error: {str(e)}'}), 500
+
+
+# ─────────────────────────────────────────────────────────────
+#  TIME-LIMITED ACCESS GRANTS
+# ─────────────────────────────────────────────────────────────
+
+def _check_and_expire_grant(user: dict) -> dict:
+    """
+    If the user has an active grant that has expired, strip it and revert role.
+    Returns the (possibly mutated) user dict — does NOT write to DB here
+    so this stays fast for reads. Writes happen lazily or on explicit check.
+    """
+    expires_at_str = user.get('grant_expires_at')
+    if not expires_at_str:
+        return user
+    try:
+        expires_at = datetime.fromisoformat(expires_at_str.replace('Z', '+00:00'))
+        now = datetime.now(expires_at.tzinfo)
+        if now > expires_at:
+            # Grant expired — revert role to base_role (or basic if missing)
+            base_role = user.get('base_role', 'basic')
+            db.users.update_one(
+                {'_id': user['_id']},
+                {'$set': {'role': base_role, 'updatedAt': datetime.utcnow()},
+                 '$unset': {'grant_role': '', 'grant_expires_at': '', 'grant_granted_by': '',
+                            'grant_note': '', 'grant_granted_at': '', 'base_role': ''}}
+            )
+            user['role'] = base_role
+            user.pop('grant_role', None)
+            user.pop('grant_expires_at', None)
+    except Exception:
+        pass
+    return user
+
+
+@admin_bp.route('/users/<user_id>/grant-access', methods=['POST', 'OPTIONS'])
+@requireAdmin
+def grant_access(user_id):
+    """
+    Grant a user time-limited elevated access (Premium or Enterprise).
+    Body: { role: 'premium'|'enterprise', duration_days: int, note: str,
+            email_them: bool, remind_3_days: bool }
+    Alternatively, pass expires_at (ISO string) instead of duration_days.
+    """
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        data = request.get_json() or {}
+        grant_role = data.get('role', 'premium')
+        if grant_role not in ('premium', 'enterprise'):
+            return jsonify({'error': 'role must be premium or enterprise'}), 400
+
+        duration_days = data.get('duration_days')
+        expires_at_str = data.get('expires_at')
+
+        if expires_at_str:
+            from datetime import timezone
+            expires_at = datetime.fromisoformat(expires_at_str.replace('Z', '+00:00'))
+        elif duration_days:
+            from datetime import timedelta, timezone
+            expires_at = datetime.now(timezone.utc) + timedelta(days=int(duration_days))
+        else:
+            return jsonify({'error': 'Provide duration_days or expires_at'}), 400
+
+        granter = g.current_user
+        granter_email = granter.get('email', 'admin')
+
+        object_id = ObjectId(user_id)
+        user = db.users.find_one({'_id': object_id})
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        # Preserve the user's base role so we can revert on expiry
+        base_role = user.get('base_role') or user.get('role', 'basic')
+
+        db.users.update_one(
+            {'_id': object_id},
+            {'$set': {
+                'role':             grant_role,
+                'grant_role':       grant_role,
+                'grant_expires_at': expires_at.isoformat(),
+                'grant_granted_by': granter_email,
+                'grant_note':       data.get('note', ''),
+                'grant_granted_at': datetime.utcnow().isoformat(),
+                'base_role':        base_role,
+                'updatedAt':        datetime.utcnow(),
+            }}
+        )
+
+        # Return the days remaining for the frontend badge
+        from datetime import timedelta, timezone
+        days_left = max(0, (expires_at - datetime.now(timezone.utc)).days)
+        return jsonify({
+            'success': True,
+            'grant_role': grant_role,
+            'grant_expires_at': expires_at.isoformat(),
+            'days_left': days_left,
+        }), 200
+
+    except Exception as e:
+        import traceback
+        print(f'grant_access error: {traceback.format_exc()}')
+        return jsonify({'error': str(e)}), 500
+
+
+@admin_bp.route('/users/<user_id>/revoke-access', methods=['DELETE', 'OPTIONS'])
+@requireAdmin
+def revoke_access(user_id):
+    """Revoke a time-limited grant and revert the user to their base role."""
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        object_id = ObjectId(user_id)
+        user = db.users.find_one({'_id': object_id})
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        base_role = user.get('base_role', 'basic')
+
+        db.users.update_one(
+            {'_id': object_id},
+            {'$set': {'role': base_role, 'updatedAt': datetime.utcnow()},
+             '$unset': {'grant_role': '', 'grant_expires_at': '', 'grant_granted_by': '',
+                        'grant_note': '', 'grant_granted_at': '', 'base_role': ''}}
+        )
+        return jsonify({'success': True, 'reverted_to': base_role}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@admin_bp.route('/users/grant-stats', methods=['GET'])
+@requireAdmin
+def grant_stats():
+    """Quick stats used by the Users tab header bar."""
+    from datetime import timedelta, timezone
+    now = datetime.now(timezone.utc)
+    soon = now + timedelta(days=7)
+
+    on_a_grant = db.users.count_documents({'grant_role': {'$exists': True},
+                                            'grant_expires_at': {'$gt': now.isoformat()}})
+    ending_soon = db.users.count_documents({'grant_role': {'$exists': True},
+                                             'grant_expires_at': {'$gt': now.isoformat(),
+                                                                   '$lte': soon.isoformat()}})
+    expired = db.users.count_documents({'grant_role': {'$exists': True},
+                                         'grant_expires_at': {'$lte': now.isoformat()}})
+
+    return jsonify({'on_a_grant': on_a_grant, 'ending_soon': ending_soon, 'expired': expired}), 200
