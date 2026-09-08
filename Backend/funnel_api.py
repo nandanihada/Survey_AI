@@ -2535,6 +2535,7 @@ Return ONLY valid JSON in this exact format:
 # ═══════════════════════════════════════════════════════
 
 import random as _random
+import hashlib as _hashlib
 
 # Options for each icon (must match FunnelList.tsx BULK_SECTIONS)
 QUICK_OPTIONS = {
@@ -2588,6 +2589,27 @@ def _apply_answer_type(value: str, overrides: dict):
         overrides["answerStyle"] = value
 
 
+def _seeded_choice(funnel_id: str, icon_id: str, position: int, group_size: int, options: list):
+    """
+    Pick a deterministic-random item from options.
+
+    For template with group_size > 1: all surveys in the same consecutive group
+    (floor(position / group_size)) get the same value. Different groups get different values.
+    For all other icons (or when position is unknown): fully random per call.
+    """
+    if not options:
+        return None
+    # Use grouping only for template icon when position is known and group_size > 1
+    if icon_id == "template" and position >= 0 and group_size > 1:
+        group_index = position // group_size
+        seed_str = f"{funnel_id}:{icon_id}:{group_index}"
+        seed_val = int(_hashlib.md5(seed_str.encode()).hexdigest(), 16)
+        rng = _random.Random(seed_val)
+        return rng.choice(options)
+    # All other cases: pure random (different each time / each respondent)
+    return _random.choice(options)
+
+
 @funnel_bp.route("/api/funnels/<funnel_id>/quick-overrides/<survey_id>",
                  methods=["GET", "OPTIONS"])
 @cross_origin(supports_credentials=True, origins="*")
@@ -2596,8 +2618,11 @@ def get_quick_overrides(funnel_id, survey_id):
     Resolve the effective survey-level overrides for a given survey
     based on the funnel's quick_settings + quick_scope.
 
+    Accepts optional query param:
+      ?position=<int>  — 0-based index of this survey in the funnel sequence.
+                         Used for template consecutive grouping when shuffled.
+
     Returns a flat dict of survey field overrides to merge client-side.
-    Example: { "template_type": "product_feedback", "animation": {...}, "answerStyle": "card" }
     """
     if request.method == "OPTIONS":
         return "", 200
@@ -2612,6 +2637,27 @@ def get_quick_overrides(funnel_id, survey_id):
 
     if not quick_settings and not bulk_settings:
         return jsonify({"overrides": {}}), 200
+
+    # Survey position in the funnel sequence (0-based), used for grouping
+    # Try query param first; fall back to looking up position in generated_surveys
+    try:
+        survey_position = int(request.args.get("position", -1))
+    except (ValueError, TypeError):
+        survey_position = -1
+
+    if survey_position < 0 and survey_entry:
+        # Derive position from generated_surveys order
+        for i, s in enumerate(generated):
+            if s.get("survey_id") == survey_id:
+                survey_position = i
+                break
+
+    # Consecutive group size for template shuffle (stored as string e.g. "2")
+    bulk_selections_raw = bulk_settings.get("selections", {}) if bulk_settings else {}
+    try:
+        template_group_size = int(bulk_selections_raw.get("template_group", 1))
+    except (ValueError, TypeError):
+        template_group_size = 1
 
     # Determine whether this survey is a screener or a Tor
     generated = funnel.get("generated_surveys", [])
@@ -2639,7 +2685,6 @@ def get_quick_overrides(funnel_id, survey_id):
             if fixed_value is None:
                 # No bulk selection — fall back to first option in the list
                 if isinstance(opts, dict):
-                    # pages: pick first from loading sub-list
                     first_sub = next(iter(opts.values()), [])
                     value = first_sub[0] if first_sub else None
                 elif isinstance(opts, list):
@@ -2655,9 +2700,9 @@ def get_quick_overrides(funnel_id, survey_id):
                 all_opts = []
                 for sub in opts.values():
                     all_opts.extend(sub)
-                value = _random.choice(all_opts)
+                value = _seeded_choice(funnel_id, icon_id, survey_position, template_group_size, all_opts)
             elif isinstance(opts, list):
-                value = _random.choice(opts)
+                value = _seeded_choice(funnel_id, icon_id, survey_position, template_group_size, opts)
             else:
                 return
 
@@ -2688,11 +2733,9 @@ def get_quick_overrides(funnel_id, survey_id):
         elif icon_id == "anchor":
             overrides["anchor_enabled"] = (value == "On")
         elif icon_id == "images":
-            # "Upload" = use all images as-is (no override needed)
-            # "Image 1/2/3" = use only that index from questionImages array
             if value == "Upload":
                 overrides["show_images"] = True
-                overrides["image_set"] = None   # no restriction
+                overrides["image_set"] = None
             elif value == "Image 1":
                 overrides["show_images"] = True
                 overrides["image_set"] = 0
