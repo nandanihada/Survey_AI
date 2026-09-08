@@ -73,6 +73,9 @@ const PublicSurveyPage: React.FC = () => {
   const offerId = searchParams.get('offer_id');
   const surveyId = offerId || id || shortId;
 
+  // Funnel params — used to fetch quick-overrides
+  const funnelId = searchParams.get('f') || searchParams.get('funnel');
+
   const isLocalhost = window.location.hostname === 'localhost';
   const apiBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
 
@@ -95,11 +98,75 @@ const PublicSurveyPage: React.FC = () => {
         console.log(`[PublicSurvey] Fetching survey: ${surveyId}`);
         const response = await axios.get(`${apiBaseUrl}/survey/${surveyId}/view`);
         const data = response.data;
-        const surveyData = data.survey || data;
+        let surveyData: Survey = data.survey || data;
 
         if (!surveyData || !surveyData.questions || surveyData.questions.length === 0) {
           throw new Error('Survey has no questions');
         }
+
+        // ── Quick set-up overrides (funnel mode only) ──────────────────────
+        // When this survey is part of a funnel, fetch the resolved overrides
+        // (fixed value or randomly-picked shuffled value) and merge them in
+        // before passing the survey prop to the template.
+        if (funnelId && surveyData.id) {
+          try {
+            const sid = (surveyData as any).short_id || surveyData.id;
+            const overRes = await fetch(
+              `${apiBaseUrl}/api/funnels/${funnelId}/quick-overrides/${sid}`
+            );
+            if (overRes.ok) {
+              const { overrides } = await overRes.json();
+              if (overrides && Object.keys(overrides).length > 0) {
+                console.log('[PublicSurvey] Applying quick-overrides:', overrides);
+                // template_type → picked directly (affects which component renders)
+                if (overrides.template_type) {
+                  surveyData = { ...surveyData, template_type: overrides.template_type };
+                }
+                // animation overrides
+                if (overrides.animation) {
+                  surveyData = {
+                    ...surveyData,
+                    animation: { ...(surveyData.animation as any), ...overrides.animation },
+                  } as Survey;
+                }
+                // answer style
+                if (overrides.answerStyle) {
+                  surveyData = { ...surveyData, answerStyle: overrides.answerStyle as any };
+                }
+                // completion page style
+                if (overrides.completion_page) {
+                  surveyData = {
+                    ...surveyData,
+                    completion_page: {
+                      ...((surveyData as any).completion_page || {}),
+                      ...overrides.completion_page,
+                    },
+                  } as Survey;
+                }
+                // default rating style — store on survey so BasicSurveyTemplate can read it
+                if (overrides.default_rating_style) {
+                  (surveyData as any).default_rating_style = overrides.default_rating_style;
+                }
+                // funnel loading style — store on survey
+                if (overrides.funnel_loading_style) {
+                  (surveyData as any).funnel_loading_style = overrides.funnel_loading_style;
+                }
+                // Store all remaining overrides as-is on the survey object
+                // so BasicSurveyTemplate can access them via (survey as any).X
+                const passThrough = ['intro_mode', 'anchor_enabled', 'show_images', 'security_scope', 'default_question_type'];
+                for (const k of passThrough) {
+                  if (overrides[k] !== undefined) {
+                    (surveyData as any)[k] = overrides[k];
+                  }
+                }
+              }
+            }
+          } catch (overErr) {
+            // Non-fatal — survey still loads, just without overrides
+            console.warn('[PublicSurvey] quick-overrides fetch failed:', overErr);
+          }
+        }
+        // ── end quick-overrides ────────────────────────────────────────────
 
         console.log(`[PublicSurvey] Loaded: "${surveyData.title}" (${surveyData.template_type}) with ${surveyData.questions.length} questions`);
         setSurvey(surveyData);
@@ -124,7 +191,7 @@ const PublicSurveyPage: React.FC = () => {
     };
 
     fetchSurvey();
-  }, [surveyId, apiBaseUrl]);
+  }, [surveyId, funnelId, apiBaseUrl]);
 
   // Loading state
   if (loading) {

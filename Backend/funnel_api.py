@@ -1201,6 +1201,9 @@ def get_funnels():
             "tags":              f.get("tags", []),
             "is_sent":           bool(f.get("is_sent", False)),
             "parent_funnel_id":  f.get("parent_funnel_id", None),
+            "quick_settings":    f.get("quick_settings", {}),
+            "quick_scope":       f.get("quick_scope", "both"),
+            "bulk_settings":     f.get("bulk_settings", None),
         })
 
     return jsonify({
@@ -1243,7 +1246,9 @@ def update_funnel(funnel_id):
     allowed_fields = [
         "name", "fallback_url", "min_score_threshold",
         "job_surveys", "job_priority_order", "status",
-        "anchor_config", "router_survey_ids"
+        "anchor_config", "router_survey_ids",
+        "quick_settings", "quick_scope", "bulk_settings",
+        "screening_spinner_configs",
     ]
     update = {k: data[k] for k in allowed_fields if k in data}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
@@ -2523,3 +2528,165 @@ Return ONLY valid JSON in this exact format:
         "mode": mode,
         "rewrite_note": rewrite_note,
     }), 201
+
+
+# ═══════════════════════════════════════════════════════
+#  QUICK SET-UP OVERRIDES — resolves what to apply per survey
+# ═══════════════════════════════════════════════════════
+
+import random as _random
+
+# Options for each icon (must match FunnelList.tsx BULK_SECTIONS)
+QUICK_OPTIONS = {
+    "template":    ["Classic", "Card stack", "One at a time", "Chat style"],
+    "motion":      ["None", "Fade", "Slide", "Spring"],
+    "pages": {
+        "loading": ["Spinner", "Progress bar", "Message", "Skeleton"],
+        "rating":  ["Stars", "Faces", "Slider", "Numeric"],
+        "ending":  ["Thank you", "Reward code", "Redirect notice", "Screen-out"],
+    },
+    "intro":       ["None", "At start", "Between", "Both", "Summary"],
+    "answer_type": ["Multiple choice", "Yes/No", "Short answer",
+                    "Rating", "Scale", "Dropdown", "Matrix", "List"],
+    "security":    ["Instant", "This layer", "All layers", "Into Tor"],
+    "images":      ["None", "Upload"],
+    "anchor":      ["Off", "On"],
+}
+
+# Map option strings → survey field overrides
+def _apply_template(value: str, overrides: dict):
+    """Convert a template option string to survey field overrides."""
+    mapping = {
+        "Classic":       {"template_type": "custom"},
+        "Card stack":    {"template_type": "product_feedback"},
+        "One at a time": {"template_type": "customer_feedback"},
+        "Chat style":    {"template_type": "onboarding_review"},
+    }
+    overrides.update(mapping.get(value, {}))
+
+def _apply_motion(value: str, overrides: dict):
+    anim_map = {
+        "None":   {"questionAnimation": "fadeSlideUp",  "delayMs": 0,   "speedMs": 0},
+        "Fade":   {"questionAnimation": "fadeSlideUp",  "delayMs": 100, "speedMs": 400},
+        "Slide":  {"questionAnimation": "slideFromLeft","delayMs": 80,  "speedMs": 350},
+        "Spring": {"questionAnimation": "zoomBounce",   "delayMs": 60,  "speedMs": 300},
+    }
+    anim = anim_map.get(value)
+    if anim:
+        existing = overrides.get("animation", {})
+        existing.update(anim)
+        overrides["animation"] = existing
+
+def _apply_answer_type(value: str, overrides: dict):
+    type_map = {
+        "Multiple choice": "multiple_choice",
+        "Yes/No":          "yes_no",
+        "Short answer":    "short_answer",
+        "Rating":          "rating",
+        "Scale":           "range",
+        "Dropdown":        "dropdown",
+        "Matrix":          "matrix",
+        "List":            "list",
+    }
+    t = type_map.get(value)
+    if t:
+        overrides["default_question_type"] = t
+
+
+@funnel_bp.route("/api/funnels/<funnel_id>/quick-overrides/<survey_id>",
+                 methods=["GET", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins="*")
+def get_quick_overrides(funnel_id, survey_id):
+    """
+    Resolve the effective survey-level overrides for a given survey
+    based on the funnel's quick_settings + quick_scope.
+
+    Returns a flat dict of survey field overrides to merge client-side.
+    Example: { "template_type": "product_feedback", "animation": {...}, "answerStyle": "card" }
+    """
+    if request.method == "OPTIONS":
+        return "", 200
+
+    funnel = db.funnels.find_one({"funnel_id": funnel_id})
+    if not funnel:
+        return jsonify({"overrides": {}}), 200
+
+    quick_settings: dict = funnel.get("quick_settings") or {}
+    quick_scope: str = funnel.get("quick_scope", "both")
+    bulk_settings: dict = funnel.get("bulk_settings") or {}
+
+    if not quick_settings and not bulk_settings:
+        return jsonify({"overrides": {}}), 200
+
+    # Determine whether this survey is a screener or a Tor
+    generated = funnel.get("generated_surveys", [])
+    survey_entry = next((s for s in generated if s.get("survey_id") == survey_id), None)
+    survey_type = survey_entry.get("type", "screening") if survey_entry else "screening"  # screening | job
+
+    # Scope check — only apply if in scope
+    in_scope = (
+        quick_scope == "both"
+        or (quick_scope == "screeners" and survey_type == "screening")
+        or (quick_scope == "tore" and survey_type == "job")
+    )
+    if not in_scope:
+        return jsonify({"overrides": {}}), 200
+
+    overrides: dict = {}
+
+    def _resolve(icon_id: str, fixed_value: str | None):
+        """Apply fixed_value or pick random if shuffled."""
+        state = quick_settings.get(icon_id, "off")
+        if state == "off":
+            return
+        if state == "fixed":
+            value = fixed_value
+        else:  # shuffled
+            opts = QUICK_OPTIONS.get(icon_id)
+            if isinstance(opts, dict):
+                # pages icon — flatten all sub-lists
+                all_opts = []
+                for sub in opts.values():
+                    all_opts.extend(sub)
+                value = _random.choice(all_opts)
+            elif isinstance(opts, list):
+                value = _random.choice(opts)
+            else:
+                return
+
+        if icon_id == "template":
+            _apply_template(value, overrides)
+        elif icon_id == "motion":
+            _apply_motion(value, overrides)
+        elif icon_id == "answer_type":
+            _apply_answer_type(value, overrides)
+        elif icon_id == "pages":
+            # Split loading/rating/ending into separate override keys
+            loading_opts = QUICK_OPTIONS["pages"]["loading"]
+            rating_opts  = QUICK_OPTIONS["pages"]["rating"]
+            ending_opts  = QUICK_OPTIONS["pages"]["ending"]
+            if value in loading_opts:
+                overrides["funnel_loading_style"] = value.lower().replace(" ", "_")
+            elif value in rating_opts:
+                overrides["default_rating_style"] = value.lower()
+            elif value in ending_opts:
+                overrides.setdefault("completion_page", {})["style"] = (
+                    value.lower().replace(" ", "_")
+                )
+        elif icon_id == "intro":
+            overrides["intro_mode"] = value.lower().replace(" ", "_")
+        elif icon_id == "anchor":
+            overrides["anchor_enabled"] = (value == "On")
+        elif icon_id == "images":
+            overrides["show_images"] = (value == "Upload")
+        elif icon_id == "security":
+            overrides["security_scope"] = value.lower().replace(" ", "_")
+
+    # Use bulk_settings selections as the "fixed" values (if bulk was applied)
+    bulk_selections = bulk_settings.get("selections", {}) if bulk_settings else {}
+
+    for icon_id in QUICK_OPTIONS:
+        fixed = bulk_selections.get(icon_id)
+        _resolve(icon_id, fixed)
+
+    return jsonify({"overrides": overrides, "survey_type": survey_type}), 200

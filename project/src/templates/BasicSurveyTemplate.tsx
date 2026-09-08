@@ -1291,7 +1291,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   };
 
   const renderRating = (question: Question) => {
-    const style = (question as any).ratingStyle || 'stars';
+    const style = (question as any).ratingStyle || (survey as any).default_rating_style || 'stars';
     const selected = Number(formData[question.id]) || 0;
 
     if (style === 'stars') {
@@ -2675,28 +2675,65 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       )}
 
       {/* Redirecting Spinner Overlay */}
-      {redirecting && (
-        <motion.div
-          className="pepper-success-overlay"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3 }}
-        >
+      {redirecting && (() => {
+        const loadStyle = (survey as any).funnel_loading_style || 'spinner';
+        return (
           <motion.div
-            className="pepper-success-card"
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ delay: 0.1, duration: 0.4 }}
+            className="pepper-success-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
           >
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
-              <div style={{ width: '48px', height: '48px', border: '4px solid #e5e7eb', borderTopColor: '#ef4444', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-              <h2 style={{ margin: 0 }}>Verifying your responses...</h2>
-              <p style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>Please wait while we process your submission.</p>
-            </div>
-            <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+            <motion.div
+              className="pepper-success-card"
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ delay: 0.1, duration: 0.4 }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+                {/* Loading style from Quick set-up / funnel config */}
+                {loadStyle === 'progress_bar' ? (
+                  <div style={{ width: 200, height: 6, background: '#f3f4f6', borderRadius: 99, overflow: 'hidden' }}>
+                    <motion.div
+                      initial={{ width: '0%' }} animate={{ width: '100%' }}
+                      transition={{ duration: 6, ease: 'linear' }}
+                      style={{ height: '100%', background: 'linear-gradient(90deg, #ef4444, #f97316)', borderRadius: 99 }}
+                    />
+                  </div>
+                ) : loadStyle === 'message' ? (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {[0,1,2].map(i => (
+                      <motion.span key={i} animate={{ opacity: [0.2,1,0.2] }}
+                        transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.3 }}
+                        style={{ fontSize: 28, color: '#ef4444', fontWeight: 900 }}>•</motion.span>
+                    ))}
+                  </div>
+                ) : loadStyle === 'skeleton' ? (
+                  <div style={{ width: 200, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {[100,80,60].map((w, i) => (
+                      <motion.div key={i}
+                        animate={{ opacity: [0.4, 0.8, 0.4] }}
+                        transition={{ duration: 1.4, repeat: Infinity, delay: i * 0.2 }}
+                        style={{ height: i === 0 ? 14 : 10, width: `${w}%`, background: '#e5e7eb', borderRadius: 4 }}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  /* Default: spinner */
+                  <div style={{ position: 'relative', width: 48, height: 48 }}>
+                    <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                      style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '4px solid #f3f4f6', borderTopColor: '#ef4444' }} />
+                    <motion.div animate={{ rotate: -360 }} transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+                      style={{ position: 'absolute', inset: 6, borderRadius: '50%', border: '3px solid #fef2f2', borderBottomColor: '#f97316' }} />
+                  </div>
+                )}
+                <h2 style={{ margin: 0 }}>Verifying your responses...</h2>
+                <p style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>Please wait while we process your submission.</p>
+              </div>
+            </motion.div>
           </motion.div>
-        </motion.div>
-      )}
+        );
+      })()}
 
       {/* Success Overlay */}
       {(submitted || funnelTerminated) && (() => {

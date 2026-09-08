@@ -21,6 +21,19 @@
     <meta name="twitter:title" content="Quick 2-Minute Survey | PepperWahl">
     <meta name="twitter:description" content="Share your feedback in a quick 2-minute survey. Your responses help make things better!">
     <title>Pepperwahl</title>
+    <script>
+      // Auto-reload when a chunk fails to load (stale deployment cache fix)
+      window.addEventListener('error', function(e) {
+        var src = e.target && (e.target.src || e.target.href);
+        if (src && (src.endsWith('.js') || src.endsWith('.css'))) {
+          var reloadKey = 'chunk_reload_' + src;
+          if (!sessionStorage.getItem(reloadKey)) {
+            sessionStorage.setItem(reloadKey, '1');
+            window.location.reload(true);
+          }
+        }
+      }, true);
+    </script>
     <style>
       /* Inline fallback styles so something shows even if CSS/JS fails */
       #root:empty::after {
@@ -47,8 +60,8 @@
       #app-error p { font-size: 14px; color: #6b7280; margin-bottom: 16px; }
       #app-error button { padding: 8px 24px; background: #ef4444; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
     </style>
-    <script type="module" crossorigin src="/assets/index-BpjywMKV-1788767536885.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-TcSUcjFm-1788767536885.css">
+    <script type="module" crossorigin src="/assets/index-CCmzXLug-1788839608093.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-TcSUcjFm-1788839608093.css">
   </head>
   <body>
     <div id="root">
