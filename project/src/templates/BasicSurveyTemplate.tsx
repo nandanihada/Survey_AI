@@ -1801,7 +1801,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         )}
 
         {/* Question images — above position (default) */}
-        {(survey as any).show_images !== false && <QuestionImage q={question} position="above" />}
+        {(survey as any).show_images !== false && <QuestionImage q={question} position="above" imageSet={(survey as any).image_set ?? null} />}
 
         {/* Question text — typewriter gets CSS animation, others use motion */}
         {isTypewriter ? (
@@ -1856,7 +1856,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         )}
 
         {/* Question images — below position */}
-        <QuestionImage q={question} position="below" />
+        <QuestionImage q={question} position="below" imageSet={(survey as any).image_set ?? null} />
 
         <div className="pepper-question-separator"></div>
 

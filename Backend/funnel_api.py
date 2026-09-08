@@ -2548,7 +2548,7 @@ QUICK_OPTIONS = {
     "intro":       ["None", "At start", "Between", "Both", "Summary"],
     "answer_type": ["classic", "underline", "card", "pill", "flat"],   # maps to answerStyle
     "security":    ["Instant", "This layer", "All layers", "Into Tor"],
-    "images":      ["On", "Off"],
+    "images":      ["Upload", "Image 1", "Image 2", "Image 3"],
     "anchor":      ["Off", "On"],
     "assurance":   ["Off", "On"],
 }
@@ -2688,7 +2688,20 @@ def get_quick_overrides(funnel_id, survey_id):
         elif icon_id == "anchor":
             overrides["anchor_enabled"] = (value == "On")
         elif icon_id == "images":
-            overrides["show_images"] = (value == "On")
+            # "Upload" = use all images as-is (no override needed)
+            # "Image 1/2/3" = use only that index from questionImages array
+            if value == "Upload":
+                overrides["show_images"] = True
+                overrides["image_set"] = None   # no restriction
+            elif value == "Image 1":
+                overrides["show_images"] = True
+                overrides["image_set"] = 0
+            elif value == "Image 2":
+                overrides["show_images"] = True
+                overrides["image_set"] = 1
+            elif value == "Image 3":
+                overrides["show_images"] = True
+                overrides["image_set"] = 2
         elif icon_id == "security":
             overrides["security_scope"] = value.lower().replace(" ", "_")
         elif icon_id == "assurance":

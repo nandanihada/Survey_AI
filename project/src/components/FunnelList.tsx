@@ -1117,10 +1117,10 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
       { label: 'Into Tor', icon: '→', desc: 'Send to destination before terminating' },
     ],
     images: [
-      { label: 'Upload', icon: '↑', desc: 'Use uploaded question images' },
-      { label: 'Image 1', icon: '⊡', desc: 'First image set' },
-      { label: 'Image 2', icon: '⊡', desc: 'Second image set' },
-      { label: 'Image 3', icon: '⊡', desc: 'Third image set' },
+      { label: 'Upload', icon: '↑', desc: 'Use uploaded question images (default)' },
+      { label: 'Image 1', icon: '①', desc: 'Show only the 1st image per question' },
+      { label: 'Image 2', icon: '②', desc: 'Show only the 2nd image per question' },
+      { label: 'Image 3', icon: '③', desc: 'Show only the 3rd image per question' },
     ],
     anchor: [
       { label: 'Checkout', icon: '⚓', desc: 'Checkout behaviour question' },

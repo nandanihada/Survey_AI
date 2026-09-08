@@ -21,8 +21,9 @@ export interface QuestionImageFields {
 /**
  * Returns the unified image list for a question.
  * Merges legacy questionImage + new questionImages array, deduplicates, caps at 4.
+ * If imageSet is a number, returns only that single image at that index (0-based).
  */
-export function getQuestionImageList(q: QuestionImageFields): string[] {
+export function getQuestionImageList(q: QuestionImageFields, imageSet?: number | null): string[] {
   const imgs: string[] = [];
   if (q.questionImages && q.questionImages.length > 0) {
     imgs.push(...q.questionImages.filter(Boolean));
@@ -30,21 +31,29 @@ export function getQuestionImageList(q: QuestionImageFields): string[] {
     imgs.push(q.questionImage);
   }
   // Deduplicate and cap at 4
-  return [...new Set(imgs)].slice(0, 4);
+  const all = [...new Set(imgs)].slice(0, 4);
+  // If a specific image set is requested, return only that index
+  if (typeof imageSet === 'number' && imageSet >= 0) {
+    const picked = all[imageSet];
+    return picked ? [picked] : [];
+  }
+  return all;
 }
 
 /** Renders the question-level images (above or below the question text). */
 export function QuestionImage({
   q,
   position,
+  imageSet,
 }: {
   q: QuestionImageFields;
   position: 'above' | 'below';
+  imageSet?: number | null;
 }) {
   const pos = q.questionImagePosition ?? 'above';
   if (pos !== position) return null;
 
-  const images = getQuestionImageList(q);
+  const images = getQuestionImageList(q, imageSet);
   if (images.length === 0) return null;
 
   // Layout:  1 image → full width  |  2 images → side by side  |  3-4 → 2×2 grid
