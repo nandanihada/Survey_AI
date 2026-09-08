@@ -2015,8 +2015,21 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     fontSize: `${Math.round(fontSizeScale * 100)}%`,
   };
 
+  // ── Theme override from Quick set-up shuffle ─────────────────────────────
+  // When a funnel has a template shuffle active, theme_override contains CSS variable values
+  const themeOverride = (survey as any).theme_override as Record<string, string> | undefined;
+  const themeOverrideStyle: React.CSSProperties = themeOverride
+    ? Object.fromEntries(Object.entries(themeOverride).map(([k, v]) => [k, v])) as React.CSSProperties
+    : {};
+  // Background comes from theme_override.background (separate from CSS vars)
+  const containerBg = themeOverride?.background;
+
   return (
-    <div className="pepper-survey-container" style={rootFontStyle}>
+    <div className="pepper-survey-container" style={{
+      ...rootFontStyle,
+      ...themeOverrideStyle,
+      ...(containerBg ? { background: containerBg } : {}),
+    }}>
       {/* ── Browser-back blocker overlay ── */}
       {showBackBlocker && (
         <div style={{

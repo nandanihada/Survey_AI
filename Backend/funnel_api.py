@@ -2554,16 +2554,18 @@ QUICK_OPTIONS = {
 
 # Map option strings → survey field overrides
 def _apply_template(value: str, overrides: dict):
-    """Map a template name to background/theme overrides that BasicSurveyTemplate will apply."""
-    # Instead of switching the React component (which is unreliable for a/b testing),
-    # map each template to a set of visual overrides that BasicSurveyTemplate reads directly.
-    mapping = {
-        "Classic":       {"template_type": "custom",        "answerStyle": "classic"},
-        "Card stack":    {"template_type": "custom",        "answerStyle": "card"},
-        "One at a time": {"template_type": "custom",        "answerStyle": "pill"},
-        "Chat style":    {"template_type": "onboarding_review", "answerStyle": "underline"},
+    """Map a template name to CSS variable overrides that BasicSurveyTemplate injects on the container.
+    This changes the visual appearance without swapping the React component."""
+    # Each theme: paper card bg, paper-inner (options bg), border, red accent, dark text, cream wrapper
+    themes = {
+        "Classic":       {"--pepper-paper": "#F5F1E8", "--pepper-paper-inner": "#FDFCFA", "--pepper-border": "#EBE8E3", "--pepper-red": "#C4785C", "--pepper-red-dark": "#A8624A", "--pepper-dark": "#2D2520", "background": "#ffffff"},
+        "Card stack":    {"--pepper-paper": "#EEF6FF", "--pepper-paper-inner": "#F8FBFF", "--pepper-border": "#C7DCF0", "--pepper-red": "#2563EB", "--pepper-red-dark": "#1D4ED8", "--pepper-dark": "#1E3A5F", "background": "#F0F7FF"},
+        "One at a time": {"--pepper-paper": "#F0FDF4", "--pepper-paper-inner": "#F7FFF9", "--pepper-border": "#B9E8C8", "--pepper-red": "#16A34A", "--pepper-red-dark": "#15803D", "--pepper-dark": "#14532D", "background": "#ECFDF5"},
+        "Chat style":    {"--pepper-paper": "#FDF4FF", "--pepper-paper-inner": "#FEF9FF", "--pepper-border": "#E4BAEE", "--pepper-red": "#9333EA", "--pepper-red-dark": "#7E22CE", "--pepper-dark": "#3B0764", "background": "#FAF5FF"},
     }
-    overrides.update(mapping.get(value, {}))
+    t = themes.get(value)
+    if t:
+        overrides["theme_override"] = t
 
 def _apply_motion(value: str, overrides: dict):
     anim_map = {
