@@ -10,7 +10,7 @@ import {
   Settings, BarChart3, Copy, Loader2, AlertCircle, ChevronLeft,
   Filter, Target, GitBranch, Edit3, Check, X, Trash2,
   ArrowRight, RefreshCw, Eye, Link2, Zap, Info, Sparkles,
-  Star, Tag, Folder, Copy as CopyIcon, GitFork, Shuffle
+  Star, Tag, Folder, Copy as CopyIcon, GitFork, Shuffle, Shield
 } from 'lucide-react';
 import { getApiBaseUrl } from '../utils/deploymentFix';
 import { useAuth } from '../contexts/AuthContext';
@@ -1001,8 +1001,138 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
   // Clones of this journey (child funnels from allFunnels list)
   const clones = allFunnels.filter(f => f.parent_funnel_id === funnel.funnel_id);
 
-  // ── Quick set-up + Bulk edit ─────────────────────────────────────────────
-  // State shape: { [iconId]: 'off' | 'fixed' | 'shuffled' }
+  // ── Quick set-up detail modals ───────────────────────────────────────────
+  const [detailModalIcon, setDetailModalIcon] = useState<string | null>(null);
+  const [detailSelection, setDetailSelection] = useState<string>('');
+  const holdTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [holdProgress, setHoldProgress] = useState(false);
+
+  const openDetailModal = (iconId: string) => {
+    const currentFixed = bulkSelections[iconId] || '';
+    setDetailSelection(currentFixed);
+    setDetailModalIcon(iconId);
+  };
+
+  const saveDetailModal = () => {
+    if (!detailModalIcon) return;
+    if (detailSelection) {
+      setBulkSelections(prev => ({ ...prev, [detailModalIcon]: detailSelection }));
+      // If currently off, set to fixed
+      if ((quickSettings[detailModalIcon] || 'off') === 'off') {
+        const updated = { ...quickSettings, [detailModalIcon]: 'fixed' as QuickState };
+        setQuickSettings(updated);
+        fetch(`${apiBase}/api/funnels/${funnel.funnel_id}`, {
+          method: 'PUT', headers: authHeaders(),
+          body: JSON.stringify({ quick_settings: updated, quick_scope: quickScope }),
+        }).catch(() => {});
+      }
+    }
+    setDetailModalIcon(null);
+  };
+
+  const useDefaultDetailModal = () => {
+    if (!detailModalIcon) return;
+    setBulkSelections(prev => { const n = { ...prev }; delete n[detailModalIcon!]; return n; });
+    const updated = { ...quickSettings, [detailModalIcon]: 'off' as QuickState };
+    setQuickSettings(updated);
+    fetch(`${apiBase}/api/funnels/${funnel.funnel_id}`, {
+      method: 'PUT', headers: authHeaders(),
+      body: JSON.stringify({ quick_settings: updated, quick_scope: quickScope }),
+    }).catch(() => {});
+    setDetailModalIcon(null);
+  };
+
+  // Detail options per icon
+  const DETAIL_OPTIONS: Record<string, { label: string; icon: string; desc?: string }[]> = {
+    heading: [
+      { label: 'Manual', icon: 'H', desc: 'Keep the original heading text' },
+      { label: 'Generate', icon: '✦', desc: 'AI rewrites per respondent' },
+      { label: 'Short', icon: '◡', desc: 'Condense to a few words' },
+      { label: 'Descriptive', icon: '≡', desc: 'Full descriptive heading' },
+      { label: 'Question form', icon: '?', desc: 'Rephrase as a question' },
+    ],
+    template: [
+      { label: 'Classic', icon: '⊞', desc: 'Cream paper, terracotta accent' },
+      { label: 'Card stack', icon: '≡', desc: 'Blue theme, card-style options' },
+      { label: 'One at a time', icon: '◡', desc: 'Green theme, minimal' },
+      { label: 'Chat style', icon: '☺', desc: 'Purple theme, conversational' },
+    ],
+    motion: [
+      { label: 'None', icon: '✕', desc: 'No animation' },
+      { label: 'Fade', icon: '◑', desc: 'Smooth fade in' },
+      { label: 'Slide', icon: '→', desc: 'Slide from left' },
+      { label: 'Spring', icon: '∿', desc: 'Bouncy spring entrance' },
+    ],
+    pages: [
+      // Loading
+      { label: 'Spinner', icon: '◌', desc: 'Rotating ring' },
+      { label: 'Bar', icon: '▬', desc: 'Progress fill bar' },
+      { label: 'Message', icon: '💬', desc: 'Animated text dots' },
+      { label: 'Skeleton', icon: '▒', desc: 'Placeholder blocks' },
+      // Rating
+      { label: 'Stars', icon: '★', desc: 'Five gold stars' },
+      { label: 'Faces', icon: '☺', desc: 'Five emoji expressions' },
+      { label: 'Slider', icon: '⟷', desc: 'Drag range 0–10' },
+      { label: 'Numeric', icon: '#', desc: 'Tappable number buttons' },
+      // Ending
+      { label: 'Thanks', icon: '♡', desc: 'Animated thank-you screen' },
+      { label: 'Reward', icon: '⊞', desc: 'Copyable reward code' },
+      { label: 'Redirect', icon: '→', desc: 'Countdown then redirect' },
+      { label: 'Screen-out', icon: '⊘', desc: 'Polite disqualification' },
+    ],
+    intro: [
+      { label: 'None', icon: '✕', desc: 'No intro pages' },
+      { label: 'At start', icon: '≡', desc: 'One description page before Q1' },
+      { label: 'Between', icon: '≡', desc: 'Description page between sections' },
+      { label: 'Both', icon: '≡', desc: 'At start and between sections' },
+      { label: 'Summary', icon: '?', desc: 'Summary page before submission' },
+    ],
+    answer_type: [
+      { label: 'Multiple choice', icon: '·', desc: 'Pick one option' },
+      { label: 'Yes / No', icon: '◑', desc: 'Binary choice' },
+      { label: 'Short answer', icon: '≡', desc: 'Free text input' },
+      { label: 'Rating', icon: '★', desc: 'Star / face / slider rating' },
+      { label: 'Scale', icon: '⟷', desc: '1–10 numeric scale' },
+      { label: 'Dropdown', icon: '▾', desc: 'Select from dropdown' },
+      { label: 'Matrix', icon: '⊞', desc: 'Grid of rows and columns' },
+      { label: 'List', icon: '≡', desc: 'Numbered checklist' },
+    ],
+    security: [
+      { label: 'Instant', icon: '⊙', desc: 'Terminate immediately on wrong answer' },
+      { label: 'This layer', icon: '≡', desc: 'Terminate after this survey' },
+      { label: 'All layers', icon: '≡', desc: 'Terminate after all screeners' },
+      { label: 'Into Tor', icon: '→', desc: 'Send to destination before terminating' },
+    ],
+    images: [
+      { label: 'Upload', icon: '↑', desc: 'Use uploaded question images' },
+      { label: 'Image 1', icon: '⊡', desc: 'First image set' },
+      { label: 'Image 2', icon: '⊡', desc: 'Second image set' },
+      { label: 'Image 3', icon: '⊡', desc: 'Third image set' },
+    ],
+    anchor: [
+      { label: 'Checkout', icon: '⚓', desc: 'Checkout behaviour question' },
+      { label: 'Cart drop', icon: '⚓', desc: 'Cart abandonment question' },
+      { label: 'Returns', icon: '⚓', desc: 'Returns behaviour question' },
+      { label: 'Router', icon: '⊙', desc: 'Mark as router survey' },
+    ],
+    assurance: [
+      { label: 'Off', icon: '⊙', desc: 'No confidentiality badge' },
+      { label: 'On', icon: '⊙', desc: 'Show "Your answers stay confidential"' },
+    ],
+  };
+
+  const DETAIL_SECTIONS: Record<string, { heading: string; items: string[] }[]> = {
+    pages: [
+      { heading: 'LOADING', items: ['Spinner', 'Bar', 'Message', 'Skeleton'] },
+      { heading: 'RATING', items: ['Stars', 'Faces', 'Slider', 'Numeric'] },
+      { heading: 'ENDING', items: ['Thanks', 'Reward', 'Redirect', 'Screen-out'] },
+    ],
+  };
+
+  const DETAIL_NOTES: Record<string, string> = {
+    security: 'Applies to every security layer in this survey. Instant is the safest default — a wrong trap answer makes the rest of the response worthless anyway.',
+    anchor: 'One anchor per screening survey. Picking one here marks this survey as a router.',
+  };
   // iconId = 'template' | 'motion' | 'pages' | 'intro' | 'answer_type' | 'security' | 'images' | 'anchor'
   type QuickState = 'off' | 'fixed' | 'shuffled';
   type QuickSettings = Record<string, QuickState>;
@@ -1016,6 +1146,7 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
     { id: 'security',    label: 'Security',    icon: '✓', desc: 'Trap question settings' },
     { id: 'images',      label: 'Images',      icon: '⊡', desc: 'Question images' },
     { id: 'anchor',      label: 'Anchor',      icon: '⚓', desc: 'Fallback question' },
+    { id: 'assurance',   label: 'Assurance',   icon: '🛡', desc: 'Confidentiality badge' },
   ] as const;  const DEFAULT_QUICK: QuickSettings = Object.fromEntries(QUICK_ICONS.map(ic => [ic.id, 'off']));
   const [quickSettings, setQuickSettings] = useState<QuickSettings>(
     (funnel as any).quick_settings || DEFAULT_QUICK
@@ -1532,20 +1663,46 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
                     security:    <GitBranch size={16} />,
                     images:      <Link2 size={16} />,
                     anchor:      <Target size={16} />,
+                    assurance:   <Shield size={16} />,
                   };
                   return (
                     <div key={ic.id} className="relative flex flex-col items-center"
                       onMouseEnter={() => setQuickHover(ic.id)}
-                      onMouseLeave={() => setQuickHover(null)}>
+                      onMouseLeave={() => { setQuickHover(null); setHoldProgress(false); if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; } }}>
                       <button
-                        onClick={e => cycleQuick(ic.id, e)}
-                        title={`${ic.label} · ${state} · tap to cycle`}
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
+                        onClick={e => {
+                          if (e.detail >= 3) { openDetailModal(ic.id); }
+                          else { cycleQuick(ic.id, e); }
+                        }}
+                        onPointerDown={e => {
+                          e.currentTarget.setPointerCapture(e.pointerId);
+                          setHoldProgress(true);
+                          holdTimerRef.current = setTimeout(() => {
+                            setHoldProgress(false);
+                            openDetailModal(ic.id);
+                          }, 500);
+                        }}
+                        onPointerUp={() => {
+                          setHoldProgress(false);
+                          if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
+                        }}
+                        onPointerLeave={() => {
+                          setHoldProgress(false);
+                          if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
+                        }}
+                        title={`${ic.label} · ${state} · tap to cycle · hold for settings`}
+                        className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition-colors overflow-hidden ${
                           state !== 'off'
                             ? isDarkMode ? 'bg-gray-600 text-white' : 'bg-gray-800 text-white'
                             : isDarkMode ? 'bg-gray-700 text-gray-400 hover:bg-gray-600' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                         }`}
                       >
+                        {/* Hold sweep animation */}
+                        {holdProgress && quickHover === ic.id && (
+                          <span className="absolute inset-0 rounded-xl border-2 border-blue-500 animate-[hold-sweep_0.5s_linear_forwards]" style={{
+                            background: 'linear-gradient(90deg, rgba(59,130,246,0.2) var(--sweep, 0%), transparent var(--sweep, 0%))',
+                          }} />
+                        )}
                         {iconMap[ic.id] || ic.icon}
                       </button>
                       {/* State dot */}
@@ -2149,6 +2306,150 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
           </div>
         </div>
       )}
+
+      {/* ── Quick set-up detail modal ── */}
+      {detailModalIcon && (() => {
+        const ic = [...QUICK_ICONS].find(i => i.id === detailModalIcon);
+        const opts = DETAIL_OPTIONS[detailModalIcon] || [];
+        const sections = DETAIL_SECTIONS[detailModalIcon] || null;
+        const note = DETAIL_NOTES[detailModalIcon] || null;
+        const currentState = quickSettings[detailModalIcon] || 'off';
+
+        return (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => { setDetailModalIcon(null); setHoldProgress(false); }}>
+            <div
+              className={`w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[90vh] ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}
+              onClick={e => e.stopPropagation()}>
+
+              {/* Header */}
+              <div className={`flex items-center justify-between px-5 py-4 border-b flex-shrink-0 ${isDarkMode ? 'border-gray-700' : 'border-gray-100'}`}>
+                <div>
+                  <h3 className={`text-sm font-bold ${textMain}`}>{ic?.label} settings</h3>
+                  <p className={`text-[11px] mt-0.5 ${textMuted}`}>Hold or triple-click an icon to open · tap to cycle Off → Fixed → Shuffled</p>
+                </div>
+                <button onClick={() => setDetailModalIcon(null)}
+                  className={`p-1.5 rounded-lg ${isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}>
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Context banner */}
+              <div className={`mx-5 mt-4 px-3 py-2 rounded-lg text-[11px] flex items-start gap-2 flex-shrink-0 ${isDarkMode ? 'bg-blue-900/30 text-blue-300 border border-blue-800' : 'bg-blue-50 text-blue-700 border border-blue-100'}`}>
+                <Info size={12} className="mt-0.5 flex-shrink-0" />
+                <span>
+                  Editing from Quick set-up — this applies to <strong>every survey</strong> in scope ({quickScope}).
+                  Currently: <strong>{currentState === 'off' ? 'off' : currentState === 'fixed' ? `fixed (${bulkSelections[detailModalIcon] || 'none selected'})` : 'shuffled'}</strong>.
+                  Saving a selection sets it to <em>Fixed</em>.
+                </span>
+              </div>
+
+              {/* Options grid — scrollable */}
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+                {sections ? (
+                  // Sectioned layout (e.g. pages = LOADING / RATING / ENDING)
+                  sections.map(sec => (
+                    <div key={sec.heading}>
+                      <p className={`text-[10px] font-bold tracking-widest uppercase mb-2 ${textMuted}`}>{sec.heading}</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {opts.filter(o => sec.items.includes(o.label)).map(opt => (
+                          <button key={opt.label}
+                            onClick={() => setDetailSelection(prev => prev === opt.label ? '' : opt.label)}
+                            className={`p-3 rounded-xl border text-left transition-all ${
+                              detailSelection === opt.label
+                                ? isDarkMode ? 'border-blue-500 bg-blue-900/30' : 'border-blue-500 bg-blue-50'
+                                : isDarkMode ? 'border-gray-600 hover:border-gray-500 bg-gray-750' : 'border-gray-200 hover:border-gray-300 bg-white'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm flex-shrink-0 ${
+                                detailSelection === opt.label
+                                  ? isDarkMode ? 'bg-blue-700 text-blue-100' : 'bg-blue-100 text-blue-700'
+                                  : isDarkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-100 text-gray-600'
+                              }`}>{opt.icon}</span>
+                              <span className={`text-xs font-semibold ${textMain}`}>{opt.label}</span>
+                              {detailSelection === opt.label && (
+                                <Check size={12} className="ml-auto text-blue-500" />
+                              )}
+                            </div>
+                            {opt.desc && <p className={`text-[10px] leading-tight ${textMuted}`}>{opt.desc}</p>}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  // Flat grid
+                  <div className="grid grid-cols-2 gap-2">
+                    {opts.map(opt => (
+                      <button key={opt.label}
+                        onClick={() => setDetailSelection(prev => prev === opt.label ? '' : opt.label)}
+                        className={`p-3 rounded-xl border text-left transition-all ${
+                          detailSelection === opt.label
+                            ? isDarkMode ? 'border-blue-500 bg-blue-900/30' : 'border-blue-500 bg-blue-50'
+                            : isDarkMode ? 'border-gray-600 hover:border-gray-500 bg-gray-750' : 'border-gray-200 hover:border-gray-300 bg-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm flex-shrink-0 ${
+                            detailSelection === opt.label
+                              ? isDarkMode ? 'bg-blue-700 text-blue-100' : 'bg-blue-100 text-blue-700'
+                              : isDarkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-100 text-gray-600'
+                          }`}>{opt.icon}</span>
+                          <span className={`text-xs font-semibold ${textMain}`}>{opt.label}</span>
+                          {detailSelection === opt.label && (
+                            <Check size={12} className="ml-auto text-blue-500" />
+                          )}
+                        </div>
+                        {opt.desc && <p className={`text-[10px] leading-tight ${textMuted}`}>{opt.desc}</p>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Note */}
+                {note && (
+                  <div className={`rounded-lg p-3 text-[11px] leading-relaxed ${isDarkMode ? 'bg-gray-700/60 text-gray-400' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
+                    💡 {note}
+                  </div>
+                )}
+
+                {/* Template-specific: consecutive survey grouping */}
+                {detailModalIcon === 'template' && (
+                  <div className={`rounded-lg p-3 space-y-2 ${isDarkMode ? 'bg-gray-700/60' : 'bg-gray-50 border border-gray-100'}`}>
+                    <p className={`text-xs font-semibold ${textMain}`}>Consecutive grouping</p>
+                    <p className={`text-[11px] ${textMuted}`}>
+                      When <strong>Shuffled</strong>, you can lock N consecutive surveys to use the same template — so a respondent sees the same look for 2–3 surveys in a row before it switches.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <label className={`text-[11px] font-medium ${textMuted}`}>Surveys per group</label>
+                      <select
+                        value={(bulkSelections as any)[`${detailModalIcon}_group`] || '1'}
+                        onChange={e => setBulkSelections(prev => ({ ...prev, [`${detailModalIcon}_group`]: e.target.value }))}
+                        className={`text-xs rounded-lg px-2 py-1 border focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'bg-gray-600 border-gray-500 text-gray-100' : 'bg-white border-gray-200 text-gray-800'}`}
+                      >
+                        {['1','2','3','4','5'].map(n => <option key={n} value={n}>{n === '1' ? '1 (every survey different)' : `${n} surveys same`}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className={`flex items-center gap-3 px-5 py-4 border-t flex-shrink-0 ${isDarkMode ? 'border-gray-700' : 'border-gray-100'}`}>
+                <button onClick={useDefaultDetailModal}
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-semibold border transition-colors ${isDarkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                  Use default (off)
+                </button>
+                <button onClick={saveDetailModal} disabled={!detailSelection}
+                  className="flex-[2] py-2.5 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 transition-colors flex items-center justify-center gap-1.5">
+                  <Check size={13} /> Done — set fixed
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Clone modal ── */}
       {showCloneModal && (
