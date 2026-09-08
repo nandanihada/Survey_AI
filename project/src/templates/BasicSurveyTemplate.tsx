@@ -967,6 +967,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         }
       });
 
+      console.log(`[submit] isFunnelSurvey=${isFunnelSurvey} funnelId=${funnelId} url=${window.location.search}`);
       const response = await fetch(`${apiBaseUrl}/survey/${survey.id}/submit-enhanced`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -998,17 +999,27 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
       // ── FUNNEL ROUTING (if this is a funnel survey) ─────────────────────
       // For funnel surveys we ALWAYS use funnel routing — never the normal redirect.
-      if (isFunnelSurvey && funnelId) {
-        const newSessionId = funnelSessionId || result.session_id || `fs_${Date.now()}`;
+      // Re-read URL params directly here as a safety net against stale state
+      const _urlParams = new URLSearchParams(window.location.search);
+      const _funnelId = funnelId || _urlParams.get('f') || _urlParams.get('funnel');
+      const _isFunnelSurvey = isFunnelSurvey || !!_funnelId;
+      const _funnelLayerIndex = funnelLayerIndex || parseInt(_urlParams.get('ly') || _urlParams.get('layer') || '0');
+      const _funnelSessionId = funnelSessionId || _urlParams.get('sn') || _urlParams.get('session') || null;
+      const _funnelJobId = funnelJobId || _urlParams.get('job') || null;
 
-        const isJobSurvey = !!funnelJobId;
+      console.log(`[handleSubmit] isFunnelSurvey=${_isFunnelSurvey} funnelId=${_funnelId} layer=${_funnelLayerIndex}`);
+
+      if (_isFunnelSurvey && _funnelId) {
+        const newSessionId = _funnelSessionId || result.session_id || `fs_${Date.now()}`;
+
+        const isJobSurvey = !!_funnelJobId;
         const funnelEndpoint = isJobSurvey
-          ? `${apiBaseUrl}/api/funnels/${funnelId}/submit-job`
-          : `${apiBaseUrl}/api/funnels/${funnelId}/submit-screening`;
+          ? `${apiBaseUrl}/api/funnels/${_funnelId}/submit-job`
+          : `${apiBaseUrl}/api/funnels/${_funnelId}/submit-screening`;
 
         const funnelPayload = isJobSurvey
-          ? { job_id: funnelJobId, answers: responses, funnel_session_id: newSessionId }
-          : { survey_id: survey.id, layer_index: funnelLayerIndex, answers: responses, funnel_session_id: newSessionId, email, username, click_id: clickId };
+          ? { job_id: _funnelJobId, answers: responses, funnel_session_id: newSessionId }
+          : { survey_id: survey.id, layer_index: _funnelLayerIndex, answers: responses, funnel_session_id: newSessionId, email, username, click_id: clickId };
 
         const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
         const frontendBase = isLocalHost ? 'http://localhost:5173' : 'https://survey.pepperwahl.com';
@@ -1066,13 +1077,13 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           }
 
           if (action === 'next_screening') {
-            const nextUrl = `${frontendBase}/survey/${funnelResult.next_survey_id}?f=${funnelId}&ly=${funnelResult.next_layer}&sn=${sessionIdToUse}`;
+            const nextUrl = `${frontendBase}/survey/${funnelResult.next_survey_id}?f=${_funnelId}&ly=${funnelResult.next_layer}&sn=${sessionIdToUse}`;
             setTimeout(() => { window.location.href = nextUrl; }, 1000);
             return;
           }
 
           if (action === 'go_to_job') {
-            const nextUrl = `${frontendBase}/survey/${funnelResult.job_survey_id}?f=${funnelId}&sn=${sessionIdToUse}&job=${funnelResult.job_id}&pos=0`;
+            const nextUrl = `${frontendBase}/survey/${funnelResult.job_survey_id}?f=${_funnelId}&sn=${sessionIdToUse}&job=${funnelResult.job_id}&pos=0`;
             setTimeout(() => { window.location.href = nextUrl; }, 1000);
             return;
           }
@@ -1091,7 +1102,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           if (action === 'next_job') {
             const tp = funnelResult.transition_page || {};
             const transitionUrl = `${frontendBase}/funnel-transition?` + new URLSearchParams({
-              f: funnelId,
+              f: _funnelId,
               sn: sessionIdToUse,
               next_job: funnelResult.next_job_id || '',
               next_survey: funnelResult.next_job_survey_id || '',

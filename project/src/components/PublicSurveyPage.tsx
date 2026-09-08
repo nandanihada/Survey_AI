@@ -191,7 +191,7 @@ const PublicSurveyPage: React.FC = () => {
     };
 
     fetchSurvey();
-  }, [surveyId, funnelId, apiBaseUrl]);
+  }, [surveyId, apiBaseUrl]); // NOTE: funnelId intentionally excluded — overrides are fetched inside fetchSurvey
 
   // Loading state
   if (loading) {
