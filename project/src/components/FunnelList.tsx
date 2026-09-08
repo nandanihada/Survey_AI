@@ -1016,28 +1016,41 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
   const saveDetailModal = () => {
     if (!detailModalIcon) return;
     if (detailSelection) {
-      setBulkSelections(prev => ({ ...prev, [detailModalIcon]: detailSelection }));
-      // If currently off, set to fixed
-      if ((quickSettings[detailModalIcon] || 'off') === 'off') {
-        const updated = { ...quickSettings, [detailModalIcon]: 'fixed' as QuickState };
-        setQuickSettings(updated);
-        fetch(`${apiBase}/api/funnels/${funnel.funnel_id}`, {
-          method: 'PUT', headers: authHeaders(),
-          body: JSON.stringify({ quick_settings: updated, quick_scope: quickScope }),
-        }).catch(() => {});
-      }
+      const newSelections = { ...bulkSelections, [detailModalIcon]: detailSelection };
+      setBulkSelections(newSelections);
+      // Compute new quick_settings — auto-promote off → fixed
+      const cur = quickSettings[detailModalIcon] || 'off';
+      const newQS = cur === 'off'
+        ? { ...quickSettings, [detailModalIcon]: 'fixed' as QuickState }
+        : { ...quickSettings };
+      if (cur === 'off') setQuickSettings(newQS);
+      // Always persist both quick_settings AND bulk_settings.selections in one call
+      fetch(`${apiBase}/api/funnels/${funnel.funnel_id}`, {
+        method: 'PUT', headers: authHeaders(),
+        body: JSON.stringify({
+          quick_settings: newQS,
+          quick_scope: quickScope,
+          bulk_settings: { scope: bulkScope, sections: bulkSectionState, selections: newSelections },
+        }),
+      }).catch(() => {});
     }
     setDetailModalIcon(null);
   };
 
   const useDefaultDetailModal = () => {
     if (!detailModalIcon) return;
-    setBulkSelections(prev => { const n = { ...prev }; delete n[detailModalIcon!]; return n; });
+    const newSelections = { ...bulkSelections };
+    delete newSelections[detailModalIcon];
+    setBulkSelections(newSelections);
     const updated = { ...quickSettings, [detailModalIcon]: 'off' as QuickState };
     setQuickSettings(updated);
     fetch(`${apiBase}/api/funnels/${funnel.funnel_id}`, {
       method: 'PUT', headers: authHeaders(),
-      body: JSON.stringify({ quick_settings: updated, quick_scope: quickScope }),
+      body: JSON.stringify({
+        quick_settings: updated,
+        quick_scope: quickScope,
+        bulk_settings: { scope: bulkScope, sections: bulkSectionState, selections: newSelections },
+      }),
     }).catch(() => {});
     setDetailModalIcon(null);
   };
@@ -1215,9 +1228,11 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
     },
   ] as const;
   const [bulkSectionState, setBulkSectionState] = useState<Record<string, BulkSectionState>>(
-    Object.fromEntries(BULK_SECTIONS.map(s => [s.id, 'off']))
+    (funnel as any).bulk_settings?.sections || Object.fromEntries(BULK_SECTIONS.map(s => [s.id, 'off']))
   );
-  const [bulkSelections, setBulkSelections] = useState<Record<string, string>>({});
+  const [bulkSelections, setBulkSelections] = useState<Record<string, string>>(
+    (funnel as any).bulk_settings?.selections || {}
+  );
   const [applyingBulk, setApplyingBulk] = useState(false);
 
   const applyBulkEdit = async () => {

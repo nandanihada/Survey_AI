@@ -2550,6 +2550,7 @@ QUICK_OPTIONS = {
     "security":    ["Instant", "This layer", "All layers", "Into Tor"],
     "images":      ["On", "Off"],
     "anchor":      ["Off", "On"],
+    "assurance":   ["Off", "On"],
 }
 
 # Map option strings → survey field overrides
@@ -2690,6 +2691,8 @@ def get_quick_overrides(funnel_id, survey_id):
             overrides["show_images"] = (value == "On")
         elif icon_id == "security":
             overrides["security_scope"] = value.lower().replace(" ", "_")
+        elif icon_id == "assurance":
+            overrides["show_assurance_badge"] = (value == "On")
 
     # Use bulk_settings selections as the "fixed" values (if bulk was applied)
     bulk_selections = bulk_settings.get("selections", {}) if bulk_settings else {}

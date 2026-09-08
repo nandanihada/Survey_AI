@@ -2030,6 +2030,25 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       ...themeOverrideStyle,
       ...(containerBg ? { background: containerBg } : {}),
     }}>
+      {/* ── Assurance badge ── */}
+      {(survey as any).show_assurance_badge === true && (
+        <div style={{
+          position: 'fixed', bottom: 16, right: 16, zIndex: 100,
+          display: 'flex', alignItems: 'center', gap: 6,
+          background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(8px)',
+          border: '1px solid #e5e7eb', borderRadius: 99,
+          padding: '6px 12px',
+          fontSize: 11, fontWeight: 600, color: '#374151',
+          fontFamily: "'Outfit', sans-serif",
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+          pointerEvents: 'none',
+        }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          Your answers stay confidential
+        </div>
+      )}
       {/* ── Browser-back blocker overlay ── */}
       {showBackBlocker && (
         <div style={{

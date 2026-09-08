@@ -153,7 +153,7 @@ const PublicSurveyPage: React.FC = () => {
                 }
                 // Store all remaining overrides as-is on the survey object
                 // so BasicSurveyTemplate can access them via (survey as any).X
-                const passThrough = ['intro_mode', 'anchor_enabled', 'show_images', 'security_scope', 'default_question_type', 'theme_override'];
+                const passThrough = ['intro_mode', 'anchor_enabled', 'show_images', 'security_scope', 'default_question_type', 'theme_override', 'show_assurance_badge'];
                 for (const k of passThrough) {
                   if (overrides[k] !== undefined) {
                     (surveyData as any)[k] = overrides[k];
