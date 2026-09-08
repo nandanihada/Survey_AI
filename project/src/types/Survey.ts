@@ -135,6 +135,11 @@ export interface Survey {
    * When true, show a summary screen with all answers before the final Submit button.
    */
   show_summary_page?: boolean;
+  /**
+   * How many questions to show per page/screen.
+   * 1 = one at a time (default), 2 = two per page, 3 = three per page, 0 = all on one page.
+   */
+  questions_per_page?: number;
   [key: string]: unknown;
 }
 

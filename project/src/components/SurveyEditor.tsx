@@ -1445,6 +1445,32 @@ const SurveyEditor: React.FC = () => {
               </div>
               )}
 
+              {/* ── Questions per page ── */}
+              <div className="mt-5 pt-5 border-t border-gray-100">
+                <p className="text-xs font-semibold text-gray-700 mb-1">Questions per page</p>
+                <p className="text-[11px] text-gray-400 mb-3">How many questions to show at once. "1" is the classic one-at-a-time experience.</p>
+                <div className="flex gap-1.5">
+                  {[
+                    { v: 1,   l: '1' },
+                    { v: 2,   l: '2' },
+                    { v: 3,   l: '3' },
+                    { v: 0,   l: 'All' },
+                  ].map(opt => {
+                    const current = (survey as any).questions_per_page ?? 1;
+                    const active = current === opt.v;
+                    return (
+                      <button key={opt.v}
+                        onClick={() => setSurvey({ ...survey, questions_per_page: opt.v } as any)}
+                        className={`flex-1 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors ${
+                          active ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                        }`}>
+                        {opt.l}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* ── Show question numbers toggle ── */}
               <div className="mt-5 pt-5 border-t border-gray-100">
                 <div className="flex items-center justify-between">

@@ -195,6 +195,21 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     [normalizedQuestions, formData]
   );
 
+  // ── Questions per page ────────────────────────────────────────────────────
+  // qpp=1 (default) = one at a time. qpp=0 = all on one page. qpp=N = N per page.
+  const qpp: number = Math.max(0, (survey as any).questions_per_page ?? 1);
+  const effectiveQpp = qpp === 0 ? visibleQuestions.length || 1 : qpp;
+
+  // Build pages: arrays of question indices grouped by effectiveQpp
+  const pages: number[][] = useMemo(() => {
+    const p: number[][] = [];
+    for (let i = 0; i < visibleQuestions.length; i += effectiveQpp) {
+      p.push(visibleQuestions.slice(i, i + effectiveQpp).map((_, j) => i + j));
+    }
+    return p.length > 0 ? p : [[0]];
+  }, [visibleQuestions.length, effectiveQpp]);
+
+  // currentQuestionIndex now means "current PAGE index" when qpp > 1
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [submitted, setSubmitted] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
@@ -246,10 +261,10 @@ const BasicSurveyTemplate: React.FC<Props> = ({
 
   // Clamp question index if visible questions change due to skip logic
   useEffect(() => {
-    if (currentQuestionIndex >= visibleQuestions.length && visibleQuestions.length > 0) {
-      setCurrentQuestionIndex(visibleQuestions.length - 1);
+    if (currentQuestionIndex >= pages.length && pages.length > 0) {
+      setCurrentQuestionIndex(pages.length - 1);
     }
-  }, [visibleQuestions.length, currentQuestionIndex]);
+  }, [pages.length, currentQuestionIndex]);
 
   const isLocalhost = window.location.hostname === 'localhost';
   const apiBaseUrl = isLocalhost
@@ -315,7 +330,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
           // Restore session state
           setResumeSessionId(data.session_id);
           setFormData(prev => ({ ...prev, ...data.answers }));
-          setCurrentQuestionIndex(Math.min(data.resume_index, visibleQuestions.length - 1));
+          setCurrentQuestionIndex(Math.min(data.resume_index, pages.length - 1));
           console.log(`?? Resumed survey from question ${data.resume_index + 1}`);
           setIsResuming(false);
         })
@@ -550,27 +565,32 @@ const BasicSurveyTemplate: React.FC<Props> = ({
     trackClickInteraction('answer_selected', { questionId: id, answer: value });
   };
 
-  const currentQuestion = visibleQuestions[currentQuestionIndex];
-  // Special pages (description, summary, ending) are always "answered" — they just need a Continue click
-  const isCurrentAnswered = currentQuestion
-    ? ((currentQuestion as any).rawType?.startsWith('__'))
-      ? true
-      : currentQuestion.type === 'range'
-      ? formData[currentQuestion.id] !== undefined && formData[currentQuestion.id] !== ''
-      : currentQuestion.type === 'matrix'
-        ? (() => {
-            const rows = (currentQuestion.options || []) as string[];
-            if (rows.length === 0) return true;
-            try {
-              const ans = JSON.parse(String(formData[currentQuestion.id] || '{}')) as Record<string, string>;
-              return rows.every((r: string) => !!ans[r]);
-            } catch { return false; }
-          })()
-        : currentQuestion.allowMultiple
-          ? !!(formData[currentQuestion.id] && String(formData[currentQuestion.id]).length > 0)
-          : currentQuestion.type === 'ranking'
-            ? String(formData[currentQuestion.id] || '').includes('|||')
-            : formData[currentQuestion.id] !== '' && formData[currentQuestion.id] !== 0 && formData[currentQuestion.id] !== undefined
+  // currentPage = the indices of questions visible on the current page
+  const currentPageIndices = pages[currentQuestionIndex] || [currentQuestionIndex];
+  const currentPageQuestions = currentPageIndices.map(i => visibleQuestions[i]).filter(Boolean);
+  const currentQuestion = currentPageQuestions[0] || visibleQuestions[currentQuestionIndex];
+
+  // A page is answered when ALL questions on it are answered
+  const isQuestionAnswered = (q: typeof visibleQuestions[0]) => {
+    if (!q) return false;
+    if ((q as any).rawType?.startsWith('__')) return true;
+    const val = formData[q.id];
+    if (q.type === 'range') return val !== undefined && val !== '';
+    if (q.type === 'matrix') {
+      const rows = (q.options || []) as string[];
+      if (rows.length === 0) return true;
+      try {
+        const ans = JSON.parse(String(val || '{}')) as Record<string, string>;
+        return rows.every((r: string) => !!ans[r]);
+      } catch { return false; }
+    }
+    if (q.allowMultiple) return !!(val && String(val).length > 0);
+    if (q.type === 'ranking') return String(val || '').includes('|||');
+    return val !== '' && val !== 0 && val !== undefined;
+  };
+
+  const isCurrentAnswered = currentPageQuestions.length > 0
+    ? currentPageQuestions.every(q => isQuestionAnswered(q))
     : false;
 
   // Check if current question has a redirect configured
@@ -849,9 +869,10 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       }
     }
 
-    // Normal navigation
-    if (currentQuestionIndex < visibleQuestions.length - 1) {
-      const nextQ = visibleQuestions[currentQuestionIndex + 1];
+    // Normal navigation — page-aware
+    if (currentQuestionIndex < pages.length - 1) {
+      const nextPageFirstIdx = pages[currentQuestionIndex + 1]?.[0] ?? (currentQuestionIndex + 1);
+      const nextQ = visibleQuestions[nextPageFirstIdx];
       const delay = (nextQ as any)?.questionDelay || 0;
 
       trackClickInteraction('question_navigation', {
@@ -919,9 +940,8 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Only validate questions up to and including the current visible question
-    // (end_here may have stopped us before all questions were answered)
-    const questionsToValidate = visibleQuestions.slice(0, currentQuestionIndex + 1);
+    // Only validate questions on the current page and all previous pages
+    const questionsToValidate = visibleQuestions.slice(0, (currentPageIndices[currentPageIndices.length - 1] ?? currentQuestionIndex) + 1);
     const unanswered = questionsToValidate.find(q => {
       // Skip special virtual pages — they have no answer
       if ((q as any).rawType?.startsWith('__')) return false;
@@ -1738,7 +1758,8 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   );
 
   const renderQuestion = (question: Question, index: number) => {
-    if (!previewMode && index !== currentQuestionIndex) return null;
+    // Show all questions on the current page (page-aware rendering)
+    if (!previewMode && !currentPageIndices.includes(index)) return null;
     if (previewMode && index !== currentQuestionIndex) return null;
 
     const isTypewriter = (survey.animation?.questionAnimation === 'typewriter');
@@ -1773,7 +1794,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         )}
 
         {/* Question images — above position (default) */}
-        <QuestionImage q={question} position="above" />
+        {(survey as any).show_images !== false && <QuestionImage q={question} position="above" />}
 
         {/* Question text — typewriter gets CSS animation, others use motion */}
         {isTypewriter ? (
@@ -2151,7 +2172,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         const st = STYLES[ps] || STYLES.standard;
 
         const advanceSP = () => {
-          if (currentQuestionIndex < visibleQuestions.length - 1) {
+          if (currentQuestionIndex < pages.length - 1) {
             setCurrentQuestionIndex(prev => prev + 1);
           } else if (formRef.current) { formRef.current.requestSubmit(); }
         };
@@ -2304,10 +2325,10 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         <div className={`pepper-card ${previewMode ? 'preview-mode' : ''}`}>
           {/* Progress Bar */}
           <div className="pepper-progress">
-            <div className="pepper-progress-track" style={{ '--progress-width': `${((currentQuestionIndex + 1) / visibleQuestions.length) * 100}%` } as React.CSSProperties}>
+            <div className="pepper-progress-track" style={{ '--progress-width': `${((currentQuestionIndex + 1) / pages.length) * 100}%` } as React.CSSProperties}>
             </div>
             <span className="pepper-progress-counter">
-              {currentQuestionIndex + 1}/{visibleQuestions.length}
+              {currentQuestionIndex + 1}/{pages.length}
             </span>
           </div>
           {/* Questions */}
@@ -2356,7 +2377,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
                     <span className="arrow">←</span> Back
                   </button>
                 ) : (<div />)}
-                {currentQuestionIndex < visibleQuestions.length - 1 ? (
+                {currentQuestionIndex < pages.length - 1 ? (
                   <button type="button" className="pepper-btn pepper-btn-next" onClick={handleNext} disabled={!isCurrentAnswered || isTransitioning}>
                     {isTransitioning ? (
                       <><span className="pepper-transition-spinner" />{transitionCountdown > 0 ? `${transitionCountdown}s` : '…'}</>
@@ -2375,12 +2396,12 @@ const BasicSurveyTemplate: React.FC<Props> = ({
                 {currentQuestionIndex > 0 ? (
                   <button type="button" className="pepper-btn pepper-btn-back" onClick={handlePrev}><span className="arrow">←</span> Back</button>
                 ) : (<div />)}
-                {currentQuestionIndex < visibleQuestions.length - 1 ? (
+                {currentQuestionIndex < pages.length - 1 ? (
                   <button type="button" className="pepper-btn pepper-btn-next" onClick={() => setCurrentQuestionIndex(prev => prev + 1)}>Next <span className="arrow">→</span></button>
                 ) : (<button type="submit" className="pepper-btn pepper-btn-submit">Submit</button>)}
               </div>
             )}
-            {!previewMode && isCurrentAnswered && currentQuestionIndex < visibleQuestions.length - 1 && (
+            {!previewMode && isCurrentAnswered && currentQuestionIndex < pages.length - 1 && (
               <div className="pepper-keyboard-hint">Press <kbd>Enter ↵</kbd> to continue</div>
             )}
           </form>

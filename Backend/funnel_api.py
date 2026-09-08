@@ -2546,30 +2546,31 @@ QUICK_OPTIONS = {
         "ending":  ["Thank you", "Reward code", "Redirect notice", "Screen-out"],
     },
     "intro":       ["None", "At start", "Between", "Both", "Summary"],
-    "answer_type": ["Multiple choice", "Yes/No", "Short answer",
-                    "Rating", "Scale", "Dropdown", "Matrix", "List"],
+    "answer_type": ["classic", "underline", "card", "pill", "flat"],   # maps to answerStyle
     "security":    ["Instant", "This layer", "All layers", "Into Tor"],
-    "images":      ["None", "Upload"],
+    "images":      ["On", "Off"],
     "anchor":      ["Off", "On"],
 }
 
 # Map option strings → survey field overrides
 def _apply_template(value: str, overrides: dict):
-    """Convert a template option string to survey field overrides."""
+    """Map a template name to background/theme overrides that BasicSurveyTemplate will apply."""
+    # Instead of switching the React component (which is unreliable for a/b testing),
+    # map each template to a set of visual overrides that BasicSurveyTemplate reads directly.
     mapping = {
-        "Classic":       {"template_type": "custom"},
-        "Card stack":    {"template_type": "product_feedback"},
-        "One at a time": {"template_type": "customer_feedback"},
-        "Chat style":    {"template_type": "onboarding_review"},
+        "Classic":       {"template_type": "custom",        "answerStyle": "classic"},
+        "Card stack":    {"template_type": "custom",        "answerStyle": "card"},
+        "One at a time": {"template_type": "custom",        "answerStyle": "pill"},
+        "Chat style":    {"template_type": "onboarding_review", "answerStyle": "underline"},
     }
     overrides.update(mapping.get(value, {}))
 
 def _apply_motion(value: str, overrides: dict):
     anim_map = {
-        "None":   {"questionAnimation": "fadeSlideUp",  "delayMs": 0,   "speedMs": 0},
-        "Fade":   {"questionAnimation": "fadeSlideUp",  "delayMs": 100, "speedMs": 400},
-        "Slide":  {"questionAnimation": "slideFromLeft","delayMs": 80,  "speedMs": 350},
-        "Spring": {"questionAnimation": "zoomBounce",   "delayMs": 60,  "speedMs": 300},
+        "None":   {"questionAnimation": "fadeSlideUp",   "delayMs": 0,   "speedMs": 0,   "autoAdvance": False},
+        "Fade":   {"questionAnimation": "fadeSlideUp",   "delayMs": 100, "speedMs": 400, "autoAdvance": False},
+        "Slide":  {"questionAnimation": "slideFromLeft", "delayMs": 80,  "speedMs": 350, "autoAdvance": False},
+        "Spring": {"questionAnimation": "zoomBounce",    "delayMs": 60,  "speedMs": 300, "autoAdvance": True, "autoAdvanceDelay": 1200},
     }
     anim = anim_map.get(value)
     if anim:
@@ -2578,19 +2579,10 @@ def _apply_motion(value: str, overrides: dict):
         overrides["animation"] = existing
 
 def _apply_answer_type(value: str, overrides: dict):
-    type_map = {
-        "Multiple choice": "multiple_choice",
-        "Yes/No":          "yes_no",
-        "Short answer":    "short_answer",
-        "Rating":          "rating",
-        "Scale":           "range",
-        "Dropdown":        "dropdown",
-        "Matrix":          "matrix",
-        "List":            "list",
-    }
-    t = type_map.get(value)
-    if t:
-        overrides["default_question_type"] = t
+    # answer_type icon controls answerStyle — the visual display of answer options
+    valid_styles = {"classic", "underline", "card", "pill", "flat"}
+    if value in valid_styles:
+        overrides["answerStyle"] = value
 
 
 @funnel_bp.route("/api/funnels/<funnel_id>/quick-overrides/<survey_id>",
@@ -2640,7 +2632,19 @@ def get_quick_overrides(funnel_id, survey_id):
         if state == "off":
             return
         if state == "fixed":
-            value = fixed_value
+            opts = QUICK_OPTIONS.get(icon_id)
+            if fixed_value is None:
+                # No bulk selection — fall back to first option in the list
+                if isinstance(opts, dict):
+                    # pages: pick first from loading sub-list
+                    first_sub = next(iter(opts.values()), [])
+                    value = first_sub[0] if first_sub else None
+                elif isinstance(opts, list):
+                    value = opts[0] if opts else None
+                else:
+                    return
+            else:
+                value = fixed_value
         else:  # shuffled
             opts = QUICK_OPTIONS.get(icon_id)
             if isinstance(opts, dict):
@@ -2653,6 +2657,9 @@ def get_quick_overrides(funnel_id, survey_id):
                 value = _random.choice(opts)
             else:
                 return
+
+        if value is None:
+            return
 
         if icon_id == "template":
             _apply_template(value, overrides)
@@ -2678,7 +2685,7 @@ def get_quick_overrides(funnel_id, survey_id):
         elif icon_id == "anchor":
             overrides["anchor_enabled"] = (value == "On")
         elif icon_id == "images":
-            overrides["show_images"] = (value == "Upload")
+            overrides["show_images"] = (value == "On")
         elif icon_id == "security":
             overrides["security_scope"] = value.lower().replace(" ", "_")
 
