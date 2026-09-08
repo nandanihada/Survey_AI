@@ -833,11 +833,19 @@ const BasicSurveyTemplate: React.FC<Props> = ({
   const handleNext = useCallback(async () => {
     if (!isCurrentAnswered) return;
 
-    const currentQ = visibleQuestions[currentQuestionIndex];
+    // For multi-page mode, check branching rules for the LAST question on the current page.
+    // For single-question mode (qpp=1), this is the only question on the page.
+    const lastIdxOnPage = currentPageIndices[currentPageIndices.length - 1] ?? currentQuestionIndex;
+    const currentQ = visibleQuestions[lastIdxOnPage];
     if (currentQ) {
-      // Record time spent on current question
+      // Record time spent — for multi-page, record for all questions on the page
       const timeSpent = (Date.now() - questionStartTime) / 1000;
-      setQuestionTimings(prev => ({ ...prev, [currentQ.id]: timeSpent }));
+      const timingUpdate: Record<string, number> = {};
+      currentPageIndices.forEach(idx => {
+        const q = visibleQuestions[idx];
+        if (q) timingUpdate[q.id] = timeSpent / currentPageIndices.length;
+      });
+      setQuestionTimings(prev => ({ ...prev, ...timingUpdate }));
 
       const answer = formData[currentQ.id];
 
@@ -906,19 +914,18 @@ const BasicSurveyTemplate: React.FC<Props> = ({
         setCurrentQuestionIndex(prev => prev + 1);
       }
     }
-  }, [currentQuestionIndex, visibleQuestions, isCurrentAnswered, questionStartTime, formData, checkQuestionRedirect, checkChainSurvey, checkLayers, processNextLayer, trackClickInteraction, survey.questions]);
+  }, [currentQuestionIndex, visibleQuestions, isCurrentAnswered, questionStartTime, formData, checkQuestionRedirect, checkChainSurvey, checkLayers, processNextLayer, trackClickInteraction, survey.questions, currentPageIndices, pages]);
 
   const handlePrev = () => {
     if (currentQuestionIndex > 0) {
-      // Record time spent on current question before going back
-      const currentQ = visibleQuestions[currentQuestionIndex];
-      if (currentQ) {
-        const timeSpent = (Date.now() - questionStartTime) / 1000;
-        setQuestionTimings(prev => ({
-          ...prev,
-          [currentQ.id]: (prev[currentQ.id] || 0) + timeSpent
-        }));
-      }
+      // Record time spent on questions of current page before going back
+      const timeSpent = (Date.now() - questionStartTime) / 1000;
+      const timingUpdate: Record<string, number> = {};
+      currentPageIndices.forEach(idx => {
+        const q = visibleQuestions[idx];
+        if (q) timingUpdate[q.id] = (timingUpdate[q.id] || 0) + timeSpent / currentPageIndices.length;
+      });
+      setQuestionTimings(prev => ({ ...prev, ...timingUpdate }));
       setQuestionStartTime(Date.now());
       setCurrentQuestionIndex(prev => prev - 1);
     }
