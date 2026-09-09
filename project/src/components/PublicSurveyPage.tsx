@@ -159,6 +159,20 @@ const PublicSurveyPage: React.FC = () => {
                     (surveyData as any)[k] = overrides[k];
                   }
                 }
+
+                // ── Anchor question injection ──────────────────────────────
+                // If the backend returned an anchor_question, inject it into
+                // the survey's questions array (mixed in at a random-ish position
+                // so it doesn't always appear last).
+                if (overrides.anchor_question) {
+                  const aq = overrides.anchor_question;
+                  const qs = [...surveyData.questions];
+                  // Insert at roughly 60–80% through the survey so it feels natural
+                  const insertAt = Math.max(1, Math.floor(qs.length * 0.65));
+                  qs.splice(insertAt, 0, aq as any);
+                  surveyData = { ...surveyData, questions: qs };
+                  console.log(`[PublicSurvey] Injected anchor question at position ${insertAt}`);
+                }
               }
             }
           } catch (overErr) {

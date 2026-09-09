@@ -2757,4 +2757,28 @@ def get_quick_overrides(funnel_id, survey_id):
         fixed = bulk_selections.get(icon_id)
         _resolve(icon_id, fixed)
 
+    # ── Anchor question injection ──────────────────────────────────────────
+    # If anchor_config is set and enabled, and this survey is in the anchor scope,
+    # return the anchor question so the frontend can inject it into the survey.
+    anchor_config = funnel.get("anchor_config")
+    if anchor_config and anchor_config.get("enabled") and anchor_config.get("question_id"):
+        anchor_scope = anchor_config.get("scope", "screeners")  # screeners / tore / all
+        anchor_in_scope = (
+            anchor_scope == "all"
+            or (anchor_scope == "screeners" and survey_type == "screening")
+            or (anchor_scope == "tore" and survey_type == "job")
+        )
+        if anchor_in_scope:
+            # Build the anchor question object to inject
+            overrides["anchor_question"] = {
+                "id": f"anchor_{anchor_config['question_id']}",
+                "question": anchor_config.get("question_text", ""),
+                "type": "multiple_choice",
+                "options": anchor_config.get("options", []),
+                "required": True,
+                "is_anchor": True,
+                "anchor_correct_answers": anchor_config.get("correct_answers", []),
+                "anchor_redirect_url": anchor_config.get("redirect_url", ""),
+            }
+
     return jsonify({"overrides": overrides, "survey_type": survey_type}), 200

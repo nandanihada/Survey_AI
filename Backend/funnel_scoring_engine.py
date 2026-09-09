@@ -295,10 +295,13 @@ def _check_anchor_redirect(funnel: dict, funnel_session_id: str) -> Optional[str
     Logic:
     - Funnel must have anchor_config with enabled=True
     - Load the session's layers_completed to find the user's answer to the anchor question
-    - The anchor question is identified by is_anchor=True on the question document
-      OR by matching the anchor question text
-    - If the user's answer is in anchor_config.correct_answers → flag = True → return redirect_url
-    - Otherwise return None (fall through to normal fallback)
+    - The anchor question is identified by:
+        1. is_anchor=True on the question document in the survey, OR
+        2. id == "anchor_<question_id>" (runtime-injected questions have this prefix), OR
+        3. id == anchor_config.question_id exactly
+    - Scope is respected: only check layers whose survey_type matches anchor_config.scope
+    - If the user's answer is in anchor_config.correct_answers → return redirect_url
+    - Otherwise return None
     """
     anchor_config = funnel.get("anchor_config")
     if not anchor_config or not anchor_config.get("enabled"):
@@ -310,6 +313,11 @@ def _check_anchor_redirect(funnel: dict, funnel_session_id: str) -> Optional[str
     if not correct_answers or not redirect_url:
         return None
 
+    # Scope: screeners / tore / all
+    anchor_scope = anchor_config.get("scope", "screeners")
+    source_question_id = anchor_config.get("question_id", "")
+    injected_question_id = f"anchor_{source_question_id}" if source_question_id else None
+
     # Load the session to get all collected answers across all layers
     session = db.funnel_sessions.find_one({"funnel_session_id": funnel_session_id})
     if not session:
@@ -319,8 +327,53 @@ def _check_anchor_redirect(funnel: dict, funnel_session_id: str) -> Optional[str
     for layer in session.get("layers_completed", []):
         layer_answers: dict = layer.get("answers", {})
         survey_id = layer.get("survey_id", "")
+        layer_phase = layer.get("phase", "screening")  # "screening" or "job_surveys"
 
-        # Fetch the survey to find which question id has is_anchor=True
+        # Scope check — only look at layers that match the anchor scope
+        if anchor_scope == "screeners" and layer_phase != "screening":
+            continue
+        if anchor_scope == "tore" and layer_phase != "job_surveys":
+            continue
+        # anchor_scope == "all" passes through
+
+        # Strategy 1: check for injected anchor question id directly in answers
+        # (frontend injects with id = "anchor_<original_id>")
+        if injected_question_id and injected_question_id in layer_answers:
+            user_answer = str(layer_answers[injected_question_id]).strip().lower()
+            if user_answer in correct_answers:
+                print(f"⚓ [Anchor] Qualified via injected id '{injected_question_id}'. Answer: '{user_answer}'")
+                db.funnel_sessions.update_one(
+                    {"funnel_session_id": funnel_session_id},
+                    {"$set": {"anchor_qualified": True, "anchor_answer": user_answer}}
+                )
+                return _ensure_https(redirect_url)
+            else:
+                print(f"⚓ [Anchor] Not qualified via injected id. Answer '{user_answer}' not in {correct_answers}")
+                db.funnel_sessions.update_one(
+                    {"funnel_session_id": funnel_session_id},
+                    {"$set": {"anchor_qualified": False, "anchor_answer": user_answer}}
+                )
+                return None
+
+        # Strategy 2: check original question_id directly in answers
+        if source_question_id and source_question_id in layer_answers:
+            user_answer = str(layer_answers[source_question_id]).strip().lower()
+            if user_answer in correct_answers:
+                print(f"⚓ [Anchor] Qualified via source id '{source_question_id}'. Answer: '{user_answer}'")
+                db.funnel_sessions.update_one(
+                    {"funnel_session_id": funnel_session_id},
+                    {"$set": {"anchor_qualified": True, "anchor_answer": user_answer}}
+                )
+                return _ensure_https(redirect_url)
+            else:
+                print(f"⚓ [Anchor] Not qualified via source id. Answer '{user_answer}' not in {correct_answers}")
+                db.funnel_sessions.update_one(
+                    {"funnel_session_id": funnel_session_id},
+                    {"$set": {"anchor_qualified": False, "anchor_answer": user_answer}}
+                )
+                return None
+
+        # Strategy 3: fallback — look up the survey doc and find is_anchor question
         if survey_id:
             survey_doc = db.surveys.find_one(
                 {"$or": [{"id": survey_id}, {"short_id": survey_id}]},
@@ -332,23 +385,21 @@ def _check_anchor_redirect(funnel: dict, funnel_session_id: str) -> Optional[str
                         q_id = q.get("id", "")
                         user_answer = str(layer_answers.get(q_id, "")).strip().lower()
                         if user_answer in correct_answers:
-                            print(f"⚓ [Anchor] Qualified! Answer '{user_answer}' in correct_answers {correct_answers}")
-                            # Record anchor_qualified flag in session
+                            print(f"⚓ [Anchor] Qualified via survey scan. Answer: '{user_answer}'")
                             db.funnel_sessions.update_one(
                                 {"funnel_session_id": funnel_session_id},
                                 {"$set": {"anchor_qualified": True, "anchor_answer": user_answer}}
                             )
                             return _ensure_https(redirect_url)
-                        else:
-                            print(f"⚓ [Anchor] Not qualified. Answer '{user_answer}' not in {correct_answers}")
+                        elif user_answer:
+                            print(f"⚓ [Anchor] Not qualified via survey scan. Answer '{user_answer}' not in {correct_answers}")
                             db.funnel_sessions.update_one(
                                 {"funnel_session_id": funnel_session_id},
                                 {"$set": {"anchor_qualified": False, "anchor_answer": user_answer}}
                             )
-                            return None  # found the anchor question but answer doesn't qualify
+                            return None
 
-    # Anchor question was never answered (user may have been terminated before reaching it)
-    print(f"⚓ [Anchor] Anchor question not found in any completed layer")
+    print(f"⚓ [Anchor] Anchor question not found in any completed layer for session {funnel_session_id}")
     return None
 
 
