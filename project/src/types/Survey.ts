@@ -41,6 +41,12 @@ export interface Question {
   questionVideo?: string;
   /** Display title for the question video button */
   questionVideoTitle?: string;
+  /** When true, this question is an anchor question — used as a fallback redirect gate on funnel failure */
+  is_anchor?: boolean;
+  /** Which answer options qualify the respondent for the anchor redirect (must match option text exactly) */
+  anchor_correct_answers?: string[];
+  /** URL to redirect qualifying respondents to when the funnel fails and they answered correctly */
+  anchor_redirect_url?: string;
 }
 
 export interface SurveyPage {

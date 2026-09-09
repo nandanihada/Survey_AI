@@ -1007,14 +1007,89 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
   const holdTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const [holdProgress, setHoldProgress] = useState(false);
 
+  // Anchor modal specific state
+  const [anchorQuestions, setAnchorQuestions] = useState<{
+    surveyId: string; surveyName: string; surveyType: string;
+    questionId: string; questionText: string; options: string[];
+    correctAnswers: string[]; redirectUrl: string;
+  }[]>([]);
+  const [anchorLoading, setAnchorLoading] = useState(false);
+  const [selectedAnchorQId, setSelectedAnchorQId] = useState<string>('');
+  const [anchorRedirectUrl, setAnchorRedirectUrl] = useState('');
+  const [anchorScope, setAnchorScope] = useState<'all' | 'screeners' | 'tore'>('screeners');
+
+  const loadAnchorQuestions = async () => {
+    setAnchorLoading(true);
+    try {
+      // Fetch all surveys in the funnel and collect anchor-tagged questions
+      const allSurveyIds = funnel.generated_surveys.map((s: any) => s.survey_id);
+      const results: typeof anchorQuestions = [];
+      await Promise.all(allSurveyIds.map(async (sid: string) => {
+        try {
+          const res = await fetch(`${apiBase}/survey/${sid}/view`);
+          if (!res.ok) return;
+          const data = await res.json();
+          const survey = data.survey || data;
+          const surveyMeta = funnel.generated_surveys.find((s: any) => s.survey_id === sid);
+          (survey.questions || []).forEach((q: any) => {
+            if (q.is_anchor) {
+              results.push({
+                surveyId: sid,
+                surveyName: surveyMeta?.name || sid,
+                surveyType: surveyMeta?.type || 'screening',
+                questionId: q.id,
+                questionText: q.question,
+                options: q.options || [],
+                correctAnswers: q.anchor_correct_answers || [],
+                redirectUrl: q.anchor_redirect_url || '',
+              });
+            }
+          });
+        } catch {}
+      }));
+      setAnchorQuestions(results);
+      // Pre-select if already configured
+      const existing = funnel.anchor_config;
+      if (existing?.question_id) {
+        setSelectedAnchorQId(existing.question_id);
+        setAnchorRedirectUrl(existing.redirect_url || '');
+      }
+    } finally {
+      setAnchorLoading(false);
+    }
+  };
+
   const openDetailModal = (iconId: string) => {
     const currentFixed = bulkSelections[iconId] || '';
     setDetailSelection(currentFixed);
     setDetailModalIcon(iconId);
+    if (iconId === 'anchor') {
+      loadAnchorQuestions();
+    }
   };
 
-  const saveDetailModal = () => {
-    if (!detailModalIcon) return;
+  const saveAnchorModal = () => {
+    if (!selectedAnchorQId) return;
+    const aq = anchorQuestions.find(q => q.questionId === selectedAnchorQId);
+    if (!aq) return;
+    const newAnchorConfig = {
+      enabled: true,
+      question_id: aq.questionId,
+      question_text: aq.questionText,
+      options: aq.options,
+      correct_answers: aq.correctAnswers,
+      redirect_url: anchorRedirectUrl || aq.redirectUrl,
+      scope: anchorScope,
+      source_survey_id: aq.surveyId,
+    };
+    fetch(`${apiBase}/api/funnels/${funnel.funnel_id}`, {
+      method: 'PUT', headers: authHeaders(),
+      body: JSON.stringify({ anchor_config: newAnchorConfig }),
+    }).catch(() => {});
+    setDetailModalIcon(null);
+  };
+
+  const saveDetailModal = () => {    if (!detailModalIcon) return;
     if (detailSelection) {
       const newSelections = { ...bulkSelections, [detailModalIcon]: detailSelection };
       setBulkSelections(newSelections);
@@ -2361,7 +2436,118 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
 
               {/* Options grid — scrollable */}
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-                {sections ? (
+                {/* ── Anchor: custom picker ── */}
+                {detailModalIcon === 'anchor' ? (
+                  <div className="space-y-4">
+                    {/* Scope */}
+                    <div>
+                      <p className={`text-[10px] font-bold tracking-widest uppercase mb-2 ${textMuted}`}>Inject into</p>
+                      <div className="flex gap-2">
+                        {([
+                          { id: 'screeners', label: 'Screeners only' },
+                          { id: 'tore',      label: 'Tore only' },
+                          { id: 'all',       label: 'All surveys' },
+                        ] as const).map(s => (
+                          <button key={s.id} onClick={() => setAnchorScope(s.id)}
+                            className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                              anchorScope === s.id
+                                ? isDarkMode ? 'bg-amber-600 border-amber-600 text-white' : 'bg-amber-500 border-amber-500 text-white'
+                                : isDarkMode ? 'border-gray-600 text-gray-400 hover:border-gray-500' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                            }`}>{s.label}</button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Anchor question list */}
+                    <div>
+                      <p className={`text-[10px] font-bold tracking-widest uppercase mb-2 ${textMuted}`}>Select anchor question</p>
+                      {anchorLoading ? (
+                        <div className="flex items-center gap-2 py-4 justify-center">
+                          <Loader2 size={14} className="animate-spin text-amber-500" />
+                          <span className={`text-xs ${textMuted}`}>Loading anchor questions…</span>
+                        </div>
+                      ) : anchorQuestions.length === 0 ? (
+                        <div className={`rounded-xl border border-dashed px-4 py-6 text-center ${isDarkMode ? 'border-gray-600' : 'border-gray-300'}`}>
+                          <div className="text-2xl mb-2">⚓</div>
+                          <p className={`text-xs font-medium ${textMain}`}>No anchor questions found</p>
+                          <p className={`text-[11px] mt-1 ${textMuted}`}>
+                            Open any survey in the editor, select a question, and toggle the <strong>Anchor Question</strong> switch in the right sidebar.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {anchorQuestions.map(aq => {
+                            const isSelected = selectedAnchorQId === aq.questionId;
+                            return (
+                              <button key={aq.questionId}
+                                onClick={() => {
+                                  setSelectedAnchorQId(isSelected ? '' : aq.questionId);
+                                  if (!isSelected && !anchorRedirectUrl) setAnchorRedirectUrl(aq.redirectUrl);
+                                }}
+                                className={`w-full p-3 rounded-xl border text-left transition-all ${
+                                  isSelected
+                                    ? isDarkMode ? 'border-amber-500 bg-amber-900/20' : 'border-amber-400 bg-amber-50'
+                                    : isDarkMode ? 'border-gray-600 hover:border-gray-500' : 'border-gray-200 hover:border-gray-300'
+                                }`}
+                              >
+                                <div className="flex items-start gap-2">
+                                  <span className="text-base mt-0.5">⚓</span>
+                                  <div className="flex-1 min-w-0">
+                                    <p className={`text-xs font-semibold truncate ${textMain}`}>{aq.questionText}</p>
+                                    <p className={`text-[10px] mt-0.5 ${textMuted}`}>
+                                      {aq.surveyName} · {aq.surveyType === 'job' ? 'Tore' : 'Screener'}
+                                    </p>
+                                    {aq.correctAnswers.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 mt-1.5">
+                                        {aq.options.map(opt => {
+                                          const isCorrect = aq.correctAnswers.includes(opt);
+                                          return (
+                                            <span key={opt} className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                                              isCorrect
+                                                ? isDarkMode ? 'bg-green-900/50 text-green-300' : 'bg-green-100 text-green-700'
+                                                : isDarkMode ? 'bg-gray-700 text-gray-500' : 'bg-gray-100 text-gray-400'
+                                            }`}>
+                                              {isCorrect ? '✓ ' : ''}{opt}
+                                            </span>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                  {isSelected && <Check size={14} className="text-amber-500 flex-shrink-0" />}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Redirect URL override */}
+                    {selectedAnchorQId && (
+                      <div>
+                        <p className={`text-[10px] font-bold tracking-widest uppercase mb-1.5 ${textMuted}`}>Redirect URL (on qualify)</p>
+                        <input
+                          type="url"
+                          value={anchorRedirectUrl}
+                          onChange={e => setAnchorRedirectUrl(e.target.value)}
+                          placeholder="https://partner.com/fallback-offer"
+                          className={`w-full text-xs rounded-lg px-3 py-2 border focus:outline-none focus:ring-2 focus:ring-amber-400 ${
+                            isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-200 text-gray-800 placeholder-gray-400'
+                          }`}
+                        />
+                        <p className={`text-[10px] mt-1 ${textMuted}`}>
+                          Overrides the URL set on the question. Leave blank to use the question's own redirect URL.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Info note */}
+                    <div className={`rounded-lg p-3 text-[11px] leading-relaxed ${isDarkMode ? 'bg-amber-900/20 text-amber-300 border border-amber-800/40' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
+                      💡 The anchor question is injected (as a copy) into the selected surveys. When a respondent fails all Tore surveys, their answer is checked — if it matches a qualifying answer, they get redirected to the anchor URL instead of screen-out.
+                    </div>
+                  </div>
+                ) : sections ? (
                   // Sectioned layout (e.g. pages = LOADING / RATING / ENDING)
                   sections.map(sec => (
                     <div key={sec.heading}>
@@ -2456,10 +2642,19 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
                   className={`flex-1 py-2.5 rounded-xl text-xs font-semibold border transition-colors ${isDarkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
                   Use default (off)
                 </button>
-                <button onClick={saveDetailModal} disabled={!detailSelection}
-                  className="flex-[2] py-2.5 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 transition-colors flex items-center justify-center gap-1.5">
-                  <Check size={13} /> Done — set fixed
-                </button>
+                {detailModalIcon === 'anchor' ? (
+                  <button
+                    onClick={saveAnchorModal}
+                    disabled={!selectedAnchorQId}
+                    className="flex-[2] py-2.5 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-40 transition-colors flex items-center justify-center gap-1.5">
+                    <Check size={13} /> Save anchor config
+                  </button>
+                ) : (
+                  <button onClick={saveDetailModal} disabled={!detailSelection}
+                    className="flex-[2] py-2.5 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 transition-colors flex items-center justify-center gap-1.5">
+                    <Check size={13} /> Done — set fixed
+                  </button>
+                )}
               </div>
             </div>
           </div>

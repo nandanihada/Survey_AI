@@ -3343,6 +3343,102 @@ const SurveyEditor: React.FC = () => {
                 </div>
               )}
 
+              {/* Anchor question toggle — available for all question types with options */}
+              {(activeQ.type === 'multiple_choice' || activeQ.type === 'yes_no' || activeQ.type === 'radio') && (
+                <div className="pt-3 border-t border-gray-100 space-y-3">
+                  {/* Toggle row */}
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <div>
+                      <span className="text-xs font-medium text-gray-600 flex items-center gap-1.5">
+                        ⚓ Anchor Question
+                      </span>
+                      <p className="text-[10px] text-gray-400 mt-0.5">Fallback redirect if respondent fails all funnel surveys</p>
+                    </div>
+                    <div
+                      onClick={() => {
+                        const updated = { ...survey };
+                        updated.questions = [...updated.questions];
+                        updated.questions[activeQuestionIndex] = {
+                          ...updated.questions[activeQuestionIndex],
+                          is_anchor: !(activeQ as any).is_anchor,
+                        };
+                        setSurvey(updated);
+                      }}
+                      className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer shrink-0 ${
+                        (activeQ as any).is_anchor ? 'bg-amber-500' : 'bg-gray-300'
+                      }`}
+                    >
+                      <div className={`absolute top-[3px] w-3.5 h-3.5 bg-white rounded-full shadow transition-transform ${
+                        (activeQ as any).is_anchor ? 'translate-x-[18px]' : 'translate-x-[3px]'
+                      }`} />
+                    </div>
+                  </label>
+
+                  {/* Anchor details — only shown when toggle is on */}
+                  {(activeQ as any).is_anchor && (
+                    <div className="space-y-2.5 pl-1">
+                      {/* Correct answers */}
+                      <div>
+                        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Qualifying answers</p>
+                        <div className="space-y-1">
+                          {(activeQ.options || []).map((opt) => {
+                            const correct: string[] = (activeQ as any).anchor_correct_answers || [];
+                            const isCorrect = correct.includes(opt);
+                            return (
+                              <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                                <div
+                                  onClick={() => {
+                                    const current: string[] = (activeQ as any).anchor_correct_answers || [];
+                                    const next = isCorrect
+                                      ? current.filter((a: string) => a !== opt)
+                                      : [...current, opt];
+                                    const updated = { ...survey };
+                                    updated.questions = [...updated.questions];
+                                    (updated.questions[activeQuestionIndex] as any).anchor_correct_answers = next;
+                                    setSurvey(updated);
+                                  }}
+                                  className={`w-4 h-4 rounded border-2 flex items-center justify-center cursor-pointer transition-colors ${
+                                    isCorrect ? 'bg-amber-500 border-amber-500' : 'border-gray-300'
+                                  }`}
+                                >
+                                  {isCorrect && (
+                                    <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
+                                      <path d="M1 3L3 5L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                    </svg>
+                                  )}
+                                </div>
+                                <span className={`text-xs ${isCorrect ? 'text-amber-700 font-medium' : 'text-gray-500'}`}>{opt}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                        {(activeQ.options || []).length === 0 && (
+                          <p className="text-[10px] text-gray-400">Add options to this question first.</p>
+                        )}
+                      </div>
+
+                      {/* Redirect URL */}
+                      <div>
+                        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Redirect URL</p>
+                        <input
+                          type="url"
+                          value={(activeQ as any).anchor_redirect_url || ''}
+                          onChange={(e) => {
+                            const updated = { ...survey };
+                            updated.questions = [...updated.questions];
+                            (updated.questions[activeQuestionIndex] as any).anchor_redirect_url = e.target.value;
+                            setSurvey(updated);
+                          }}
+                          placeholder="https://partner.com/offer"
+                          className="w-full text-xs rounded-lg px-2.5 py-1.5 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-400 text-gray-800 placeholder-gray-400"
+                        />
+                        <p className="text-[10px] text-gray-400 mt-1">Where to send respondents who gave a qualifying answer but failed the funnel.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Rating style selector — only for rating type */}
               {activeQ.type === 'rating' && (
                 <div className="pt-3 border-t border-gray-100">
