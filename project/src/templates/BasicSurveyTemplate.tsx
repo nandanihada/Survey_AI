@@ -561,6 +561,28 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       });
     } else {
       setFormData(prev => ({ ...prev, [id]: value }));
+      // ── Instant security termination ─────────────────────────────────────
+      // If this question is a security question with instant termination,
+      // check immediately on answer — don't wait for survey submit.
+      const q = (survey.questions || []).find((q: any) => q.id === id);
+      if (q && (q as any).is_security_question && (q as any).security_termination === 'instant') {
+        const rule = (q as any).screening_rule;
+        if (rule && rule.enabled) {
+          const correctAnswer = (rule.correct_answer || rule.fail_value || '').trim().toLowerCase();
+          const givenAnswer = String(value).trim().toLowerCase();
+          // fail_condition is "not_equals" — wrong means they didn't pick the correct answer
+          const failed = rule.fail_condition === 'not_equals'
+            ? givenAnswer !== correctAnswer
+            : givenAnswer === (rule.fail_value || '').trim().toLowerCase();
+          if (failed) {
+            console.log(`⚠️ [Security] Instant termination triggered on question ${id}`);
+            // Trigger submit immediately — the funnel backend will handle the terminate action
+            setTimeout(() => {
+              if (formRef.current) formRef.current.requestSubmit();
+            }, 300); // short delay so the answer registers visually
+          }
+        }
+      }
     }
     trackClickInteraction('answer_selected', { questionId: id, answer: value });
   };

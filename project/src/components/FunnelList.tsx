@@ -2596,12 +2596,36 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
                     {secStep === 'review' && (
                       <>
                         <div className="flex items-center justify-between">
-                          <p className={`text-xs font-semibold ${textMain}`}>AI generated {secGenerated.length} question{secGenerated.length !== 1 ? 's' : ''}</p>
+                          <p className={`text-xs font-semibold ${textMain}`}>
+                            {secGenerated.length} question{secGenerated.length !== 1 ? 's' : ''} ready
+                          </p>
                           <div className="flex items-center gap-3">
                             <button onClick={() => { setSecStep('config'); setSecGenerated([]); setSecSelected([]); }} className={`text-[11px] ${textMuted} hover:text-red-500`}>← Back</button>
                             <button onClick={() => setSecStep('config')} className="text-[11px] text-red-500 font-semibold hover:text-red-600 flex items-center gap-1">
                               <RefreshCw size={10} /> Regenerate
                             </button>
+                          </div>
+                        </div>
+
+                        {/* Termination selector — editable from review */}
+                        <div className={`rounded-xl p-3 ${isDarkMode ? 'bg-gray-700/60' : 'bg-gray-50 border border-gray-100'}`}>
+                          <p className={`text-[10px] font-bold tracking-widest uppercase mb-2 ${textMuted}`}>On wrong answer</p>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {([
+                              ['instant','⚡ Instant','Stop immediately'],
+                              ['this_layer','📄 This layer','After this survey'],
+                              ['all_layers','🗂 All layers','After all screeners'],
+                              ['into_tor','→ Into Tor','Send to destination first'],
+                            ] as const).map(([v,l,d]) => (
+                              <button key={v} onClick={() => setSecTermination(v)}
+                                className={`flex items-center gap-2 p-2 rounded-lg border text-left transition-all ${secTermination === v ? isDarkMode ? 'border-red-500 bg-red-900/20' : 'border-red-400 bg-red-50' : isDarkMode ? 'border-gray-600 hover:border-gray-500' : 'border-gray-200 hover:border-gray-300'}`}>
+                                <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${secTermination === v ? 'bg-red-500' : isDarkMode ? 'bg-gray-600' : 'bg-gray-300'}`} />
+                                <div>
+                                  <p className={`text-[11px] font-semibold ${textMain}`}>{l}</p>
+                                  <p className={`text-[10px] ${textMuted}`}>{d}</p>
+                                </div>
+                              </button>
+                            ))}
                           </div>
                         </div>
                         <div className="space-y-3">
