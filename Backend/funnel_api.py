@@ -2856,3 +2856,236 @@ def get_anchor_questions():
             })
 
     return jsonify({"anchor_questions": results, "total": len(results)}), 200
+
+
+# ═══════════════════════════════════════════════════════
+#  SECURITY QUESTIONS — AI GENERATOR
+# ═══════════════════════════════════════════════════════
+
+@funnel_bp.route("/api/funnels/<funnel_id>/generate-security-questions", methods=["POST", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins="*")
+@requireAuth
+def generate_security_questions(funnel_id):
+    """
+    AI generates trap/attention-check questions based on the funnel's survey content.
+    Config: count, scope, termination_behaviour, question_types.
+    Returns a list of candidate questions with correct_answer and fail_answers marked.
+    """
+    if request.method == "OPTIONS":
+        return "", 200
+
+    data = request.get_json() or {}
+    count = min(int(data.get("count", 2)), 5)
+    scope = data.get("scope", "screeners")          # screeners | all
+    termination = data.get("termination", "instant") # instant | this_layer | all_layers | into_tor
+    question_types = data.get("question_types", ["attention_check", "knowledge_trap"])
+
+    funnel = db.funnels.find_one({"funnel_id": funnel_id})
+    if not funnel:
+        return jsonify({"error": "Funnel not found"}), 404
+
+    # Collect survey content for context
+    generated = funnel.get("generated_surveys", [])
+    if scope == "screeners":
+        target_surveys = [s for s in generated if s.get("type") == "screening"]
+    else:
+        target_surveys = generated
+
+    survey_summaries = []
+    for s in target_surveys[:4]:  # limit context to 4 surveys
+        sid = s.get("survey_id", "")
+        survey_doc = db.surveys.find_one(
+            {"$or": [{"id": sid}, {"short_id": sid}]},
+            {"title": 1, "questions": 1}
+        )
+        if survey_doc:
+            questions_preview = [
+                {"q": q.get("question", ""), "options": q.get("options", [])}
+                for q in survey_doc.get("questions", [])[:5]
+                if not str(q.get("type", "")).startswith("__")
+            ]
+            survey_summaries.append({
+                "name": s.get("name", survey_doc.get("title", sid)),
+                "questions": questions_preview
+            })
+
+    if not survey_summaries:
+        return jsonify({"error": "No surveys found in scope"}), 400
+
+    api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("AI_API_KEY", "")
+    if not api_key:
+        return jsonify({"error": "AI not configured"}), 500
+
+    type_instructions = []
+    if "attention_check" in question_types:
+        type_instructions.append("- Attention check: a simple instruction like 'To verify you are reading carefully, please select [option]'. One specific option is correct, the rest are wrong.")
+    if "knowledge_trap" in question_types:
+        type_instructions.append("- Knowledge trap: a topic-relevant question with one clearly correct answer and plausible-sounding wrong options. Someone genuinely familiar with the topic should get it right.")
+    if "consistency_check" in question_types:
+        type_instructions.append("- Consistency check: rephrase a question from the survey in a different way — a genuine respondent should give a consistent answer.")
+
+    prompt = f"""You are a survey security expert. Generate {count} security/trap questions for a funnel survey.
+
+Survey context (topic and sample questions):
+{json.dumps(survey_summaries, indent=2)}
+
+Question types to generate:
+{chr(10).join(type_instructions)}
+
+Rules:
+- Each question must have exactly 4 answer options
+- Exactly ONE option is the correct/pass answer (a genuine respondent should pick this)
+- The other 3 options are fail answers (wrong, distractor, or inattentive choices)
+- Questions should feel natural — they should NOT look like obvious traps to a genuine respondent
+- Mix question types if multiple types requested
+
+Return ONLY valid JSON in this exact format:
+{{
+  "questions": [
+    {{
+      "id": "sec_1",
+      "type": "attention_check",
+      "question": "...",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correct_answer": "Option B",
+      "fail_answers": ["Option A", "Option C", "Option D"],
+      "explanation": "Why this is a good security question"
+    }}
+  ]
+}}"""
+
+    try:
+        resp = http_requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            timeout=60,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": "gpt-4o-mini",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.6,
+                "max_tokens": 2000,
+                "response_format": {"type": "json_object"}
+            }
+        )
+        if resp.status_code != 200:
+            return jsonify({"error": f"AI call failed: {resp.status_code}"}), 500
+
+        raw = resp.json()["choices"][0]["message"]["content"]
+        parsed = json.loads(raw)
+        questions = parsed.get("questions", [])
+
+        # Attach config metadata to each question
+        for q in questions:
+            q["termination"] = termination
+            q["scope"] = scope
+
+        return jsonify({
+            "questions": questions,
+            "count": len(questions),
+            "scope": scope,
+            "termination": termination,
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@funnel_bp.route("/api/funnels/<funnel_id>/apply-security-questions", methods=["POST", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins="*")
+@requireAuth
+def apply_security_questions(funnel_id):
+    """
+    Injects selected security questions into the funnel's surveys.
+    Each selected question is added to every survey in scope with a screening_rule.
+    termination controls how the fail_condition is stored for runtime use.
+    """
+    if request.method == "OPTIONS":
+        return "", 200
+
+    data = request.get_json() or {}
+    selected_questions = data.get("questions", [])   # list of question dicts from generate step
+    scope = data.get("scope", "screeners")
+    termination = data.get("termination", "instant")
+
+    if not selected_questions:
+        return jsonify({"error": "No questions selected"}), 400
+
+    funnel = db.funnels.find_one({"funnel_id": funnel_id})
+    if not funnel:
+        return jsonify({"error": "Funnel not found"}), 404
+
+    generated = funnel.get("generated_surveys", [])
+    if scope == "screeners":
+        target_sids = [s["survey_id"] for s in generated if s.get("type") == "screening"]
+    else:
+        target_sids = [s["survey_id"] for s in generated]
+
+    applied_count = 0
+    for sid in target_sids:
+        survey_doc = db.surveys.find_one({"$or": [{"id": sid}, {"short_id": sid}]})
+        if not survey_doc:
+            continue
+
+        existing_ids = {q.get("id") for q in survey_doc.get("questions", [])}
+        new_questions = []
+        for sq in selected_questions:
+            q_id = f"sec_{uuid.uuid4().hex[:8]}"
+            while q_id in existing_ids:
+                q_id = f"sec_{uuid.uuid4().hex[:8]}"
+            existing_ids.add(q_id)
+
+            new_q = {
+                "id": q_id,
+                "question": sq.get("question", ""),
+                "type": "multiple_choice",
+                "options": sq.get("options", []),
+                "required": True,
+                "funnel_role": "screen",
+                "is_security_question": True,
+                "security_termination": termination,
+                "screening_rule": {
+                    "enabled": True,
+                    "fail_condition": "not_equals",
+                    "fail_value": sq.get("correct_answer", ""),
+                    "fail_reason": f"Security check failed — termination: {termination}",
+                    "termination": termination,
+                    "correct_answer": sq.get("correct_answer", ""),
+                    "fail_answers": sq.get("fail_answers", []),
+                }
+            }
+            new_questions.append(new_q)
+
+        if new_questions:
+            # Insert security questions near the middle of the survey (not first, not last)
+            existing_qs = survey_doc.get("questions", [])
+            insert_at = max(1, len(existing_qs) // 2)
+            updated_qs = existing_qs[:insert_at] + new_questions + existing_qs[insert_at:]
+
+            db.surveys.update_one(
+                {"$or": [{"id": sid}, {"short_id": sid}]},
+                {"$set": {"questions": updated_qs}}
+            )
+            applied_count += 1
+
+    # Also store security config on the funnel for reference
+    db.funnels.update_one(
+        {"funnel_id": funnel_id},
+        {"$set": {
+            "security_config": {
+                "enabled": True,
+                "scope": scope,
+                "termination": termination,
+                "question_count": len(selected_questions),
+                "applied_to": applied_count,
+                "applied_at": datetime.now(timezone.utc).isoformat(),
+            }
+        }}
+    )
+
+    return jsonify({
+        "success": True,
+        "applied_to_surveys": applied_count,
+        "questions_injected": len(selected_questions),
+        "scope": scope,
+        "termination": termination,
+    }), 200

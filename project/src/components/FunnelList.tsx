@@ -1018,6 +1018,65 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
   const [anchorRedirectUrl, setAnchorRedirectUrl] = useState('');
   const [anchorScope, setAnchorScope] = useState<'all' | 'screeners' | 'tore'>('screeners');
 
+  // ── Security question generator state ──────────────────────────────────
+  const [secStep, setSecStep] = useState<'config' | 'review' | 'applying'>('config');
+  const [secCount, setSecCount] = useState(2);
+  const [secScope, setSecScope] = useState<'screeners' | 'all'>('screeners');
+  const [secTermination, setSecTermination] = useState<'instant' | 'this_layer' | 'all_layers' | 'into_tor'>('instant');
+  const [secTypes, setSecTypes] = useState<string[]>(['attention_check', 'knowledge_trap']);
+  const [secLoading, setSecLoading] = useState(false);
+  const [secGenerated, setSecGenerated] = useState<{
+    id: string; type: string; question: string;
+    options: string[]; correct_answer: string;
+    fail_answers: string[]; explanation: string;
+  }[]>([]);
+  const [secSelected, setSecSelected] = useState<string[]>([]);
+  const [secError, setSecError] = useState('');
+  const [secApplied, setSecApplied] = useState(false);
+
+  const generateSecurityQuestions = async () => {
+    setSecLoading(true);
+    setSecError('');
+    try {
+      const res = await fetch(`${apiBase}/api/funnels/${funnel.funnel_id}/generate-security-questions`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({
+          count: secCount,
+          scope: secScope,
+          termination: secTermination,
+          question_types: secTypes,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Generation failed');
+      setSecGenerated(data.questions || []);
+      setSecSelected((data.questions || []).map((q: any) => q.id)); // select all by default
+      setSecStep('review');
+    } catch (e: any) {
+      setSecError(e.message || 'Failed to generate questions');
+    } finally {
+      setSecLoading(false);
+    }
+  };
+
+  const applySecurityQuestions = async () => {
+    setSecStep('applying');
+    try {
+      const chosen = secGenerated.filter(q => secSelected.includes(q.id));
+      const res = await fetch(`${apiBase}/api/funnels/${funnel.funnel_id}/apply-security-questions`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ questions: chosen, scope: secScope, termination: secTermination }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Apply failed');
+      setSecApplied(true);
+      setTimeout(() => { setDetailModalIcon(null); setSecApplied(false); onRefresh(); }, 1500);
+    } catch (e: any) {
+      setSecError(e.message || 'Failed to apply');
+      setSecStep('review');
+    }
+  };
+
   const loadAnchorQuestions = async () => {
     setAnchorLoading(true);
     try {
@@ -1044,6 +1103,13 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
     setDetailModalIcon(iconId);
     if (iconId === 'anchor') {
       loadAnchorQuestions();
+    }
+    if (iconId === 'security') {
+      // Reset security flow
+      setSecStep('config');
+      setSecGenerated([]);
+      setSecSelected([]);
+      setSecError('');
     }
   };
 
@@ -2404,19 +2470,179 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
               </div>
 
               {/* Context banner */}
-              <div className={`mx-5 mt-4 px-3 py-2 rounded-lg text-[11px] flex items-start gap-2 flex-shrink-0 ${isDarkMode ? 'bg-blue-900/30 text-blue-300 border border-blue-800' : 'bg-blue-50 text-blue-700 border border-blue-100'}`}>
+              <div className={`mx-5 mt-4 px-3 py-2 rounded-lg text-[11px] flex items-start gap-2 flex-shrink-0 ${
+                detailModalIcon === 'security'
+                  ? isDarkMode ? 'bg-red-900/30 text-red-300 border border-red-800' : 'bg-red-50 text-red-700 border border-red-100'
+                  : isDarkMode ? 'bg-blue-900/30 text-blue-300 border border-blue-800' : 'bg-blue-50 text-blue-700 border border-blue-100'
+              }`}>
                 <Info size={12} className="mt-0.5 flex-shrink-0" />
-                <span>
-                  Editing from Quick set-up — this applies to <strong>every survey</strong> in scope ({quickScope}).
-                  Currently: <strong>{currentState === 'off' ? 'off' : currentState === 'fixed' ? `fixed (${bulkSelections[detailModalIcon] || 'none selected'})` : 'shuffled'}</strong>.
-                  Saving a selection sets it to <em>Fixed</em>.
-                </span>
+                {detailModalIcon === 'security' ? (
+                  <span>
+                    AI generates trap questions from your survey content and injects them into every survey in scope.
+                    Wrong answers trigger the termination behaviour you select.
+                  </span>
+                ) : (
+                  <span>
+                    Editing from Quick set-up — this applies to <strong>every survey</strong> in scope ({quickScope}).
+                    Currently: <strong>{currentState === 'off' ? 'off' : currentState === 'fixed' ? `fixed (${bulkSelections[detailModalIcon] || 'none selected'})` : 'shuffled'}</strong>.
+                    Saving a selection sets it to <em>Fixed</em>.
+                  </span>
+                )}
               </div>
 
               {/* Options grid — scrollable */}
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-                {/* ── Anchor: custom picker ── */}
-                {detailModalIcon === 'anchor' ? (
+                {/* ── Security: 2-step config + review ── */}
+                {detailModalIcon === 'security' ? (
+                  <div className="space-y-4">
+                    {secStep === 'config' && (
+                      <>
+                        {/* How many */}
+                        <div>
+                          <p className={`text-[10px] font-bold tracking-widest uppercase mb-2 ${textMuted}`}>How many questions</p>
+                          <div className="flex gap-2">
+                            {[1,2,3].map(n => (
+                              <button key={n} onClick={() => setSecCount(n)}
+                                className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-colors ${secCount === n ? 'bg-red-500 border-red-500 text-white' : isDarkMode ? 'border-gray-600 text-gray-400 hover:border-gray-500' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                                {n}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Scope */}
+                        <div>
+                          <p className={`text-[10px] font-bold tracking-widest uppercase mb-2 ${textMuted}`}>Apply to</p>
+                          <div className="flex gap-2">
+                            {([['screeners','Screeners only'],['all','All surveys']] as const).map(([v,l]) => (
+                              <button key={v} onClick={() => setSecScope(v)}
+                                className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${secScope === v ? 'bg-red-500 border-red-500 text-white' : isDarkMode ? 'border-gray-600 text-gray-400' : 'border-gray-200 text-gray-600'}`}>
+                                {l}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Termination */}
+                        <div>
+                          <p className={`text-[10px] font-bold tracking-widest uppercase mb-2 ${textMuted}`}>On wrong answer</p>
+                          <div className="space-y-1.5">
+                            {([
+                              ['instant','Instant','Terminate immediately'],
+                              ['this_layer','This layer','Terminate after this survey'],
+                              ['all_layers','All layers','Terminate after all screeners'],
+                              ['into_tor','Into Tor','Send to destination first'],
+                            ] as const).map(([v,l,d]) => (
+                              <button key={v} onClick={() => setSecTermination(v)}
+                                className={`w-full flex items-center gap-3 p-2.5 rounded-xl border text-left transition-all ${secTermination === v ? isDarkMode ? 'border-red-500 bg-red-900/20' : 'border-red-400 bg-red-50' : isDarkMode ? 'border-gray-600 hover:border-gray-500' : 'border-gray-200 hover:border-gray-300'}`}>
+                                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${secTermination === v ? 'bg-red-500' : isDarkMode ? 'bg-gray-600' : 'bg-gray-300'}`} />
+                                <div>
+                                  <p className={`text-xs font-semibold ${textMain}`}>{l}</p>
+                                  <p className={`text-[10px] ${textMuted}`}>{d}</p>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Question type */}
+                        <div>
+                          <p className={`text-[10px] font-bold tracking-widest uppercase mb-2 ${textMuted}`}>Question type</p>
+                          <div className="space-y-1.5">
+                            {([
+                              ['attention_check','🎯 Attention check','Simple instruction — catches bots and random clickers'],
+                              ['knowledge_trap','🧠 Knowledge trap','Topic-relevant question only genuine respondents get right'],
+                              ['consistency_check','🔄 Consistency check','Rephrased repeat — catches contradictory answers'],
+                            ]).map(([v,l,d]) => {
+                              const active = secTypes.includes(v);
+                              return (
+                                <button key={v} onClick={() => setSecTypes(prev => active ? prev.filter(t => t !== v) : [...prev, v])}
+                                  className={`w-full flex items-center gap-3 p-2.5 rounded-xl border text-left transition-all ${active ? isDarkMode ? 'border-red-500 bg-red-900/20' : 'border-red-400 bg-red-50' : isDarkMode ? 'border-gray-600 hover:border-gray-500' : 'border-gray-200 hover:border-gray-300'}`}>
+                                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${active ? 'bg-red-500 border-red-500' : isDarkMode ? 'border-gray-500' : 'border-gray-300'}`}>
+                                    {active && <svg width="8" height="6" viewBox="0 0 8 6" fill="none"><path d="M1 3L3 5L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                                  </div>
+                                  <div>
+                                    <p className={`text-xs font-semibold ${textMain}`}>{l}</p>
+                                    <p className={`text-[10px] ${textMuted}`}>{d}</p>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {secError && <p className="text-xs text-red-500">{secError}</p>}
+                      </>
+                    )}
+
+                    {secStep === 'review' && (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <p className={`text-xs font-semibold ${textMain}`}>AI generated {secGenerated.length} question{secGenerated.length !== 1 ? 's' : ''}</p>
+                          <button onClick={() => setSecStep('config')} className={`text-[11px] ${textMuted} hover:text-red-500`}>← Back</button>
+                        </div>
+                        <div className="space-y-3">
+                          {secGenerated.map(q => {
+                            const isSelected = secSelected.includes(q.id);
+                            return (
+                              <div key={q.id}
+                                onClick={() => setSecSelected(prev => isSelected ? prev.filter(id => id !== q.id) : [...prev, q.id])}
+                                className={`rounded-xl border p-3 cursor-pointer transition-all ${isSelected ? isDarkMode ? 'border-red-500 bg-red-900/20' : 'border-red-400 bg-red-50' : isDarkMode ? 'border-gray-600 hover:border-gray-500' : 'border-gray-200 hover:border-gray-300'}`}>
+                                <div className="flex items-start gap-2 mb-2">
+                                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${isSelected ? 'bg-red-500 border-red-500' : isDarkMode ? 'border-gray-500' : 'border-gray-300'}`}>
+                                    {isSelected && <svg width="8" height="6" viewBox="0 0 8 6" fill="none"><path d="M1 3L3 5L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                                  </div>
+                                  <div className="flex-1">
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full mr-1.5 ${isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>
+                                      {q.type.replace(/_/g,' ')}
+                                    </span>
+                                    <p className={`text-xs font-semibold mt-1 ${textMain}`}>{q.question}</p>
+                                  </div>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 ml-6">
+                                  {q.options.map(opt => {
+                                    const isCorrect = opt === q.correct_answer;
+                                    return (
+                                      <span key={opt} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                                        isCorrect
+                                          ? isDarkMode ? 'bg-green-900/60 text-green-300 border border-green-700' : 'bg-green-100 text-green-700 border border-green-200'
+                                          : isDarkMode ? 'bg-red-900/40 text-red-400 border border-red-800' : 'bg-red-50 text-red-600 border border-red-200'
+                                      }`}>
+                                        {isCorrect ? '✓ ' : '✗ '}{opt}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                                {q.explanation && (
+                                  <p className={`text-[10px] mt-2 ml-6 ${textMuted}`}>💡 {q.explanation}</p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {secError && <p className="text-xs text-red-500">{secError}</p>}
+                      </>
+                    )}
+
+                    {secStep === 'applying' && (
+                      <div className="flex flex-col items-center justify-center py-8 gap-3">
+                        {secApplied ? (
+                          <>
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isDarkMode ? 'bg-green-900/40' : 'bg-green-100'}`}>
+                              <Check size={22} className="text-green-500" />
+                            </div>
+                            <p className={`text-sm font-semibold ${textMain}`}>Security questions applied!</p>
+                          </>
+                        ) : (
+                          <>
+                            <Loader2 size={24} className="animate-spin text-red-500" />
+                            <p className={`text-sm ${textMuted}`}>Injecting into surveys…</p>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : detailModalIcon === 'anchor' ? (
                   <div className="space-y-4">
                     {/* Scope */}
                     <div>
@@ -2617,22 +2843,52 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
 
               {/* Footer */}
               <div className={`flex items-center gap-3 px-5 py-4 border-t flex-shrink-0 ${isDarkMode ? 'border-gray-700' : 'border-gray-100'}`}>
-                <button onClick={useDefaultDetailModal}
-                  className={`flex-1 py-2.5 rounded-xl text-xs font-semibold border transition-colors ${isDarkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
-                  Use default (off)
-                </button>
-                {detailModalIcon === 'anchor' ? (
-                  <button
-                    onClick={saveAnchorModal}
-                    disabled={!selectedAnchorQId}
-                    className="flex-[2] py-2.5 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-40 transition-colors flex items-center justify-center gap-1.5">
-                    <Check size={13} /> Save anchor config
-                  </button>
+                {detailModalIcon === 'security' ? (
+                  secStep === 'config' ? (
+                    <>
+                      <button onClick={() => setDetailModalIcon(null)}
+                        className={`flex-1 py-2.5 rounded-xl text-xs font-semibold border transition-colors ${isDarkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                        Cancel
+                      </button>
+                      <button onClick={generateSecurityQuestions} disabled={secLoading || secTypes.length === 0}
+                        className="flex-[2] py-2.5 rounded-xl text-xs font-semibold bg-red-500 hover:bg-red-600 text-white disabled:opacity-40 transition-colors flex items-center justify-center gap-1.5">
+                        {secLoading ? <><Loader2 size={12} className="animate-spin" /> Generating…</> : <><Sparkles size={13} /> Generate with AI</>}
+                      </button>
+                    </>
+                  ) : secStep === 'review' ? (
+                    <>
+                      <button onClick={() => setSecStep('config')}
+                        className={`flex-1 py-2.5 rounded-xl text-xs font-semibold border transition-colors ${isDarkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                        ← Reconfigure
+                      </button>
+                      <button onClick={applySecurityQuestions} disabled={secSelected.length === 0}
+                        className="flex-[2] py-2.5 rounded-xl text-xs font-semibold bg-red-500 hover:bg-red-600 text-white disabled:opacity-40 transition-colors flex items-center justify-center gap-1.5">
+                        <Check size={13} /> Inject {secSelected.length} question{secSelected.length !== 1 ? 's' : ''}
+                      </button>
+                    </>
+                  ) : null
+                ) : detailModalIcon === 'anchor' ? (
+                  <>
+                    <button onClick={useDefaultDetailModal}
+                      className={`flex-1 py-2.5 rounded-xl text-xs font-semibold border transition-colors ${isDarkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                      Use default (off)
+                    </button>
+                    <button onClick={saveAnchorModal} disabled={!selectedAnchorQId}
+                      className="flex-[2] py-2.5 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-40 transition-colors flex items-center justify-center gap-1.5">
+                      <Check size={13} /> Save anchor config
+                    </button>
+                  </>
                 ) : (
-                  <button onClick={saveDetailModal} disabled={!detailSelection}
-                    className="flex-[2] py-2.5 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 transition-colors flex items-center justify-center gap-1.5">
-                    <Check size={13} /> Done — set fixed
-                  </button>
+                  <>
+                    <button onClick={useDefaultDetailModal}
+                      className={`flex-1 py-2.5 rounded-xl text-xs font-semibold border transition-colors ${isDarkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                      Use default (off)
+                    </button>
+                    <button onClick={saveDetailModal} disabled={!detailSelection}
+                      className="flex-[2] py-2.5 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 transition-colors flex items-center justify-center gap-1.5">
+                      <Check size={13} /> Done — set fixed
+                    </button>
+                  </>
                 )}
               </div>
             </div>
