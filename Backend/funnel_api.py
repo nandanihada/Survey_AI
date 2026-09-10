@@ -2395,7 +2395,7 @@ def clone_journey(funnel_id):
     new_doc = copy.deepcopy(source)
     new_doc.pop("_id", None)
     new_doc["funnel_id"] = new_funnel_id
-    new_doc["name"] = f"{source['name']} (copy)"
+    new_doc["name"] = f"{source['name']} (copy)" if mode == "duplicate" else f"{source['name']} — {rewrite_prompt[:40]}" if rewrite_prompt else f"{source['name']} (rewrite)"
     new_doc["status"] = "draft"
     new_doc["created_at"] = now
     new_doc["updated_at"] = now
@@ -2438,58 +2438,72 @@ def clone_journey(funnel_id):
             api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("AI_API_KEY", "")
             if api_key:
                 q_list = [{"id": q.get("id"), "question": q.get("question", ""), "options": q.get("options", [])}
-                          for q in survey_copy.get("questions", [])]
-                # Use a wrapper object (not bare array) to satisfy json_object format requirement
-                rewrite_prompt_text = f"""You are rewriting survey questions for a new subject.
+                          for q in survey_copy.get("questions", [])
+                          if not str(q.get("type","")).startswith("__")]  # skip special pages
 
-Original subject: {source.get('goal', '')}
-New subject/context: {rewrite_prompt}
+                if not q_list:
+                    print(f"[clone rewrite] Survey {old_sid}: no rewritable questions, skipping")
+                else:
+                    # Use survey title + first question as original context if no funnel goal
+                    original_context = (
+                        source.get("goal") or
+                        source.get("name") or
+                        old_survey.get("title") or
+                        "the original subject"
+                    )
+                    rewrite_prompt_text = f"""You are rewriting survey questions to match a new subject/context.
 
-Keep EXACTLY the same number of questions and the same number of answer options per question.
-Keep the exact same question IDs.
-Only change the text of questions and options to match the new subject.
-Do NOT add or remove questions. Do NOT add or remove options.
+Original survey topic: {original_context}
+New subject/context the user wants: {rewrite_prompt}
+
+Rules:
+- Keep EXACTLY the same number of questions
+- Keep EXACTLY the same number of answer options per question  
+- Keep the exact same question IDs (do not change them)
+- Rewrite every question and every answer option to be about the new subject
+- Keep the same question TYPE/format (yes/no stays yes/no, ratings stay ratings)
+- Make the rewrite feel natural and professional, not just a word substitution
 
 Original questions:
 {json.dumps(q_list, indent=2)}
 
-Return ONLY valid JSON in this exact format:
+Return ONLY valid JSON in this exact format (no extra text):
 {{"questions": [{{"id": "...", "question": "...", "options": ["..."]}}]}}"""
 
-                resp = http_requests.post(
-                    "https://api.openai.com/v1/chat/completions",
-                    timeout=60,
-                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                    json={
-                        "model": "gpt-4o-mini",
-                        "messages": [{"role": "user", "content": rewrite_prompt_text}],
-                        "temperature": 0.4,
-                        "max_tokens": 3000,
-                        "response_format": {"type": "json_object"}
-                    }
-                )
-                if resp.status_code != 200:
-                    raise Exception(f"AI rewrite failed: HTTP {resp.status_code} — {resp.text[:200]}")
-
-                raw = resp.json()["choices"][0]["message"]["content"]
-                try:
-                    parsed = json.loads(raw)
-                except json.JSONDecodeError as je:
-                    raise Exception(f"AI returned invalid JSON: {je}")
-
-                rewritten = parsed.get("questions") or parsed.get("items") or []
-                if not rewritten:
-                    raise Exception("AI returned empty questions list")
-
-                rw_map = {r["id"]: r for r in rewritten if "id" in r}
-                applied = 0
-                for q in survey_copy.get("questions", []):
-                    if q.get("id") in rw_map:
-                        q["question"] = rw_map[q["id"]].get("question", q["question"])
-                        if rw_map[q["id"]].get("options"):
-                            q["options"] = rw_map[q["id"]]["options"]
-                        applied += 1
-                print(f"[clone rewrite] Survey {old_sid}: rewrote {applied}/{len(q_list)} questions")
+                    try:
+                        resp = http_requests.post(
+                            "https://api.openai.com/v1/chat/completions",
+                            timeout=90,
+                            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                            json={
+                                "model": "gpt-4o-mini",
+                                "messages": [{"role": "user", "content": rewrite_prompt_text}],
+                                "temperature": 0.5,
+                                "max_tokens": 4000,
+                                "response_format": {"type": "json_object"}
+                            }
+                        )
+                        if resp.status_code != 200:
+                            print(f"[clone rewrite] AI call failed HTTP {resp.status_code}: {resp.text[:200]}")
+                        else:
+                            raw = resp.json()["choices"][0]["message"]["content"]
+                            parsed = json.loads(raw)
+                            rewritten = parsed.get("questions") or parsed.get("items") or []
+                            if rewritten:
+                                rw_map = {r["id"]: r for r in rewritten if "id" in r}
+                                applied = 0
+                                for q in survey_copy.get("questions", []):
+                                    if q.get("id") in rw_map:
+                                        q["question"] = rw_map[q["id"]].get("question", q["question"])
+                                        if rw_map[q["id"]].get("options"):
+                                            q["options"] = rw_map[q["id"]]["options"]
+                                        applied += 1
+                                print(f"[clone rewrite] Survey {old_sid}: rewrote {applied}/{len(q_list)} questions")
+                            else:
+                                print(f"[clone rewrite] Survey {old_sid}: AI returned empty questions list")
+                    except Exception as rewrite_err:
+                        print(f"[clone rewrite] Survey {old_sid}: rewrite error — {rewrite_err}")
+                        # Continue without rewrite rather than failing the whole clone
 
         db.surveys.insert_one(survey_copy)
         survey_id_map[old_sid] = new_sid
