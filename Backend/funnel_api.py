@@ -2451,9 +2451,10 @@ def clone_journey(funnel_id):
                         old_survey.get("title") or
                         "the original subject"
                     )
-                    rewrite_prompt_text = f"""You are rewriting survey questions to match a new subject/context.
+                    rewrite_prompt_text = f"""You are rewriting a survey to match a new subject/context.
 
 Original survey topic: {original_context}
+Original survey name: {old_survey.get("title", "")}
 New subject/context the user wants: {rewrite_prompt}
 
 Rules:
@@ -2463,12 +2464,13 @@ Rules:
 - Rewrite every question and every answer option to be about the new subject
 - Keep the same question TYPE/format (yes/no stays yes/no, ratings stay ratings)
 - Make the rewrite feel natural and professional, not just a word substitution
+- Also provide a new survey name that fits the new subject
 
 Original questions:
 {json.dumps(q_list, indent=2)}
 
 Return ONLY valid JSON in this exact format (no extra text):
-{{"questions": [{{"id": "...", "question": "...", "options": ["..."]}}]}}"""
+{{"survey_name": "...", "questions": [{{"id": "...", "question": "...", "options": ["..."]}}]}}"""
 
                     try:
                         resp = http_requests.post(
@@ -2490,6 +2492,11 @@ Return ONLY valid JSON in this exact format (no extra text):
                             parsed = json.loads(raw)
                             rewritten = parsed.get("questions") or parsed.get("items") or []
                             if rewritten:
+                                # Apply new survey name if provided
+                                new_survey_name = parsed.get("survey_name", "").strip()
+                                if new_survey_name:
+                                    survey_copy["title"] = new_survey_name
+                                    print(f"[clone rewrite] Survey {old_sid}: renamed to '{new_survey_name}'")
                                 rw_map = {r["id"]: r for r in rewritten if "id" in r}
                                 applied = 0
                                 for q in survey_copy.get("questions", []):
@@ -2509,6 +2516,9 @@ Return ONLY valid JSON in this exact format (no extra text):
         survey_id_map[old_sid] = new_sid
         gs_copy = dict(gs)
         gs_copy["survey_id"] = new_sid
+        # Update the display name in generated_surveys to match the rewritten title
+        if mode == "rewrite" and survey_copy.get("title"):
+            gs_copy["name"] = survey_copy["title"]
         cloned_surveys.append(gs_copy)
 
     new_doc["generated_surveys"] = cloned_surveys
