@@ -2875,7 +2875,7 @@ def generate_security_questions(funnel_id):
         return "", 200
 
     data = request.get_json() or {}
-    count = min(int(data.get("count", 2)), 5)
+    count = min(int(data.get("count", 2)), 10)
     scope = data.get("scope", "screeners")          # screeners | all
     termination = data.get("termination", "instant") # instant | this_layer | all_layers | into_tor
     question_types = data.get("question_types", ["attention_check", "knowledge_trap"])
@@ -3021,14 +3021,31 @@ def apply_security_questions(funnel_id):
         target_sids = [s["survey_id"] for s in generated]
 
     applied_count = 0
+    if not target_sids:
+        return jsonify({"error": "No surveys found in scope"}), 400
+
+    num_surveys = len(target_sids)
+    num_questions = len(selected_questions)
+
+    # Distribute questions uniformly across surveys (round-robin)
+    # e.g. 6 questions, 3 surveys → 2 per survey
+    # e.g. 5 questions, 3 surveys → surveys get [2, 2, 1]
+    survey_question_map: dict = {sid: [] for sid in target_sids}
+    for i, sq in enumerate(selected_questions):
+        survey_question_map[target_sids[i % num_surveys]].append(sq)
+
     for sid in target_sids:
+        assigned = survey_question_map.get(sid, [])
+        if not assigned:
+            continue
+
         survey_doc = db.surveys.find_one({"$or": [{"id": sid}, {"short_id": sid}]})
         if not survey_doc:
             continue
 
         existing_ids = {q.get("id") for q in survey_doc.get("questions", [])}
         new_questions = []
-        for sq in selected_questions:
+        for sq in assigned:
             q_id = f"sec_{uuid.uuid4().hex[:8]}"
             while q_id in existing_ids:
                 q_id = f"sec_{uuid.uuid4().hex[:8]}"
@@ -3056,10 +3073,17 @@ def apply_security_questions(funnel_id):
             new_questions.append(new_q)
 
         if new_questions:
-            # Insert security questions near the middle of the survey (not first, not last)
             existing_qs = survey_doc.get("questions", [])
-            insert_at = max(1, len(existing_qs) // 2)
-            updated_qs = existing_qs[:insert_at] + new_questions + existing_qs[insert_at:]
+            # Insert each security question at a random non-first, non-last position
+            import random as _rand_sec
+            updated_qs = list(existing_qs)
+            for nq in new_questions:
+                if len(updated_qs) <= 1:
+                    updated_qs.append(nq)
+                else:
+                    # Random position: not first (0) and not last
+                    pos = _rand_sec.randint(1, len(updated_qs) - 1)
+                    updated_qs.insert(pos, nq)
 
             db.surveys.update_one(
                 {"$or": [{"id": sid}, {"short_id": sid}]},

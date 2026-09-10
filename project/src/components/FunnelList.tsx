@@ -2499,15 +2499,18 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
                       <>
                         {/* How many */}
                         <div>
-                          <p className={`text-[10px] font-bold tracking-widest uppercase mb-2 ${textMuted}`}>How many questions</p>
-                          <div className="flex gap-2">
-                            {[1,2,3].map(n => (
-                              <button key={n} onClick={() => setSecCount(n)}
-                                className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-colors ${secCount === n ? 'bg-red-500 border-red-500 text-white' : isDarkMode ? 'border-gray-600 text-gray-400 hover:border-gray-500' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
-                                {n}
-                              </button>
-                            ))}
+                          <p className={`text-[10px] font-bold tracking-widest uppercase mb-2 ${textMuted}`}>How many questions total</p>
+                          <div className="flex items-center gap-2">
+                            <div className="flex gap-1.5">
+                              {[1,2,3,4,5,6,8,10].map(n => (
+                                <button key={n} onClick={() => setSecCount(n)}
+                                  className={`w-8 h-8 rounded-lg text-xs font-bold border transition-colors ${secCount === n ? 'bg-red-500 border-red-500 text-white' : isDarkMode ? 'border-gray-600 text-gray-400 hover:border-gray-500' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                                  {n}
+                                </button>
+                              ))}
+                            </div>
                           </div>
+                          <p className={`text-[10px] mt-1.5 ${textMuted}`}>Distributed uniformly across surveys in scope — each survey gets roughly the same number.</p>
                         </div>
 
                         {/* Scope */}
