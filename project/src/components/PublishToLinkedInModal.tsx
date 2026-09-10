@@ -189,7 +189,12 @@ const PublishToLinkedInModal: React.FC<Props> = ({
       setScheduleResult({ success: false, message: 'Please pick a date and time.' });
       return;
     }
-    const publishAt = new Date(`${scheduleDate}T${scheduleTime}:00`).toISOString();
+    const localDt = new Date(`${scheduleDate}T${scheduleTime}:00`);
+    if (isNaN(localDt.getTime())) {
+      setScheduleResult({ success: false, message: 'Invalid date or time.' });
+      return;
+    }
+    const publishAt = localDt.toISOString(); // always UTC
     setScheduling(true);
     setScheduleResult(null);
     try {

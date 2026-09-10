@@ -1632,11 +1632,18 @@ def moustache_schedule(survey_short_id):
             return jsonify({'success': False, 'error': 'At least one eligibility question is required'}), 400
 
         try:
+            from datetime import timezone as _tz, timedelta
+            # Parse ISO string — handle both Z suffix and +00:00
             dt = datetime.fromisoformat(publish_at.replace('Z', '+00:00'))
-            if dt <= datetime.now(_tz.utc):
-                return jsonify({'success': False, 'error': 'publish_at must be in the future'}), 400
-        except ValueError:
-            return jsonify({'success': False, 'error': 'Invalid publish_at datetime format'}), 400
+            # Make naive datetimes timezone-aware (assume UTC)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=_tz.utc)
+            now_utc = datetime.now(_tz.utc)
+            # Allow 2-minute grace period for timezone differences
+            if dt <= now_utc - timedelta(minutes=2):
+                return jsonify({'success': False, 'error': 'Scheduled time must be in the future'}), 400
+        except (ValueError, TypeError) as e:
+            return jsonify({'success': False, 'error': f'Invalid publish_at datetime: {str(e)}'}), 400
 
         user_id = str(g.current_user['_id'])
 
