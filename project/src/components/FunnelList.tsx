@@ -1034,6 +1034,20 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
   const [secError, setSecError] = useState('');
   const [secApplied, setSecApplied] = useState(false);
 
+  const loadExistingSecurityQuestions = async () => {
+    try {
+      const res = await fetch(`${apiBase}/api/funnels/${funnel.funnel_id}/security-questions`, { headers: authHeaders() });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.questions && data.questions.length > 0) {
+        setSecGenerated(data.questions);
+        setSecSelected(data.questions.map((q: any) => q.id));
+        setSecTermination(data.security_config?.termination || 'instant');
+        setSecStep('review');  // jump straight to review showing existing
+      }
+    } catch {}
+  };
+
   const generateSecurityQuestions = async () => {
     setSecLoading(true);
     setSecError('');
@@ -1105,11 +1119,12 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
       loadAnchorQuestions();
     }
     if (iconId === 'security') {
-      // Reset security flow
+      // Reset security flow then check for existing
       setSecStep('config');
       setSecGenerated([]);
       setSecSelected([]);
       setSecError('');
+      loadExistingSecurityQuestions();
     }
   };
 
@@ -2582,7 +2597,12 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
                       <>
                         <div className="flex items-center justify-between">
                           <p className={`text-xs font-semibold ${textMain}`}>AI generated {secGenerated.length} question{secGenerated.length !== 1 ? 's' : ''}</p>
-                          <button onClick={() => setSecStep('config')} className={`text-[11px] ${textMuted} hover:text-red-500`}>← Back</button>
+                          <div className="flex items-center gap-3">
+                            <button onClick={() => { setSecStep('config'); setSecGenerated([]); setSecSelected([]); }} className={`text-[11px] ${textMuted} hover:text-red-500`}>← Back</button>
+                            <button onClick={() => setSecStep('config')} className="text-[11px] text-red-500 font-semibold hover:text-red-600 flex items-center gap-1">
+                              <RefreshCw size={10} /> Regenerate
+                            </button>
+                          </div>
                         </div>
                         <div className="space-y-3">
                           {secGenerated.map(q => {

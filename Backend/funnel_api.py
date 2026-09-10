@@ -3059,6 +3059,8 @@ def apply_security_questions(funnel_id):
                 "required": True,
                 "funnel_role": "screen",
                 "is_security_question": True,
+                "security_question_type": sq.get("type", "knowledge_trap"),
+                "security_explanation": sq.get("explanation", ""),
                 "security_termination": termination,
                 "screening_rule": {
                     "enabled": True,
@@ -3112,4 +3114,62 @@ def apply_security_questions(funnel_id):
         "questions_injected": len(selected_questions),
         "scope": scope,
         "termination": termination,
+    }), 200
+
+
+@funnel_bp.route("/api/funnels/<funnel_id>/security-questions", methods=["GET", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins="*")
+@requireAuth
+def get_security_questions(funnel_id):
+    """
+    Returns all security questions already injected into this funnel's surveys.
+    Used to show existing questions when the Security modal is reopened.
+    """
+    if request.method == "OPTIONS":
+        return "", 200
+
+    funnel = db.funnels.find_one({"funnel_id": funnel_id})
+    if not funnel:
+        return jsonify({"questions": []}), 200
+
+    generated = funnel.get("generated_surveys", [])
+    results = []
+    seen_ids = set()
+
+    for s in generated:
+        sid = s.get("survey_id", "")
+        survey_doc = db.surveys.find_one(
+            {"$or": [{"id": sid}, {"short_id": sid}]},
+            {"questions": 1, "title": 1}
+        )
+        if not survey_doc:
+            continue
+        for q in survey_doc.get("questions", []):
+            if not isinstance(q, dict):
+                continue
+            if not q.get("is_security_question"):
+                continue
+            q_id = q.get("id", "")
+            if q_id in seen_ids:
+                continue
+            seen_ids.add(q_id)
+            rule = q.get("screening_rule", {})
+            results.append({
+                "id": q_id,
+                "type": q.get("security_question_type", "knowledge_trap"),
+                "question": q.get("question", ""),
+                "options": q.get("options", []),
+                "correct_answer": rule.get("correct_answer", rule.get("fail_value", "")),
+                "fail_answers": rule.get("fail_answers", []),
+                "explanation": q.get("security_explanation", ""),
+                "survey_name": s.get("name", survey_doc.get("title", sid)),
+                "survey_id": sid,
+                "termination": rule.get("termination", "instant"),
+            })
+
+    security_config = funnel.get("security_config", {})
+    return jsonify({
+        "questions": results,
+        "total": len(results),
+        "security_config": security_config,
     }), 200

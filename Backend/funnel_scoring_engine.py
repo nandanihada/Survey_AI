@@ -52,9 +52,11 @@ def run_screening_check(questions: List[dict], answers: Dict[str, str]) -> dict:
             continue
 
         # Safety guard: never terminate on a yes/no question unless it's a hard legal/eligibility check
+        # EXCEPTION: always apply screening rule for explicitly tagged security questions
+        is_security_q = q.get("is_security_question", False)
         q_type = q.get("type", "")
         q_text_lower = q.get("question", "").lower()
-        if q_type == "yes_no" and not any(w in q_text_lower for w in HARD_DISQUALIFY_WORDS):
+        if not is_security_q and q_type == "yes_no" and not any(w in q_text_lower for w in HARD_DISQUALIFY_WORDS):
             continue  # Treat as scoring question, not a hard screen
 
         q_id = q.get("id", "")
@@ -80,8 +82,6 @@ def run_screening_check(questions: List[dict], answers: Dict[str, str]) -> dict:
                 "reason": screen_rule.get("fail_reason", f"Answer '{answer}' failed screening on question {q_id}"),
                 "question_id": q_id
             }
-
-    return {"passed": True}
 
     return {"passed": True}
 
