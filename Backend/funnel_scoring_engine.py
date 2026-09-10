@@ -520,13 +520,18 @@ def process_screening_survey_submission(
         fallback_url = funnel.get("fallback_url", "")
         # Security questions have their own redirect URL — use it instead of anchor
         security_redirect = _ensure_https(screen_result.get("security_redirect_url", ""))
-        if security_redirect:
-            # Security termination — use security redirect, skip anchor check
-            print(f"🔒 [Security] Terminated. Redirect to: {security_redirect}")
+        is_security_fail = screen_result.get("is_security_question", False)
+
+        if is_security_fail:
+            # Security termination — NEVER use anchor redirect, always use security redirect or screen-out
+            if security_redirect:
+                print(f"🔒 [Security] Terminated with redirect: {security_redirect}")
+            else:
+                print(f"🔒 [Security] Terminated with standard screen-out")
             return {
                 "action": "terminate",
                 "reason": screen_result["reason"],
-                "redirect_url": security_redirect,
+                "redirect_url": security_redirect,  # empty = standard screen-out
                 "termination_page": screen_result.get("termination_page", "default"),
                 "is_security_termination": True,
                 "anchor_qualified": False,
