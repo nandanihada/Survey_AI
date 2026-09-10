@@ -2645,13 +2645,6 @@ def get_quick_overrides(funnel_id, survey_id):
     except (ValueError, TypeError):
         survey_position = -1
 
-    if survey_position < 0 and survey_entry:
-        # Derive position from generated_surveys order
-        for i, s in enumerate(generated):
-            if s.get("survey_id") == survey_id:
-                survey_position = i
-                break
-
     # Consecutive group size for template shuffle (stored as string e.g. "2")
     bulk_selections_raw = bulk_settings.get("selections", {}) if bulk_settings else {}
     try:
@@ -2663,6 +2656,13 @@ def get_quick_overrides(funnel_id, survey_id):
     generated = funnel.get("generated_surveys", [])
     survey_entry = next((s for s in generated if s.get("survey_id") == survey_id), None)
     survey_type = survey_entry.get("type", "screening") if survey_entry else "screening"  # screening | job
+
+    # Derive position from generated_surveys order if not provided via query param
+    if survey_position < 0 and survey_entry:
+        for i, s in enumerate(generated):
+            if s.get("survey_id") == survey_id:
+                survey_position = i
+                break
 
     # Scope check — only apply if in scope
     in_scope = (
