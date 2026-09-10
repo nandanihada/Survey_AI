@@ -311,6 +311,7 @@ def _check_anchor_redirect(funnel: dict, funnel_session_id: str) -> Optional[str
     redirect_url = anchor_config.get("redirect_url", "").strip()
 
     if not correct_answers or not redirect_url:
+        print(f"⚓ [Anchor] Config incomplete — correct_answers={correct_answers}, redirect_url='{redirect_url}'")
         return None
 
     # Scope: screeners / tore / all
@@ -432,21 +433,40 @@ def process_screening_survey_submission(
     # Step 1: Screening check
     screen_result = run_screening_check(questions, answers)
     if not screen_result["passed"]:
-        # Save terminate status
+        # Save this layer's answers to the session BEFORE checking anchor
+        # so _check_anchor_redirect can find the anchor question answer
+        terminated_layer_record = {
+            "layer": layer_index,
+            "phase": "screening",
+            "survey_id": survey_id,
+            "answers": answers,
+            "scores_added": {},
+            "screening_passed": False,
+            "completed_at": datetime.now(timezone.utc).isoformat()
+        }
         db.funnel_sessions.update_one(
             {"funnel_session_id": funnel_session_id},
-            {"$set": {
-                "status": "terminated",
-                "terminate_reason": screen_result["reason"],
-                "terminated_at": datetime.now(timezone.utc).isoformat()
-            }},
+            {
+                "$push": {"layers_completed": terminated_layer_record},
+                "$set": {
+                    "status": "terminated",
+                    "terminate_reason": screen_result["reason"],
+                    "terminated_at": datetime.now(timezone.utc).isoformat(),
+                    "funnel_id": funnel_id,
+                    "user_info": user_info,
+                }
+            },
             upsert=True
         )
         fallback_url = funnel.get("fallback_url", "")
+        # Check anchor redirect — if qualified, send there instead of fallback
+        anchor_redirect = _check_anchor_redirect(funnel, funnel_session_id)
+        final_url = anchor_redirect if anchor_redirect else _ensure_https(fallback_url)
         return {
             "action": "terminate",
             "reason": screen_result["reason"],
-            "redirect_url": _ensure_https(fallback_url)
+            "redirect_url": final_url,
+            "anchor_qualified": bool(anchor_redirect),
         }
 
     # Step 2: Calculate scores
