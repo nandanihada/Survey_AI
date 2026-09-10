@@ -1021,34 +1021,13 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
   const loadAnchorQuestions = async () => {
     setAnchorLoading(true);
     try {
-      // Fetch all surveys in the funnel and collect anchor-tagged questions
-      const allSurveyIds = funnel.generated_surveys.map((s: any) => s.survey_id);
-      const results: typeof anchorQuestions = [];
-      await Promise.all(allSurveyIds.map(async (sid: string) => {
-        try {
-          const res = await fetch(`${apiBase}/survey/${sid}/view`);
-          if (!res.ok) return;
-          const data = await res.json();
-          const survey = data.survey || data;
-          const surveyMeta = funnel.generated_surveys.find((s: any) => s.survey_id === sid);
-          (survey.questions || []).forEach((q: any) => {
-            if (q.is_anchor) {
-              results.push({
-                surveyId: sid,
-                surveyName: surveyMeta?.name || sid,
-                surveyType: surveyMeta?.type || 'screening',
-                questionId: q.id,
-                questionText: q.question,
-                options: q.options || [],
-                correctAnswers: q.anchor_correct_answers || [],
-                redirectUrl: q.anchor_redirect_url || '',
-              });
-            }
-          });
-        } catch {}
-      }));
-      setAnchorQuestions(results);
-      // Pre-select if already configured
+      // Fetch ALL anchor-tagged questions across all surveys (global pool)
+      const res = await fetch(`${apiBase}/api/anchor-questions`, { headers: authHeaders() });
+      if (res.ok) {
+        const { anchor_questions } = await res.json();
+        setAnchorQuestions(anchor_questions || []);
+      }
+      // Pre-select if already configured on this funnel
       const existing = funnel.anchor_config;
       if (existing?.question_id) {
         setSelectedAnchorQId(existing.question_id);
@@ -2471,7 +2450,7 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
                           <div className="text-2xl mb-2">⚓</div>
                           <p className={`text-xs font-medium ${textMain}`}>No anchor questions found</p>
                           <p className={`text-[11px] mt-1 ${textMuted}`}>
-                            Open any survey in the editor, select a question, and toggle the <strong>Anchor Question</strong> switch in the right sidebar.
+                            Open any survey in the editor, select a question, and toggle the <strong>Anchor Question</strong> switch in the right sidebar. It will appear here across all your funnels.
                           </p>
                         </div>
                       ) : (

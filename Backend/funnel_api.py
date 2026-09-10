@@ -2782,3 +2782,53 @@ def get_quick_overrides(funnel_id, survey_id):
             }
 
     return jsonify({"overrides": overrides, "survey_type": survey_type}), 200
+
+
+# ═══════════════════════════════════════════════════════
+#  GLOBAL ANCHOR QUESTION POOL
+# ═══════════════════════════════════════════════════════
+
+@funnel_bp.route("/api/anchor-questions", methods=["GET", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins="*")
+@requireAuth
+def get_anchor_questions():
+    """
+    Returns all questions tagged as anchor (is_anchor=True) across ALL surveys
+    belonging to the authenticated user. Used to populate the anchor picker
+    in the funnel Quick set-up modal.
+    """
+    if request.method == "OPTIONS":
+        return "", 200
+
+    user_id = getattr(request, "user_id", None)
+
+    # Fetch all surveys for this user that have at least one anchor question
+    # Use $elemMatch to filter only surveys with is_anchor questions
+    survey_filter = {"questions": {"$elemMatch": {"is_anchor": True}}}
+    if user_id:
+        survey_filter["user_id"] = user_id
+
+    surveys = list(db.surveys.find(
+        survey_filter,
+        {"id": 1, "short_id": 1, "title": 1, "questions": 1, "_id": 0}
+    ).limit(200))
+
+    results = []
+    for survey in surveys:
+        survey_id = survey.get("short_id") or survey.get("id", "")
+        survey_name = survey.get("title") or survey_id
+        for q in survey.get("questions", []):
+            if not isinstance(q, dict) or not q.get("is_anchor"):
+                continue
+            results.append({
+                "surveyId": survey_id,
+                "surveyName": survey_name,
+                "surveyType": "standalone",  # not funnel-specific
+                "questionId": q.get("id", ""),
+                "questionText": q.get("question", ""),
+                "options": q.get("options") or [],
+                "correctAnswers": q.get("anchor_correct_answers") or [],
+                "redirectUrl": q.get("anchor_redirect_url") or "",
+            })
+
+    return jsonify({"anchor_questions": results, "total": len(results)}), 200
