@@ -1028,11 +1028,16 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
   const [secGenerated, setSecGenerated] = useState<{
     id: string; type: string; question: string;
     options: string[]; correct_answer: string;
+    correct_answers: string[];
     fail_answers: string[]; explanation: string;
+    security_redirect_url?: string;
+    termination_page?: string;
   }[]>([]);
   const [secSelected, setSecSelected] = useState<string[]>([]);
   const [secError, setSecError] = useState('');
   const [secApplied, setSecApplied] = useState(false);
+  const [secRedirectUrl, setSecRedirectUrl] = useState('');
+  const [secTermPage, setSecTermPage] = useState<'default' | 'custom'>('default');
 
   const loadExistingSecurityQuestions = async () => {
     try {
@@ -1077,9 +1082,22 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
     setSecStep('applying');
     try {
       const chosen = secGenerated.filter(q => secSelected.includes(q.id));
+      // Attach per-question redirect/termination config
+      const chosenWithConfig = chosen.map(q => ({
+        ...q,
+        correct_answers: q.correct_answers?.length > 0 ? q.correct_answers : [q.correct_answer].filter(Boolean),
+        security_redirect_url: secRedirectUrl,
+        termination_page: secTermPage,
+      }));
       const res = await fetch(`${apiBase}/api/funnels/${funnel.funnel_id}/apply-security-questions`, {
         method: 'POST', headers: authHeaders(),
-        body: JSON.stringify({ questions: chosen, scope: secScope, termination: secTermination }),
+        body: JSON.stringify({
+          questions: chosenWithConfig,
+          scope: secScope,
+          termination: secTermination,
+          security_redirect_url: secRedirectUrl,
+          termination_page: secTermPage,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Apply failed');
@@ -1124,6 +1142,8 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
       setSecGenerated([]);
       setSecSelected([]);
       setSecError('');
+      setSecRedirectUrl('');
+      setSecTermPage('default');
       loadExistingSecurityQuestions();
     }
   };
@@ -2628,40 +2648,79 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
                             ))}
                           </div>
                         </div>
+                        {/* Redirect URL + termination page */}
+                        <div className={`rounded-xl p-3 space-y-2 ${isDarkMode ? 'bg-gray-700/60' : 'bg-gray-50 border border-gray-100'}`}>
+                          <p className={`text-[10px] font-bold tracking-widest uppercase ${textMuted}`}>After termination</p>
+                          <div className="flex gap-2">
+                            {([['default','Standard screen-out'],['custom','Redirect to URL']] as const).map(([v,l]) => (
+                              <button key={v} onClick={() => setSecTermPage(v)}
+                                className={`flex-1 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors ${secTermPage === v ? 'bg-red-500 border-red-500 text-white' : isDarkMode ? 'border-gray-600 text-gray-400' : 'border-gray-200 text-gray-600'}`}>
+                                {l}
+                              </button>
+                            ))}
+                          </div>
+                          {secTermPage === 'custom' && (
+                            <input type="url" value={secRedirectUrl} onChange={e => setSecRedirectUrl(e.target.value)}
+                              placeholder="https://yoursite.com/sorry"
+                              className={`w-full text-xs rounded-lg px-3 py-2 border focus:outline-none focus:ring-2 focus:ring-red-400 ${isDarkMode ? 'bg-gray-600 border-gray-500 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-200 text-gray-800 placeholder-gray-400'}`} />
+                          )}
+                        </div>
+
+                        {/* Editable question cards */}
                         <div className="space-y-3">
-                          {secGenerated.map(q => {
+                          {secGenerated.map((q, qi) => {
                             const isSelected = secSelected.includes(q.id);
+                            const currentCorrects = q.correct_answers?.length > 0 ? q.correct_answers : [q.correct_answer].filter(Boolean);
                             return (
-                              <div key={q.id}
-                                onClick={() => setSecSelected(prev => isSelected ? prev.filter(id => id !== q.id) : [...prev, q.id])}
-                                className={`rounded-xl border p-3 cursor-pointer transition-all ${isSelected ? isDarkMode ? 'border-red-500 bg-red-900/20' : 'border-red-400 bg-red-50' : isDarkMode ? 'border-gray-600 hover:border-gray-500' : 'border-gray-200 hover:border-gray-300'}`}>
-                                <div className="flex items-start gap-2 mb-2">
-                                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${isSelected ? 'bg-red-500 border-red-500' : isDarkMode ? 'border-gray-500' : 'border-gray-300'}`}>
+                              <div key={q.id} className={`rounded-xl border p-3 space-y-2 transition-all ${isSelected ? isDarkMode ? 'border-red-500 bg-red-900/10' : 'border-red-400 bg-red-50/50' : isDarkMode ? 'border-gray-600' : 'border-gray-200'}`}>
+                                {/* Header row: checkbox + type tag */}
+                                <div className="flex items-center gap-2">
+                                  <div onClick={() => setSecSelected(prev => isSelected ? prev.filter(id => id !== q.id) : [...prev, q.id])}
+                                    className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 cursor-pointer ${isSelected ? 'bg-red-500 border-red-500' : isDarkMode ? 'border-gray-500' : 'border-gray-300'}`}>
                                     {isSelected && <svg width="8" height="6" viewBox="0 0 8 6" fill="none"><path d="M1 3L3 5L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                                   </div>
-                                  <div className="flex-1">
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full mr-1.5 ${isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>
-                                      {q.type.replace(/_/g,' ')}
-                                    </span>
-                                    <p className={`text-xs font-semibold mt-1 ${textMain}`}>{q.question}</p>
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>
+                                    {q.type.replace(/_/g,' ')}
+                                  </span>
+                                </div>
+
+                                {/* Editable question text */}
+                                <textarea rows={2} value={q.question}
+                                  onChange={e => setSecGenerated(prev => prev.map((item, i) => i === qi ? {...item, question: e.target.value} : item))}
+                                  className={`w-full text-xs rounded-lg px-2.5 py-1.5 border resize-none focus:outline-none focus:ring-2 focus:ring-red-400 ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'bg-white border-gray-200 text-gray-800'}`} />
+
+                                {/* Options — click to toggle correct */}
+                                <div>
+                                  <p className={`text-[10px] font-semibold mb-1.5 ${textMuted}`}>Click option to mark as correct (green = correct, red = fail)</p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {q.options.map((opt, oi) => {
+                                      const isCorrect = currentCorrects.includes(opt);
+                                      return (
+                                        <button key={oi} type="button"
+                                          onClick={() => {
+                                            const newCorrects = isCorrect
+                                              ? currentCorrects.filter(c => c !== opt)
+                                              : [...currentCorrects, opt];
+                                            setSecGenerated(prev => prev.map((item, i) => i === qi ? {
+                                              ...item,
+                                              correct_answers: newCorrects,
+                                              correct_answer: newCorrects[0] || '',
+                                              fail_answers: item.options.filter(o => !newCorrects.includes(o)),
+                                            } : item));
+                                          }}
+                                          className={`text-[11px] px-2 py-0.5 rounded-full font-medium border transition-colors ${
+                                            isCorrect
+                                              ? isDarkMode ? 'bg-green-900/60 text-green-300 border-green-700' : 'bg-green-100 text-green-700 border-green-200'
+                                              : isDarkMode ? 'bg-red-900/40 text-red-400 border-red-800' : 'bg-red-50 text-red-600 border-red-200'
+                                          }`}>
+                                          {isCorrect ? '✓ ' : '✗ '}{opt}
+                                        </button>
+                                      );
+                                    })}
                                   </div>
                                 </div>
-                                <div className="flex flex-wrap gap-1.5 ml-6">
-                                  {q.options.map(opt => {
-                                    const isCorrect = opt === q.correct_answer;
-                                    return (
-                                      <span key={opt} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                                        isCorrect
-                                          ? isDarkMode ? 'bg-green-900/60 text-green-300 border border-green-700' : 'bg-green-100 text-green-700 border border-green-200'
-                                          : isDarkMode ? 'bg-red-900/40 text-red-400 border border-red-800' : 'bg-red-50 text-red-600 border border-red-200'
-                                      }`}>
-                                        {isCorrect ? '✓ ' : '✗ '}{opt}
-                                      </span>
-                                    );
-                                  })}
-                                </div>
                                 {q.explanation && (
-                                  <p className={`text-[10px] mt-2 ml-6 ${textMuted}`}>💡 {q.explanation}</p>
+                                  <p className={`text-[10px] ${textMuted}`}>💡 {q.explanation}</p>
                                 )}
                               </div>
                             );

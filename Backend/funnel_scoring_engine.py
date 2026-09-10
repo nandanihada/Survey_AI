@@ -75,12 +75,19 @@ def run_screening_check(questions: List[dict], answers: Dict[str, str]) -> dict:
             failed = str(answer).strip().lower() in [str(v).strip().lower() for v in fail_values]
         elif fail_condition == "not_equals":
             failed = str(answer).strip().lower() != str(fail_value).strip().lower()
+        elif fail_condition == "not_in":
+            # Answer must be in the correct set — if not, it fails
+            correct_vals = fail_value if isinstance(fail_value, list) else [fail_value]
+            failed = str(answer).strip().lower() not in [str(v).strip().lower() for v in correct_vals]
 
         if failed:
             return {
                 "passed": False,
                 "reason": screen_rule.get("fail_reason", f"Answer '{answer}' failed screening on question {q_id}"),
-                "question_id": q_id
+                "question_id": q_id,
+                "security_redirect_url": screen_rule.get("security_redirect_url", ""),
+                "termination_page": screen_rule.get("termination_page", "default"),
+                "is_security_question": q.get("is_security_question", False),
             }
 
     return {"passed": True}
@@ -511,7 +518,20 @@ def process_screening_survey_submission(
             upsert=True
         )
         fallback_url = funnel.get("fallback_url", "")
-        # Early flag check then full anchor redirect check
+        # Security questions have their own redirect URL — use it instead of anchor
+        security_redirect = _ensure_https(screen_result.get("security_redirect_url", ""))
+        if security_redirect:
+            # Security termination — use security redirect, skip anchor check
+            print(f"🔒 [Security] Terminated. Redirect to: {security_redirect}")
+            return {
+                "action": "terminate",
+                "reason": screen_result["reason"],
+                "redirect_url": security_redirect,
+                "termination_page": screen_result.get("termination_page", "default"),
+                "is_security_termination": True,
+                "anchor_qualified": False,
+            }
+        # Non-security termination — check anchor redirect
         _try_early_anchor_flag(funnel, funnel_session_id, answers)
         anchor_redirect = _check_anchor_redirect(funnel, funnel_session_id)
         final_url = anchor_redirect if anchor_redirect else _ensure_https(fallback_url)

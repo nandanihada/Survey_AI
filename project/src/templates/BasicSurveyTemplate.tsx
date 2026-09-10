@@ -568,18 +568,21 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       if (q && (q as any).is_security_question && (q as any).security_termination === 'instant') {
         const rule = (q as any).screening_rule;
         if (rule && rule.enabled) {
-          const correctAnswer = (rule.correct_answer || rule.fail_value || '').trim().toLowerCase();
           const givenAnswer = String(value).trim().toLowerCase();
-          // fail_condition is "not_equals" — wrong means they didn't pick the correct answer
-          const failed = rule.fail_condition === 'not_equals'
-            ? givenAnswer !== correctAnswer
-            : givenAnswer === (rule.fail_value || '').trim().toLowerCase();
+          let failed = false;
+          if (rule.fail_condition === 'not_equals') {
+            const correctAnswer = (rule.correct_answer || rule.fail_value || '').trim().toLowerCase();
+            failed = givenAnswer !== correctAnswer;
+          } else if (rule.fail_condition === 'not_in') {
+            const correctSet = (Array.isArray(rule.fail_value) ? rule.fail_value : [rule.fail_value])
+              .map((v: string) => String(v).trim().toLowerCase());
+            failed = !correctSet.includes(givenAnswer);
+          }
           if (failed) {
             console.log(`⚠️ [Security] Instant termination triggered on question ${id}`);
-            // Trigger submit immediately — the funnel backend will handle the terminate action
             setTimeout(() => {
               if (formRef.current) formRef.current.requestSubmit();
-            }, 300); // short delay so the answer registers visually
+            }, 300);
           }
         }
       }

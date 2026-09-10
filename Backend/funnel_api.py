@@ -3036,20 +3036,34 @@ def apply_security_questions(funnel_id):
 
     for sid in target_sids:
         assigned = survey_question_map.get(sid, [])
-        if not assigned:
-            continue
 
         survey_doc = db.surveys.find_one({"$or": [{"id": sid}, {"short_id": sid}]})
         if not survey_doc:
             continue
 
-        existing_ids = {q.get("id") for q in survey_doc.get("questions", [])}
+        # ── ALWAYS strip existing security questions first ──────────────────
+        clean_questions = [q for q in survey_doc.get("questions", [])
+                           if not (isinstance(q, dict) and q.get("is_security_question"))]
+
+        if not assigned:
+            # No new questions for this survey — just save with security questions removed
+            db.surveys.update_one(
+                {"$or": [{"id": sid}, {"short_id": sid}]},
+                {"$set": {"questions": clean_questions}}
+            )
+            continue
+
+        existing_ids = {q.get("id") for q in clean_questions}
         new_questions = []
         for sq in assigned:
             q_id = f"sec_{uuid.uuid4().hex[:8]}"
             while q_id in existing_ids:
                 q_id = f"sec_{uuid.uuid4().hex[:8]}"
             existing_ids.add(q_id)
+
+            # Support multiple correct answers
+            correct_answers_raw = sq.get("correct_answers", []) or ([sq.get("correct_answer")] if sq.get("correct_answer") else [])
+            has_multiple_correct = len(correct_answers_raw) > 1
 
             new_q = {
                 "id": q_id,
@@ -3064,26 +3078,28 @@ def apply_security_questions(funnel_id):
                 "security_termination": termination,
                 "screening_rule": {
                     "enabled": True,
-                    "fail_condition": "not_equals",
-                    "fail_value": sq.get("correct_answer", ""),
+                    # not_in = answer must be in the correct set, otherwise fail
+                    "fail_condition": "not_in" if has_multiple_correct else "not_equals",
+                    "fail_value": correct_answers_raw if has_multiple_correct else (correct_answers_raw[0] if correct_answers_raw else ""),
                     "fail_reason": f"Security check failed — termination: {termination}",
                     "termination": termination,
-                    "correct_answer": sq.get("correct_answer", ""),
+                    "security_redirect_url": sq.get("security_redirect_url", ""),
+                    "termination_page": sq.get("termination_page", "default"),
+                    "correct_answer": correct_answers_raw[0] if correct_answers_raw else "",
+                    "correct_answers": correct_answers_raw,
                     "fail_answers": sq.get("fail_answers", []),
                 }
             }
             new_questions.append(new_q)
 
         if new_questions:
-            existing_qs = survey_doc.get("questions", [])
             # Insert each security question at a random non-first, non-last position
             import random as _rand_sec
-            updated_qs = list(existing_qs)
+            updated_qs = list(clean_questions)
             for nq in new_questions:
                 if len(updated_qs) <= 1:
                     updated_qs.append(nq)
                 else:
-                    # Random position: not first (0) and not last
                     pos = _rand_sec.randint(1, len(updated_qs) - 1)
                     updated_qs.insert(pos, nq)
 
@@ -3101,6 +3117,8 @@ def apply_security_questions(funnel_id):
                 "enabled": True,
                 "scope": scope,
                 "termination": termination,
+                "security_redirect_url": data.get("security_redirect_url", ""),
+                "termination_page": data.get("termination_page", "default"),
                 "question_count": len(selected_questions),
                 "applied_to": applied_count,
                 "applied_at": datetime.now(timezone.utc).isoformat(),
