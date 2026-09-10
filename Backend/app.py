@@ -440,6 +440,7 @@ try:
     from location_control_api import location_bp    # Location control admin API
     from plan_features_api import plan_features_bp  # Plan features config API
     from resubmit_control_api import resubmit_bp   # Survey resubmit policy API
+    from linkedin_api import linkedin_bp             # LinkedIn OAuth + publish API
 
     # Register blueprints
 
@@ -481,6 +482,11 @@ try:
     app.register_blueprint(survey_sharing_bp)  # Survey sharing earnings
     app.register_blueprint(location_bp)          # Location control at /api/admin/location
     app.register_blueprint(resubmit_bp)          # Resubmit policy at /api/admin/resubmit
+    app.register_blueprint(linkedin_bp)          # LinkedIn OAuth + publish
+
+    # Start publish scheduler background thread (Moustache + LinkedIn)
+    from publish_scheduler import start_scheduler
+    start_scheduler()
 
     # Setup tracking TTL indexes for 15-day auto-delete
     setup_tracking_indexes()

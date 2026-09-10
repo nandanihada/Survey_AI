@@ -10,7 +10,7 @@ import {
   X, Plus, Trash2, ChevronDown, ChevronUp,
   Send, CheckCircle, AlertCircle, Loader, DollarSign,
   Globe, Users, Clock, Tag, FileText, LayoutTemplate,
-  Sparkles, Code, Copy,
+  Sparkles, Code, Copy, Calendar,
 } from 'lucide-react';
 import { getApiBaseUrl } from '../utils/deploymentFix';
 
@@ -161,6 +161,14 @@ const PublishToMoustacheModal: React.FC<Props> = ({
   const [showJsonPreview, setShowJsonPreview] = useState(false);
   const [jsonCopied, setJsonCopied] = useState(false);
 
+  // ── Scheduling state ───────────────────────────────────────────────────────
+  const [scheduleMode, setScheduleMode]     = useState(false);
+  const [scheduleDate, setScheduleDate]     = useState('');
+  const [scheduleTime, setScheduleTime]     = useState('');
+  const [scheduling, setScheduling]         = useState(false);
+  const [scheduleResult, setScheduleResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [scheduledItems, setScheduledItems] = useState<{ _id: string; publish_at: string }[]>([]);
+
   // Build the preview payload (mirrors backend logic)
   const buildPreviewPayload = () => {
     const cleanedQuestions = questions.map(q => ({
@@ -251,6 +259,59 @@ const PublishToMoustacheModal: React.FC<Props> = ({
     } finally {
       setGeneratingDesc(false);
     }
+  };
+
+  // ── Schedule helpers ───────────────────────────────────────────────────────
+
+  const fetchScheduled = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${baseUrl}/api/admin/surveys/${surveyShortId}/moustache-schedule`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) setScheduledItems(data.scheduled || []);
+    } catch { /* silent */ }
+  };
+
+  useEffect(() => { fetchScheduled(); }, [surveyShortId]);
+
+  const handleSchedule = async () => {
+    const err = validate();
+    if (err) { setScheduleResult({ success: false, message: err }); return; }
+    if (!scheduleDate || !scheduleTime) {
+      setScheduleResult({ success: false, message: 'Please pick a date and time.' });
+      return;
+    }
+    const publishAt = new Date(`${scheduleDate}T${scheduleTime}:00`).toISOString();
+    const cleanedQuestions = questions.map(q => ({ ...q, options: q.options.filter(o => o.trim()) }));
+    setScheduling(true);
+    setScheduleResult(null);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${baseUrl}/api/admin/surveys/${surveyShortId}/moustache-schedule`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ publish_at: publishAt, questions: cleanedQuestions, extra }),
+      });
+      const data = await res.json();
+      setScheduleResult({ success: data.success, message: data.message || data.error });
+      if (data.success) { fetchScheduled(); setScheduleDate(''); setScheduleTime(''); }
+    } catch {
+      setScheduleResult({ success: false, message: 'Network error.' });
+    } finally {
+      setScheduling(false);
+    }
+  };
+
+  const cancelScheduled = async (scheduleId: string) => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      await fetch(`${baseUrl}/api/admin/moustache-schedule/${scheduleId}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+      });
+      fetchScheduled();
+    } catch { /* silent */ }
   };
 
   // ── Validation ─────────────────────────────────────────────────────────────
@@ -725,20 +786,85 @@ const PublishToMoustacheModal: React.FC<Props> = ({
             {extra.country ? ` · ${extra.country}` : ''}
             {extra.loi_minutes ? ` · ${extra.loi_minutes} min` : ''}
           </p>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {result?.success ? (
-              <button style={C.btnGhost} onClick={onClose}>Close</button>
-            ) : (
-              <>
-                <button style={C.btnGhost} onClick={onClose} disabled={publishing}>Cancel</button>
-                <button style={C.btnPrimary(publishing)} onClick={handlePublish} disabled={publishing}>
-                  {publishing
-                    ? <><Loader size={13} style={{ animation: 'spin 1s linear infinite' }} /> Publishing…</>
-                    : <><Send size={13} /> {existingMoustacheId ? 'Update on Moustache' : 'Publish to Moustache'}</>
-                  }
-                </button>
-              </>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end', minWidth: 300 }}>
+
+            {/* Scheduled items */}
+            {scheduledItems.length > 0 && (
+              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <p style={{ fontSize: 10, fontWeight: 700, color: '#9B9189', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>Scheduled</p>
+                {scheduledItems.map(it => (
+                  <div key={it._id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 7, padding: '5px 9px' }}>
+                    <span style={{ fontSize: 11, color: '#15803D', display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <Clock size={11} /> {new Date(it.publish_at).toLocaleString()}
+                    </span>
+                    <button onClick={() => cancelScheduled(it._id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#C4A99A', display: 'flex', padding: 2 }} title="Cancel">
+                      <X size={11} />
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
+
+            {/* Schedule toggle panel */}
+            {!result?.success && (
+              <div style={{ width: '100%', border: '1px solid #EBE8E3', borderRadius: 10, overflow: 'hidden' }}>
+                <button
+                  onClick={() => { setScheduleMode(v => !v); setScheduleResult(null); }}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 11px', background: scheduleMode ? '#FEF9F7' : '#F9F7F4', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: scheduleMode ? '#C4785C' : '#6B6158' }}>
+                    <Calendar size={12} /> Schedule for later
+                  </span>
+                  {scheduleMode ? <ChevronUp size={12} color="#9B9189" /> : <ChevronDown size={12} color="#9B9189" />}
+                </button>
+                {scheduleMode && (
+                  <div style={{ padding: '9px 11px', background: '#FDFCFA', borderTop: '1px solid #EBE8E3', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ fontSize: 10, fontWeight: 700, color: '#9B9189', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 3 }}>Date</label>
+                        <input type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)}
+                          min={new Date().toISOString().split('T')[0]}
+                          style={{ width: '100%', border: '1px solid #EBE8E3', borderRadius: 7, padding: '6px 9px', fontSize: 12, fontFamily: 'inherit', background: '#fff', boxSizing: 'border-box' as const }} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ fontSize: 10, fontWeight: 700, color: '#9B9189', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 3 }}>Time (local)</label>
+                        <input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)}
+                          style={{ width: '100%', border: '1px solid #EBE8E3', borderRadius: 7, padding: '6px 9px', fontSize: 12, fontFamily: 'inherit', background: '#fff', boxSizing: 'border-box' as const }} />
+                      </div>
+                    </div>
+                    {scheduleResult && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: scheduleResult.success ? '#15803D' : '#DC2626' }}>
+                        {scheduleResult.success ? <CheckCircle size={11} /> : <AlertCircle size={11} />}
+                        {scheduleResult.message}
+                      </div>
+                    )}
+                    <button onClick={handleSchedule} disabled={scheduling || !scheduleDate || !scheduleTime}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, background: scheduling ? '#EBE8E3' : '#1A1A2E', color: scheduling ? '#9B9189' : '#F5C842', border: 'none', borderRadius: 8, padding: '7px 0', fontSize: 11, fontWeight: 700, cursor: scheduling ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                      {scheduling ? <><Loader size={11} style={{ animation: 'spin 1s linear infinite' }} /> Scheduling…</> : <><Calendar size={11} /> Confirm Schedule</>}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Publish / cancel row */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              {result?.success ? (
+                <button style={C.btnGhost} onClick={onClose}>Close</button>
+              ) : (
+                <>
+                  <button style={C.btnGhost} onClick={onClose} disabled={publishing}>Cancel</button>
+                  {!scheduleMode && (
+                    <button style={C.btnPrimary(publishing)} onClick={handlePublish} disabled={publishing}>
+                      {publishing
+                        ? <><Loader size={13} style={{ animation: 'spin 1s linear infinite' }} /> Publishing…</>
+                        : <><Send size={13} /> {existingMoustacheId ? 'Update on Moustache' : 'Publish to Moustache'}</>
+                      }
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>

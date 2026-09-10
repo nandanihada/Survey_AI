@@ -3085,12 +3085,11 @@ const FunnelList: React.FC<Props> = ({ isDarkMode = false, onCreateNew }) => {
   const [page, setPage]               = useState(1);
   const [totalPages, setTotalPages]   = useState(1);
   const [total, setTotal]             = useState(0);
-  const perPage                        = 20;
+  const [perPage, setPerPage]         = useState(20);
   const [search, setSearch]           = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [dateFrom, setDateFrom]       = useState('');
   const [dateTo, setDateTo]           = useState('');
-
   const authHeaders = () => {
     const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt_token') || '';
     return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
@@ -3116,7 +3115,7 @@ const FunnelList: React.FC<Props> = ({ isDarkMode = false, onCreateNew }) => {
     } finally {
       setLoading(false);
     }
-  }, [apiBase]);
+  }, [apiBase, perPage]);
 
   useEffect(() => { fetchFunnels(1, '', '', ''); }, [fetchFunnels]);
 
@@ -3273,9 +3272,25 @@ const FunnelList: React.FC<Props> = ({ isDarkMode = false, onCreateNew }) => {
       {/* ── Pagination ── */}
       {!loading && totalPages > 1 && (
         <div className={`flex items-center justify-between pt-2 border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-          <span className={`text-sm ${textMuted}`}>
-            Showing {(page - 1) * perPage + 1}–{Math.min(page * perPage, total)} of {total}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className={`text-sm ${textMuted}`}>
+              Showing {(page - 1) * perPage + 1}–{Math.min(page * perPage, total)} of {total}
+            </span>
+            {/* Per-page selector */}
+            <select
+              value={perPage}
+              onChange={e => {
+                const newPer = Number(e.target.value);
+                setPerPage(newPer);
+                fetchFunnels(1, search, dateFrom, dateTo);
+              }}
+              className={`text-xs border rounded-lg px-2 py-1 ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-white border-gray-300 text-gray-600'}`}
+            >
+              {[10, 20, 50, 100].map(n => (
+                <option key={n} value={n}>{n} / page</option>
+              ))}
+            </select>
+          </div>
           <div className="flex items-center gap-1">
             <button
               disabled={page <= 1}

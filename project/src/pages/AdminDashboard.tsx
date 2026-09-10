@@ -23,11 +23,12 @@ import {
   Bell, Filter, Save, Edit2, X, Check, Eye, EyeOff, Play, RotateCcw, AlertCircle,
   Users, LayoutDashboard, FileText, BarChart2, SlidersHorizontal, CheckSquare,
   Gift, DollarSign, Radio, Mail, Trash2, MapPin, Settings2, ChevronLeft,
-  ChevronRight, Shield, RefreshCw, Layers, GitBranch, MousePointerClick, Send, Search
+  ChevronRight, Shield, RefreshCw, Layers, GitBranch, MousePointerClick, Send, Search, Linkedin
 } from 'lucide-react';
 import PublishToMoustacheModal from '../components/PublishToMoustacheModal';
 import BulkPublishToMoustacheModal from '../components/BulkPublishToMoustacheModal';
 import MoustacheLeadsTab from '../components/admin/MoustacheLeadsTab';
+import PublishToLinkedInModal from '../components/PublishToLinkedInModal';
 import { getApiBaseUrl } from '../utils/deploymentFix';
 
 interface User {
@@ -155,6 +156,14 @@ const AdminDashboard: React.FC = () => {
   } | null>(null);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [selectedSurveyIds, setSelectedSurveyIds] = useState<string[]>([]);
+
+  // ── LinkedIn publish modal ────────────────────────────────────────────────
+  const [linkedinModal, setLinkedinModal] = useState<{
+    surveyShortId: string;
+    surveyTitle: string;
+    sourceType: 'survey' | 'funnel';
+    existingPostUrn?: string | null;
+  } | null>(null);
   const [filters, setFilters] = useState<Filter[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking' | 'tracking' | 'contacts' | 'deletions' | 'referrals' | 'earnings-config' | 'survey-report' | 'survey-flow-tracking' | 'funnel-tracking' | 'location-control' | 'survey-settings' | 'back-exits' | 'plan-features' | 'resubmit-policy' | 'survey-click-tracking' | 'moustache-leads'>('users');
@@ -1417,6 +1426,32 @@ const AdminDashboard: React.FC = () => {
                                 <Send size={11} />
                                 {hasMoustache ? 'Update' : 'Publish to Moustache'}
                               </button>
+                              {/* Publish to LinkedIn button */}
+                              {(() => {
+                                const hasLinkedIn = !!survey.linkedin_post_urn;
+                                return (
+                                  <button
+                                    onClick={() => setLinkedinModal({
+                                      surveyShortId: survey.short_id,
+                                      surveyTitle: survey.title,
+                                      sourceType: (survey.source_type || 'survey') as 'survey' | 'funnel',
+                                      existingPostUrn: survey.linkedin_post_urn || null,
+                                    })}
+                                    style={{
+                                      display: 'flex', alignItems: 'center', gap: 5,
+                                      fontSize: 11, fontWeight: 700,
+                                      border: hasLinkedIn ? '1px solid #BAE6FD' : '1px solid #0A66C2',
+                                      borderRadius: 7, padding: '5px 10px',
+                                      background: hasLinkedIn ? '#EFF8FF' : '#0A66C2',
+                                      color: hasLinkedIn ? '#0369A1' : '#FFFFFF',
+                                      cursor: 'pointer', fontFamily: 'inherit',
+                                    }}
+                                  >
+                                    <Linkedin size={11} />
+                                    {hasLinkedIn ? 'Re-post' : 'LinkedIn'}
+                                  </button>
+                                );
+                              })()}
                             </div>
                           </div>
                         );
@@ -1482,6 +1517,24 @@ const AdminDashboard: React.FC = () => {
                       setSurveys(prev => prev.map(s =>
                         s.short_id === moustacheModal.surveyShortId
                           ? { ...s, moustache_survey_id: moustacheId, moustache_status: status }
+                          : s
+                      ));
+                    }}
+                  />
+                )}
+
+                {/* LinkedIn publish modal */}
+                {linkedinModal && (
+                  <PublishToLinkedInModal
+                    surveyShortId={linkedinModal.surveyShortId}
+                    surveyTitle={linkedinModal.surveyTitle}
+                    sourceType={linkedinModal.sourceType}
+                    existingPostUrn={linkedinModal.existingPostUrn}
+                    onClose={() => setLinkedinModal(null)}
+                    onPublished={(postUrn, postUrl) => {
+                      setSurveys(prev => prev.map(s =>
+                        s.short_id === linkedinModal.surveyShortId
+                          ? { ...s, linkedin_post_urn: postUrn, linkedin_post_url: postUrl }
                           : s
                       ));
                     }}

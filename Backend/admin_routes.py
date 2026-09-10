@@ -1604,3 +1604,102 @@ def grant_stats():
                                          'grant_expires_at': {'$lte': now.isoformat()}})
 
     return jsonify({'on_a_grant': on_a_grant, 'ending_soon': ending_soon, 'expired': expired}), 200
+
+
+# ─────────────────────────────────────────────────────────────
+#  MOUSTACHE SCHEDULED PUBLISH
+# ─────────────────────────────────────────────────────────────
+
+@admin_bp.route('/surveys/<survey_short_id>/moustache-schedule', methods=['POST', 'OPTIONS'])
+@requireAdmin
+def moustache_schedule(survey_short_id):
+    """
+    Schedule a Moustache Leads publish for a future date/time.
+    Body: { publish_at: ISO str, questions: [...], extra: {...} }
+    """
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        from datetime import timezone as _tz
+        body       = request.get_json(silent=True) or {}
+        publish_at = body.get('publish_at', '').strip()
+        questions  = body.get('questions', [])
+        extra      = body.get('extra', {})
+
+        if not publish_at:
+            return jsonify({'success': False, 'error': 'publish_at is required'}), 400
+        if not questions:
+            return jsonify({'success': False, 'error': 'At least one eligibility question is required'}), 400
+
+        try:
+            dt = datetime.fromisoformat(publish_at.replace('Z', '+00:00'))
+            if dt <= datetime.now(_tz.utc):
+                return jsonify({'success': False, 'error': 'publish_at must be in the future'}), 400
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Invalid publish_at datetime format'}), 400
+
+        user_id = str(g.current_user['_id'])
+
+        doc = {
+            'type':         'moustache',
+            'survey_id':    survey_short_id,
+            'user_id':      user_id,
+            'status':       'scheduled',
+            'scheduled_at': datetime.utcnow().isoformat(),
+            'publish_at':   dt.isoformat(),
+            'payload': {
+                'questions': questions,
+                'extra':     extra,
+            },
+            'result':   None,
+            'error':    None,
+            'fired_at': None,
+        }
+        result = db.publish_schedule.insert_one(doc)
+
+        return jsonify({
+            'success':     True,
+            'schedule_id': str(result.inserted_id),
+            'publish_at':  dt.isoformat(),
+            'message':     f"Moustache publish scheduled for {dt.strftime('%d %b %Y %H:%M UTC')}",
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@admin_bp.route('/surveys/<survey_short_id>/moustache-schedule', methods=['GET', 'OPTIONS'])
+@requireAdmin
+def moustache_schedule_list(survey_short_id):
+    """Return all scheduled (pending) Moustache publishes for this survey."""
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        items = list(db.publish_schedule.find(
+            {'type': 'moustache', 'survey_id': survey_short_id, 'status': 'scheduled'},
+            {'_id': 1, 'publish_at': 1, 'scheduled_at': 1}
+        ).sort('publish_at', 1))
+        for it in items:
+            it['_id'] = str(it['_id'])
+        return jsonify({'success': True, 'scheduled': items})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@admin_bp.route('/moustache-schedule/<schedule_id>', methods=['DELETE', 'OPTIONS'])
+@requireAdmin
+def moustache_schedule_cancel(schedule_id):
+    """Cancel a scheduled Moustache publish."""
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        from bson import ObjectId
+        result = db.publish_schedule.update_one(
+            {'_id': ObjectId(schedule_id), 'status': 'scheduled'},
+            {'$set': {'status': 'cancelled', 'cancelled_at': datetime.utcnow().isoformat()}},
+        )
+        if result.matched_count == 0:
+            return jsonify({'success': False, 'error': 'Schedule not found or already fired'}), 404
+        return jsonify({'success': True, 'message': 'Scheduled publish cancelled'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
