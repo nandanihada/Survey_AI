@@ -293,6 +293,7 @@ def add_cors_headers(response):
             "https://pepperads.in",
             "https://dashboard.pepperwahl.com",
             "https://pepperwahl.com",
+            "https://survey.pepperwahl.com",
         ]
 
         if origin in allowed_origins:
