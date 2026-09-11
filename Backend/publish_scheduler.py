@@ -43,6 +43,8 @@ def _fire_moustache(item: dict) -> dict:
     from mongodb_config import db
 
     payload   = item.get("payload", {})
+    questions = payload.get("questions", [])
+    extra     = payload.get("extra", {})
     survey_id = item["survey_id"]
 
     moustache_api_key = os.environ.get("MOUSTACHE_API_KEY", "")
@@ -71,7 +73,40 @@ def _fire_moustache(item: dict) -> dict:
         first_sid   = (funnel_doc.get("screening_surveys") or [{}])[0].get("survey_id", survey_id)
         survey_link = f"{frontend_url}/survey/{first_sid}?funnel={survey_id}&uid={{{{user_id}}}}&src=moustache"
 
-    api_payload = {**payload, "survey_id": survey_id, "survey_name": survey_name, "survey_link": survey_link}
+    # Auto-generate description if not provided
+    description = extra.get("description", "").strip()
+    if not description:
+        description = f"Participate in our {survey_name} survey. Share your opinions and help us understand consumer preferences. Takes just a few minutes to complete."
+
+    # Build full payload — mirrors the normal publish_to_moustache route exactly
+    api_payload = {
+        "survey_id":   survey_id,
+        "survey_name": survey_name,
+        "survey_link": survey_link,
+        "description": description,
+        "questions":   questions,
+        "payout_usd":  0.0,
+        "country":     extra.get("country", "US") or "US",
+    }
+
+    # Expand all extra fields
+    if extra.get("payout"):
+        try: api_payload["payout_usd"] = float(extra["payout"])
+        except (ValueError, TypeError): pass
+    if extra.get("country"):
+        api_payload["country"] = extra["country"]
+    if extra.get("min_age"):
+        try: api_payload["min_age"] = int(extra["min_age"])
+        except: pass
+    if extra.get("max_age"):
+        try: api_payload["max_age"] = int(extra["max_age"])
+        except: pass
+    if extra.get("loi_minutes"):
+        try: api_payload["loi_minutes"] = int(extra["loi_minutes"])
+        except: pass
+    if extra.get("survey_type"): api_payload["survey_type"] = extra["survey_type"]
+    if extra.get("notes"):       api_payload["notes"]        = extra["notes"]
+    if extra.get("source_type"): api_payload["source_type"]  = extra["source_type"]
 
     resp = ext_req.post(
         moustache_api_url,
