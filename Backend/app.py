@@ -442,6 +442,7 @@ try:
     from plan_features_api import plan_features_bp  # Plan features config API
     from resubmit_control_api import resubmit_bp   # Survey resubmit policy API
     from linkedin_api import linkedin_bp             # LinkedIn OAuth + publish API
+    from onboarding_email_api import onboarding_email_bp  # Onboarding email template + automation
 
     # Register blueprints
 
@@ -484,6 +485,7 @@ try:
     app.register_blueprint(location_bp)          # Location control at /api/admin/location
     app.register_blueprint(resubmit_bp)          # Resubmit policy at /api/admin/resubmit
     app.register_blueprint(linkedin_bp)          # LinkedIn OAuth + publish
+    app.register_blueprint(onboarding_email_bp)  # Onboarding email config at /api/admin/onboarding-email
 
     # Start publish scheduler background thread (Moustache + LinkedIn)
     from publish_scheduler import start_scheduler

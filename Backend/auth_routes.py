@@ -142,6 +142,19 @@ def confirm_email():
         except Exception as ref_err:
             print(f"⚠️ Post-confirmation referral attribution failed (non-critical): {ref_err}")
 
+        # Send onboarding email (fires only when automation is enabled in admin panel)
+        try:
+            from onboarding_email_api import maybe_send_onboarding_email
+            import threading
+            threading.Thread(
+                target=maybe_send_onboarding_email,
+                args=(user['email'], user.get('name', '')),
+                daemon=True,
+            ).start()
+            print(f"📧 Onboarding email dispatch triggered for {user['email']}")
+        except Exception as onboard_err:
+            print(f"⚠️ Onboarding email dispatch failed (non-critical): {onboard_err}")
+
         return jsonify({
             'message': 'Email confirmed successfully. You can now login.',
             'user': {
