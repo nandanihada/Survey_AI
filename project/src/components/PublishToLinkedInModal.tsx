@@ -203,11 +203,12 @@ const PublishToLinkedInModal: React.FC<Props> = ({
         headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ publish_at: publishAt, commentary: copy.commentary, title: copy.title, description: copy.description }),
       });
-      const data = await res.json();
-      setScheduleResult({ success: data.success, message: data.message || data.error });
+      let data: any = {};
+      try { data = await res.json(); } catch { data = { success: false, error: `Server error (HTTP ${res.status})` }; }
+      setScheduleResult({ success: data.success, message: data.message || data.error || 'Unknown error' });
       if (data.success) { fetchScheduled(); setScheduleDate(''); setScheduleTime(''); }
-    } catch {
-      setScheduleResult({ success: false, message: 'Network error.' });
+    } catch (err: any) {
+      setScheduleResult({ success: false, message: `Request failed: ${err?.message || 'Network error'}` });
     } finally {
       setScheduling(false);
     }
