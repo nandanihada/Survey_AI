@@ -18,6 +18,9 @@ def requireAuth(f):
     """Decorator to require valid JWT token"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # Let CORS preflight through without auth
+        if request.method == 'OPTIONS':
+            return f(*args, **kwargs)
         try:
             token = get_token_from_request()
             if not token:
@@ -40,6 +43,9 @@ def requireAdmin(f):
     """Decorator to require admin role"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # Let CORS preflight through without auth
+        if request.method == 'OPTIONS':
+            return f(*args, **kwargs)
         try:
             token = get_token_from_request()
             if not token:
