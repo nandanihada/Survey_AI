@@ -40,7 +40,7 @@ def _li_client_secret():
     return os.environ.get("LI_CLIENT_SECRET", "")
 
 def _li_version():
-    return os.environ.get("LI_VERSION", "202409")
+    return os.environ.get("LI_VERSION", "202508")
 
 def _frontend_url():
     return os.environ.get("FRONTEND_URL", "https://survey.pepperwahl.com")
