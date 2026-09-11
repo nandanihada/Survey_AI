@@ -1712,3 +1712,82 @@ def moustache_schedule_cancel(schedule_id):
         return jsonify({'success': True, 'message': 'Scheduled publish cancelled'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ─────────────────────────────────────────────────────────────
+#  PUBLISH SCHEDULE — ADMIN VIEW (all scheduled items)
+# ─────────────────────────────────────────────────────────────
+
+@admin_bp.route('/publish-schedule', methods=['GET', 'OPTIONS'])
+@requireAdmin
+def get_publish_schedule():
+    """
+    Return all publish_schedule items with optional filters.
+    Query params: status (scheduled|done|failed|cancelled|all), type (moustache|linkedin|all), page, per_page
+    """
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        status   = request.args.get('status', 'all').strip()
+        pub_type = request.args.get('type', 'all').strip()
+        page     = max(1, int(request.args.get('page', 1)))
+        per_page = min(int(request.args.get('per_page', 50)), 200)
+
+        query = {}
+        if status != 'all':
+            query['status'] = status
+        if pub_type != 'all':
+            query['type'] = pub_type
+
+        total = db.publish_schedule.count_documents(query)
+        items = list(
+            db.publish_schedule.find(query, {'payload': 0})  # exclude heavy payload from list
+            .sort('publish_at', -1)
+            .skip((page - 1) * per_page)
+            .limit(per_page)
+        )
+
+        # Enrich with survey/funnel title
+        for item in items:
+            item['_id'] = str(item['_id'])
+            sid = item.get('survey_id', '')
+            if item.get('type') == 'moustache':
+                doc = (db.surveys.find_one({'short_id': sid}, {'title': 1}) or
+                       db.surveys.find_one({'id': sid}, {'title': 1}) or
+                       db.funnels.find_one({'funnel_id': sid}, {'name': 1}))
+                item['survey_title'] = (doc or {}).get('title') or (doc or {}).get('name', sid)
+            else:
+                doc = (db.surveys.find_one({'short_id': sid}, {'title': 1}) or
+                       db.surveys.find_one({'id': sid}, {'title': 1}) or
+                       db.funnels.find_one({'funnel_id': sid}, {'name': 1}))
+                item['survey_title'] = (doc or {}).get('title') or (doc or {}).get('name', sid)
+
+        return jsonify({
+            'success': True,
+            'items': items,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': max(1, (total + per_page - 1) // per_page),
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@admin_bp.route('/publish-schedule/<schedule_id>', methods=['DELETE', 'OPTIONS'])
+@requireAdmin
+def cancel_publish_schedule(schedule_id):
+    """Cancel any scheduled publish by ID."""
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        from bson import ObjectId
+        result = db.publish_schedule.update_one(
+            {'_id': ObjectId(schedule_id), 'status': 'scheduled'},
+            {'$set': {'status': 'cancelled', 'cancelled_at': datetime.utcnow().isoformat()}},
+        )
+        if result.matched_count == 0:
+            return jsonify({'success': False, 'error': 'Not found or already fired'}), 404
+        return jsonify({'success': True, 'message': 'Cancelled'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
