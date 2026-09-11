@@ -107,6 +107,7 @@ def _fire_moustache(item: dict) -> dict:
     if extra.get("survey_type"): api_payload["survey_type"] = extra["survey_type"]
     if extra.get("notes"):       api_payload["notes"]        = extra["notes"]
     if extra.get("source_type"): api_payload["source_type"]  = extra["source_type"]
+    if extra.get("expiry_date"): api_payload["expiry_date"]  = extra["expiry_date"]
 
     resp = ext_req.post(
         moustache_api_url,

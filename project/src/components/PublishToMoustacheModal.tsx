@@ -11,8 +11,7 @@ import {
   Send, CheckCircle, AlertCircle, Loader, DollarSign,
   Globe, Users, Clock, Tag, FileText, LayoutTemplate,
   Sparkles, Code, Copy, Calendar,
-} from 'lucide-react';
-import { getApiBaseUrl } from '../utils/deploymentFix';
+} from 'lucide-react';import { getApiBaseUrl } from '../utils/deploymentFix';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,6 +30,7 @@ export interface ExtraFields {
   survey_type: string;
   description: string;
   notes: string;
+  expiry_date: string;
 }
 
 interface Props {
@@ -123,6 +123,7 @@ const blankQuestion = (): EligibilityQuestion => ({ question: '', options: ['Yes
 const defaultExtra = (): ExtraFields => ({
   payout: '', country: 'US', min_age: '18', max_age: '',
   loi_minutes: '', survey_type: 'product_interest', description: 'Complete the survey', notes: '',
+  expiry_date: '',
 });
 
 const SURVEY_TYPES = [
@@ -188,6 +189,7 @@ const PublishToMoustacheModal: React.FC<Props> = ({
     if (extra.loi_minutes) preview.loi_minutes  = parseInt(extra.loi_minutes);
     if (extra.survey_type) preview.survey_type  = extra.survey_type;
     if (extra.notes)       preview.notes        = extra.notes;
+    if (extra.expiry_date) preview.expiry_date  = extra.expiry_date;
     return preview;
   };
 
@@ -701,6 +703,23 @@ const PublishToMoustacheModal: React.FC<Props> = ({
                 value={extra.notes}
                 onChange={e => setExtra(x => ({ ...x, notes: e.target.value }))}
               />
+            </div>
+
+            {/* Expiry date */}
+            <div>
+              <label style={C.label}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Calendar size={11} /> Expiry date</span>
+              </label>
+              <input
+                style={C.input}
+                type="date"
+                value={extra.expiry_date}
+                min={new Date().toISOString().split('T')[0]}
+                onChange={e => setExtra(x => ({ ...x, expiry_date: e.target.value }))}
+              />
+              <p style={{ fontSize: 10, color: '#C4A99A', margin: '3px 0 0' }}>
+                Sent as <code style={{ fontSize: 10 }}>expiry_date</code> · survey will stop accepting responses after this date
+              </p>
             </div>
 
             {/* JSON Preview */}

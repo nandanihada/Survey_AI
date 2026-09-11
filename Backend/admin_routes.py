@@ -1235,6 +1235,7 @@ def publish_to_moustache(survey_short_id):
         if extra.get('survey_type'): payload['survey_type']  = extra['survey_type']
         if extra.get('notes'):       payload['notes']         = extra['notes']
         if extra.get('source_type'): payload['source_type']   = extra['source_type']
+        if extra.get('expiry_date'): payload['expiry_date']   = extra['expiry_date']
 
         # Call Moustache API
         try:
@@ -1408,6 +1409,7 @@ def bulk_publish_to_moustache():
                 except: pass
             if extra.get('survey_type'): payload['survey_type']  = extra['survey_type']
             if extra.get('notes'):       payload['notes']         = extra['notes']
+            if extra.get('expiry_date'): payload['expiry_date']   = extra['expiry_date']
 
             try:
                 resp = ext_requests.post(
