@@ -323,7 +323,7 @@ function LegacyDashboard() {
                 <img
                   src="/logo.png"
                   alt="Pepperwahl Logo"
-                  className={`w-6 h-6 sm:w-8 sm:h-8 logo-animated ${isDarkMode ? 'brightness-200 contrast-125 mix-blend-screen' : 'mix-blend-multiply'}`}
+                  className={`w-6 h-6 sm:w-8 sm:h-8 logo-animated ${isDarkMode ? 'brightness-[3] contrast-125 saturate-125' : 'mix-blend-multiply'}`}
                 />
               </div>
               <span className="text-sm sm:text-base font-bold bg-clip-text text-transparent bg-gradient-to-r from-red-600 to-orange-500">Pepperwahl</span>
