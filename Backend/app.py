@@ -5907,7 +5907,10 @@ def serve_yellow_chilli():
 def serve_icons(filename):
     return send_from_directory(os.path.join(DIST_DIR, 'icons'), filename)
 
-@app.errorhandler(404)
+@app.route('/privacy-policy.html')
+def serve_privacy_policy_html():
+    """Serve standalone privacy policy HTML page (for Google OAuth verification etc.)"""
+    return send_from_directory(DIST_DIR, 'privacy-policy.html')
 def catch_all(e):
     """Serve index.html for all unmatched routes (SPA fallback)"""
     # Only block API/backend routes — everything else gets the SPA
