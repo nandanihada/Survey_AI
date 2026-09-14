@@ -6,6 +6,7 @@ import { generateSurveyLink } from '../utils/surveyLinkUtils';
 import { parsePrompt as parsePromptFn, getClarificationNeeds as getClarificationNeedsFn, ClarificationNeeds as ClarificationNeedsType } from '../utils/promptParser';
 import SurveyClarification, { ClarificationAnswers as ClarificationAnswersType } from './SurveyClarification';
 import SearchLoader from './SearchLoader';
+import type { AnimationId } from './SearchLoader';
 import FunnelCreator from './FunnelCreator';
 
 interface Question {
@@ -45,6 +46,17 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
   const [imageContext, setImageContext] = useState('');
   const [isParsingImage, setIsParsingImage] = useState(false);
   const [loadingPhase, setLoadingPhase] = useState(0);
+
+  // Fetch admin-chosen loading animation once on mount
+  const [loaderAnimationId, setLoaderAnimationId] = useState<AnimationId>('gooey');
+  useEffect(() => {
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const apiBase = isLocal ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
+    fetch(`${apiBase}/api/admin/loading-animation/public`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.animation_id) setLoaderAnimationId(d.animation_id as AnimationId); })
+      .catch(() => {});
+  }, []);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showAllSuggestions, setShowAllSuggestions] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<{ label: string; prompt: string } | null>(null);
@@ -578,7 +590,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
   return (
     <>
     {/* Full-page Gooey Loader */}
-    {isLoading && <SearchLoader message={loadingMessages[loadingPhase]} />}
+    {isLoading && <SearchLoader message={loadingMessages[loadingPhase]} animationId={loaderAnimationId} />}
 
     <div className="flex flex-col items-center justify-center min-h-[70vh] px-0 sm:px-4 pt-6 sm:pt-10">
       <div className="w-[92vw] sm:w-full sm:max-w-xl lg:max-w-2xl">

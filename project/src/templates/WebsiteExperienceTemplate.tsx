@@ -171,7 +171,7 @@ const WebsiteExperienceTemplate: React.FC<Props> = ({ survey, previewMode = fals
         </form>
       </div>
 
-      <div className="we-foot">Powered by PepperAds</div>
+      <div className="we-foot">Powered by Pepperwahl</div>
 
       {submitted && (
         <motion.div className="we-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>

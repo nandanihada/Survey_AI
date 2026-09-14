@@ -443,6 +443,7 @@ try:
     from resubmit_control_api import resubmit_bp   # Survey resubmit policy API
     from linkedin_api import linkedin_bp             # LinkedIn OAuth + publish API
     from onboarding_email_api import onboarding_email_bp  # Onboarding email template + automation
+    from loading_animation_api import loading_animation_bp  # Survey creation loading animation
 
     # Register blueprints
 
@@ -486,6 +487,7 @@ try:
     app.register_blueprint(resubmit_bp)          # Resubmit policy at /api/admin/resubmit
     app.register_blueprint(linkedin_bp)          # LinkedIn OAuth + publish
     app.register_blueprint(onboarding_email_bp)  # Onboarding email config at /api/admin/onboarding-email
+    app.register_blueprint(loading_animation_bp) # Loading animation config at /api/admin/loading-animation
 
     # Start publish scheduler background thread (Moustache + LinkedIn)
     from publish_scheduler import start_scheduler

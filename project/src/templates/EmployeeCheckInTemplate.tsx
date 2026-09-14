@@ -181,7 +181,7 @@ const EmployeeCheckInTemplate: React.FC<Props> = ({ survey, previewMode = false 
           </form>
         </div>
       </div>
-      <div className="ec-powered">Powered by <a href="#">PepperAds</a></div>
+      <div className="ec-powered">Powered by <a href="#">Pepperwahl</a></div>
       {submitted && (
         <motion.div className="ec-success-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <motion.div className="ec-success-card" initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ delay: 0.15 }}>

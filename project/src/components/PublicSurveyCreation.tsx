@@ -6,6 +6,7 @@ import { Loader2, Hash, X, ChevronRight, ImagePlus, Check, ArrowRight, Lightbulb
 import { parsePrompt, getClarificationNeeds } from '../utils/promptParser';
 import SurveyClarification, { ClarificationAnswers } from './SurveyClarification';
 import SearchLoader from './SearchLoader';
+import type { AnimationId } from './SearchLoader';
 
 interface Question {
   id: string;
@@ -40,6 +41,17 @@ const PublicSurveyCreation: React.FC = () => {
   const [imageContext, setImageContext] = useState('');
   const [isParsingImage, setIsParsingImage] = useState(false);
   const [loadingPhase, setLoadingPhase] = useState(0);
+
+  // Fetch admin-chosen loading animation once on mount
+  const [loaderAnimationId, setLoaderAnimationId] = useState<AnimationId>('gooey');
+  useEffect(() => {
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const apiBase = isLocal ? 'http://localhost:5000' : 'https://surevy-pepperwahl.onrender.com';
+    fetch(`${apiBase}/api/admin/loading-animation/public`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.animation_id) setLoaderAnimationId(d.animation_id as AnimationId); })
+      .catch(() => {});
+  }, []);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showAllSuggestions, setShowAllSuggestions] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<{ label: string; prompt: string } | null>(null);
@@ -291,7 +303,7 @@ const PublicSurveyCreation: React.FC = () => {
   return (
     <>
     {/* Full-page Gooey Loader */}
-    {isLoading && <SearchLoader message={loadingMessages[loadingPhase]} />}
+    {isLoading && <SearchLoader message={loadingMessages[loadingPhase]} animationId={loaderAnimationId} />}
 
     <div className={`min-h-screen ${isDarkMode ? 'bg-slate-900 text-white' : 'bg-gray-50 text-gray-900'}`}>
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-3 sm:px-4 py-8">

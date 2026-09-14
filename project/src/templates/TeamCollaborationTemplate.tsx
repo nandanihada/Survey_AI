@@ -148,7 +148,7 @@ const TeamCollaborationTemplate: React.FC<Props> = ({ survey, previewMode = fals
       <aside className="tc-sidebar">
         <div className="tc-sidebar-brand">
           <div className="tc-logo"></div>
-          <span>PepperAds</span>
+          <span>Pepperwahl</span>
         </div>
         <h1 className="tc-sidebar-title">{survey.title || 'Team Collaboration'}</h1>
         {survey.subtitle && <p className="tc-sidebar-sub">{survey.subtitle}</p>}

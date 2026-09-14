@@ -189,7 +189,7 @@ const OnboardingReviewTemplate: React.FC<Props> = ({ survey, previewMode = false
         </form>
       </div>
 
-      <div className="or-chat-footer">Powered by PepperAds</div>
+      <div className="or-chat-footer">Powered by Pepperwahl</div>
 
       {submitted && (
         <motion.div className="or-success-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>

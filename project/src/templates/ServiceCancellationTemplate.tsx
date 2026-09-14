@@ -149,7 +149,7 @@ const ServiceCancellationTemplate: React.FC<Props> = ({ survey, previewMode = fa
       <div className="sc-top-bar">
         <div className="sc-top-brand">
           <div className="sc-top-logo"></div>
-          <span>PepperAds</span>
+          <span>Pepperwahl</span>
         </div>
         <div className="sc-top-counter">{currentQuestionIndex + 1} / {normalizedQuestions.length}</div>
       </div>
@@ -184,7 +184,7 @@ const ServiceCancellationTemplate: React.FC<Props> = ({ survey, previewMode = fa
         </div>
       </div>
 
-      <div className="sc-bottom">Powered by PepperAds</div>
+      <div className="sc-bottom">Powered by Pepperwahl</div>
 
       {submitted && (
         <motion.div className="sc-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>

@@ -20,11 +20,12 @@ import LocationControlTab from '../components/admin/LocationControlTab';
 import PlanFeaturesTab from '../components/admin/PlanFeaturesTab';
 import ResubmitPolicyTab from '../components/admin/ResubmitPolicyTab';
 import OnboardMailTab from '../components/admin/OnboardMailTab';
+import LoadingAnimationTab from '../components/admin/LoadingAnimationTab';
 import {
   Bell, Filter, Save, Edit2, X, Check, Eye, EyeOff, Play, RotateCcw, AlertCircle,
   Users, LayoutDashboard, FileText, BarChart2, SlidersHorizontal, CheckSquare,
   Gift, DollarSign, Radio, Mail, Trash2, MapPin, Settings2, ChevronLeft,
-  ChevronRight, Shield, RefreshCw, Layers, GitBranch, MousePointerClick, Send, Search, Linkedin, Calendar
+  ChevronRight, Shield, RefreshCw, Layers, GitBranch, MousePointerClick, Send, Search, Linkedin, Calendar, Zap
 } from 'lucide-react';
 import PublishToMoustacheModal from '../components/PublishToMoustacheModal';
 import BulkPublishToMoustacheModal from '../components/BulkPublishToMoustacheModal';
@@ -168,7 +169,7 @@ const AdminDashboard: React.FC = () => {
   } | null>(null);
   const [filters, setFilters] = useState<Filter[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking' | 'tracking' | 'contacts' | 'deletions' | 'referrals' | 'earnings-config' | 'survey-report' | 'survey-flow-tracking' | 'funnel-tracking' | 'location-control' | 'survey-settings' | 'back-exits' | 'plan-features' | 'resubmit-policy' | 'survey-click-tracking' | 'moustache-leads' | 'publish-schedule' | 'onboard-mail'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'surveys' | 'filters' | 'pass-fail' | 'link-masking' | 'tracking' | 'contacts' | 'deletions' | 'referrals' | 'earnings-config' | 'survey-report' | 'survey-flow-tracking' | 'funnel-tracking' | 'location-control' | 'survey-settings' | 'back-exits' | 'plan-features' | 'resubmit-policy' | 'survey-click-tracking' | 'moustache-leads' | 'publish-schedule' | 'onboard-mail' | 'loading-animation'>('users');
   const [showNotifModal, setShowNotifModal] = useState(false);
   // Sidebar collapse state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -793,6 +794,7 @@ const AdminDashboard: React.FC = () => {
       { id: 'moustache-leads',        icon: <span style={{ fontWeight: 800, fontSize: 13, lineHeight: 1 }}>M</span>, label: 'MoustacheLeads API' },
       { id: 'publish-schedule',       icon: <Calendar size={14} />,        label: 'Publish Schedule' },
       { id: 'onboard-mail',           icon: <Mail size={14} />,            label: 'Onboard Mail' },
+      { id: 'loading-animation',      icon: <Zap size={14} />,             label: 'Loading Animation' },
     ]},
     { label: 'System',     items: [
       { id: 'location-control',icon: <MapPin size={14} />,          label: 'Location' },
@@ -932,6 +934,7 @@ const AdminDashboard: React.FC = () => {
                 {activeTab === 'moustache-leads' && 'External API integration — requests received from MoustacheLeads and generation status'}
                 {activeTab === 'publish-schedule' && 'All scheduled Moustache & LinkedIn publishes — past, pending and failed'}
                 {activeTab === 'onboard-mail' && 'Onboarding email template & automation — fires on every new signup confirmation'}
+                {activeTab === 'loading-animation' && 'Survey creation loading animation — choose which animation users see during generation'}
               </p>
             </div>
 
@@ -2190,6 +2193,11 @@ const AdminDashboard: React.FC = () => {
                 {/* Onboard Mail Tab */}
                 {activeTab === 'onboard-mail' && (
                   <OnboardMailTab />
+                )}
+
+                {/* Loading Animation Tab */}
+                {activeTab === 'loading-animation' && (
+                  <LoadingAnimationTab />
                 )}
 
                 </>

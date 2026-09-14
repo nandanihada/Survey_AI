@@ -182,7 +182,7 @@ const TrainingFeedbackTemplate: React.FC<Props> = ({ survey, previewMode = false
           </form>
         </div>
 
-        <div className="tf-page-footer">Powered by PepperAds</div>
+        <div className="tf-page-footer">Powered by Pepperwahl</div>
       </div>
 
       {submitted && (
