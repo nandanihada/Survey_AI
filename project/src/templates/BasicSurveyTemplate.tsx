@@ -2009,8 +2009,8 @@ const BasicSurveyTemplate: React.FC<Props> = ({
                       const totalMins = Math.ceil(diff / 60000);
                       if (totalMins < 60) return `You can fill this survey again in ${totalMins} minute${totalMins !== 1 ? 's' : ''}.`;
                       const totalHours = Math.ceil(diff / 3600000);
-                      if (totalHours < 24) return `You can fill this survey again in ${totalHours} hour${totalHours !== 1 ? 's' : ''} (${resubmitCooldownEnds.toLocaleString()}).`;
-                      return `You can fill this survey again after ${resubmitCooldownEnds.toLocaleString()}.`;
+                      if (totalHours < 24) return `You can fill this survey again in ${totalHours} hour${totalHours !== 1 ? 's' : ''} (${resubmitCooldownEnds.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })}).`;
+                      return `You can fill this survey again after ${resubmitCooldownEnds.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}.`;
                     })()
                   : 'This survey has a cooldown period. Please try again later.'}
             </p>

@@ -12,15 +12,32 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="theme-color" content="#d90429">
     <meta name="description" content="AI-powered survey generation platform with advanced customization">
-    <meta property="og:title" content="Quick 2-Minute Survey | PepperWahl">
-    <meta property="og:description" content="Share your feedback in a quick 2-minute survey. Your responses help make things better!">
-    <meta property="og:image" content="https://survey.pepperwahl.com/logo.png">
+    <meta property="og:title" content="Quick 2-Minute Survey | Pepperwahl">
+    <meta property="og:description" content="Share your feedback in a quick 2-minute survey. AI-powered, free, no sign-up needed. Your responses make a real difference!">
+    <meta property="og:image" content="https://survey.pepperwahl.com/og-preview.svg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
     <meta property="og:type" content="website">
-    <meta property="og:site_name" content="PepperWahl">
-    <meta name="twitter:card" content="summary">
-    <meta name="twitter:title" content="Quick 2-Minute Survey | PepperWahl">
-    <meta name="twitter:description" content="Share your feedback in a quick 2-minute survey. Your responses help make things better!">
+    <meta property="og:url" content="https://survey.pepperwahl.com">
+    <meta property="og:site_name" content="Pepperwahl">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Quick 2-Minute Survey | Pepperwahl">
+    <meta name="twitter:description" content="Share your feedback in a quick 2-minute survey. AI-powered, free, no sign-up needed.">
+    <meta name="twitter:image" content="https://survey.pepperwahl.com/og-preview.svg">
     <title>Pepperwahl</title>
+    <script>
+      // Auto-reload when a chunk fails to load (stale deployment cache fix)
+      window.addEventListener('error', function(e) {
+        var src = e.target && (e.target.src || e.target.href);
+        if (src && (src.endsWith('.js') || src.endsWith('.css'))) {
+          var reloadKey = 'chunk_reload_' + src;
+          if (!sessionStorage.getItem(reloadKey)) {
+            sessionStorage.setItem(reloadKey, '1');
+            window.location.reload(true);
+          }
+        }
+      }, true);
+    </script>
     <style>
       /* Inline fallback styles so something shows even if CSS/JS fails */
       #root:empty::after {

@@ -148,10 +148,10 @@ const ProfessionalAnalyticsDashboard: React.FC = () => {
       
       const dayCompleted = dayResponses.filter(r => r.completed);
       
-      console.log(`🔍 Day ${date.toLocaleDateString()}: ${dayResponses.length} responses, ${dayCompleted.length} completed`);
+      console.log(`🔍 Day ${date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}: ${dayResponses.length} responses, ${dayCompleted.length} completed`);
       
       return {
-        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        date: date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric' }),
         total: dayResponses.length,
         completed: dayCompleted.length
       };
@@ -323,7 +323,7 @@ const ProfessionalAnalyticsDashboard: React.FC = () => {
       const dayCompleted = dayResponses.filter(r => r.completed);
       
       return {
-        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        date: date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric' }),
         responses: dayCompleted.length // Show completed responses for growth
       };
     });

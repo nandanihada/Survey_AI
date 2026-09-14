@@ -1304,7 +1304,7 @@ const SurveyEditor: React.FC = () => {
             {/* Draft badge — shown when there are unsaved changes */}
             {hasUnsavedChanges && (
               <span
-                title={draftRestoredAt ? `Draft restored from ${new Date(draftRestoredAt).toLocaleTimeString()}` : 'Unsaved changes — will be auto-restored on next visit'}
+                title={draftRestoredAt ? `Draft restored from ${new Date(draftRestoredAt).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}` : 'Unsaved changes — will be auto-restored on next visit'}
                 className="flex-shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200 select-none cursor-default"
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse inline-block" />

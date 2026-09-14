@@ -45,7 +45,7 @@ const ResponseTrendChart: React.FC<ResponseTrendChartProps> = ({ responses }) =>
       const partialResponses = totalResponses - completedResponses;
 
       return {
-        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        date: date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric' }),
         total: totalResponses,
         completed: completedResponses,
         partial: partialResponses

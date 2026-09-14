@@ -68,7 +68,7 @@ const SurveyResponsesPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14 sm:h-16 gap-2">
             <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-              <button onClick={() => navigate('/dashboard?tab=surveys')} className="flex items-center gap-1 text-gray-600 hover:text-gray-900 transition-colors flex-shrink-0">
+              <button onClick={() => navigate('/dashboard?v=my')} className="flex items-center gap-1 text-gray-600 hover:text-gray-900 transition-colors flex-shrink-0">
                 <ArrowLeft size={16} /> <span className="hidden sm:inline">Back</span>
               </button>
               <div className="w-px h-5 bg-gray-300 hidden sm:block" />

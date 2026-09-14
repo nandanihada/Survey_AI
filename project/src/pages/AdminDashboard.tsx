@@ -1211,7 +1211,7 @@ const AdminDashboard: React.FC = () => {
                             const days = grantDays || Math.ceil((d.getTime() - Date.now()) / 86400000);
                             return (
                               <p style={{ fontSize: 11, color: '#9B9189', margin: '0 0 16px' }}>
-                                Ends {d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })} — {days} days from today.
+                                Ends {d.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day:'2-digit', month:'short', year:'numeric' })} — {days} days from today.
                               </p>
                             );
                           })()}

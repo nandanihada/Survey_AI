@@ -126,7 +126,7 @@ function modeLabel(mode: string, hours?: number | null) {
 
 function fmt(iso?: string) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleString();
+  return new Date(iso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
 }
 
 // ─── ModeForm helper ─────────────────────────────────────────────────────────

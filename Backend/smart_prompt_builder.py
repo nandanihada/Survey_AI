@@ -142,26 +142,44 @@ def parse_user_prompt(prompt_text: str, image_context: str = "") -> dict:
     if re.search(r'\b(yes\s*/?\s*no)\b', prompt_text, re.IGNORECASE):
         result["mentioned_types"].append("yes_no")
 
-    # Detect language (non-English scripts)
+    # Detect language (non-English scripts and non-English Latin languages)
     result["language"] = "english"
     # Hindi (Devanagari script)
     if re.search(r'[\u0900-\u097F]', prompt_text):
         result["language"] = "hindi"
-    # Hinglish detection (Hindi words written in Roman/Latin script)
-    elif re.search(r'\b(karo|banao|banaen|chahiye|kaise|kitne|sawal|prashna|survekshan|santusti|grahak|karmchari|baare|mein|hai|hain|aur|ya|ke liye|mujhe|humein|hamari)\b', prompt_text, re.IGNORECASE):
-        result["language"] = "hinglish"
-    # Spanish (strong indicators only)
-    elif re.search(r'\b(encuesta|preguntas?\s+sobre|satisfacción|crear\s+una)\b', prompt_text, re.IGNORECASE):
-        result["language"] = "spanish"
-    # French (strong indicators only)
-    elif re.search(r'\b(sondage|enquête|créer\s+un|à\s+propos)\b', prompt_text, re.IGNORECASE):
-        result["language"] = "french"
     # Arabic
     elif re.search(r'[\u0600-\u06FF]', prompt_text):
         result["language"] = "arabic"
     # Chinese/Japanese/Korean
     elif re.search(r'[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]', prompt_text):
         result["language"] = "cjk"
+    # Thai
+    elif re.search(r'[\u0E00-\u0E7F]', prompt_text):
+        result["language"] = "thai"
+    # Cyrillic (Russian etc.)
+    elif re.search(r'[\u0400-\u04FF]', prompt_text):
+        result["language"] = "russian"
+    # Greek
+    elif re.search(r'[\u0370-\u03FF]', prompt_text):
+        result["language"] = "greek"
+    # Hinglish — romanized Hindi words
+    elif re.search(r'\b(karo|banao|banaen|chahiye|kaise|kitne|sawal|prashna|survekshan|santusti|grahak|karmchari|baare|mein|hai|hain|aur|ya|ke\s*liye|humein|hamari|unka|apna|yeh|woh|kaun|kya|kyun|theek|accha|bahut|bilkul|zaroor)\b', prompt_text, re.IGNORECASE):
+        result["language"] = "hinglish"
+    # Spanish — broader detection
+    elif re.search(r'\b(encuesta|encuestas|preguntas?|satisfacci[oó]n|respuestas?|crear\s+una|cu[aá]l|c[oó]mo\s+es|por\s+qu[eé]|qu[eé]\s+tan|usuarios?|clientes?|productos?|servicio|comentarios?|empresa|trabajo|empleados?)\b', prompt_text, re.IGNORECASE):
+        result["language"] = "spanish"
+    # French — broader detection
+    elif re.search(r'\b(sondage|enqu[eê]te|cr[eé]er\s+un|questions?|r[eé]ponses?|utilisateurs?|clients?|satisfaction|entreprise|employ[eé]s?|produit|service)\b', prompt_text, re.IGNORECASE):
+        result["language"] = "french"
+    # German
+    elif re.search(r'\b(umfrage|fragebogen|fragen?|antworten?|erstellen|zufriedenheit|benutzer|kunden|wie\s+viele|welche|warum|mitarbeiter|produkt|dienstleistung)\b', prompt_text, re.IGNORECASE):
+        result["language"] = "german"
+    # Portuguese
+    elif re.search(r'\b(pesquisa|question[aá]rio|perguntas?|respostas?|satisfa[cç][aã]o|criar\s+uma|usu[aá]rios?|clientes?|quanto|como\s+[eé]|por\s+que|funcion[aá]rios?)\b', prompt_text, re.IGNORECASE):
+        result["language"] = "portuguese"
+    # Italian
+    elif re.search(r'\b(sondaggio|questionario|domande?|risposte?|soddisfazione|creare\s+un|utenti?|clienti?|quanto|come\s+[eè]|perch[eé]|dipendenti?)\b', prompt_text, re.IGNORECASE):
+        result["language"] = "italian"
 
     # Extract topic (cleaned version)
     topic = prompt_text
@@ -370,14 +388,20 @@ YOU MUST:
     language_instruction = ""
     if parsed.get("language", "english") != "english":
         lang_map = {
-            "hindi": "Generate the ENTIRE survey in Hindi (हिंदी). All question text and answer options must be in Hindi using Devanagari script.",
-            "hinglish": "Generate the ENTIRE survey in Hinglish (Hindi written in English/Roman script). Example: 'Aap kitne satisfied hain hamare product se?' — Mix Hindi words with English script. Do NOT use Devanagari. Do NOT use pure English.",
-            "spanish": "Generate the ENTIRE survey in Spanish (Español). All question text and answer options must be in Spanish.",
-            "french": "Generate the ENTIRE survey in French (Français). All question text and answer options must be in French.",
-            "arabic": "Generate the ENTIRE survey in Arabic (العربية). All question text and answer options must be in Arabic.",
-            "cjk": "Generate the ENTIRE survey in the same language as the user's prompt. All question text and answer options must be in that language.",
+            "hindi":      "Generate the ENTIRE survey in Hindi (हिंदी). All question text and answer options must be in Hindi using Devanagari script.",
+            "hinglish":   "Generate the ENTIRE survey in Hinglish (Hindi written in English/Roman script). Example: 'Aap kitne satisfied hain hamare product se?' — Mix Hindi words with English script. Do NOT use Devanagari. Do NOT use pure English.",
+            "spanish":    "Generate the ENTIRE survey in Spanish (Español). ALL question text and answer options must be in Spanish.",
+            "french":     "Generate the ENTIRE survey in French (Français). ALL question text and answer options must be in French.",
+            "arabic":     "Generate the ENTIRE survey in Arabic (العربية). All question text and answer options must be in Arabic.",
+            "german":     "Generate the ENTIRE survey in German (Deutsch). ALL question text and answer options must be in German.",
+            "portuguese": "Generate the ENTIRE survey in Portuguese (Português). ALL question text and answer options must be in Portuguese.",
+            "italian":    "Generate the ENTIRE survey in Italian (Italiano). ALL question text and answer options must be in Italian.",
+            "russian":    "Generate the ENTIRE survey in Russian (Русский). All question text and answer options must be in Russian.",
+            "thai":       "Generate the ENTIRE survey in Thai (ภาษาไทย). All question text and answer options must be in Thai.",
+            "greek":      "Generate the ENTIRE survey in Greek (Ελληνικά). All question text and answer options must be in Greek.",
+            "cjk":        "Generate the ENTIRE survey in the same language as the user's prompt (Chinese/Japanese/Korean). All question text and answer options must be in that language.",
         }
-        language_instruction = f"LANGUAGE: {lang_map.get(parsed['language'], '')}"
+        language_instruction = f"LANGUAGE: {lang_map.get(parsed['language'], 'Generate the ENTIRE survey in the same language as the user prompt.')}"
 
     system_prompt = f"""You are an expert survey designer with 15+ years of experience. Generate a precise, non-generic survey.
 

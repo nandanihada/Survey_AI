@@ -494,7 +494,7 @@ export default function SurveyReportTab() {
                                       <td className="px-3 py-2 text-gray-500">{c.sharer_email || c.sharer_display_name || '—'}</td>
                                       <td className="px-3 py-2 text-center font-semibold text-green-700">{fmt(c.earned_cents)}</td>
                                       <td className="px-3 py-2 text-center text-gray-400">
-                                        {c.completed_at ? new Date(c.completed_at).toLocaleString() : '—'}
+                                        {c.completed_at ? new Date(c.completed_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'}
                                       </td>
                                       <td className="px-3 py-2 text-center">
                                         {c.status === 'approved' && (

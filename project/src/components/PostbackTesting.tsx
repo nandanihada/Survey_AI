@@ -226,7 +226,7 @@ const PostbackTesting: React.FC<PostbackTestingProps> = ({ isDarkMode = false })
   };
 
   const formatTimestamp = (timestamp: string) => {
-    return new Date(timestamp).toLocaleTimeString();
+    return new Date(timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
   };
 
   // Remove dark mode styling - use light theme only

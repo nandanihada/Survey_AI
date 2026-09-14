@@ -179,7 +179,8 @@ const SurveyResponses: React.FC<SurveyResponsesProps> = ({ surveyId }) => {
   });
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('en-US', {
+    return new Date(dateString).toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
       year: 'numeric',
       month: 'short',
       day: 'numeric',

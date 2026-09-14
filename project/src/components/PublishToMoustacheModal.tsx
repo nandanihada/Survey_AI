@@ -821,7 +821,7 @@ const PublishToMoustacheModal: React.FC<Props> = ({
                 {scheduledItems.map(it => (
                   <div key={it._id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 7, padding: '5px 9px' }}>
                     <span style={{ fontSize: 11, color: '#15803D', display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <Clock size={11} /> {new Date(it.publish_at).toLocaleString()}
+                      <Clock size={11} /> {new Date(it.publish_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
                     </span>
                     <button onClick={() => cancelScheduled(it._id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#C4A99A', display: 'flex', padding: 2 }} title="Cancel">
                       <X size={11} />

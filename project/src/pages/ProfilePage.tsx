@@ -255,7 +255,7 @@ export default function ProfilePage() {
                   <div>
                     <p className="text-sm text-gray-600">Member Since</p>
                     <p className="text-lg font-semibold text-gray-900">
-                      {new Date(profile.createdAt).toLocaleDateString()}
+                      {new Date(profile.createdAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })}
                     </p>
                   </div>
                 </div>

@@ -88,9 +88,7 @@ body {
 
 .logo-animated {
   animation: logoFloat 4s ease-in-out infinite, logoGlow 3s ease-in-out infinite;
-  mix-blend-mode: multiply;
   background: transparent;
-  opacity: 0.85;
 }
 
 .dark .logo-animated {

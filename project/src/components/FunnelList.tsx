@@ -3077,7 +3077,7 @@ const FunnelList: React.FC<Props> = ({ isDarkMode = false, onCreateNew }) => {
   const [error, setError] = useState('');
   const [showCreator, setShowCreator] = useState(false);
   const [autoExpandFunnelId, setAutoExpandFunnelId] = useState<string | null>(
-    searchParams.get('open') || null
+    searchParams.get('id') || searchParams.get('open') || null
   );
   // ── Favourites filter ─────────────────────────────────────────────────────
   const [favOnly, setFavOnly] = useState(false);

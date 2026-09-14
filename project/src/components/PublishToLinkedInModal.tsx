@@ -618,7 +618,7 @@ const PublishToLinkedInModal: React.FC<Props> = ({
               {scheduledItems.map(it => (
                 <div key={it._id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#EFF8FF', border: '1px solid #BAE6FD', borderRadius: 8, padding: '6px 10px' }}>
                   <span style={{ fontSize: 11, color: '#0369A1', display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <Clock size={11} /> {new Date(it.publish_at).toLocaleString()}
+                    <Clock size={11} /> {new Date(it.publish_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
                   </span>
                   <button onClick={() => cancelScheduled(it._id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', display: 'flex', padding: 2 }} title="Cancel">
                     <Trash2 size={12} />

@@ -119,7 +119,7 @@ const MoustacheLeadsTab: React.FC = () => {
           </p>
           <p style={{ fontSize: 11, color: '#9B9189', margin: '3px 0 0' }}>
             External survey generation requests — auto-refreshes every 10s
-            {lastRefreshed && <> · Last updated {lastRefreshed.toLocaleTimeString()}</>}
+            {lastRefreshed && <> · Last updated {lastRefreshed.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}</>}
           </p>
         </div>
         <button

@@ -131,9 +131,9 @@ const SessionAnalyticsView = lazyRetry(() => import('./pages/SessionAnalyticsVie
 function SurveysTabWithFunnels({ isDarkMode, onCreateNew }: { isDarkMode: boolean; onCreateNew: () => void }) {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  // If URL has ?subtab=funnels, start on funnels tab
+  // If URL has ?subtab=funnels or ?v=jrn, start on funnels tab
   const [surveySubTab, setSurveySubTab] = useState<'surveys' | 'funnels'>(
-    searchParams.get('subtab') === 'funnels' ? 'funnels' : 'surveys'
+    (searchParams.get('subtab') === 'funnels' || searchParams.get('v') === 'jrn') ? 'funnels' : 'surveys'
   );
   const activeClass = 'bg-blue-600 text-white';
   const inactiveClass = isDarkMode
@@ -176,7 +176,12 @@ function LegacyDashboard() {
   const { hasFeature, user, authenticated, isAdmin } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'create');
+  const [activeTab, setActiveTab] = useState(() => {
+    const tab = searchParams.get('tab');
+    const v   = searchParams.get('v');
+    const vMap: Record<string, string> = { my: 'surveys', jrn: 'surveys', mail: 'email', create: 'create' };
+    return (v && vMap[v]) ? vMap[v] : (tab || 'create');
+  });
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showPreviewWidget, setShowPreviewWidget] = useState(false);
   const [autoPreviewEnabled, setAutoPreviewEnabled] = useState(false);
@@ -206,8 +211,12 @@ function LegacyDashboard() {
   // Update activeTab when URL changes
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab) {
-      setActiveTab(tab);
+    const v   = searchParams.get('v');
+    // v=my or v=jrn → surveys tab; v=mail → email tab; v=create → create tab
+    const vMap: Record<string, string> = { my: 'surveys', jrn: 'surveys', mail: 'email', create: 'create' };
+    const resolved = (v && vMap[v]) ? vMap[v] : (tab || null);
+    if (resolved) {
+      setActiveTab(resolved);
     }
   }, [searchParams]);
 
@@ -323,7 +332,8 @@ function LegacyDashboard() {
                 <img
                   src="/logo.png"
                   alt="Pepperwahl Logo"
-                  className={`w-6 h-6 sm:w-8 sm:h-8 logo-animated ${isDarkMode ? 'brightness-[3] contrast-125 saturate-125' : 'mix-blend-multiply'}`}
+                  className="w-6 h-6 sm:w-8 sm:h-8 logo-animated"
+                  style={isDarkMode ? { filter: 'brightness(3) contrast(1.2) saturate(1.3)', opacity: 1, mixBlendMode: 'normal' } : { mixBlendMode: 'multiply', opacity: 0.85 }}
                 />
               </div>
               <span className="text-sm sm:text-base font-bold bg-clip-text text-transparent bg-gradient-to-r from-red-600 to-orange-500">Pepperwahl</span>
@@ -412,7 +422,7 @@ function LegacyDashboard() {
               {/* Earnings badge */}
               {totalEarningsCents !== null && (
                 <button
-                  onClick={() => navigate('/refer?tab=earnings')}
+                  onClick={() => navigate('/refer?v=earn')}
                   title="My Earnings — click to view"
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
                     totalEarningsCents > 0

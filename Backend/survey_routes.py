@@ -29,79 +29,124 @@ def convert_objectid_to_string(doc):
 @survey_bp.route('', methods=['GET'])
 @requireAuth
 def get_user_surveys():
-    """Get surveys for the current user (My Surveys)"""
+    """Get surveys for the current user (My Surveys) with server-side pagination"""
     try:
         user = g.current_user
         user_id = str(user['_id'])
-        
-        # Admin can see all surveys, regular users only see their own
+
+        # ── Pagination params ──────────────────────────────────────────────────
+        try:
+            page  = max(1, int(request.args.get('page',  1)))
+            limit = int(request.args.get('limit', 20))
+            limit = limit if limit in (20, 50, 100) else 20
+        except (ValueError, TypeError):
+            page, limit = 1, 20
+        skip = (page - 1) * limit
+
+        # ── Optional search / date filters ────────────────────────────────────
+        search    = request.args.get('search', '').strip()
+        date_from = request.args.get('date_from', '').strip()  # ISO date string
+        date_to   = request.args.get('date_to',   '').strip()
+
+        # ── Build ownership query ──────────────────────────────────────────────
         if user.get('role') == 'admin':
-            surveys = list(db.surveys.find().sort('created_at', -1))
-            print(f"Admin {user.get('email')} viewing all surveys: {len(surveys)}")
+            ownership_query = {}
         else:
-            # Enhanced query to find user's surveys using multiple identification methods
-            # Only match non-empty values to avoid false matches
             or_conditions = [
                 {'ownerUserId': user_id},
-                {'user_id': user_id},
+                {'user_id':     user_id},
                 {'created_by.user_id': user_id},
-                {'shared_with': user_id},   # surveys shared with this user
+                {'shared_with': user_id},
             ]
             user_email = user.get('email', '')
             if user_email:
                 or_conditions.append({'creator_email': user_email})
                 or_conditions.append({'created_by.email': user_email})
-            
-            query = {'$or': or_conditions}
-            surveys = list(db.surveys.find(query).sort('created_at', -1))
-            print(f"User {user.get('email')} ({user_id}) found {len(surveys)} surveys")
-            
-            # Debug: Show what fields each survey has for troubleshooting
-            for survey in surveys[:3]:  # Show first 3 surveys
-                fields = []
-                if survey.get('ownerUserId'): fields.append('ownerUserId')
-                if survey.get('user_id'): fields.append('user_id')
-                if survey.get('creator_email'): fields.append('creator_email')
-                if survey.get('created_by'): fields.append('created_by')
-                prompt = survey.get('prompt', 'No prompt')[:30] + '...'
-                print(f"  - Survey: {prompt} | Fields: {', '.join(fields)}")
-        
-        # Convert ObjectIds to strings and include response counts
+            ownership_query = {'$or': or_conditions}
+
+        # ── Apply search filter ────────────────────────────────────────────────
+        if search:
+            import re as _re
+            pattern = _re.compile(_re.escape(search), _re.IGNORECASE)
+            search_conditions = [
+                {'title':    {'$regex': pattern}},
+                {'prompt':   {'$regex': pattern}},
+                {'short_id': {'$regex': pattern}},
+            ]
+            if ownership_query:
+                query = {'$and': [ownership_query, {'$or': search_conditions}]}
+            else:
+                query = {'$or': search_conditions}
+        else:
+            query = ownership_query
+
+        # ── Apply date range filter ────────────────────────────────────────────
+        date_filter = {}
+        if date_from:
+            try:
+                from datetime import timezone as _tz
+                date_filter['$gte'] = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
+            except Exception:
+                pass
+        if date_to:
+            try:
+                from datetime import timezone as _tz
+                dt = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
+                # end of that day
+                from datetime import timedelta as _td
+                dt = dt.replace(hour=23, minute=59, second=59)
+                date_filter['$lte'] = dt
+            except Exception:
+                pass
+        if date_filter:
+            if query:
+                query = {'$and': [query, {'created_at': date_filter}]}
+            else:
+                query = {'created_at': date_filter}
+
+        if not query:
+            query = {}
+
+        # ── Count + paginated fetch ────────────────────────────────────────────
+        total   = db.surveys.count_documents(query)
+        surveys = list(db.surveys.find(query).sort('created_at', -1).skip(skip).limit(limit))
+
+        if user.get('role') == 'admin':
+            print(f"Admin {user.get('email')} page={page} limit={limit} total={total}")
+        else:
+            print(f"User {user.get('email')} ({user_id}) page={page} limit={limit} found={len(surveys)}/{total}")
+
+        # ── Enrich with response counts ────────────────────────────────────────
         for survey in surveys:
             convert_objectid_to_string(survey)
-            # Include actual response count from responses collection
-            # Check by all possible survey ID formats
-            possible_ids = set()
-            if survey.get('_id'):
-                possible_ids.add(str(survey['_id']))
-            if survey.get('id'):
-                possible_ids.add(str(survey['id']))
-            if survey.get('short_id'):
-                possible_ids.add(str(survey['short_id']))
-            
-            # Remove empty strings
-            possible_ids.discard('')
-            
+            possible_ids = set(filter(None, [
+                str(survey.get('_id', '')),
+                str(survey.get('id', '')),
+                str(survey.get('short_id', '')),
+            ]))
             if possible_ids:
-                if len(possible_ids) == 1:
-                    count = db.responses.count_documents({'survey_id': list(possible_ids)[0]})
-                else:
-                    count = db.responses.count_documents({'survey_id': {'$in': list(possible_ids)}})
+                count = db.responses.count_documents(
+                    {'survey_id': list(possible_ids)[0]} if len(possible_ids) == 1
+                    else {'survey_id': {'$in': list(possible_ids)}}
+                )
             else:
                 count = 0
             survey['response_count'] = count
-        
+
         return jsonify({
-            'surveys': surveys,
-            'total': len(surveys),
+            'surveys':   surveys,
+            'total':     total,
+            'page':      page,
+            'limit':     limit,
+            'pages':     (total + limit - 1) // limit,
             'user_role': user.get('role'),
             'user_info': {
-                'id': user_id,
-                'email': user.get('email'),
-                'simple_id': user.get('simpleUserId')
-            }
+                'id':        user_id,
+                'email':     user.get('email'),
+                'simple_id': user.get('simpleUserId'),
+            },
         })
-        
+
     except Exception as e:
         return jsonify({'error': f'Failed to get surveys: {str(e)}'}), 500
 

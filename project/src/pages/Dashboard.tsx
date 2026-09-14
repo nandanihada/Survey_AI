@@ -274,7 +274,9 @@ const Dashboard: React.FC = () => {
 
   const formatDate = (dateString: string) => {
 
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return new Date(dateString).toLocaleDateString('en-IN', {
+
+      timeZone: 'Asia/Kolkata',
 
       year: 'numeric',
 
@@ -505,7 +507,7 @@ const Dashboard: React.FC = () => {
 
               {totalEarningsCents !== null && (
                 <button
-                  onClick={() => navigate('/refer?tab=earnings')}
+                  onClick={() => navigate('/refer?v=earn')}
                   className="inline-flex items-center px-5 py-3 bg-green-50 text-green-700 font-semibold rounded-xl hover:bg-green-100 transition-all duration-200 border border-green-200"
                   title="View My Earnings"
                 >
@@ -668,7 +670,7 @@ const Dashboard: React.FC = () => {
 
             <button 
 
-              onClick={() => navigate('/dashboard/create?tab=surveys')}
+              onClick={() => navigate('/dashboard?v=my')}
 
               className="text-slate-600 hover:text-slate-900 font-medium flex items-center transition-colors"
 
@@ -879,7 +881,7 @@ const Dashboard: React.FC = () => {
                       if (!earningInfo) return null;
                       return (
                         <button
-                          onClick={() => navigate('/refer?tab=earnings')}
+                          onClick={() => navigate('/refer?v=earn')}
                           className="mt-3 w-full flex items-center justify-between px-3 py-2 rounded-lg border transition-colors group
                             bg-green-50 border-green-100 hover:bg-green-100 hover:border-green-200"
                         >

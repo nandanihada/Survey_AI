@@ -110,7 +110,7 @@ const SurveyDetailAnalytics: React.FC<SurveyDetailAnalyticsProps> = ({ survey, r
       );
 
       return {
-        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        date: date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric' }),
         responses: dayResponses.length
       };
     });

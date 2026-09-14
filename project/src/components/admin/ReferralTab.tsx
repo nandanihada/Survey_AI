@@ -196,7 +196,7 @@ function PayoutsView() {
                     <td className="px-4 py-3 font-semibold text-gray-900">{fmtEur(p.amount_cents)}</td>
                     <td className="px-4 py-3 text-gray-600 capitalize">{p.method_type || '—'}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs">
-                      {p.requested_at ? new Date(p.requested_at).toLocaleDateString() : '—'}
+                      {p.requested_at ? new Date(p.requested_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                     </td>
                     <td className="px-4 py-3">
                       {p.status === 'paid' ? (
@@ -517,7 +517,7 @@ function PromotersListView() {
                   <td className="px-4 py-3 text-center text-gray-600">{p.total_clicks}</td>
                   <td className="px-4 py-3 text-center text-gray-600">{p.total_signups}</td>
                   <td className="px-4 py-3 text-xs text-gray-400">
-                    {p.created_at ? new Date(p.created_at).toLocaleDateString() : '—'}
+                    {p.created_at ? new Date(p.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ${
@@ -922,7 +922,7 @@ function PromoterView() {
                   {data.activity.map((row, i) => (
                     <tr key={i} className="hover:bg-gray-50">
                       <td className="px-5 py-3 font-medium text-gray-900">{row.visitor_label}</td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">{new Date(row.occurred_at).toLocaleDateString()}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">{new Date(row.occurred_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })}</td>
                       <td className="px-4 py-3 text-gray-600 text-xs">{row.city || '—'}</td>
                       <td className="px-4 py-3">
                         {row.signup_status

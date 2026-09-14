@@ -131,7 +131,7 @@ const MLInsightsDashboard = () => {
                         </div>
                         <div className="flex items-center text-xs text-gray-400 gap-1 font-medium bg-gray-100 px-2.5 py-1 rounded-full">
                           <Calendar className="w-3.5 h-3.5" />
-                          {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(log.created_at).toLocaleDateString()}
+                        {new Date(log.created_at).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })} • {new Date(log.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })}
                         </div>
                       </div>
                       

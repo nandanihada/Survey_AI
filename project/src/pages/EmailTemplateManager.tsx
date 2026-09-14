@@ -394,9 +394,9 @@ const EmailTemplateManager: React.FC = () => {
                 </div>
               </div>
               <div className="text-xs text-gray-400">
-                Created: {new Date(template.created_at).toLocaleDateString()}
+                Created: {new Date(template.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })}
                 {template.updated_at !== template.created_at && (
-                  <> • Updated: {new Date(template.updated_at).toLocaleDateString()}</>
+                  <> • Updated: {new Date(template.updated_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })}</>
                 )}
               </div>
             </div>

@@ -5275,7 +5275,7 @@ def initialize_default_suggestion_filters():
 @app.route("/api/contextual-question", methods=["POST", "OPTIONS"])
 @cross_origin(supports_credentials=True, origins="*")
 def get_contextual_question():
-    """Generate a single clarifying question based on the user's prompt"""
+    """Generate a single clarifying question based on the user's prompt, in the user's language, varied each time"""
     if request.method == "OPTIONS":
         return "", 200
 
@@ -5288,23 +5288,76 @@ def get_contextual_question():
         if not prompt or len(prompt) < 5:
             return jsonify({"question": None})
 
-        ai_prompt = f"""Based on this survey topic, generate ONE short clarifying question that would help create a better survey. The question should ask about something specific that the user hasn't mentioned but would be useful to know.
+        # ── Detect language from the prompt ───────────────────────────────────
+        import re as _re
+        import random as _random
+
+        lang = "english"
+        if _re.search(r'[\u0900-\u097F]', prompt):
+            lang = "hindi"
+        elif _re.search(r'[\u0600-\u06FF]', prompt):
+            lang = "arabic"
+        elif _re.search(r'[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]', prompt):
+            lang = "cjk"
+        elif _re.search(r'\b(karo|banao|chahiye|kaise|kitne|sawal|survekshan|grahak|karmchari|mein|hai|hain|aur|ke liye|humein|hamari|unka|apna|yeh|woh|kaun|kya|kyun)\b', prompt, _re.IGNORECASE):
+            lang = "hinglish"
+        elif _re.search(r'\b(encuesta|encuestas|preguntas?|satisfacci[oó]n|respuestas?|crear\s+una|cu[aá]l|c[oó]mo|por\s+qu[eé]|qu[eé]\s+tan|usuarios?|clientes?|productos?|servicio)\b', prompt, _re.IGNORECASE):
+            lang = "spanish"
+        elif _re.search(r'\b(sondage|enqu[eê]te|cr[eé]er\s+un|questions?|r[eé]ponses?|utilisateurs?|clients?|satisfaction|[àáâãäå]|[èéêë]|[ùúûü])\b', prompt, _re.IGNORECASE):
+            lang = "french"
+        elif _re.search(r'\b(umfrage|fragebogen|fragen?|antworten?|erstellen|zufriedenheit|benutzer|kunden|wie\s+viele|welche|warum)\b', prompt, _re.IGNORECASE):
+            lang = "german"
+        elif _re.search(r'\b(pesquisa|perguntas?|respostas?|satisfa[cç][aã]o|criar\s+uma|usu[aá]rios?|clientes?|quanto|como|por\s+que)\b', prompt, _re.IGNORECASE):
+            lang = "portuguese"
+
+        # ── Language instructions ─────────────────────────────────────────────
+        lang_instructions = {
+            "english":    "Write the question and ALL options in English.",
+            "hindi":      "Write the question and ALL options in Hindi using Devanagari script (हिंदी में लिखें).",
+            "hinglish":   "Write the question and ALL options in Hinglish — Hindi words written in Roman/English script. Example: 'Aapka survey kis audience ke liye hai?' Do NOT use Devanagari. Do NOT use pure English.",
+            "arabic":     "Write the question and ALL options in Arabic (اكتب السؤال والخيارات بالعربية).",
+            "cjk":        "Write the question and ALL options in the same language as the user's prompt (Chinese/Japanese/Korean).",
+            "spanish":    "Escribe la pregunta y TODAS las opciones en español.",
+            "french":     "Écris la question et TOUTES les options en français.",
+            "german":     "Schreibe die Frage und ALLE Optionen auf Deutsch.",
+            "portuguese": "Escreva a pergunta e TODAS as opções em português.",
+        }
+        lang_instr = lang_instructions.get(lang, lang_instructions["english"])
+
+        # ── Pick a random clarification angle for variety ─────────────────────
+        angles = [
+            "Ask about the PRIMARY audience segment — who exactly will fill this out (age group, role, relationship to the brand, etc.)",
+            "Ask about the MAIN GOAL — what specific decision or action will this survey data drive?",
+            "Ask about the TIMEFRAME or frequency — is this a one-time check or recurring? Recent experience or long-term?",
+            "Ask about the SCOPE — how broad or narrow should the survey be? One specific aspect or overall experience?",
+            "Ask about the KEY METRIC the user cares most about — satisfaction, loyalty, usability, awareness, etc.",
+            "Ask about the DISTRIBUTION method — where will respondents see this survey? Email, WhatsApp, website pop-up, in-person?",
+            "Ask what OUTCOME they expect from the results — improve a product, understand churn, plan a new feature, etc.",
+            "Ask about the TONE preference — should it feel official and formal, friendly and casual, or quick and direct?",
+            "Ask about any SENSITIVE or off-limits topics that should NOT be included in the survey.",
+            "Ask about the ANONYMITY preference — should responses be linked to user accounts or fully anonymous?",
+        ]
+        angle = _random.choice(angles)
+
+        ai_prompt = f"""You are generating a single smart clarifying question for a survey creation tool.
 
 User's survey topic: "{prompt}"
 
+Your task: {angle}
+
+Language rule: {lang_instr}
+
 Rules:
-- Ask about a specific detail that would improve the survey (scope, timeframe, specific aspect to focus on, etc.)
-- Provide exactly 3-4 short answer options that cover likely responses
-- Keep the question under 15 words
-- Keep each option under 5 words
-- Return ONLY valid JSON, no markdown
+- Question must be under 12 words
+- Provide exactly 4 short answer options (each under 6 words) that cover the realistic range of answers
+- Options must be mutually exclusive and collectively exhaustive
+- Return ONLY valid JSON — no markdown, no backticks, no explanation
 
-Format:
-{{"question": "Your clarifying question?", "options": ["Option 1", "Option 2", "Option 3", "Option 4"]}}"""
+JSON format:
+{{"question": "Your question here?", "options": ["Option A", "Option B", "Option C", "Option D"]}}"""
 
-        result = generate_ai_content(ai_prompt, temperature=0.7, max_tokens=150)
-        
-        # Parse the JSON response
+        result = generate_ai_content(ai_prompt, temperature=0.9, max_tokens=180)
+
         import json as json_mod
         cleaned = result.strip()
         if cleaned.startswith("```"):
@@ -5314,7 +5367,7 @@ Format:
         cleaned = cleaned.strip()
         if cleaned.startswith("json"):
             cleaned = cleaned[4:].strip()
-        
+
         parsed = json_mod.loads(cleaned)
         return jsonify(parsed)
 
@@ -5911,6 +5964,11 @@ def serve_icons(filename):
 def serve_privacy_policy_html():
     """Serve standalone privacy policy HTML page (for Google OAuth verification etc.)"""
     return send_from_directory(DIST_DIR, 'privacy-policy.html')
+
+@app.route('/og-preview.svg')
+def serve_og_preview():
+    """Serve OG preview image for link previews (WhatsApp, Twitter etc.)"""
+    return send_from_directory(DIST_DIR, 'og-preview.svg')
 def catch_all(e):
     """Serve index.html for all unmatched routes (SPA fallback)"""
     # Only block API/backend routes — everything else gets the SPA

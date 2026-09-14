@@ -615,7 +615,7 @@ const EmailTriggerManager: React.FC<EmailTriggerManagerProps> = ({ surveyId, que
                 </div>
                 
                 <div className="text-xs text-gray-400">
-                  Created: {new Date(trigger.created_at).toLocaleDateString()}
+                  Created: {new Date(trigger.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })}
                 </div>
               </div>
             );

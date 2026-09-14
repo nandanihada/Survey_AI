@@ -165,7 +165,7 @@ const SendNotificationModal: React.FC<Props> = ({ onClose }) => {
                       <div style={{ fontWeight: 600, fontSize: 14, color: '#111827' }}>{n.title}</div>
                       <div style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>{n.message}</div>
                       <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 6 }}>
-                        To: {n.target} · {new Date(n.created_at).toLocaleString()} · {n.read_by?.length || 0} read
+                        To: {n.target} · {new Date(n.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })} · {n.read_by?.length || 0} read
                       </div>
                     </div>
                     <button onClick={() => handleDelete(n._id)} style={{ position: 'absolute', top: 10, right: 10, background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444' }}>

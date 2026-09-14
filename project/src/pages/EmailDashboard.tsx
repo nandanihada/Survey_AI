@@ -28,7 +28,7 @@ const EmailDashboard: React.FC<EmailDashboardProps> = ({
   const [loadingSurvey, setLoadingSurvey] = useState(false);
 
   useEffect(() => {
-    const urlSurveyId = searchParams.get('survey_id');
+    const urlSurveyId = searchParams.get('q') || searchParams.get('survey_id');
     console.log('URL survey_id:', urlSurveyId);
     console.log('Prop surveyId:', propSurveyId);
     if (urlSurveyId && urlSurveyId !== propSurveyId) {

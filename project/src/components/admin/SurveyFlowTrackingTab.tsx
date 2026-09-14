@@ -34,7 +34,8 @@ interface FlowRow {
 const fmt = (iso: string | null | undefined) => {
   if (!iso) return '—';
   const d = new Date(iso);
-  return d.toLocaleString('en-US', {
+  return d.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
     month: 'short', day: 'numeric', year: 'numeric',
     hour: '2-digit', minute: '2-digit', second: '2-digit'
   });

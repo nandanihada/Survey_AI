@@ -54,7 +54,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ surveys }) => {
                 <div className="flex-1">
                   <h3 className="font-medium text-gray-900 mb-2">{survey.title}</h3>
                   <div className="text-sm text-gray-600">
-                    Created: {survey.createdAt.toLocaleDateString()}
+                    Created: {survey.createdAt.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })}
                   </div>
                 </div>
                 

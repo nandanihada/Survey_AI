@@ -125,7 +125,7 @@ function GlobalRatesPanel({ baseUrl }: { baseUrl: string }) {
           </h3>
           <p className="text-xs text-gray-400 mt-0.5">
             These rates appear on the public "How it works" page and in users' "Ways to Earn" panel.
-            {cfg?.updated_at && ` Last updated ${new Date(cfg.updated_at).toLocaleString()}`}
+            {cfg?.updated_at && ` Last updated ${new Date(cfg.updated_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}`}
           </p>
         </div>
         <button

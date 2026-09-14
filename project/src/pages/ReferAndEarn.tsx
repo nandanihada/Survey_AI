@@ -654,7 +654,7 @@ function PayoutHistory({ baseUrl }: { baseUrl: string }) {
               <tr key={p.id} className="hover:bg-gray-50">
                 <td className="px-6 py-3 font-semibold text-gray-900">{fmtEur(p.amount_cents)}</td>
                 <td className="px-4 py-3 text-gray-600 capitalize">{p.method_type || '—'}</td>
-                <td className="px-4 py-3 text-gray-500 text-xs">{p.requested_at ? new Date(p.requested_at).toLocaleDateString() : '—'}</td>
+                <td className="px-4 py-3 text-gray-500 text-xs">{p.requested_at ? new Date(p.requested_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
                 <td className="px-4 py-3">
                   <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ${statusColor[p.status] || 'bg-gray-100 text-gray-600'}`}>
                     {p.status}
@@ -1586,10 +1586,10 @@ export default function ReferAndEarn() {
       .catch(() => {});
   }, [baseUrl]);
 
-  // Auto-switch to earnings tab if ?tab=earnings is in URL
+  // Auto-switch to earnings tab if ?tab=earnings or ?v=earn is in URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('tab') === 'earnings' && authenticated) {
+    if ((params.get('tab') === 'earnings' || params.get('v') === 'earn') && authenticated) {
       setTab('earnings');
     }
   }, [authenticated]);

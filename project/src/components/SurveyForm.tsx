@@ -33,6 +33,15 @@ interface SurveyFormProps {
 
 const OPTION_KEYS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
 
+// English wizard steps — used as default and as reference for translations
+const WIZARD_STEPS_EN = [
+  { id: 'purpose', question: "Let's start with your goal", options: ["Customer feedback", "Market research", "Educational / academic", "Personal / casual", "Lead generation"], moreOptions: ["Employee check-in", "Product experience", "Training feedback", "Website experience", "Onboarding review", "Event feedback"], inputType: 'options' },
+  { id: 'audience', question: "Who is this survey for?", options: ["Customers", "Friends / personal network", "Students", "Employees / team", "General public"], inputType: 'options' },
+  { id: 'tone', question: "What tone should your survey have?", options: ["Professional", "Friendly", "Casual", "Academic", "Direct"], inputType: 'options' },
+  { id: 'collect', question: "Do you want to collect respondent details?", options: ["Yes (Name, Email, Phone)", "Only Email", "No (keep it anonymous)"], inputType: 'options' },
+  { id: 'depth', question: "How detailed should the survey be?", options: ["Quick (5–7 questions)", "Balanced (8–12 questions)", "Detailed (15+ questions)"], inputType: 'options' },
+];
+
 const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -70,6 +79,22 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
   const [password, setPassword] = useState('');
   const [isLoginMode, setIsLoginMode] = useState(false);
   const suggestionsRef = useRef<HTMLDivElement>(null);
+
+  // ── Detect prompt language for translating wizard steps ──────────────────
+  const detectPromptLanguage = (text: string): string => {
+    if (!text || text.length < 3) return 'en';
+    if (/[\u0900-\u097F]/.test(text)) return 'hi';
+    if (/[\u0600-\u06FF]/.test(text)) return 'ar';
+    if (/[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/.test(text)) return 'cjk';
+    if (/[\u0400-\u04FF]/.test(text)) return 'ru';
+    if (/[\u0E00-\u0E7F]/.test(text)) return 'th';
+    if (/\b(karo|banao|chahiye|kaise|kitne|mein|hai|hain|aur|ke\s*liye|humein|hamari|yeh|woh|kaun|kya|kyun)\b/i.test(text)) return 'hin';
+    if (/\b(encuesta|encuestas|preguntas?|satisfacci[oó]n|respuestas?|cu[aá]l|c[oó]mo|clientes?|productos?|empleados?|empresa|hablante|nativo|utilices|idioma)\b/i.test(text)) return 'es';
+    if (/\b(sondage|enqu[eê]te|questions?|r[eé]ponses?|utilisateurs?|clients?|satisfaction|entreprise)\b/i.test(text)) return 'fr';
+    if (/\b(umfrage|fragebogen|fragen?|kunden|zufriedenheit|mitarbeiter)\b/i.test(text)) return 'de';
+    if (/\b(pesquisa|perguntas?|respostas?|satisfa[cç][aã]o|usu[aá]rios?|clientes?)\b/i.test(text)) return 'pt';
+    return 'en';
+  };
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [showQsDropdown, setShowQsDropdown] = useState(false);
   const [showClarification, setShowClarification] = useState(false);
@@ -138,39 +163,54 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
   const [contextualQuestion, setContextualQuestion] = useState<{question: string; options: string[]} | null>(null);
   const [isFetchingContextual, setIsFetchingContextual] = useState(false);
 
-  const WIZARD_STEPS = [
-    {
-      id: 'purpose',
-      question: "Let's start with your goal",
-      options: ["Customer feedback", "Market research", "Educational / academic", "Personal / casual", "Lead generation"],
-      moreOptions: ["Employee check-in", "Product experience", "Training feedback", "Website experience", "Onboarding review", "Event feedback"],
-      inputType: 'options'
-    },
-    {
-      id: 'audience',
-      question: "Who is this survey for?",
-      options: ["Customers", "Friends / personal network", "Students", "Employees / team", "General public"],
-      inputType: 'options'
-    },
-    {
-      id: 'tone',
-      question: "What tone should your survey have?",
-      options: ["Professional", "Friendly", "Casual", "Academic", "Direct"],
-      inputType: 'options'
-    },
-    {
-      id: 'collect',
-      question: "Do you want to collect respondent details?",
-      options: ["Yes (Name, Email, Phone)", "Only Email", "No (keep it anonymous)"],
-      inputType: 'options'
-    },
-    {
-      id: 'depth',
-      question: "How detailed should the survey be?",
-      options: ["Quick (5–7 questions)", "Balanced (8–12 questions)", "Detailed (15+ questions)"],
-      inputType: 'options'
-    }
-  ];
+  const lang = detectPromptLanguage(surveyTopic);
+
+  const WIZARD_STEPS_BY_LANG: Record<string, typeof WIZARD_STEPS_EN> = {
+    es: [
+      { id: 'purpose', question: '¿Cuál es el objetivo de tu encuesta?', options: ['Retroalimentación de clientes', 'Investigación de mercado', 'Educativo / académico', 'Personal / casual', 'Generación de leads'], moreOptions: ['Check-in de empleados', 'Experiencia de producto', 'Feedback de formación', 'Experiencia web', 'Revisión de onboarding', 'Feedback de evento'], inputType: 'options' },
+      { id: 'audience', question: '¿Para quién es esta encuesta?', options: ['Clientes', 'Amigos / red personal', 'Estudiantes', 'Empleados / equipo', 'Público general'], inputType: 'options' },
+      { id: 'tone', question: '¿Qué tono debe tener tu encuesta?', options: ['Profesional', 'Amigable', 'Casual', 'Académico', 'Directo'], inputType: 'options' },
+      { id: 'collect', question: '¿Quieres recopilar datos del encuestado?', options: ['Sí (Nombre, Email, Teléfono)', 'Solo Email', 'No (anónimo)'], inputType: 'options' },
+      { id: 'depth', question: '¿Qué tan detallada debe ser la encuesta?', options: ['Rápida (5–7 preguntas)', 'Equilibrada (8–12 preguntas)', 'Detallada (15+ preguntas)'], inputType: 'options' },
+    ],
+    fr: [
+      { id: 'purpose', question: 'Quel est l\'objectif de votre sondage ?', options: ['Retour clients', 'Étude de marché', 'Éducatif / académique', 'Personnel / informel', 'Génération de leads'], moreOptions: ['Check-in employés', 'Expérience produit', 'Retour formation', 'Expérience web', 'Revue d\'intégration', 'Retour événement'], inputType: 'options' },
+      { id: 'audience', question: 'À qui est destiné ce sondage ?', options: ['Clients', 'Amis / réseau personnel', 'Étudiants', 'Employés / équipe', 'Grand public'], inputType: 'options' },
+      { id: 'tone', question: 'Quel ton doit avoir votre sondage ?', options: ['Professionnel', 'Amical', 'Décontracté', 'Académique', 'Direct'], inputType: 'options' },
+      { id: 'collect', question: 'Voulez-vous collecter des données ?', options: ['Oui (Nom, Email, Téléphone)', 'Email seulement', 'Non (anonyme)'], inputType: 'options' },
+      { id: 'depth', question: 'Quel niveau de détail souhaitez-vous ?', options: ['Rapide (5–7 questions)', 'Équilibré (8–12 questions)', 'Détaillé (15+ questions)'], inputType: 'options' },
+    ],
+    de: [
+      { id: 'purpose', question: 'Was ist das Ziel Ihrer Umfrage?', options: ['Kundenfeedback', 'Marktforschung', 'Bildung / Akademisch', 'Persönlich / Freizeitig', 'Lead-Generierung'], moreOptions: ['Mitarbeiter Check-in', 'Produkterfahrung', 'Schulungsfeedback', 'Website-Erfahrung', 'Onboarding-Überprüfung', 'Veranstaltungsfeedback'], inputType: 'options' },
+      { id: 'audience', question: 'Für wen ist diese Umfrage?', options: ['Kunden', 'Freunde / persönliches Netzwerk', 'Studierende', 'Mitarbeiter / Team', 'Allgemeine Öffentlichkeit'], inputType: 'options' },
+      { id: 'tone', question: 'Welchen Ton soll Ihre Umfrage haben?', options: ['Professionell', 'Freundlich', 'Locker', 'Akademisch', 'Direkt'], inputType: 'options' },
+      { id: 'collect', question: 'Möchten Sie Teilnehmerdaten sammeln?', options: ['Ja (Name, E-Mail, Telefon)', 'Nur E-Mail', 'Nein (anonym)'], inputType: 'options' },
+      { id: 'depth', question: 'Wie detailliert soll die Umfrage sein?', options: ['Schnell (5–7 Fragen)', 'Ausgewogen (8–12 Fragen)', 'Detailliert (15+ Fragen)'], inputType: 'options' },
+    ],
+    pt: [
+      { id: 'purpose', question: 'Qual é o objetivo da sua pesquisa?', options: ['Feedback de clientes', 'Pesquisa de mercado', 'Educacional / académico', 'Pessoal / casual', 'Geração de leads'], moreOptions: ['Check-in de funcionários', 'Experiência do produto', 'Feedback de treinamento', 'Experiência no site', 'Revisão de onboarding', 'Feedback de evento'], inputType: 'options' },
+      { id: 'audience', question: 'Para quem é esta pesquisa?', options: ['Clientes', 'Amigos / rede pessoal', 'Estudantes', 'Funcionários / equipe', 'Público geral'], inputType: 'options' },
+      { id: 'tone', question: 'Que tom deve ter a sua pesquisa?', options: ['Profissional', 'Amigável', 'Casual', 'Académico', 'Direto'], inputType: 'options' },
+      { id: 'collect', question: 'Deseja recolher dados do respondente?', options: ['Sim (Nome, Email, Telefone)', 'Só Email', 'Não (anónimo)'], inputType: 'options' },
+      { id: 'depth', question: 'Quão detalhada deve ser a pesquisa?', options: ['Rápida (5–7 perguntas)', 'Equilibrada (8–12 perguntas)', 'Detalhada (15+ perguntas)'], inputType: 'options' },
+    ],
+    hi: [
+      { id: 'purpose', question: 'आपके सर्वेक्षण का उद्देश्य क्या है?', options: ['ग्राहक प्रतिक्रिया', 'बाजार अनुसंधान', 'शैक्षिक / अकादमिक', 'व्यक्तिगत / आकस्मिक', 'लीड जनरेशन'], moreOptions: ['कर्मचारी चेक-इन', 'उत्पाद अनुभव', 'प्रशिक्षण फीडबैक', 'वेबसाइट अनुभव', 'ऑनबोर्डिंग समीक्षा', 'इवेंट फीडबैक'], inputType: 'options' },
+      { id: 'audience', question: 'यह सर्वेक्षण किसके लिए है?', options: ['ग्राहक', 'मित्र / व्यक्तिगत नेटवर्क', 'छात्र', 'कर्मचारी / टीम', 'सामान्य जनता'], inputType: 'options' },
+      { id: 'tone', question: 'सर्वेक्षण का स्वर कैसा होना चाहिए?', options: ['पेशेवर', 'मित्रवत', 'अनौपचारिक', 'शैक्षणिक', 'सीधा'], inputType: 'options' },
+      { id: 'collect', question: 'क्या आप उत्तरदाता का विवरण एकत्र करना चाहते हैं?', options: ['हाँ (नाम, ईमेल, फोन)', 'केवल ईमेल', 'नहीं (अनाम)'], inputType: 'options' },
+      { id: 'depth', question: 'सर्वेक्षण कितना विस्तृत होना चाहिए?', options: ['त्वरित (5–7 प्रश्न)', 'संतुलित (8–12 प्रश्न)', 'विस्तृत (15+ प्रश्न)'], inputType: 'options' },
+    ],
+    hin: [
+      { id: 'purpose', question: 'Aapke survey ka kya goal hai?', options: ['Customer feedback', 'Market research', 'Educational / academic', 'Personal / casual', 'Lead generation'], moreOptions: ['Employee check-in', 'Product experience', 'Training feedback', 'Website experience', 'Onboarding review', 'Event feedback'], inputType: 'options' },
+      { id: 'audience', question: 'Yeh survey kiske liye hai?', options: ['Customers', 'Dost / personal network', 'Students', 'Employees / team', 'General public'], inputType: 'options' },
+      { id: 'tone', question: 'Survey ka tone kaisa hona chahiye?', options: ['Professional', 'Friendly', 'Casual', 'Academic', 'Direct'], inputType: 'options' },
+      { id: 'collect', question: 'Kya aap respondent ki details collect karna chahte hain?', options: ['Haan (Naam, Email, Phone)', 'Sirf Email', 'Nahi (anonymous)'], inputType: 'options' },
+      { id: 'depth', question: 'Survey kitna detailed hona chahiye?', options: ['Quick (5–7 sawaal)', 'Balanced (8–12 sawaal)', 'Detailed (15+ sawaal)'], inputType: 'options' },
+    ],
+  };
+
+  const WIZARD_STEPS = WIZARD_STEPS_BY_LANG[lang] ?? WIZARD_STEPS_EN;
 
 
 
@@ -284,6 +324,18 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [showQsDropdown]);
+
+  // Close Tone dropdown on outside click
+  useEffect(() => {
+    if (!showToneDropdown) return;
+    const handler = (e: MouseEvent) => {
+      if (toneDropdownRef.current && !toneDropdownRef.current.contains(e.target as Node)) {
+        setShowToneDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showToneDropdown]);
 
   const handleSelectSuggestion = (suggestion: typeof SUGGESTION_PROMPTS[0]) => {
     setSelectedSuggestion({ label: suggestion.label, prompt: suggestion.prompt });
@@ -683,7 +735,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
           </div>
         )}
 
-        <div className={`relative rounded-3xl sm:rounded-2xl p-0 sm:p-1.5 sm:p-2 transition-all duration-500 overflow-hidden group ${showClarification ? 'clarification-prompt-down' : ''} ${isDarkMode
+        <div className={`relative rounded-3xl sm:rounded-2xl p-0 sm:p-1.5 sm:p-2 transition-all duration-500 group ${showClarification ? 'clarification-prompt-down' : ''} ${isDarkMode
             ? 'bg-gradient-to-b from-slate-800/90 to-slate-900/90 border border-slate-700/60 shadow-[0_8px_24px_rgba(0,0,0,0.3)] focus-within:shadow-[0_12px_40px_rgba(239,68,68,0.1)] focus-within:border-red-500/40'
             : 'bg-white border border-stone-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.05)] focus-within:shadow-[0_12px_40px_rgba(239,68,68,0.06)] focus-within:border-red-400/40 focus-within:ring-2 focus-within:ring-red-500/[0.04]'
           }`}>
@@ -762,7 +814,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
             }}
           />
           <div className={`relative z-10 flex items-center justify-between px-3 sm:px-2.5 sm:px-3 pb-2 sm:pb-2.5 pt-1.5 sm:pt-0.5 gap-2 border-t sm:border-t-0 ${isDarkMode ? 'border-slate-700/50' : 'border-stone-100'}`}>
-            <div className="flex items-center gap-2 sm:gap-1.5 overflow-x-auto flex-1 min-w-0 scrollbar-hide">
+            <div className="flex items-center gap-2 sm:gap-1.5 flex-1 min-w-0 scrollbar-hide" style={{ overflowX: 'visible', overflow: 'visible' }}>
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
               <button onClick={() => fileInputRef.current?.click()} disabled={isParsingImage || imagePreview.length >= 3}
                 className={`p-2 sm:p-1.5 rounded-xl sm:rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-stone-100 text-stone-400'} disabled:opacity-40`}>
@@ -966,7 +1018,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
         {/* ── Mobile-only pills row (outside the box) ── */}
         <div className="sm:hidden flex items-center gap-2 mt-3 flex-wrap">
           {/* Question Count */}
-          <div className="relative" ref={qsDropdownRef}>
+          <div className="relative">
             <button
               onClick={() => setShowQsDropdown(!showQsDropdown)}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-[12px] font-semibold border transition-all ${
@@ -994,7 +1046,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
             )}
           </div>
           {/* Tone */}
-          <div className="relative" ref={toneDropdownRef}>
+          <div className="relative">
             <button
               onClick={() => setShowToneDropdown(!showToneDropdown)}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-[12px] font-semibold border transition-all ${
@@ -1283,7 +1335,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
                     isDarkMode={isDarkMode}
                     initialPrompt={surveyTopic}
                     onFunnelCreated={(funnelId) => {
-                      window.location.href = `/dashboard?tab=surveys&subtab=funnels&open=${funnelId}`;
+                      window.location.href = `/dashboard?v=jrn&id=${funnelId}`;
                     }}
                   />
                 </div>

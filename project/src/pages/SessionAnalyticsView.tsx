@@ -47,7 +47,7 @@ const FormatDate = ({ dateString }: { dateString: string | null }) => {
   const date = new Date(dateString);
   return (
     <span className="whitespace-nowrap">
-      {date.toLocaleDateString("en-US", { year: 'numeric', month: 'short', day: 'numeric'})} {date.toLocaleTimeString("en-US", { hour: '2-digit', minute:'2-digit', hour12: true })}
+      {date.toLocaleDateString("en-IN", { timeZone: 'Asia/Kolkata', year: 'numeric', month: 'short', day: 'numeric' })} {date.toLocaleTimeString("en-IN", { timeZone: 'Asia/Kolkata', hour: '2-digit', minute:'2-digit', hour12: true })}
     </span>
   );
 };

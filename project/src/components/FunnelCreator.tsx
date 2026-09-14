@@ -767,97 +767,315 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
         </div>
       );
     }
+
+    // ── Helpers to mutate funnelPlan state ──────────────────────────────────
+    const updateScreening = (idx: number, patch: Partial<ScreeningSurveyMeta>) => {
+      setFunnelPlan(prev => {
+        if (!prev) return prev;
+        const arr = prev.screening_surveys.map((s, i) => i === idx ? { ...s, ...patch } : s);
+        return { ...prev, screening_surveys: arr, estimated_total_surveys: arr.length + prev.job_profiles.length };
+      });
+    };
+
+    const removeScreening = (idx: number) => {
+      setFunnelPlan(prev => {
+        if (!prev) return prev;
+        const arr = prev.screening_surveys.filter((_, i) => i !== idx).map((s, i) => ({ ...s, index: i }));
+        return { ...prev, screening_surveys: arr, estimated_total_surveys: arr.length + prev.job_profiles.length };
+      });
+    };
+
+    const addScreening = () => {
+      setFunnelPlan(prev => {
+        if (!prev) return prev;
+        const newS: ScreeningSurveyMeta = {
+          index: prev.screening_surveys.length,
+          name: 'New Screening Survey',
+          purpose: 'Collect additional background information',
+          estimated_questions: 8,
+          key_topics: [],
+          has_termination: false,
+          termination_condition: null,
+        };
+        const arr = [...prev.screening_surveys, newS];
+        return { ...prev, screening_surveys: arr, estimated_total_surveys: arr.length + prev.job_profiles.length };
+      });
+    };
+
+    const updateJob = (idx: number, patch: Partial<JobProfileMeta>) => {
+      setFunnelPlan(prev => {
+        if (!prev) return prev;
+        const arr = prev.job_profiles.map((j, i) => i === idx ? { ...j, ...patch } : j);
+        return { ...prev, job_profiles: arr };
+      });
+    };
+
+    const removeJob = (idx: number) => {
+      setFunnelPlan(prev => {
+        if (!prev) return prev;
+        const arr = prev.job_profiles.filter((_, i) => i !== idx);
+        return { ...prev, job_profiles: arr, estimated_total_surveys: prev.screening_surveys.length + arr.length };
+      });
+    };
+
+    const addJob = () => {
+      setFunnelPlan(prev => {
+        if (!prev) return prev;
+        const newJ: JobProfileMeta = {
+          id: `dest_${Date.now()}`,
+          display_name: 'New Destination',
+          match_criteria: 'Describe who qualifies for this destination',
+          estimated_survey_questions: 8,
+          key_topics: [],
+          qualification_flag: null,
+        };
+        const arr = [...prev.job_profiles, newJ];
+        return { ...prev, job_profiles: arr, estimated_total_surveys: prev.screening_surveys.length + arr.length };
+      });
+    };
+
+    // ── Total counts (live) ─────────────────────────────────────────────────
+    const totalSurveys = funnelPlan.screening_surveys.length + funnelPlan.job_profiles.length;
+    const totalQs = funnelPlan.screening_surveys.reduce((s, x) => s + (x.estimated_questions || 0), 0)
+      + funnelPlan.job_profiles.reduce((s, x) => s + (x.estimated_survey_questions || 0), 0);
+
     return (
-      <div className="space-y-6">
-        {/* Header */}
+      <div className="space-y-5">
+
+        {/* ── Header ── */}
         <div>
-          <h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-            {funnelPlan.funnel_name}
-          </h3>
-          <p className={`text-sm mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{funnelPlan.goal}</p>
-          <div className="flex gap-4 mt-2">
-            <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-              {funnelPlan.estimated_total_surveys} surveys
+          <div className="flex items-center gap-2 mb-1">
+            <span className={`text-xs font-bold uppercase tracking-wide px-2 py-0.5 rounded-full
+              ${isDarkMode ? 'bg-blue-900/60 text-blue-300' : 'bg-blue-100 text-blue-700'}`}>
+              AI Extraction Review
             </span>
-            <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-              ~{funnelPlan.estimated_total_questions} total questions
+            <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+              {totalSurveys} surveys · ~{totalQs} questions total
             </span>
+          </div>
+          <input
+            value={funnelPlan.funnel_name}
+            onChange={e => setFunnelPlan(p => p ? { ...p, funnel_name: e.target.value } : p)}
+            className={`w-full text-lg font-bold bg-transparent border-0 outline-none border-b-2 pb-0.5 mb-1
+              ${isDarkMode ? 'text-white border-gray-700 focus:border-blue-400' : 'text-gray-900 border-gray-200 focus:border-blue-400'}`}
+            placeholder="Funnel name"
+          />
+          <input
+            value={funnelPlan.goal}
+            onChange={e => setFunnelPlan(p => p ? { ...p, goal: e.target.value } : p)}
+            className={`w-full text-sm bg-transparent border-0 outline-none
+              ${isDarkMode ? 'text-gray-400 placeholder-gray-600' : 'text-gray-500 placeholder-gray-300'}`}
+            placeholder="Funnel goal description"
+          />
+        </div>
+
+        {/* ── Alert box ── */}
+        <div className={`rounded-xl border px-4 py-2.5 flex items-start gap-2.5
+          ${isDarkMode ? 'bg-amber-950/30 border-amber-700/40' : 'bg-amber-50 border-amber-200'}`}>
+          <Info size={14} className={`mt-0.5 shrink-0 ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`} />
+          <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-amber-300' : 'text-amber-800'}`}>
+            Review the AI's understanding below. Edit any name, purpose, or question count directly in the table —
+            then click <strong>Confirm &amp; Generate</strong> when everything looks right.
+          </p>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════
+             PHASE 1 — SCREENING SURVEYS
+            ═══════════════════════════════════════════════════════ */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <p className={`text-xs font-bold uppercase tracking-wide
+              ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              Phase 1 — Screening Surveys ({funnelPlan.screening_surveys.length})
+            </p>
+            <button
+              onClick={addScreening}
+              className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition
+                ${isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              <Plus size={11} /> Add survey
+            </button>
+          </div>
+
+        {/* Table header */}
+          <div className={`flex gap-2 text-[10px] font-bold uppercase tracking-wide px-3 py-1.5
+            ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+            <span className="w-24 shrink-0"># Name</span>
+            <span className="flex-1">Purpose</span>
+            <span className="w-20 text-center shrink-0">Qs</span>
+            <span className="w-5 shrink-0" />
+          </div>
+
+          <div className="space-y-2">
+            {funnelPlan.screening_surveys.map((s, idx) => (
+              <div key={idx}
+                className={`rounded-xl border p-3 transition
+                  ${isDarkMode ? 'bg-gray-800 border-gray-700 hover:border-gray-600' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
+
+                {/* Row 1: badge + name + q-count + delete */}
+                <div className="flex items-start gap-2 mb-2">
+                  <span className={`text-[10px] font-bold shrink-0 px-1.5 py-0.5 rounded mt-0.5
+                    ${isDarkMode ? 'bg-blue-900/60 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>S{idx+1}</span>
+                  <textarea
+                    value={s.name}
+                    onChange={e => updateScreening(idx, { name: e.target.value })}
+                    rows={1}
+                    className={`flex-1 text-sm font-semibold bg-transparent border-0 outline-none resize-none leading-snug
+                      ${isDarkMode ? 'text-gray-100 placeholder-gray-600' : 'text-gray-900 placeholder-gray-300'}`}
+                    placeholder="Survey name"
+                  />
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <input
+                      type="number" min={1} max={50}
+                      value={s.estimated_questions}
+                      onChange={e => updateScreening(idx, { estimated_questions: Math.max(1, parseInt(e.target.value) || 1) })}
+                      className={`w-14 rounded-lg border text-center text-sm py-0.5 outline-none
+                        ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-200 focus:border-blue-400' : 'bg-gray-50 border-gray-200 text-gray-800 focus:border-blue-400'}`}
+                    />
+                    <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Qs</span>
+                    <button onClick={() => removeScreening(idx)} disabled={funnelPlan.screening_surveys.length <= 1}
+                      className={`p-1 rounded transition disabled:opacity-20
+                        ${isDarkMode ? 'text-gray-600 hover:text-red-400 hover:bg-red-900/30' : 'text-gray-300 hover:text-red-500 hover:bg-red-50'}`}>
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Row 2: purpose */}
+                <textarea
+                  value={s.purpose}
+                  onChange={e => updateScreening(idx, { purpose: e.target.value })}
+                  rows={2}
+                  className={`w-full text-xs bg-transparent border-0 outline-none resize-none leading-relaxed mb-1.5
+                    ${isDarkMode ? 'text-gray-400 placeholder-gray-600' : 'text-gray-500 placeholder-gray-300'}`}
+                  placeholder="What this survey collects and why"
+                />
+
+                {/* Row 3: topics */}
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-[10px] font-bold uppercase shrink-0 ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>Topics:</span>
+                  <input
+                    value={(s.key_topics || []).join(', ')}
+                    onChange={e => updateScreening(idx, { key_topics: e.target.value.split(',').map(t => t.trim()).filter(Boolean) })}
+                    className={`flex-1 text-xs bg-transparent border-0 outline-none
+                      ${isDarkMode ? 'text-gray-400 placeholder-gray-600' : 'text-gray-500 placeholder-gray-300'}`}
+                    placeholder="topic1, topic2, topic3"
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Screening surveys */}
+        {/* ═══════════════════════════════════════════════════════
+             PHASE 2 — DESTINATION SURVEYS
+            ═══════════════════════════════════════════════════════ */}
         <div>
-          <p className={`text-xs font-semibold uppercase tracking-wide mb-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-            Phase 1 — Screening Surveys
-          </p>
+          <div className="flex items-center justify-between mb-2">
+            <p className={`text-xs font-bold uppercase tracking-wide
+              ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              Phase 2 — Destination Surveys ({funnelPlan.job_profiles.length})
+            </p>
+            <button
+              onClick={addJob}
+              className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition
+                ${isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              <Plus size={11} /> Add destination
+            </button>
+          </div>
+
+          {/* Table header */}
+          <div className={`flex gap-2 text-[10px] font-bold uppercase tracking-wide px-3 py-1.5
+            ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+            <span className="w-24 shrink-0"># Name</span>
+            <span className="flex-1">Match criteria</span>
+            <span className="w-20 text-center shrink-0">Qs</span>
+            <span className="w-5 shrink-0" />
+          </div>
+
           <div className="space-y-2">
-            {(funnelPlan.screening_surveys || []).map(s => (
-              <div key={s.index} className={`rounded-xl border p-3 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className={`text-sm font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                      Survey {s.index + 1} — {s.name}
-                    </p>
-                    <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{s.purpose}</p>
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {(s.key_topics || []).slice(0, 5).map(t => (
-                        <span key={t} className={`text-xs px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>{t}</span>
-                      ))}
-                    </div>
+            {funnelPlan.job_profiles.map((j, idx) => (
+              <div key={idx}
+                className={`rounded-xl border p-3 transition
+                  ${isDarkMode ? 'bg-gray-800 border-gray-700 hover:border-gray-600' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
+
+                {/* Row 1: badge + name + q-count + delete */}
+                <div className="flex items-start gap-2 mb-2">
+                  <span className={`text-[10px] font-bold shrink-0 px-1.5 py-0.5 rounded mt-0.5
+                    ${isDarkMode ? 'bg-green-900/60 text-green-400' : 'bg-green-100 text-green-700'}`}>D{idx+1}</span>
+                  <textarea
+                    value={j.display_name}
+                    onChange={e => updateJob(idx, { display_name: e.target.value })}
+                    rows={1}
+                    className={`flex-1 text-sm font-semibold bg-transparent border-0 outline-none resize-none leading-snug
+                      ${isDarkMode ? 'text-gray-100 placeholder-gray-600' : 'text-gray-900 placeholder-gray-300'}`}
+                    placeholder="Destination name"
+                  />
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <input
+                      type="number" min={1} max={50}
+                      value={j.estimated_survey_questions}
+                      onChange={e => updateJob(idx, { estimated_survey_questions: Math.max(1, parseInt(e.target.value) || 1) })}
+                      className={`w-14 rounded-lg border text-center text-sm py-0.5 outline-none
+                        ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-200 focus:border-blue-400' : 'bg-gray-50 border-gray-200 text-gray-800 focus:border-blue-400'}`}
+                    />
+                    <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Qs</span>
+                    <button onClick={() => removeJob(idx)} disabled={funnelPlan.job_profiles.length <= 1}
+                      className={`p-1 rounded transition disabled:opacity-20
+                        ${isDarkMode ? 'text-gray-600 hover:text-red-400 hover:bg-red-900/30' : 'text-gray-300 hover:text-red-500 hover:bg-red-50'}`}>
+                      <Trash2 size={13} />
+                    </button>
                   </div>
-                  <span className={`text-xs shrink-0 ml-3 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                    ~{s.estimated_questions} Qs
-                  </span>
                 </div>
-                {s.has_termination && s.termination_condition && (
-                  <div className="mt-2 flex items-center gap-1.5 text-xs text-red-500">
-                    <X size={12} /> Hard stop: {s.termination_condition}
-                  </div>
+
+                {/* Row 2: match criteria */}
+                <textarea
+                  value={j.match_criteria}
+                  onChange={e => updateJob(idx, { match_criteria: e.target.value })}
+                  rows={2}
+                  className={`w-full text-xs bg-transparent border-0 outline-none resize-none leading-relaxed mb-1.5
+                    ${isDarkMode ? 'text-gray-400 placeholder-gray-600' : 'text-gray-500 placeholder-gray-300'}`}
+                  placeholder="Who qualifies for this destination"
+                />
+
+                {/* Row 3: topics + qualification flag */}
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-[10px] font-bold uppercase shrink-0 ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>Topics:</span>
+                  <input
+                    value={(j.key_topics || []).join(', ')}
+                    onChange={e => updateJob(idx, { key_topics: e.target.value.split(',').map(t => t.trim()).filter(Boolean) })}
+                    className={`flex-1 text-xs bg-transparent border-0 outline-none
+                      ${isDarkMode ? 'text-gray-400 placeholder-gray-600' : 'text-gray-500 placeholder-gray-300'}`}
+                    placeholder="topic1, topic2, topic3"
+                  />
+                </div>
+                {j.qualification_flag && (
+                  <p className={`text-xs mt-1.5 font-medium ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`}>
+                    ⚑ {j.qualification_flag}
+                  </p>
                 )}
               </div>
             ))}
           </div>
         </div>
 
-        {/* Job profiles */}
-        <div>
-          <p className={`text-xs font-semibold uppercase tracking-wide mb-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-            Phase 2 — Destination Surveys (cascade on fail)
-          </p>
-          <div className="space-y-2">
-            {(funnelPlan.job_profiles || []).map((j, i) => (
-              <div key={j.id} className={`rounded-xl border p-3 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${isDarkMode ? 'bg-green-900/50 text-green-400' : 'bg-green-100 text-green-700'}`}>
-                        #{i + 1}
-                      </span>
-                      <p className={`text-sm font-medium ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{j.display_name}</p>
-                    </div>
-                    <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{j.match_criteria}</p>
-                    {j.qualification_flag && (
-                      <p className={`text-xs mt-1 font-medium ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`}>
-                        ⚑ {j.qualification_flag}
-                      </p>
-                    )}
-                  </div>
-                  <span className={`text-xs shrink-0 ml-3 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                    ~{j.estimated_survey_questions} Qs
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Scoring & routing logic */}
-        <div className={`rounded-xl border p-3 text-sm ${isDarkMode ? 'bg-gray-800 border-gray-700 text-gray-400' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
-          <p className={`text-xs font-semibold uppercase mb-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Scoring & Routing</p>
-          <p>{funnelPlan.scoring_logic}</p>
+        {/* ── Scoring & routing (editable) ── */}
+        <div className={`rounded-xl border p-3
+          ${isDarkMode ? 'bg-gray-800/60 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+          <p className={`text-[10px] font-bold uppercase tracking-wide mb-1.5
+            ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Scoring &amp; Routing Logic</p>
+          <textarea
+            value={funnelPlan.scoring_logic}
+            onChange={e => setFunnelPlan(p => p ? { ...p, scoring_logic: e.target.value } : p)}
+            rows={2}
+            className={`w-full bg-transparent border-0 outline-none text-sm resize-none
+              ${isDarkMode ? 'text-gray-400 placeholder-gray-600' : 'text-gray-600 placeholder-gray-300'}`}
+            placeholder="How screening answers map to destinations"
+          />
           {(funnelPlan.termination_conditions || []).length > 0 && (
-            <p className="text-red-500 text-xs mt-2">
-              Hard stops: {(funnelPlan.termination_conditions || []).join(' · ')}
+            <p className="text-red-500 text-xs mt-1.5 font-medium">
+              Hard stops: {funnelPlan.termination_conditions.join(' · ')}
             </p>
           )}
         </div>
@@ -865,9 +1083,13 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
         {/* ── Anchor Question ── */}
         {renderAnchorSection()}
 
-        {error && <p className="text-red-500 text-sm flex items-center gap-2"><AlertCircle size={14} />{error}</p>}
+        {error && (
+          <p className="text-red-500 text-sm flex items-center gap-2">
+            <AlertCircle size={14} />{error}
+          </p>
+        )}
 
-        <div className="flex gap-3">
+        <div className="flex gap-3 pt-1">
           <button
             onClick={() => { setStep('prompt'); setFunnelPlan(null); setError(''); }}
             className={`px-4 py-2 rounded-xl text-sm ${isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'}`}
@@ -879,7 +1101,7 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
             className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-semibold"
           >
             <Sparkles size={16} />
-            Confirm & Generate All Surveys →
+            Confirm &amp; Generate All Surveys →
           </button>
         </div>
       </div>
@@ -988,7 +1210,7 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
             if (onFunnelCreated) {
               onFunnelCreated(funnelId);
             } else {
-              navigate(`/dashboard?tab=surveys&subtab=funnels&open=${funnelId}`);
+              navigate(`/dashboard?v=jrn&id=${funnelId}`);
             }
           }}
           className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold"
