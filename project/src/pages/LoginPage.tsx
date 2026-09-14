@@ -270,8 +270,8 @@ const LoginPage: React.FC = () => {
   // Account creation animation overlay
   if (showCreatingAccount) {
     return (
-      <div className="min-h-screen w-full bg-gradient-to-br from-gray-950 via-red-950/40 to-gray-950 relative overflow-hidden flex flex-col items-center justify-center"
-           style={{ animation: 'loaderFadeIn 0.3s ease-out' }}>
+      <div className="min-h-screen w-full relative overflow-hidden flex flex-col items-center justify-center"
+           style={{ backgroundImage: "url('/dark-bg.png')", backgroundSize: 'cover', backgroundPosition: 'center', animation: 'loaderFadeIn 0.3s ease-out' }}>
         <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-[80vh] h-[40vh] rounded-b-full bg-red-500/10 blur-[100px]" />
         
         <div className="relative z-10 flex flex-col items-center">
@@ -356,7 +356,8 @@ const LoginPage: React.FC = () => {
 
   if (showSuccess) {
     return (
-      <div className="min-h-screen w-full bg-gradient-to-br from-gray-950 via-red-950/40 to-gray-950 relative overflow-hidden flex items-center justify-center">
+      <div className="min-h-screen w-full relative overflow-hidden flex items-center justify-center"
+           style={{ backgroundImage: "url('/dark-bg.png')", backgroundSize: 'cover', backgroundPosition: 'center' }}>
         <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-[80vh] h-[40vh] rounded-b-full bg-red-500/10 blur-[100px]" />
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}

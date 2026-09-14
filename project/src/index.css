@@ -37,7 +37,7 @@ body {
 
 /* Dark mode background */
 .bg-dark-theme {
-  background-image: url('https://png.pngtree.com/background/20230618/original/pngtree-dark-textured-background-in-3d-render-picture-image_3756507.jpg');
+  background-image: url('/dark-bg.png');
   background-size: cover;
   background-repeat: no-repeat;
   background-position: center center;

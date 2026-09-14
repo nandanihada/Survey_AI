@@ -79,7 +79,8 @@ const PricingPage: React.FC = () => {
   ];
 
   return (
-    <div className={`min-h-screen ${isLight ? 'bg-white text-slate-900' : 'bg-slate-950 text-white'}`}>
+    <div className={`min-h-screen ${isLight ? 'bg-white text-slate-900' : 'text-white'}`}
+         style={!isLight ? { backgroundImage: "url('/dark-bg.png')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' } : undefined}>
       {/* Close button - top right */}
       <div className="max-w-6xl mx-auto px-4 pt-4 flex justify-end">
         <button
