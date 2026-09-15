@@ -337,10 +337,27 @@ def send_test_email():
         return jsonify({"error": "email is required"}), 400
 
     cfg = _get_config()
-    ok = _send_onboarding_email(test_email, "Test User", cfg)
-    if ok:
-        return jsonify({"success": True, "message": f"Test email sent to {test_email}"}), 200
-    return jsonify({"success": False, "error": "SMTP send failed — check server logs."}), 500
+    last_error = [None]
+    original_send = _send_onboarding_email
+
+    # Temporarily wrap to capture the error message
+    import smtplib as _smtplib
+    try:
+        msg_obj = __import__('email.mime.multipart', fromlist=['MIMEMultipart']).MIMEMultipart("alternative")
+        smtp_server   = os.getenv("SMTP_SERVER")   or "smtp.gmail.com"
+        smtp_port     = int(os.getenv("SMTP_PORT") or "587")
+        smtp_username = os.getenv("SMTP_USERNAME") or ""
+        smtp_password = os.getenv("SMTP_PASSWORD") or ""
+        from_email    = os.getenv("FROM_EMAIL") or smtp_username
+        if not smtp_username or not smtp_password:
+            return jsonify({"success": False, "error": "SMTP credentials not configured on server"}), 200
+
+        ok = _send_onboarding_email(test_email, "Test User", cfg)
+        if ok:
+            return jsonify({"success": True, "message": f"Test email sent to {test_email}"}), 200
+        return jsonify({"success": False, "error": "SMTP send failed — check server logs"}), 200
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 200
 
 
 @onboarding_email_bp.route("/send-missed", methods=["POST"])
