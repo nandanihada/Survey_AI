@@ -351,7 +351,8 @@ def _run_funnel_generation_bg(job_id, funnel_plan, original_prompt, owner_user_i
                     funnel_id=funnel_id,
                     layer_index=s_meta["index"],
                     original_prompt=original_prompt,
-                    questions_asked_so_far=questions_asked_so_far
+                    questions_asked_so_far=questions_asked_so_far,
+                    question_count=s_meta.get("estimated_questions")
                 )
                 for q in survey_doc.get("questions", []):
                     if isinstance(q, dict):  # guard: skip any non-dict items saved by AI
@@ -411,7 +412,8 @@ def _run_funnel_generation_bg(job_id, funnel_plan, original_prompt, owner_user_i
                     original_prompt=original_prompt,
                     job_id=job_id_key,
                     qualification_flag=job_meta.get("qualification_flag"),
-                    questions_asked_so_far=screening_questions_asked
+                    questions_asked_so_far=screening_questions_asked,
+                    question_count=job_meta.get("estimated_survey_questions")
                 )
                 job_surveys_config[job_id_key] = {
                     "survey_id": survey_doc["id"],
@@ -620,7 +622,8 @@ def _inject_anchor_question_into_survey(survey_id: str, anchor_config: dict) -> 
 def _generate_single_survey(
     api_key, survey_name, survey_purpose, key_topics, survey_type,
     funnel_plan, owner_user_id, funnel_id, layer_index, original_prompt,
-    job_id=None, qualification_flag=None, questions_asked_so_far=None
+    job_id=None, qualification_flag=None, questions_asked_so_far=None,
+    question_count=None
 ):
     """Generate one survey (screening or job) and save to DB. Returns the saved doc."""
     from utils.short_id import generate_short_id
@@ -708,7 +711,7 @@ Do NOT invent new questions when the user has already written them.
 Rules:
 1. If the original prompt contains questions relevant to this survey's purpose → extract and use them EXACTLY (same wording, same options)
 2. Only add new questions if the user's prompt doesn't cover enough for this survey's purpose
-3. Keep the total between 5-15 questions
+3. Generate EXACTLY {question_count if question_count else 8} questions — no more, no less. This count was set by the user and must be respected precisely.
 4. Preserve the user's exact answer options — don't paraphrase or reorder them
 
 Original user prompt (extract questions from here if present):
@@ -769,7 +772,8 @@ STRICT RULES:
 - multi_select type MUST have allowMultiple: true
 - Every question with selectable answers MUST have a non-empty options array
 - If user wrote "Select all that apply" → use type "multi_select" with allowMultiple: true
-- If user wrote "Select up to N" → use type "multi_select" with allowMultiple: true"""
+- If user wrote "Select up to N" → use type "multi_select" with allowMultiple: true
+- QUESTION COUNT IS MANDATORY: You MUST generate EXACTLY {question_count if question_count else 8} questions. Count them before returning. If you have fewer, add more. If you have more, remove the least important ones."""
 
     resp = http_requests.post(
         "https://api.openai.com/v1/chat/completions",
@@ -1716,7 +1720,8 @@ def regenerate_screening_surveys(funnel_id):
                     funnel_id=funnel_id,
                     layer_index=s_idx,
                     original_prompt=original_prompt,
-                    questions_asked_so_far=questions_asked_so_far
+                    questions_asked_so_far=questions_asked_so_far,
+                    question_count=s_meta.get("estimated_questions")
                 )
                 for q in survey_doc.get("questions", []):
                     if isinstance(q, dict):  # guard: skip any non-dict items saved by AI
