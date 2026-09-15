@@ -66,14 +66,6 @@ DEFAULT_HTML = """<!DOCTYPE html>
   <!-- body -->
   <div style="background:#ffffff;border:1px solid #e1bebb;border-top:none;border-radius:0 0 8px 8px;padding:40px 32px;">
 
-    <!-- meta badge -->
-    <div style="margin-bottom:24px;padding-bottom:12px;border-bottom:1px solid #f0eee8;display:flex;align-items:center;justify-content:space-between;">
-      <span style="background:#f0eee8;color:#605e5c;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;padding:3px 10px;border-radius:4px;">
-        ● Researcher Onboarding
-      </span>
-      <span style="color:#605e5c;font-size:11px;">Edition #01 · 3 min setup</span>
-    </div>
-
     <!-- hero -->
     <h1 style="font-family:'Newsreader',serif;font-size:32px;line-height:1.25;font-weight:500;color:#7a0009;letter-spacing:-0.015em;margin:0 0 16px;">
       Welcome to Pepperwahl. Smarter surveys, real-time responses, effortless insights.
