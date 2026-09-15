@@ -24,7 +24,8 @@ export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.addScope('email');
 googleProvider.addScope('profile');
-googleProvider.addScope('https://www.googleapis.com/auth/gmail.send');
+// gmail.send scope removed from sign-in — requested on-demand only when user
+// uses the Gmail send feature in SurveyEditor (avoids the scary permission popup at signup)
 googleProvider.setCustomParameters({
   prompt: 'select_account'
 });
