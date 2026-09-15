@@ -731,6 +731,26 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
     {/* Outer wrapper: full viewport minus navbar, relative for absolute positioning */}
     <div style={{ position: 'relative', height: 'calc(100vh - 120px)', overflow: 'hidden' }}>
 
+    {/* Heading — visible only when idle, fades out when typing starts */}
+    <div
+      className="absolute left-0 right-0 flex justify-center px-4 pointer-events-none"
+      style={{
+        top: 'calc(45% - 120px)',
+        opacity: surveyTopic.trim() ? 0 : 1,
+        transform: surveyTopic.trim() ? 'translateY(-8px)' : 'translateY(0)',
+        transition: 'opacity 0.35s ease, transform 0.35s ease',
+      }}
+    >
+      <h1
+        className={`text-[1.5rem] sm:text-[1.9rem] lg:text-[2.2rem] font-semibold tracking-[-0.01em] leading-[1.3] text-center ${isDarkMode ? 'text-white' : 'text-slate-800'}`}
+        style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+      >
+        What would you like to{' '}
+        <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-orange-400">create</span>
+        {' '}today?
+      </h1>
+    </div>
+
     {/* Prompt box — centered when idle, fixed at bottom when typing */}
     <div
       className="flex justify-center px-4"
