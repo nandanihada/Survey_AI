@@ -391,6 +391,7 @@ def send_missed_onboarding():
                     upsert=True,
                 )
                 sent += 1
+                time.sleep(3)  # stay within Hostinger rate limit
             else:
                 failed += 1
         except Exception as e:
@@ -417,6 +418,17 @@ _onboarding_scheduler_lock = threading.Lock()
 def _onboarding_scheduler_loop():
     """Background thread: every 5 min, send onboarding to users who missed it."""
     logger.info("[OnboardingScheduler] Worker started")
+
+    # Known disposable/fake email domains to skip
+    SKIP_DOMAINS = {
+        'ruutukf.com', 'fxzig.com', 'forexzig.com', 'denipl.net', 'acoxs.com',
+        'mailinator.com', 'guerrillamail.com', 'tempmail.com', 'throwam.com',
+        'sharklasers.com', 'guerrillamailblock.com', 'grr.la', 'guerrillamail.info',
+        'spam4.me', 'yopmail.com', 'trashmail.com', 'fakeinbox.com', 'dispostable.com',
+        'mailnull.com', 'spamgourmet.com', 'spaml.de', 'trashmail.me',
+        'example.com', 'test.com',
+    }
+
     while True:
         try:
             cfg = _get_config()
@@ -435,20 +447,36 @@ def _onboarding_scheduler_loop():
                     name  = user.get("name", "")
                     if not email:
                         continue
+
+                    # Skip disposable/fake domains
+                    domain = email.split("@")[-1].lower() if "@" in email else ""
+                    if domain in SKIP_DOMAINS:
+                        # Mark as "sent" so we never retry fake addresses
+                        db.onboarding_email_log.update_one(
+                            {"email": email},
+                            {"$setOnInsert": {"email": email, "sent_at": datetime.now(timezone.utc), "skipped": True}},
+                            upsert=True,
+                        )
+                        logger.info(f"[OnboardingScheduler] ⏭ Skipped fake/disposable: {email}")
+                        continue
+
                     try:
                         ok = _send_onboarding_email(email, name, cfg)
                         if ok:
-                            # upsert so a duplicate write is silently ignored
                             db.onboarding_email_log.update_one(
                                 {"email": email},
                                 {"$setOnInsert": {"email": email, "sent_at": datetime.now(timezone.utc)}},
                                 upsert=True,
                             )
                             logger.info(f"[OnboardingScheduler] ✅ Sent to {email}")
+                            # Delay between sends to stay within Hostinger rate limits
+                            time.sleep(3)
                         else:
                             logger.warning(f"[OnboardingScheduler] ⚠️ Send failed for {email}")
+                            time.sleep(5)  # back off on failure too
                     except Exception as e:
                         logger.error(f"[OnboardingScheduler] ❌ Error for {email}: {e}")
+                        time.sleep(5)
         except Exception as outer:
             logger.error(f"[OnboardingScheduler] Outer error: {outer}")
 
