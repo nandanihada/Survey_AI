@@ -56,12 +56,12 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
   const [cloningId, setCloningId]     = useState<string | null>(null);
   const [localDraftIds, setLocalDraftIds] = useState<Set<string>>(new Set());
 
-  // â”€â”€ Search / filter state â”€â”€
+  // ?????? Search / filter state ??????
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFrom, setDateFrom]       = useState('');
   const [dateTo, setDateTo]           = useState('');
 
-  // â”€â”€ Pagination state â”€â”€
+  // ?????? Pagination state ??????
   const [page, setPage]       = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(20);
   const [total, setTotal]     = useState(0);
@@ -82,7 +82,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
     setLocalDraftIds(drafts);
   }, []);
 
-  // â”€â”€ Fetch surveys (server-side page + search + date) â”€â”€
+  // ?????? Fetch surveys (server-side page + search + date) ??????
   const fetchSurveys = useCallback(async (p: number, ps: PageSize, sq: string, df: string, dt: string) => {
     setLoading(true);
     setError('');
@@ -201,8 +201,15 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
 
   const inputBase = `pl-9 pr-3 py-2 border rounded-lg text-sm transition-colors focus:ring-2 focus:ring-red-500/20 focus:border-red-500`;
   const cardBase  = `rounded-xl border p-5 transition-all duration-200 hover:shadow-sm`;
+  // Unified action button base ? all survey action buttons use this
+  const actionBtn = (isDark: boolean) =>
+    `flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-colors ${
+      isDark
+        ? 'text-slate-300 hover:bg-slate-700 hover:text-white'
+        : 'text-stone-500 hover:bg-stone-100 hover:text-stone-800'
+    }`;
 
-  // â”€â”€ Pagination controls â”€â”€
+  // ?????? Pagination controls ??????
   const PaginationBar = () => {
     const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
     const to   = Math.min(page * pageSize, total);
@@ -211,7 +218,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
         {/* Left: count info + per-page selector */}
         <div className="flex items-center gap-3 text-sm">
           <span className={isDarkMode ? 'text-slate-400' : 'text-stone-500'}>
-            {total === 0 ? 'No surveys' : `${from}â€“${to} of ${total} survey${total !== 1 ? 's' : ''}`}
+            {total === 0 ? 'No surveys' : `${from}???${to} of ${total} survey${total !== 1 ? 's' : ''}`}
           </span>
           <div className="flex items-center gap-1.5">
             <span className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-stone-400'}`}>Per page:</span>
@@ -239,7 +246,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
               disabled={page === 1}
               className={`px-2 py-1 rounded text-xs font-medium disabled:opacity-40 transition-colors ${isDarkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'}`}
               title="First page"
-            >Â«</button>
+            >??</button>
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
@@ -276,7 +283,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
               disabled={page === totalPages}
               className={`px-2 py-1 rounded text-xs font-medium disabled:opacity-40 transition-colors ${isDarkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'}`}
               title="Last page"
-            >Â»</button>
+            >??</button>
           </div>
         )}
       </div>
@@ -288,52 +295,38 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <FolderOpen className={isDarkMode ? 'text-blue-400' : 'text-blue-600'} size={20} />
-          <h2 className={`text-lg sm:text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
+          <FolderOpen className={isDarkMode ? 'text-slate-400' : 'text-stone-500'} size={18} />
+          <h2 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>
             Your Surveys
           </h2>
         </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1 sm:flex-initial">
-              <Search size={16} className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-stone-400'}`} />
-              <input
-                type="text"
-                placeholder="Search by name or survey ID..."
-                value={searchQuery}
-                onChange={e => handleSearchChange(e.target.value)}
-                className={`w-full ${inputBase} ${isDarkMode ? 'bg-slate-700/50 border-slate-600 text-white placeholder-slate-400' : 'bg-stone-50 border-stone-300 placeholder-stone-500'}`}
-              />
-            </div>
-            <button className={`p-2 border rounded-lg transition-colors flex-shrink-0 ${isDarkMode ? 'border-slate-600 hover:bg-slate-700 text-slate-300' : 'border-stone-300 hover:bg-stone-50 text-stone-600'}`}>
-              <Filter size={16} />
-            </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Search */}
+          <div className="relative">
+            <Search size={14} className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-stone-400'}`} />
+            <input
+              type="text"
+              placeholder="Search surveys..."
+              value={searchQuery}
+              onChange={e => handleSearchChange(e.target.value)}
+              className={`pl-8 pr-3 py-1.5 border rounded-lg text-sm w-48 transition-colors focus:outline-none focus:ring-1 focus:ring-stone-400 ${isDarkMode ? 'bg-slate-700/50 border-slate-600 text-white placeholder-slate-400' : 'bg-white border-stone-200 placeholder-stone-400 text-stone-800'}`}
+            />
           </div>
-          <button onClick={() => onCreateNew?.()} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2">
-          {/* Date filters */}
-          <div className="flex flex-wrap items-center gap-2 mt-1">
-            <div className="flex items-center gap-1.5">
-              <Calendar size={12} className="text-gray-400 flex-shrink-0" />
-              <input type="date" value={dateFrom} onChange={e => handleDateFromChange(e.target.value)}
-                className={`px-2 py-1.5 rounded-lg border text-xs ${isDarkMode ? "bg-slate-700 border-slate-600 text-white" : "bg-stone-50 border-stone-300 text-stone-800"}`}
-                title="From date (IST)"
-              />
-              <span className="text-xs text-gray-400">to</span>
-              <input type="date" value={dateTo} onChange={e => handleDateToChange(e.target.value)}
-                className={`px-2 py-1.5 rounded-lg border text-xs ${isDarkMode ? "bg-slate-700 border-slate-600 text-white" : "bg-stone-50 border-stone-300 text-stone-800"}`}
-                title="To date (IST)"
-              />
-            </div>
+          {/* Date range */}
+          <div className="flex items-center gap-1.5">
+            <input type="date" value={dateFrom} onChange={e => handleDateFromChange(e.target.value)}
+              className={`px-2 py-1.5 rounded-lg border text-xs ${isDarkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-stone-200 text-stone-700'}`} />
+            <span className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-stone-400'}`}>?</span>
+            <input type="date" value={dateTo} onChange={e => handleDateToChange(e.target.value)}
+              className={`px-2 py-1.5 rounded-lg border text-xs ${isDarkMode ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-stone-200 text-stone-700'}`} />
             {(dateFrom || dateTo) && (
-              <button onClick={clearDates}
-                className="text-xs px-2 py-1 rounded-lg border border-stone-300 text-stone-500 hover:bg-stone-50">
-                Clear dates
-              </button>
+              <button onClick={clearDates} className={`text-xs px-2 py-1.5 rounded-lg border transition-colors ${isDarkMode ? 'border-slate-600 text-slate-400 hover:bg-slate-700' : 'border-stone-200 text-stone-500 hover:bg-stone-50'}`}>Clear</button>
             )}
           </div>
-
-            <Plus size={16} />
-            <span className="sm:inline">Create New</span>
+          {/* Create New */}
+          <button onClick={() => onCreateNew?.()} className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-900 hover:bg-stone-700 text-white rounded-lg text-sm font-medium transition-colors">
+            <Plus size={14} />
+            <span>Create New</span>
           </button>
         </div>
       </div>
@@ -414,7 +407,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                           className={`flex items-center gap-1 px-2 py-0.5 rounded font-mono text-[10px] select-all cursor-text ${
                             isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-gray-100 text-gray-500 border border-gray-200'
                           }`}
-                          title="Survey ID â€” click to select"
+                          title="Survey ID ??? click to select"
                         >
                           ID: {surveyId}
                         </span>
@@ -424,25 +417,25 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
 
                   <div className="flex items-center gap-2 flex-wrap mt-2 sm:mt-0 sm:flex-shrink-0">
                     <button onClick={() => navigate(`/dashboard/edit/${surveyId}`)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isDarkMode ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`} title="Edit Survey">
+                      className={actionBtn(isDarkMode)} title="Edit Survey">
                       <Edit size={13} /><span className="hidden sm:inline">Edit</span>
                     </button>
                     <button onClick={() => window.open(`${window.location.origin}/s/${surveyId}`, '_blank')}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isDarkMode ? 'bg-purple-500/10 text-purple-400 hover:bg-purple-500/20' : 'bg-purple-50 text-purple-600 hover:bg-purple-100'}`} title="Open Live Survey Link">
-                      <Eye size={13} /><span className="hidden sm:inline">Open / Live Link</span>
+                      className={actionBtn(isDarkMode)} title="Open Live Survey Link">
+                      <Eye size={13} /><span className="hidden sm:inline">Open</span>
                     </button>
                     <button onClick={() => navigate(`/dashboard?v=mail&q=${surveyId}`)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isDarkMode ? 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20' : 'bg-orange-50 text-orange-600 hover:bg-orange-100'}`} title="Configure Email Triggers">
+                      className={actionBtn(isDarkMode)} title="Configure Email Triggers">
                       <Mail size={13} /><span className="hidden sm:inline">Email</span>
                     </button>
                     <button onClick={() => navigate(`/dashboard/responses/${surveyId}`)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isDarkMode ? 'bg-green-500/10 text-green-400 hover:bg-green-500/20' : 'bg-green-50 text-green-600 hover:bg-green-100'}`} title="View Responses">
+                      className={actionBtn(isDarkMode)} title="View Responses">
                       <BarChart3 size={13} /><span className="hidden sm:inline">Responses</span>
                     </button>
                     {isAdmin && survey.prompt && (
                       <button
                         onClick={() => setShowPromptId(showPromptId === promptKey ? null : promptKey)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${showPromptId === promptKey ? isDarkMode ? 'bg-violet-500/30 text-violet-200' : 'bg-violet-100 text-violet-700' : isDarkMode ? 'bg-violet-500/20 text-violet-300 hover:bg-violet-500/30' : 'bg-violet-50 text-violet-600 hover:bg-violet-100'}`}
+                        className={`${actionBtn(isDarkMode)} ${showPromptId === promptKey ? isDarkMode ? 'bg-slate-700 text-white' : 'bg-stone-100 text-stone-800' : ''}`}
                         title="View original prompt">
                         <FileText size={13} /><span className="hidden sm:inline">Prompt</span>
                       </button>
@@ -452,10 +445,10 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isDarkMode ? 'bg-teal-500/10 text-teal-400 hover:bg-teal-500/20' : 'bg-teal-50 text-teal-600 hover:bg-teal-100'} disabled:opacity-50`}
                         title="Clone Survey">
                         {cloningId === surveyId ? <Loader2 size={13} className="animate-spin" /> : <Copy size={13} />}
-                        <span className="hidden sm:inline">{cloningId === surveyId ? 'Cloningâ€¦' : 'Clone'}</span>
+                        <span className="hidden sm:inline">{cloningId === surveyId ? 'Cloning...' : 'Clone'}</span>
                       </button>
                     ) : (
-                      <button disabled title="Clone Survey â€” upgrade your plan"
+                      <button disabled title="Clone Survey ??? upgrade your plan"
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium opacity-40 cursor-not-allowed ${isDarkMode ? 'bg-slate-700 text-slate-400' : 'bg-stone-100 text-stone-400'}`}>
                         <Copy size={13} /><span className="hidden sm:inline">Clone</span>
                         <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -483,7 +476,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                           }
                         } catch { alert('Failed. Please try again.'); }
                       }}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isDarkMode ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-colors text-red-500 hover:bg-red-50 hover:text-red-700`}
                       title="Delete Survey">
                       <Trash2 size={13} /><span className="hidden sm:inline">Delete</span>
                     </button>
@@ -494,7 +487,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
                       <div className="relative bg-white rounded-2xl shadow-xl max-w-lg w-full p-6" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-4">
                           <h3 className="text-sm font-semibold text-violet-700 flex items-center gap-2"><FileText size={16} /> Original Prompt</h3>
-                          <button onClick={() => setShowPromptId(null)} className="text-gray-400 hover:text-gray-600 text-lg">Ã—</button>
+                          <button onClick={() => setShowPromptId(null)} className="text-gray-400 hover:text-gray-600 text-lg">??</button>
                         </div>
                         <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{survey.prompt}</p>
                       </div>
@@ -506,7 +499,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
             })
           )}
         </div>
-        {/* Pagination bar â€” always shown when there are surveys */}
+        {/* Pagination bar ??? always shown when there are surveys */}
         {(total > 0 || surveys.length > 0) && <PaginationBar />}
         </>
       )}
@@ -515,3 +508,7 @@ const SurveyList: React.FC<SurveyListProps> = ({ isDarkMode = false, onCreateNew
 };
 
 export default SurveyList;
+
+
+
+

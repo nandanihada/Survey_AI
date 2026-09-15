@@ -100,7 +100,7 @@ const WidgetTestPage = lazyRetry(() => import('./components/WidgetTestPage'));
 // Import legacy dashboard for backward compatibility
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/Tabs';
-import { PenSquare, FolderOpen, TrendingUp, Link, Mail, MapPin, Sun, Moon, Settings, Lock, Menu, X, User } from 'lucide-react';
+import { PenSquare, FolderOpen, TrendingUp, Link, Mail, MapPin, Sun, Moon, Settings, Lock, Menu, X, User, DollarSign } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import type { WidgetCustomizerSettings } from './components/WidgetCustomizer';
 
@@ -434,7 +434,7 @@ function LegacyDashboard() {
                         : 'bg-stone-100 text-stone-500 border border-stone-200 hover:bg-stone-200'
                   }`}
                 >
-                  <span className="text-[11px]">🔥</span>
+                  <DollarSign size={12} />
                   <span>{totalEarningsCents > 0 ? `€${(totalEarningsCents / 100).toFixed(2)}` : 'Earnings'}</span>
                 </button>
               )}
