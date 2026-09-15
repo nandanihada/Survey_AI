@@ -418,74 +418,84 @@ function LegacyDashboard() {
               </button>
             </div>
 
-            <div className="hidden md:flex items-center gap-3">
+            <div className="hidden md:flex items-center gap-2">
               {/* Earnings badge */}
               {totalEarningsCents !== null && (
                 <button
                   onClick={() => navigate('/refer?v=earn')}
                   title="My Earnings — click to view"
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                     totalEarningsCents > 0
                       ? isDarkMode
-                        ? 'bg-green-500/20 text-green-300 border border-green-500/30 hover:bg-green-500/30'
-                        : 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100'
+                        ? 'bg-slate-700 text-emerald-400 border border-slate-600 hover:bg-slate-600'
+                        : 'bg-stone-100 text-emerald-700 border border-stone-200 hover:bg-stone-200'
                       : isDarkMode
-                        ? 'bg-slate-700/60 text-slate-400 border border-slate-600 hover:bg-slate-700'
-                        : 'bg-stone-50 text-stone-500 border border-stone-200 hover:bg-stone-100'
+                        ? 'bg-slate-700 text-slate-400 border border-slate-600 hover:bg-slate-600'
+                        : 'bg-stone-100 text-stone-500 border border-stone-200 hover:bg-stone-200'
                   }`}
                 >
-                  <span>💰</span>
-                  <span>
-                    {totalEarningsCents > 0
-                      ? `€${(totalEarningsCents / 100).toFixed(2)}`
-                      : 'Earnings'}
-                  </span>
+                  <span className="text-[11px]">🔥</span>
+                  <span>{totalEarningsCents > 0 ? `€${(totalEarningsCents / 100).toFixed(2)}` : 'Earnings'}</span>
                 </button>
               )}
+
+              {/* Free plan · Upgrade */}
               <button
                 onClick={() => {
                   import('./hooks/useTracking').then(m => m.trackPricingClick('dashboard_header_upgrade', '', 'Upgrade'));
                   navigate('/pricing?theme=light');
                 }}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${isDarkMode
-                    ? 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
-                    : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-50'
-                  }`}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  isDarkMode
+                    ? 'bg-slate-700 text-slate-300 border border-slate-600 hover:bg-slate-600'
+                    : 'bg-stone-100 text-stone-500 border border-stone-200 hover:bg-stone-200'
+                }`}
               >
-                <span className="opacity-70">Free plan</span>
-                <span className="w-1 h-1 rounded-full bg-slate-400"></span>
-                <span className={isDarkMode ? 'text-white' : 'text-stone-900'}>Upgrade</span>
+                <span>Free plan</span>
+                <span className={`w-px h-3 ${isDarkMode ? 'bg-slate-500' : 'bg-stone-300'}`} />
+                <span className={`font-semibold ${isDarkMode ? 'text-white' : 'text-stone-800'}`}>Upgrade</span>
               </button>
+
+              {/* Admin */}
               {isAdmin && (
                 <button
                   onClick={() => navigate('/admin')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${isDarkMode
-                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30 hover:bg-purple-500/30'
-                      : 'bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100'
-                    }`}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    isDarkMode
+                      ? 'bg-slate-700 text-slate-300 border border-slate-600 hover:bg-slate-600'
+                      : 'bg-stone-100 text-stone-600 border border-stone-200 hover:bg-stone-200'
+                  }`}
                 >
-                  <Settings size={12} />
-                  Admin
+                  <Settings size={11} />
+                  <span>Admin</span>
                 </button>
               )}
+
+              {/* User avatar */}
               {authenticated && user && (
                 <button
                   onClick={() => navigate('/profile')}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${isDarkMode
-                      ? 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30'
-                      : 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100'
-                    }`}
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${
+                    isDarkMode
+                      ? 'bg-slate-700 text-slate-200 border border-slate-600 hover:bg-slate-600'
+                      : 'bg-stone-800 text-white hover:bg-stone-700'
+                  }`}
                   title="Profile"
                 >
-                  {user.name ? user.name.charAt(0).toUpperCase() : <User size={16} />}
+                  {user.name ? user.name.charAt(0).toUpperCase() : <User size={14} />}
                 </button>
               )}
+
+              {/* Dark mode toggle */}
               <button
                 onClick={toggleTheme}
-                className={`p-2 rounded-md transition-colors ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-yellow-400' : 'bg-stone-100 hover:bg-stone-200 text-stone-600'
-                  }`}
+                className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all ${
+                  isDarkMode
+                    ? 'bg-slate-700 text-slate-300 border border-slate-600 hover:bg-slate-600'
+                    : 'bg-stone-100 text-stone-500 border border-stone-200 hover:bg-stone-200'
+                }`}
               >
-                {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
+                {isDarkMode ? <Sun size={13} /> : <Moon size={13} />}
               </button>
             </div>
           </div>
