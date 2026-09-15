@@ -265,11 +265,11 @@ def maybe_send_onboarding_email(to_email: str, name: str) -> None:
 
         success = _send_onboarding_email(to_email, name, cfg)
         if success:
-            # Mark as sent so we never duplicate
-            db.onboarding_email_log.insert_one({
-                "email": to_email,
-                "sent_at": datetime.now(timezone.utc),
-            })
+            db.onboarding_email_log.update_one(
+                {"email": to_email},
+                {"$setOnInsert": {"email": to_email, "sent_at": datetime.now(timezone.utc)}},
+                upsert=True,
+            )
     except Exception as e:
         logger.warning(f"⚠️ maybe_send_onboarding_email non-critical error: {e}")
 
@@ -385,10 +385,11 @@ def send_missed_onboarding():
         try:
             ok = _send_onboarding_email(email, name, cfg)
             if ok:
-                db.onboarding_email_log.insert_one({
-                    "email": email,
-                    "sent_at": datetime.now(timezone.utc),
-                })
+                db.onboarding_email_log.update_one(
+                    {"email": email},
+                    {"$setOnInsert": {"email": email, "sent_at": datetime.now(timezone.utc)}},
+                    upsert=True,
+                )
                 sent += 1
             else:
                 failed += 1
@@ -437,10 +438,12 @@ def _onboarding_scheduler_loop():
                     try:
                         ok = _send_onboarding_email(email, name, cfg)
                         if ok:
-                            db.onboarding_email_log.insert_one({
-                                "email": email,
-                                "sent_at": datetime.now(timezone.utc),
-                            })
+                            # upsert so a duplicate write is silently ignored
+                            db.onboarding_email_log.update_one(
+                                {"email": email},
+                                {"$setOnInsert": {"email": email, "sent_at": datetime.now(timezone.utc)}},
+                                upsert=True,
+                            )
                             logger.info(f"[OnboardingScheduler] ✅ Sent to {email}")
                         else:
                             logger.warning(f"[OnboardingScheduler] ⚠️ Send failed for {email}")

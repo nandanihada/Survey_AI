@@ -497,6 +497,12 @@ try:
     from onboarding_email_api import start_onboarding_scheduler
     start_onboarding_scheduler()
 
+    # Unique index on onboarding_email_log.email — prevents any duplicate sends
+    try:
+        db.onboarding_email_log.create_index("email", unique=True, background=True)
+    except Exception:
+        pass  # index already exists
+
     # Setup tracking TTL indexes for 15-day auto-delete
     setup_tracking_indexes()
     setup_referral_indexes()
