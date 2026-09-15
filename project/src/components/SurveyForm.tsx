@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { generateSurvey, parseImage } from '../utils/api';
-import { Loader2, Sparkles, ImagePlus, Check, X, ArrowRight, Lightbulb, ChevronDown, Eye, Share2, BarChart2, Zap, Lock, Mail, ChevronRight, Hash, Edit3, RefreshCcw, Layers, GitBranch } from 'lucide-react';
+import { generateSurvey, parseImage, parsePdf } from '../utils/api';
+import { Loader2, Sparkles, ImagePlus, FileText, Check, X, ArrowRight, Lightbulb, ChevronDown, Eye, Share2, BarChart2, Zap, Lock, Mail, ChevronRight, Hash, Edit3, RefreshCcw, Layers, GitBranch } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { generateSurveyLink } from '../utils/surveyLinkUtils';
 import { parsePrompt as parsePromptFn, getClarificationNeeds as getClarificationNeedsFn, ClarificationNeeds as ClarificationNeedsType } from '../utils/promptParser';
@@ -45,6 +45,9 @@ const WIZARD_STEPS_EN = [
 const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+  const [isParsingPdf, setIsParsingPdf] = useState(false);
+  const [pdfName, setPdfName] = useState('');
   const [surveyTopic, setSurveyTopic] = useState('');
   const [questionCount, setQuestionCount] = useState(10);
   const [isLoading, setIsLoading] = useState(false);
@@ -108,6 +111,52 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
   const [isFlipping, setIsFlipping] = useState(false);
   const [isFlipped, setIsFlipped] = useState(false);
   const detectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasTypedRef = useRef(false); // tracks if user has typed at least once
+  const [promptPosition, setPromptPosition] = useState<'center' | 'bottom' | 'returning'>('center');
+  const [isFocused, setIsFocused] = useState(false);
+
+  // ── Typewriter placeholder ────────────────────────────────────────────────
+  const PLACEHOLDER_EXAMPLES = [
+    'Customer satisfaction survey for our e-commerce store…',
+    'Employee engagement check-in for a remote team of 50…',
+    'Post-event feedback form for a 3-day tech conference…',
+    'Product feedback survey to understand churn reasons…',
+    'NPS survey for SaaS users after their first 30 days…',
+    'Onboarding experience survey for new hires…',
+    'Website usability study targeting mobile users…',
+    'Training effectiveness survey after a sales workshop…',
+    'Market research on Gen Z spending habits…',
+    'Healthcare patient satisfaction survey for a clinic…',
+  ];
+  const [placeholderIdx, setPlaceholderIdx] = useState(0);
+  const [placeholderText, setPlaceholderText] = useState('');
+  const [placeholderPhase, setPlaceholderPhase] = useState<'typing' | 'waiting' | 'erasing'>('typing');
+  const placeholderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const full = PLACEHOLDER_EXAMPLES[placeholderIdx];
+    if (placeholderPhase === 'typing') {
+      if (placeholderText.length < full.length) {
+        placeholderTimerRef.current = setTimeout(() => {
+          setPlaceholderText(full.slice(0, placeholderText.length + 1));
+        }, 38);
+      } else {
+        placeholderTimerRef.current = setTimeout(() => setPlaceholderPhase('waiting'), 1800);
+      }
+    } else if (placeholderPhase === 'waiting') {
+      placeholderTimerRef.current = setTimeout(() => setPlaceholderPhase('erasing'), 400);
+    } else if (placeholderPhase === 'erasing') {
+      if (placeholderText.length > 0) {
+        placeholderTimerRef.current = setTimeout(() => {
+          setPlaceholderText(t => t.slice(0, -1));
+        }, 18);
+      } else {
+        setPlaceholderIdx(i => (i + 1) % PLACEHOLDER_EXAMPLES.length);
+        setPlaceholderPhase('typing');
+      }
+    }
+    return () => { if (placeholderTimerRef.current) clearTimeout(placeholderTimerRef.current); };
+  }, [placeholderText, placeholderPhase, placeholderIdx]);
 
   // ── Funnel detection on typing ────────────────────────────────────────────
   const detectFunnel = async (text: string) => {
@@ -381,8 +430,39 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const handlePdfUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) { setError('PDF must be under 20MB'); return; }
+    setIsParsingPdf(true);
+    setError('');
+    setPdfName(file.name);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        const base64 = ev.target?.result as string;
+        try {
+          const extracted = await parsePdf(base64);
+          setImageContext(prev => prev ? `${prev}\n${extracted}` : extracted);
+          if (!surveyTopic.trim()) setSurveyTopic(`Survey based on: ${file.name.replace(/\.pdf$/i, '')}`);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Could not parse PDF. Try a text-based PDF.');
+          setPdfName('');
+        } finally {
+          setIsParsingPdf(false);
+        }
+      };
+      reader.onerror = () => { setError('Failed to read PDF file.'); setIsParsingPdf(false); setPdfName(''); };
+      reader.readAsDataURL(file);
+    } catch {
+      setIsParsingPdf(false);
+      setPdfName('');
+    }
+    if (pdfInputRef.current) pdfInputRef.current.value = '';
+  }, [surveyTopic]);
+
   const handleStartWizard = async () => {
-    if (!surveyTopic.trim() && !imageContext && !selectedSuggestion) { 
+    if (!surveyTopic.trim() && !imageContext && !selectedSuggestion) {
       setError('Please enter a survey topic or pick a suggestion'); 
       return; 
     }
@@ -644,78 +724,79 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
     {/* Full-page Gooey Loader */}
     {isLoading && <SearchLoader message={loadingMessages[loadingPhase]} animationId={loaderAnimationId} />}
 
-    <div className="flex flex-col items-center justify-center min-h-[70vh] px-0 sm:px-4 pt-6 sm:pt-10">
-      <div className="w-[92vw] sm:w-full sm:max-w-xl lg:max-w-2xl">
-        {/* Header */}
-        <div className="text-center mb-6 sm:mb-8">
-          <h1
-            className={`text-[1.4rem] sm:text-[1.7rem] lg:text-[2rem] font-semibold tracking-[-0.01em] leading-[1.3] ${isDarkMode ? 'text-white' : 'text-slate-800'}`}
-            style={{ fontFamily: "'Space Grotesk', sans-serif" }}
-          >
-            What would you like to <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-orange-400">create</span> today?
-          </h1>
-        </div>
+    {/* ── Idle: prompt centered + cards below. Typing: prompt fixed at bottom ── */}
+
+    {/* Idle-state centered container — invisible when typing so fixed box takes over */}
+    {/* ── Layout: prompt box always rendered, positioned by CSS ── */}
+    {/* Outer wrapper: full viewport minus navbar, relative for absolute positioning */}
+    <div style={{ position: 'relative', height: 'calc(100vh - 120px)', overflow: 'hidden' }}>
+
+    {/* Prompt box — centered when idle, fixed at bottom when typing */}
+    <div
+      className="flex justify-center px-4"
+      style={surveyTopic.trim() ? {
+        position: 'fixed',
+        bottom: '1.5rem',
+        left: 0,
+        right: 0,
+        zIndex: 40,
+        animation: 'promptToBottom 0.65s cubic-bezier(0.34, 1.2, 0.64, 1) both',
+      } : {
+        position: 'absolute',
+        top: '45%',
+        left: 0,
+        right: 0,
+        transform: 'translateY(-50%)',
+        zIndex: 1,
+      }}
+    >
+      <div className="w-full" style={{ maxWidth: '672px' }}>
 
         
 
         {/* ── Flip card container ── */}
-        <div style={{ perspective: '1200px' }}>
-          <div style={{
-            transition: 'transform 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-            transformStyle: 'preserve-3d' as any,
-            transform: isFlipped ? 'rotateY(180deg)' : isFlipping ? 'scale(0.97) rotateY(8deg)' : 'rotateY(0deg)',
-            position: 'relative' as any,
-          }}>
+        <div>
+          {/* ── FRONT — Single survey mode ── */}
+          {!isFlipped && <div>
 
-            {/* ── FRONT — Single survey mode ── */}
-            <div style={{ backfaceVisibility: 'hidden' as any, WebkitBackfaceVisibility: 'hidden' as any }}>
-
-        {/* ── Funnel suggestion banner (appears when AI detects funnel prompt) ── */}
+        {/* ── Conversation bubble: multi-stage suggestion ── */}
         {funnelSuggestion.show && createMode === 'single' && (
-          <div
-            className={`mb-4 rounded-2xl border p-4 ${isDarkMode ? 'bg-blue-950/40 border-blue-700/50' : 'bg-blue-50 border-blue-200'}`}
-            style={{ animation: 'sfFadeUp 0.4s ease-out' }}
-          >
-            <div className="flex items-start gap-3 mb-3">
-              <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isDarkMode ? 'bg-blue-900' : 'bg-blue-100'}`}>
-                <Layers size={16} className="text-blue-500" />
+          <div className="mb-3" style={{ animation: 'bubbleIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both' }}>
+            <div
+              className={`inline-flex flex-col gap-3 px-4 py-3 rounded-2xl rounded-bl-sm max-w-[88%] ${
+                isDarkMode
+                  ? 'bg-slate-800 border border-slate-700 shadow-xl'
+                  : 'bg-white border border-stone-200 shadow-[0_4px_24px_rgba(0,0,0,0.08)]'
+              }`}
+            >
+              <p className={`text-[13px] leading-relaxed ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                Would you like to connect these into a series of linked surveys?
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSwitchToFunnel}
+                  disabled={isFlipping}
+                  className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                    isFlipping
+                      ? 'bg-slate-300 text-slate-400 cursor-wait'
+                      : isDarkMode
+                      ? 'bg-white text-slate-900 hover:bg-slate-100'
+                      : 'bg-slate-900 text-white hover:bg-slate-700'
+                  }`}
+                >
+                  {isFlipping ? '...' : 'Yes, set it up'}
+                </button>
+                <button
+                  onClick={() => setFunnelSuggestion(f => ({ ...f, show: false }))}
+                  className={`px-4 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                    isDarkMode
+                      ? 'border-slate-600 text-slate-400 hover:bg-slate-700'
+                      : 'border-stone-200 text-stone-500 hover:bg-stone-50'
+                  }`}
+                >
+                  No, keep it single
+                </button>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className={`text-sm font-semibold ${isDarkMode ? 'text-blue-200' : 'text-blue-800'}`}>
-                  This looks like a funnel survey
-                </p>
-                <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
-                  {funnelSuggestion.reason || 'Your prompt mentions multiple surveys, screening, scoring, or routing — this is a funnel.'}
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleSwitchToFunnel}
-                disabled={isFlipping}
-                className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${
-                  isFlipping
-                    ? 'bg-blue-400 text-white scale-95 opacity-80 cursor-wait'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white hover:scale-[1.02]'
-                }`}
-                style={{ boxShadow: isFlipping ? '0 0 12px rgba(59,130,246,0.6)' : undefined }}
-              >
-                {isFlipping ? '✦ Switching...' : '✦ Switch to Funnel mode'}
-              </button>
-              <button
-                onClick={() => {
-                  setFunnelSuggestion(f => ({ ...f, show: false }));
-                  // Continue with normal wizard — use a tiny delay for state to clear
-                  setTimeout(() => handleStartWizard(), 50);
-                }}
-                className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-all ${
-                  isDarkMode
-                    ? 'border-slate-600 text-slate-300 hover:bg-slate-700'
-                    : 'border-stone-300 text-stone-600 hover:bg-stone-100'
-                }`}
-              >
-                Continue in normal mode
-              </button>
             </div>
           </div>
         )}
@@ -767,13 +848,40 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
               </div>
             </div>
           )}
+          <div className="relative">
+            {/* Animated typewriter placeholder — only when empty and not focused */}
+            {!surveyTopic && !isFocused && (
+              <div
+                aria-hidden="true"
+                className="absolute top-0 left-0 px-4 sm:px-3.5 pt-4 pb-2 sm:py-3 text-[15px] font-medium pointer-events-none select-none z-0 w-full"
+                style={{ color: isDarkMode ? 'rgba(148,163,184,0.55)' : 'rgba(148,163,184,0.9)' }}
+              >
+                {placeholderText}
+                <span
+                  className="inline-block w-[2px] h-[1em] ml-[1px] align-middle"
+                  style={{
+                    background: isDarkMode ? 'rgba(148,163,184,0.5)' : 'rgba(148,163,184,0.7)',
+                    animation: 'cursorBlink 0.9s step-end infinite',
+                    verticalAlign: 'text-bottom',
+                  }}
+                />
+              </div>
+            )}
           <textarea
             value={surveyTopic} onChange={(e) => {
-              setSurveyTopic(e.target.value);
+              const val = e.target.value;
+              setSurveyTopic(val);
+              if (!hasTypedRef.current) hasTypedRef.current = true;
+              // Drive prompt box position
+              if (val.trim() && promptPosition !== 'bottom') setPromptPosition('bottom');
+              else if (!val.trim() && promptPosition === 'bottom') setPromptPosition('returning');
               // Debounced funnel detection
               if (detectionTimerRef.current) clearTimeout(detectionTimerRef.current);
               detectionTimerRef.current = setTimeout(() => detectFunnel(e.target.value), 2000);
-            }}            placeholder="Describe your survey topic or paste an image..."
+            }}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            placeholder=""
             className={`relative w-full px-4 sm:px-3.5 pt-4 pb-2 sm:py-3 text-[15px] resize-none border-0 focus:outline-none focus:ring-0 z-10 font-medium [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${isDarkMode ? 'bg-transparent text-white placeholder-slate-400' : 'bg-transparent text-slate-800 placeholder-slate-400'
               }`}
             rows={1}
@@ -813,6 +921,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
               }
             }}
           />
+          </div> {/* end relative typewriter wrapper */}
           <div className={`relative z-10 flex items-center justify-between px-3 sm:px-2.5 sm:px-3 pb-2 sm:pb-2.5 pt-1.5 sm:pt-0.5 gap-2 border-t sm:border-t-0 ${isDarkMode ? 'border-slate-700/50' : 'border-stone-100'}`}>
             <div className="flex items-center gap-2 sm:gap-1.5 flex-1 min-w-0 scrollbar-hide" style={{ overflowX: 'visible', overflow: 'visible' }}>
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
@@ -821,6 +930,34 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
                 <ImagePlus size={18} className="sm:hidden" />
                 <ImagePlus size={14} className="hidden sm:block" />
               </button>
+
+              {/* PDF upload */}
+              <input ref={pdfInputRef} type="file" accept=".pdf,application/pdf" onChange={handlePdfUpload} className="hidden" />
+              <button
+                onClick={() => pdfInputRef.current?.click()}
+                disabled={isParsingPdf}
+                title="Upload PDF"
+                className={`relative p-2 sm:p-1.5 rounded-xl sm:rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-stone-100 text-stone-400'} disabled:opacity-40`}
+              >
+                {isParsingPdf
+                  ? <Loader2 size={16} className="animate-spin" />
+                  : <>
+                      <FileText size={18} className="sm:hidden" />
+                      <FileText size={14} className="hidden sm:block" />
+                    </>
+                }
+              </button>
+
+              {/* PDF name badge */}
+              {pdfName && !isParsingPdf && (
+                <div className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-medium max-w-[120px] truncate ${isDarkMode ? 'bg-violet-900/40 text-violet-300' : 'bg-violet-50 text-violet-700 border border-violet-200'}`}>
+                  <FileText size={9} />
+                  <span className="truncate">{pdfName}</span>
+                  <button onClick={() => { setPdfName(''); setImageContext(''); }} className="ml-0.5 shrink-0 hover:opacity-70">
+                    <X size={9} />
+                  </button>
+                </div>
+              )}
               {/* Mic — hidden on mobile (shown on right side below) */}
               <button
                 onClick={async () => {
@@ -1007,7 +1144,7 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
                 {isListening ? <rect x="6" y="6" width="12" height="12" rx="2"/> : (<><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></>)}
               </svg>
             </button>
-            <button onClick={handleStartWizard} disabled={(!surveyTopic.trim() && !imageContext && !selectedSuggestion)}
+            <button onClick={handleStartWizard} disabled={(!surveyTopic.trim() && !imageContext && !selectedSuggestion) || isParsingPdf}
               className="p-2 sm:p-2 rounded-xl bg-gradient-to-r from-red-500 to-orange-400 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-[0_4px_12px_rgba(239,68,68,0.3)] active:scale-95 transition-all flex-shrink-0 flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:p-2">
               <ArrowRight size={18} className="sm:hidden" />
               <ArrowRight size={14} className="hidden sm:block" />
@@ -1214,138 +1351,110 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
 
         {error && <div className="mt-4 sm:mt-6 bg-red-100/50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-[13px] sm:text-[14px] font-medium text-center">{error}</div>}
 
-        {/* ── Auto-scrolling Prompt Suggestion Slider ── */}
-        {wizardStep === -1 && !expandedCategory && !showClarification && (
-          <div className="mt-8 sm:mt-10" style={{ animation: 'sfFadeUp 0.6s 0.2s ease-out both' }}>
-            <div
-              className="prompt-slider"
-              style={{ '--card-width': '220px', '--card-height': '120px', '--quantity': SUGGESTION_PROMPTS.length, '--duration': '25s' } as React.CSSProperties}
-            >
-              <div className="prompt-slider__track">
-                {SUGGESTION_PROMPTS.map((s, i) => (
-                  <button
-                    key={i}
-                    onClick={() => {
-                      setExpandedCategory(s.label);
-                      setSelectedSuggestion({ label: s.label, prompt: s.prompt });
-                      setSurveyTopic(s.prompt);
-                    }}
-                    className="prompt-slider__item"
-                    style={{ '--position': i + 1, background: s.gradient } as React.CSSProperties}
-                  >
-                    <div className="prompt-slider__icon">
-                      <img src={s.icon} alt={s.label} />
-                    </div>
-                    <p className="prompt-slider__title">{s.label}</p>
-                    <p className="prompt-slider__desc">{s.prompt.slice(0, 50)}...</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+        </>
         )}
+            </div>}
+          {/* end front face */}
 
-        {/* ── Expanded Sub-Prompts for Selected Category ── */}
-        {wizardStep === -1 && expandedCategory && !showClarification && (
-          <div className="mt-6 sm:mt-8" style={{ animation: 'sfSubPromptsIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both' }}>
-            <div className="flex items-center justify-between mb-4 px-1">
-              <div className="flex items-center gap-2.5">
-                <div
-                  className="w-8 h-8 rounded-xl flex items-center justify-center"
-                  style={{ background: SUGGESTION_PROMPTS.find(s => s.label === expandedCategory)?.gradient || '#666' }}
-                >
-                  <img
-                    src={SUGGESTION_PROMPTS.find(s => s.label === expandedCategory)?.icon || ''}
-                    alt=""
-                    className="w-4 h-4 object-contain"
-                    style={{ filter: 'brightness(0) invert(1)' }}
-                  />
-                </div>
-                <span className={`text-sm sm:text-base font-semibold ${isDarkMode ? 'text-white' : 'text-slate-800'}`} style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                  {expandedCategory}
-                </span>
-                <span className={`text-[11px] ${isDarkMode ? 'text-slate-500' : 'text-stone-400'}`}>— or try a specific angle:</span>
-              </div>
-              <button
-                onClick={() => {
-                  setExpandedCategory(null);
-                  setSelectedSuggestion(null);
-                  setSurveyTopic('');
-                }}
-                className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-all ${isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-700' : 'text-stone-500 hover:text-stone-800 hover:bg-stone-100'}`}
-              >
-                ← Back
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {(SUB_PROMPTS[expandedCategory] || []).map((subPrompt, i) => (
-                <button
-                  key={i}
-                  onClick={() => {
-                    const fullPrompt = `${expandedCategory}: ${subPrompt}`;
-                    setSelectedSuggestion({ label: expandedCategory, prompt: fullPrompt });
-                    setSurveyTopic(fullPrompt);
-                  }}
-                  className={`sub-prompt-card px-4 py-2.5 rounded-full border text-[12px] sm:text-[13px] font-medium transition-all duration-200 hover:scale-[1.03] active:scale-[0.97] ${
-                    isDarkMode
-                      ? 'bg-slate-800/70 border-slate-700/50 text-slate-300 hover:border-slate-500 hover:bg-slate-800 hover:text-white'
-                      : 'bg-white border-stone-200/80 text-slate-600 hover:border-red-300 hover:text-slate-900 hover:shadow-md hover:shadow-red-500/5'
-                  }`}
-                  style={{ animation: `sfSubCardIn 0.4s ${i * 0.07}s cubic-bezier(0.34, 1.56, 0.64, 1) both` }}
-                >
-                  {subPrompt}
+        </div> {/* end flip container */}
+
+      </div> {/* end prompt box inner */}
+    </div> {/* end prompt box outer */}
+
+    {/* ── Cards: only shown when idle, positioned below the prompt box ── */}
+    {!surveyTopic.trim() && wizardStep === -1 && !showClarification && !expandedCategory && (
+      <div className="flex justify-center px-4"
+        style={{ position: 'absolute', top: '58%', left: 0, right: 0, animation: 'sfFadeUp 0.5s 0.1s ease-out both' }}>
+        <div className="w-full" style={{ maxWidth: '672px' }}>
+          <div className="prompt-slider"
+            style={{ '--card-width': '220px', '--card-height': '110px', '--quantity': SUGGESTION_PROMPTS.length, '--duration': '25s' } as React.CSSProperties}>
+            <div className="prompt-slider__track">
+              {SUGGESTION_PROMPTS.map((s, i) => (
+                <button key={i}
+                  onClick={() => { setExpandedCategory(s.label); setSelectedSuggestion({ label: s.label, prompt: s.prompt }); setSurveyTopic(s.prompt); }}
+                  className="prompt-slider__item"
+                  style={{ '--position': i + 1, background: s.gradient } as React.CSSProperties}>
+                  <div className="prompt-slider__icon"><img src={s.icon} alt={s.label} /></div>
+                  <p className="prompt-slider__title">{s.label}</p>
+                  <p className="prompt-slider__desc">{s.prompt.slice(0, 50)}...</p>
                 </button>
               ))}
             </div>
           </div>
-        )}
-
-        {!showClarification && (
-        <div className="flex items-center justify-center mt-4 sm:mt-6">
         </div>
-        )}
-        </>
-        )}
-            </div> {/* end front face */}
-
-            {/* ── BACK — Funnel mode (rotated 180deg, visible after flip) ── */}
-            <div style={{
-              backfaceVisibility: 'hidden' as any,
-              WebkitBackfaceVisibility: 'hidden' as any,
-              transform: 'rotateY(180deg)',
-              position: 'absolute' as any,
-              top: 0, left: 0, right: 0,
-            }}>
-              {isFlipped && (
-                <div className={`rounded-3xl border p-6 ${isDarkMode ? 'bg-slate-800/90 border-slate-700' : 'bg-white border-stone-200 shadow-sm'}`}>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <Layers size={18} className="text-blue-500" />
-                      <span className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>Funnel Survey Mode</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold">AI</span>
-                    </div>
-                    <button
-                      onClick={() => { setCreateMode('single'); setIsFlipped(false); setFunnelSuggestion(f => ({ ...f, show: false })); }}
-                      className={`text-xs px-2 py-1 rounded-lg ${isDarkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-stone-500 hover:bg-stone-100'}`}
-                    >
-                      ← Back to single survey
-                    </button>
-                  </div>
-                  <FunnelCreator
-                    isDarkMode={isDarkMode}
-                    initialPrompt={surveyTopic}
-                    onFunnelCreated={(funnelId) => {
-                      window.location.href = `/dashboard?v=jrn&id=${funnelId}`;
-                    }}
-                  />
-                </div>
-              )}
-            </div>
-
-          </div> {/* end flip inner */}
-        </div> {/* end flip container */}
-
       </div>
+    )}
+
+    {!surveyTopic.trim() && wizardStep === -1 && expandedCategory && !showClarification && (
+      <div className="flex justify-center px-4"
+        style={{ position: 'absolute', top: '58%', left: 0, right: 0, animation: 'sfSubPromptsIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both' }}>
+        <div className="w-full" style={{ maxWidth: '672px', animation: 'sfSubPromptsIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both' }}>
+          <div className="flex items-center justify-between mb-3 px-1">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center"
+                style={{ background: SUGGESTION_PROMPTS.find(s => s.label === expandedCategory)?.gradient || '#666' }}>
+                <img src={SUGGESTION_PROMPTS.find(s => s.label === expandedCategory)?.icon || ''} alt="" className="w-4 h-4 object-contain" style={{ filter: 'brightness(0) invert(1)' }} />
+              </div>
+              <span className={`text-sm font-semibold ${isDarkMode ? 'text-white' : 'text-slate-800'}`} style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{expandedCategory}</span>
+            </div>
+            <button onClick={() => { setExpandedCategory(null); setSelectedSuggestion(null); setSurveyTopic(''); }}
+              className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-all ${isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-700' : 'text-stone-500 hover:text-stone-800 hover:bg-stone-100'}`}>
+              ← Back
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(SUB_PROMPTS[expandedCategory] || []).map((subPrompt, i) => (
+              <button key={i}
+                onClick={() => { const p = `${expandedCategory}: ${subPrompt}`; setSelectedSuggestion({ label: expandedCategory, prompt: p }); setSurveyTopic(p); }}
+                className={`px-4 py-2.5 rounded-full border text-[12px] sm:text-[13px] font-medium transition-all duration-200 hover:scale-[1.03] active:scale-[0.97] ${isDarkMode ? 'bg-slate-800/70 border-slate-700/50 text-slate-300 hover:border-slate-500 hover:bg-slate-800 hover:text-white' : 'bg-white border-stone-200/80 text-slate-600 hover:border-red-300 hover:text-slate-900 hover:shadow-md hover:shadow-red-500/5'}`}
+                style={{ animation: `sfSubCardIn 0.4s ${i * 0.07}s cubic-bezier(0.34, 1.56, 0.64, 1) both` }}>
+                {subPrompt}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    )}
+
+    </div> {/* end viewport wrapper */}
+
+    {/* ── Multi-Stage Builder overlay — outside clipped wrapper so fixed positioning works ── */}
+    {isFlipped && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        style={{ background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(4px)', animation: 'sfOverlayIn 0.3s ease-out' }}
+      >
+        <div
+          className={`relative w-full rounded-2xl border flex flex-col shadow-2xl ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-stone-200'}`}
+          style={{ maxWidth: '680px', maxHeight: '85vh', animation: 'sfModalIn 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}
+        >
+          {/* Header */}
+          <div className={`flex items-center justify-between px-5 py-4 border-b shrink-0 ${isDarkMode ? 'border-slate-700' : 'border-stone-100'}`}>
+            <div className="flex items-center gap-2">
+              <GitBranch size={16} className={isDarkMode ? 'text-slate-400' : 'text-stone-500'} />
+              <span className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>Multi-Stage Survey Builder</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 font-semibold">AI</span>
+            </div>
+            <button
+              onClick={() => { setCreateMode('single'); setIsFlipped(false); setFunnelSuggestion(f => ({ ...f, show: false })); }}
+              className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${isDarkMode ? 'text-slate-400 hover:bg-slate-700 hover:text-white' : 'text-stone-500 hover:bg-stone-100 hover:text-stone-800'}`}
+            >
+              ← Single survey
+            </button>
+          </div>
+          {/* Scrollable content */}
+          <div className="flex-1 overflow-y-auto p-5">
+            <FunnelCreator
+              isDarkMode={isDarkMode}
+              initialPrompt={surveyTopic}
+              onFunnelCreated={(funnelId) => {
+                window.location.href = `/dashboard?v=jrn&id=${funnelId}`;
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    )}
 
       {/* ── Survey Result Modal ── */}
       {showResultModal && generatedSurvey && (
@@ -1609,6 +1718,43 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
           from { opacity: 0; transform: translateY(6px); }
           to { opacity: 1; transform: translateY(0); }
         }
+        @keyframes sfFadeOut {
+          from { opacity: 1; transform: translateY(0); }
+          to { opacity: 0; transform: translateY(-12px); pointer-events: none; }
+        }
+        /* Prompt glide to bottom on first type */
+        @keyframes promptToBottom {
+          from { opacity: 0.6; transform: translateY(20px); }
+          to   { opacity: 1;   transform: translateY(0); }
+        }
+        /* Chat bubble pop-in from bottom-left */
+        @keyframes bubbleIn {
+          0%   { opacity: 0; transform: translateY(16px) scale(0.92); }
+          60%  { opacity: 1; transform: translateY(-4px) scale(1.01); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        /* Typewriter cursor blink */
+        @keyframes cursorBlink {
+          0%, 100% { opacity: 1; }
+          50%       { opacity: 0; }
+        }
+        /* Prompt box glide to bottom */
+        @keyframes promptGlideDown {
+          0%   { transform: translateX(-50%) translateY(-50%); }
+          60%  { transform: translateX(-50%) translateY(calc(40vh - 50% + 8px)); }
+          80%  { transform: translateX(-50%) translateY(calc(40vh - 50% - 4px)); }
+          100% { transform: translateX(-50%) translateY(calc(40vh - 50%)); }
+        }
+        @keyframes promptGlideUp {
+          0%   { transform: translateX(-50%) translateY(calc(40vh - 50%)); }
+          100% { transform: translateX(-50%) translateY(-50%); }
+        }
+        .prompt-glide-down {
+          animation: promptGlideDown 0.75s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+        }
+        .prompt-glide-up {
+          animation: promptGlideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+        }
         .clarification-prompt-down {
           animation: promptSlideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
         }
@@ -1719,7 +1865,6 @@ const SurveyForm: React.FC<SurveyFormProps> = ({ isDarkMode = false }) => {
           to { opacity: 1; transform: translateY(0) scale(1) rotateX(0deg); }
         }
       `}</style>
-    </div>
     </>
   );
 };

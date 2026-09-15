@@ -207,3 +207,21 @@ export const parseImage = async (imageBase64: string): Promise<string> => {
     throw new Error(handleApiError(error, 'Image parsing'));
   }
 };
+
+export const parsePdf = async (pdfBase64: string): Promise<string> => {
+  try {
+    const response = await makeApiRequest('/parse-pdf', {
+      method: 'POST',
+      body: JSON.stringify({ pdf: pdfBase64 }),
+    }, true); // Allow unauthenticated
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as any).error || `PDF parse failed: ${response.status}`);
+    }
+    const data = await response.json();
+    return (data as any).text || '';
+  } catch (error) {
+    console.error('PDF parsing failed:', error);
+    throw new Error((error instanceof Error ? error.message : 'PDF parsing failed'));
+  }
+};

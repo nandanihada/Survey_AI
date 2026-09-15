@@ -1116,6 +1116,87 @@ Return valid JSON only.""",
         return jsonify({"error": f"Failed to parse image: {str(e)}"}), 500
 
 
+@app.route("/parse-pdf", methods=["POST", "OPTIONS"])
+@cross_origin(supports_credentials=True, origins="*")
+def parse_pdf():
+    if request.method == "OPTIONS":
+        return "", 200
+
+    try:
+        import fitz  # PyMuPDF
+        import base64
+        import io
+
+        data = request.get_json()
+        pdf_b64 = data.get("pdf", "")
+        if not pdf_b64:
+            return jsonify({"error": "No PDF data provided"}), 400
+
+        # Strip data-URI prefix if present
+        if "," in pdf_b64:
+            pdf_b64 = pdf_b64.split(",", 1)[1]
+
+        pdf_bytes = base64.b64decode(pdf_b64)
+
+        # Extract text from all pages using PyMuPDF
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        pages_text = []
+        for page in doc:
+            text = page.get_text("text").strip()
+            if text:
+                pages_text.append(text)
+        doc.close()
+
+        raw_text = "\n\n".join(pages_text)
+
+        if not raw_text.strip():
+            return jsonify({"error": "Could not extract text from PDF. It may be scanned or image-based."}), 400
+
+        # Truncate to 12000 chars to stay within token limits
+        raw_text = raw_text[:12000]
+
+        # Use OpenAI to summarize/extract the relevant survey context
+        headers = {
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You extract the core topic, objectives, and any relevant context from a document "
+                        "to help build a survey. Return a concise 2-4 sentence summary that describes what "
+                        "the survey should cover based on this document. Be specific and actionable."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": f"Document content:\n\n{raw_text}"
+                }
+            ],
+            "max_tokens": 300,
+            "temperature": 0.3,
+        }
+
+        resp = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        result = resp.json()
+        summary = result["choices"][0]["message"]["content"].strip()
+
+        return jsonify({"text": summary, "raw_length": len(raw_text)})
+
+    except Exception as e:
+        print(f"PDF parsing error: {e}")
+        return jsonify({"error": f"Failed to parse PDF: {str(e)}"}), 500
+
+
 @app.route("/wizard-suggestions", methods=["GET", "OPTIONS"])
 @cross_origin(supports_credentials=True, origins="*")
 def get_wizard_suggestions():
