@@ -1313,13 +1313,11 @@ def publish_to_surveyforever(survey_short_id):
     import os, requests as ext_requests
 
     sf_api_key = os.environ.get('SF_API_KEY', '')
-    sf_api_url = os.environ.get('SF_API_URL', '')  # TODO: set once SF docs are shared
+    sf_api_url = os.environ.get('SF_API_URL', 'https://gyafunimpnzctpfbqkgm.supabase.co/functions/v1/receive-pepperwahl')
     frontend_url = os.environ.get('FRONTEND_URL', 'https://survey.pepperwahl.com')
 
     if not sf_api_key:
         return jsonify({'success': False, 'error': 'Survey Forever API key is not configured. Set SF_API_KEY in your environment.'}), 400
-    if not sf_api_url:
-        return jsonify({'success': False, 'error': 'Survey Forever API URL is not configured. Set SF_API_URL in your environment.'}), 400
 
     try:
         body      = request.get_json(silent=True) or {}
@@ -1402,7 +1400,11 @@ def publish_to_surveyforever(survey_short_id):
             resp = ext_requests.post(
                 sf_api_url,
                 json=payload,
-                headers={'Content-Type': 'application/json', 'X-API-Key': sf_api_key},
+                headers={
+                    'Content-Type': 'application/json',
+                    'X-API-Key': sf_api_key,
+                    'Authorization': f'Bearer {sf_api_key}',
+                },
                 timeout=15
             )
             sf_data = resp.json()
