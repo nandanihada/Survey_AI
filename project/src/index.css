@@ -35,9 +35,11 @@ body {
   background-position: center center;
 }
 
-/* Dark mode background */
+/* Dark mode background — same hexagon pattern as light, with dark overlay */
 .bg-dark-theme {
-  background-image: url('/dark-bg.png');
+  background-image: 
+    linear-gradient(rgba(15, 23, 42, 0.82), rgba(15, 23, 42, 0.82)),
+    url('https://i.postimg.cc/Hn0yML3W/13684518-5329445.jpg');
   background-size: cover;
   background-repeat: no-repeat;
   background-position: center center;
