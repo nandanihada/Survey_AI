@@ -6050,6 +6050,8 @@ def serve_privacy_policy_html():
 def serve_og_preview():
     """Serve OG preview image for link previews (WhatsApp, Twitter etc.)"""
     return send_from_directory(DIST_DIR, 'og-preview.svg')
+
+@app.errorhandler(404)
 def catch_all(e):
     """Serve index.html for all unmatched routes (SPA fallback)"""
     # Only block API/backend routes — everything else gets the SPA
@@ -6064,6 +6066,7 @@ def catch_all(e):
     return jsonify({"error": "Not found"}), 404
 
 @app.route('/s/<path:rest>')
+@app.route('/survey')
 @app.route('/survey/<path:survey_path>')
 @app.route('/login')
 @app.route('/signup')
