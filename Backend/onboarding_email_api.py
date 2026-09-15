@@ -246,12 +246,28 @@ def _send_onboarding_email(to_email: str, name: str, cfg: dict) -> bool:
 # ────────────────────────────────────────────────────────────────────────────
 
 def maybe_send_onboarding_email(to_email: str, name: str) -> None:
-    """Call this after a user confirms their email.
-    Sends the onboarding email only when automation is enabled."""
+    """Call this after a new user is created.
+    Sends the onboarding email only when automation is enabled.
+    Tracks sent status per-user so it fires exactly once per account."""
     try:
         cfg = _get_config()
-        if cfg.get("automation_enabled"):
-            _send_onboarding_email(to_email, name, cfg)
+        if not cfg.get("automation_enabled"):
+            logger.info(f"📧 Onboarding automation disabled — skipping {to_email}")
+            return
+
+        # Check if already sent to this user
+        already_sent = db.onboarding_email_log.find_one({"email": to_email})
+        if already_sent:
+            logger.info(f"📧 Onboarding already sent to {to_email} — skipping")
+            return
+
+        success = _send_onboarding_email(to_email, name, cfg)
+        if success:
+            # Mark as sent so we never duplicate
+            db.onboarding_email_log.insert_one({
+                "email": to_email,
+                "sent_at": datetime.now(timezone.utc),
+            })
     except Exception as e:
         logger.warning(f"⚠️ maybe_send_onboarding_email non-critical error: {e}")
 
@@ -331,3 +347,57 @@ def send_test_email():
     if ok:
         return jsonify({"success": True, "message": f"Test email sent to {test_email}"}), 200
     return jsonify({"success": False, "error": "SMTP send failed — check server logs."}), 500
+
+
+@onboarding_email_bp.route("/send-missed", methods=["POST"])
+@cross_origin(supports_credentials=True, origins="*")
+@requireAdmin
+def send_missed_onboarding():
+    """POST /api/admin/onboarding-email/send-missed
+    Sends the onboarding email to all users who have not yet received it.
+    Safe to call multiple times — skips anyone already in onboarding_email_log."""
+    if request.method == "OPTIONS":
+        return "", 200
+
+    cfg = _get_config()
+    if not cfg.get("automation_enabled"):
+        return jsonify({"error": "Automation is disabled. Enable it first."}), 400
+
+    # Get all emails already sent
+    sent_emails = set(
+        doc["email"] for doc in db.onboarding_email_log.find({}, {"email": 1})
+    )
+
+    # Get all users not yet sent
+    users = list(db.users.find(
+        {"email": {"$nin": list(sent_emails)}},
+        {"email": 1, "name": 1}
+    ))
+
+    sent, failed = 0, 0
+    for user in users:
+        email = user.get("email", "")
+        name  = user.get("name", "")
+        if not email:
+            continue
+        try:
+            ok = _send_onboarding_email(email, name, cfg)
+            if ok:
+                db.onboarding_email_log.insert_one({
+                    "email": email,
+                    "sent_at": datetime.now(timezone.utc),
+                })
+                sent += 1
+            else:
+                failed += 1
+        except Exception as e:
+            logger.error(f"❌ Bulk onboarding send failed for {email}: {e}")
+            failed += 1
+
+    return jsonify({
+        "success": True,
+        "sent": sent,
+        "failed": failed,
+        "total_users": len(users),
+        "message": f"Sent to {sent} users, {failed} failed."
+    }), 200
