@@ -493,6 +493,10 @@ try:
     from publish_scheduler import start_scheduler
     start_scheduler()
 
+    # Start onboarding email scheduler — auto-sends to new users every 5 min
+    from onboarding_email_api import start_onboarding_scheduler
+    start_onboarding_scheduler()
+
     # Setup tracking TTL indexes for 15-day auto-delete
     setup_tracking_indexes()
     setup_referral_indexes()

@@ -9,6 +9,8 @@ this email automatically.
 import os
 import smtplib
 import logging
+import threading
+import time
 from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -401,3 +403,66 @@ def send_missed_onboarding():
         "total_users": len(users),
         "message": f"Sent to {sent} users, {failed} failed."
     }), 200
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Background auto-sender — runs every 5 minutes
+# Finds users who never received the onboarding email and sends it
+# ────────────────────────────────────────────────────────────────────────────
+
+_onboarding_scheduler_started = False
+_onboarding_scheduler_lock = threading.Lock()
+
+def _onboarding_scheduler_loop():
+    """Background thread: every 5 min, send onboarding to users who missed it."""
+    logger.info("[OnboardingScheduler] Worker started")
+    while True:
+        try:
+            cfg = _get_config()
+            if cfg.get("automation_enabled"):
+                # Find emails already sent
+                sent_emails = set(
+                    doc["email"] for doc in db.onboarding_email_log.find({}, {"email": 1})
+                )
+                # Find users who haven't received it
+                pending = list(db.users.find(
+                    {"email": {"$nin": list(sent_emails)}},
+                    {"email": 1, "name": 1}
+                ))
+                for user in pending:
+                    email = user.get("email", "")
+                    name  = user.get("name", "")
+                    if not email:
+                        continue
+                    try:
+                        ok = _send_onboarding_email(email, name, cfg)
+                        if ok:
+                            db.onboarding_email_log.insert_one({
+                                "email": email,
+                                "sent_at": datetime.now(timezone.utc),
+                            })
+                            logger.info(f"[OnboardingScheduler] ✅ Sent to {email}")
+                        else:
+                            logger.warning(f"[OnboardingScheduler] ⚠️ Send failed for {email}")
+                    except Exception as e:
+                        logger.error(f"[OnboardingScheduler] ❌ Error for {email}: {e}")
+        except Exception as outer:
+            logger.error(f"[OnboardingScheduler] Outer error: {outer}")
+
+        time.sleep(300)  # wait 5 minutes before next check
+
+
+def start_onboarding_scheduler():
+    """Start the onboarding email background scheduler (idempotent)."""
+    global _onboarding_scheduler_started
+    with _onboarding_scheduler_lock:
+        if _onboarding_scheduler_started:
+            return
+        _onboarding_scheduler_started = True
+        t = threading.Thread(
+            target=_onboarding_scheduler_loop,
+            daemon=True,
+            name="OnboardingEmailScheduler"
+        )
+        t.start()
+        logger.info("[OnboardingScheduler] Thread launched")
