@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import PublishToMoustacheModal from '../components/PublishToMoustacheModal';
 import BulkPublishToMoustacheModal from '../components/BulkPublishToMoustacheModal';
+import PublishToSurveyForeverModal from '../components/PublishToSurveyForeverModal';
 import MoustacheLeadsTab from '../components/admin/MoustacheLeadsTab';
 import PublishScheduleTab from '../components/admin/PublishScheduleTab';
 import PublishToLinkedInModal from '../components/PublishToLinkedInModal';
@@ -159,6 +160,14 @@ const AdminDashboard: React.FC = () => {
   } | null>(null);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [selectedSurveyIds, setSelectedSurveyIds] = useState<string[]>([]);
+
+  // ── Survey Forever publish modal ──────────────────────────────────────────
+  const [sfModal, setSfModal] = useState<{
+    surveyShortId: string;
+    surveyTitle: string;
+    existingSfId?: string | null;
+    existingQuestions?: any[];
+  } | null>(null);
 
   // ── LinkedIn publish modal ────────────────────────────────────────────────
   const [linkedinModal, setLinkedinModal] = useState<{
@@ -1461,6 +1470,32 @@ const AdminDashboard: React.FC = () => {
                                   </button>
                                 );
                               })()}
+                              {/* Publish to Survey Forever button */}
+                              {(() => {
+                                const hasSF = !!survey.sf_survey_id;
+                                return (
+                                  <button
+                                    onClick={() => setSfModal({
+                                      surveyShortId: survey.short_id,
+                                      surveyTitle: survey.title,
+                                      existingSfId: survey.sf_survey_id || null,
+                                      existingQuestions: survey.sf_questions || [],
+                                    })}
+                                    style={{
+                                      display: 'flex', alignItems: 'center', gap: 5,
+                                      fontSize: 11, fontWeight: 700,
+                                      border: hasSF ? '1px solid #BAE6FD' : '1px solid #1565C0',
+                                      borderRadius: 7, padding: '5px 10px',
+                                      background: hasSF ? '#EFF8FF' : '#1565C0',
+                                      color: hasSF ? '#0369A1' : '#FFFFFF',
+                                      cursor: 'pointer', fontFamily: 'inherit',
+                                    }}
+                                  >
+                                    <Send size={11} />
+                                    {hasSF ? 'SF Update' : 'Survey Forever'}
+                                  </button>
+                                );
+                              })()}
                             </div>
                           </div>
                         );
@@ -1522,10 +1557,27 @@ const AdminDashboard: React.FC = () => {
                     existingQuestions={moustacheModal.existingQuestions}
                     onClose={() => setMoustacheModal(null)}
                     onPublished={(moustacheId, status) => {
-                      // Update the survey row in state without a full refetch
                       setSurveys(prev => prev.map(s =>
                         s.short_id === moustacheModal.surveyShortId
                           ? { ...s, moustache_survey_id: moustacheId, moustache_status: status }
+                          : s
+                      ));
+                    }}
+                  />
+                )}
+
+                {/* Survey Forever publish modal */}
+                {sfModal && (
+                  <PublishToSurveyForeverModal
+                    surveyShortId={sfModal.surveyShortId}
+                    surveyTitle={sfModal.surveyTitle}
+                    existingSfId={sfModal.existingSfId}
+                    existingQuestions={sfModal.existingQuestions}
+                    onClose={() => setSfModal(null)}
+                    onPublished={(sfId, status) => {
+                      setSurveys(prev => prev.map(s =>
+                        s.short_id === sfModal.surveyShortId
+                          ? { ...s, sf_survey_id: sfId, sf_status: status }
                           : s
                       ));
                     }}

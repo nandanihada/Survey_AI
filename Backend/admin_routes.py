@@ -1294,6 +1294,164 @@ def publish_to_moustache(survey_short_id):
         return jsonify({'success': False, 'error': f'Internal error: {str(e)}'}), 500
 
 
+@admin_bp.route('/surveys/<survey_short_id>/publish-to-surveyforever', methods=['POST'])
+@requireAdmin
+def publish_to_surveyforever(survey_short_id):
+    """
+    Publish (or update) a Pepperwahl survey to Survey Forever.
+
+    Expects JSON body:
+    {
+        "questions": [
+            { "question": "...", "options": [...], "qualify_if": [...] }
+        ],
+        "extra": { "payout": "2.50", "country": "US", ... }
+    }
+
+    NOTE: SF_API_URL will be updated once the Survey Forever API docs are shared.
+    """
+    import os, requests as ext_requests
+
+    sf_api_key = os.environ.get('SF_API_KEY', '')
+    sf_api_url = os.environ.get('SF_API_URL', '')  # TODO: set once SF docs are shared
+    frontend_url = os.environ.get('FRONTEND_URL', 'https://survey.pepperwahl.com')
+
+    if not sf_api_key:
+        return jsonify({'success': False, 'error': 'Survey Forever API key is not configured. Set SF_API_KEY in your environment.'}), 400
+    if not sf_api_url:
+        return jsonify({'success': False, 'error': 'Survey Forever API URL is not configured. Set SF_API_URL in your environment.'}), 400
+
+    try:
+        body      = request.get_json(silent=True) or {}
+        questions = body.get('questions', [])
+        extra     = body.get('extra', {})
+
+        # Validate questions
+        if not questions:
+            return jsonify({'success': False, 'error': 'At least one eligibility question is required.'}), 400
+        if len(questions) > 5:
+            return jsonify({'success': False, 'error': 'A maximum of 5 eligibility questions is allowed.'}), 400
+        for i, q in enumerate(questions):
+            if not q.get('question', '').strip():
+                return jsonify({'success': False, 'error': f'Question {i+1} is missing text.'}), 400
+            if not q.get('options') or len(q['options']) < 2:
+                return jsonify({'success': False, 'error': f'Question {i+1} must have at least 2 options.'}), 400
+            if not q.get('qualify_if'):
+                return jsonify({'success': False, 'error': f'Question {i+1} must have at least one qualifying answer.'}), 400
+
+        # Resolve survey / funnel
+        is_funnel   = False
+        survey_name = None
+        survey_link = None
+
+        survey_doc = (
+            db.surveys.find_one({'id': survey_short_id}) or
+            db.surveys.find_one({'short_id': survey_short_id}) or
+            db.surveys.find_one({'_id': survey_short_id})
+        )
+
+        if survey_doc:
+            survey_name = survey_doc.get('title', 'Untitled Survey')
+            survey_link = f"{frontend_url}/survey/{survey_short_id}?uid={{{{user_id}}}}&src=surveyforever"
+        else:
+            funnel_doc = (
+                db.funnels.find_one({'funnel_id': survey_short_id}) or
+                db.funnels.find_one({'_id': survey_short_id})
+            )
+            if not funnel_doc:
+                return jsonify({'success': False, 'error': 'Survey or funnel not found.'}), 404
+            is_funnel   = True
+            survey_name = funnel_doc.get('name', 'Untitled Funnel')
+            first_sid   = (funnel_doc.get('screening_surveys') or [{}])[0].get('survey_id', survey_short_id)
+            survey_link = f"{frontend_url}/survey/{first_sid}?funnel={survey_short_id}&uid={{{{user_id}}}}&src=surveyforever"
+
+        # Auto-generate description if not provided
+        description = extra.get('description', '').strip()
+        if not description:
+            description = f"Participate in our {survey_name} survey. Share your opinions and help us improve. Takes just a few minutes to complete."
+
+        # Build payload — will be adjusted once SF API spec is available
+        payload = {
+            'survey_id':   survey_short_id,
+            'survey_name': survey_name,
+            'survey_link': survey_link,
+            'description': description,
+            'questions':   questions,
+            'payout_usd':  0.0,
+            'country':     extra.get('country', 'US') or 'US',
+        }
+        if extra.get('payout'):
+            try: payload['payout_usd'] = float(extra['payout'])
+            except (ValueError, TypeError): pass
+        if extra.get('country'):    payload['country']      = extra['country']
+        if extra.get('min_age'):
+            try: payload['min_age'] = int(extra['min_age'])
+            except: pass
+        if extra.get('max_age'):
+            try: payload['max_age'] = int(extra['max_age'])
+            except: pass
+        if extra.get('loi_minutes'):
+            try: payload['loi_minutes'] = int(extra['loi_minutes'])
+            except: pass
+        if extra.get('survey_type'): payload['survey_type'] = extra['survey_type']
+        if extra.get('notes'):       payload['notes']        = extra['notes']
+        if extra.get('expiry_date'): payload['expiry_date']  = extra['expiry_date']
+
+        # Call Survey Forever API
+        try:
+            resp = ext_requests.post(
+                sf_api_url,
+                json=payload,
+                headers={'Content-Type': 'application/json', 'X-API-Key': sf_api_key},
+                timeout=15
+            )
+            sf_data = resp.json()
+        except ext_requests.exceptions.Timeout:
+            return jsonify({'success': False, 'error': 'Survey Forever API timed out. Please try again.'}), 502
+        except Exception as req_err:
+            return jsonify({'success': False, 'error': f'Failed to reach Survey Forever API: {str(req_err)}'}), 502
+
+        if not resp.ok or not sf_data.get('success'):
+            err_msg = sf_data.get('error') or sf_data.get('message') or f'HTTP {resp.status_code}'
+            return jsonify({'success': False, 'error': f'Survey Forever returned an error: {err_msg}'}), 400
+
+        sf_survey_id = sf_data.get('sf_survey_id', sf_data.get('survey_id', ''))
+        sf_status    = sf_data.get('status', 'published')
+
+        # Persist SF survey ID back to the survey/funnel document
+        _sf_set = {
+            'sf_survey_id':      sf_survey_id,
+            'sf_status':         sf_status,
+            'sf_published_at':   datetime.utcnow().isoformat(),
+            'sf_questions':      questions,
+            'sf_extra':          extra,
+        }
+        if is_funnel:
+            db.funnels.update_one(
+                {'$or': [{'funnel_id': survey_short_id}, {'_id': survey_short_id}]},
+                {'$set': _sf_set}
+            )
+        else:
+            db.surveys.update_one(
+                {'$or': [{'id': survey_short_id}, {'short_id': survey_short_id}, {'_id': survey_short_id}]},
+                {'$set': _sf_set}
+            )
+
+        return jsonify({
+            'success':          True,
+            'sf_survey_id':     sf_survey_id,
+            'source_survey_id': survey_short_id,
+            'status':           sf_status,
+            'message':          sf_data.get('message', 'Survey published to Survey Forever successfully.'),
+            'payload_sent':     payload,
+        })
+
+    except Exception as e:
+        print(f"Error in publish_to_surveyforever: {e}")
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'error': f'Internal error: {str(e)}'}), 500
+
+
 @admin_bp.route('/surveys/<survey_short_id>/moustache-status', methods=['GET'])
 @requireAdmin
 def get_moustache_status(survey_short_id):
