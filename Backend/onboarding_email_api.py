@@ -422,6 +422,7 @@ def _onboarding_scheduler_loop():
     # Known disposable/fake email domains to skip
     SKIP_DOMAINS = {
         'ruutukf.com', 'fxzig.com', 'forexzig.com', 'denipl.net', 'acoxs.com',
+        'duvips.com',
         'mailinator.com', 'guerrillamail.com', 'tempmail.com', 'throwam.com',
         'sharklasers.com', 'guerrillamailblock.com', 'grr.la', 'guerrillamail.info',
         'spam4.me', 'yopmail.com', 'trashmail.com', 'fakeinbox.com', 'dispostable.com',
@@ -469,13 +470,18 @@ def _onboarding_scheduler_loop():
                                 upsert=True,
                             )
                             logger.info(f"[OnboardingScheduler] ✅ Sent to {email}")
-                            # Delay between sends to stay within Hostinger rate limits
-                            time.sleep(3)
+                            # 8s delay = ~450/hr, well within Hostinger limits
+                            time.sleep(8)
                         else:
                             logger.warning(f"[OnboardingScheduler] ⚠️ Send failed for {email}")
                             time.sleep(5)  # back off on failure too
                     except Exception as e:
+                        err_str = str(e)
                         logger.error(f"[OnboardingScheduler] ❌ Error for {email}: {e}")
+                        if 'Ratelimit' in err_str or '451' in err_str:
+                            logger.warning("[OnboardingScheduler] Rate limit hit — backing off 10 minutes")
+                            time.sleep(600)
+                            break  # stop this cycle, next 5-min loop will retry
                         time.sleep(5)
         except Exception as outer:
             logger.error(f"[OnboardingScheduler] Outer error: {outer}")
