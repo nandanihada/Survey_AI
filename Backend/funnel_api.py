@@ -273,7 +273,7 @@ def generate_funnel():
     data = request.get_json() or {}
     funnel_plan = data.get("funnel_plan")
     original_prompt = data.get("original_prompt", "")
-    anchor_config = data.get("anchor_config")  # optional anchor question config
+    anchor_config = data.get("anchor_config")  # anchor question config from plan step
 
     if not funnel_plan:
         return jsonify({"error": "funnel_plan is required"}), 400
@@ -337,6 +337,8 @@ def _run_funnel_generation_bg(job_id, funnel_plan, original_prompt, owner_user_i
         # ── Screening surveys ──
         screening_survey_ids = []
         router_survey_ids = []   # surveys that contain the anchor question
+        all_screening_docs = []  # collect docs so we can distribute anchor later
+
         for s_meta in funnel_plan.get("screening_surveys", []):
             update_job(step=f"Generating: {s_meta['name']}...", progress=int(done / max(total_surveys, 1) * 80))
             try:
@@ -355,34 +357,25 @@ def _run_funnel_generation_bg(job_id, funnel_plan, original_prompt, owner_user_i
                     question_count=s_meta.get("estimated_questions")
                 )
                 for q in survey_doc.get("questions", []):
-                    if isinstance(q, dict):  # guard: skip any non-dict items saved by AI
+                    if isinstance(q, dict):
                         questions_asked_so_far.append({"topic": q.get("question", "")[:80], "survey": s_meta["name"]})
-
-                # ── Inject anchor question into this survey ──
-                # We inject into every screening survey so the answer is always captured,
-                # regardless of which screening layer the user reaches last.
-                # The flag evaluation happens only at the end (all_failed / no_match).
-                is_router = False
-                if anchor_config and anchor_config.get("enabled") and anchor_config.get("question_text"):
-                    _inject_anchor_question_into_survey(survey_doc["id"], anchor_config)
-                    is_router = True
-                    router_survey_ids.append(survey_doc["id"])
 
                 s_entry = {
                     "survey_id": survey_doc["id"],
                     "name": s_meta["name"],
                     "index": s_meta["index"],
                     "purpose": s_meta["purpose"],
-                    "is_router": is_router,
+                    "is_router": False,
                 }
                 screening_survey_ids.append(s_entry)
+                all_screening_docs.append(survey_doc)
                 generated_surveys.append({
                     "type": "screening",
                     "index": s_meta["index"],
                     "survey_id": survey_doc["id"],
                     "name": s_meta["name"],
                     "question_count": len(survey_doc.get("questions", [])),
-                    "is_router": is_router,
+                    "is_router": False,
                 })
                 done += 1
                 update_job(surveys=list(generated_surveys), progress=int(done / max(total_surveys, 1) * 80))
@@ -391,6 +384,37 @@ def _run_funnel_generation_bg(job_id, funnel_plan, original_prompt, owner_user_i
                 errors.append(f"Screening survey '{s_meta['name']}': {e}")
                 print(f"❌ [BG Funnel] Screening failed {s_meta['name']}: {e}")
                 done += 1
+
+        # ── Register anchor question in global collection (NO injection into own surveys) ──
+        # The anchor question is this funnel's GATE — it gets injected into OTHER funnels
+        # that choose to attach it. It should NOT appear in this funnel's own surveys.
+        own_anchor_id = None
+        if anchor_config and anchor_config.get("question_text"):
+            update_job(step="Registering anchor question...", progress=int(done / max(total_surveys, 1) * 80))
+            try:
+                first_screening = all_screening_docs[0] if all_screening_docs else None
+                anchor_name = screening_survey_ids[0]["name"] if screening_survey_ids else "Screening"
+
+                anchor_doc_id = f"anc_{uuid.uuid4().hex[:12]}"
+                db.anchor_questions.insert_one({
+                    "anchor_id":           anchor_doc_id,
+                    "owner_funnel_id":     funnel_id,
+                    "owner_funnel_name":   funnel_plan.get("funnel_name", "Funnel"),
+                    "question_text":       anchor_config["question_text"],
+                    "options":             anchor_config.get("options", []),
+                    "correct_answers":     anchor_config.get("correct_answers", []),
+                    "source_survey_id":    first_screening["id"] if first_screening else "",
+                    "source_survey_name":  anchor_name,
+                    "source_question_id":  "",
+                    "injected_survey_ids": [],  # empty — not injected into own surveys
+                    "created_at":          datetime.now(timezone.utc).isoformat(),
+                    "updated_at":          datetime.now(timezone.utc).isoformat(),
+                })
+                own_anchor_id = anchor_doc_id
+                print(f"✅ [BG Funnel] Anchor question registered as {anchor_doc_id} (not injected into own surveys)")
+            except Exception as ae:
+                errors.append(f"Anchor registration: {ae}")
+                print(f"⚠️ [BG Funnel] Anchor registration failed: {ae}")
 
         # ── Job surveys ──
         screening_questions_asked = list(questions_asked_so_far)
@@ -479,9 +503,12 @@ def _run_funnel_generation_bg(job_id, funnel_plan, original_prompt, owner_user_i
             "updated_at": datetime.now(timezone.utc).isoformat(),
             "generated_surveys": generated_surveys,
             "generation_errors": errors,
-            # ── Anchor question config ──────────────────────────────────────
-            "anchor_config": anchor_config if (anchor_config and anchor_config.get("enabled")) else None,
-            "router_survey_ids": router_survey_ids if router_survey_ids else [],
+            # ── New anchor system ───────────────────────────────────────────
+            "own_anchor_id":   own_anchor_id,      # anchor this funnel owns/gates
+            "attached_anchors": [],                 # anchors from other funnels, added via UI
+            "router_survey_ids": router_survey_ids, # surveys that contain injected anchor Qs
+            # ── Legacy field kept for backward compat (scoring engine reads it) ──
+            "anchor_config": None,
         }
         db.funnels.insert_one(funnel_doc)
         print(f"✅ [BG Funnel] Saved funnel: {funnel_id}")
@@ -1199,6 +1226,9 @@ def get_funnels():
             "anchor_config":     f.get("anchor_config"),
             "router_survey_ids": f.get("router_survey_ids", []),
             "fallback_url":      f.get("fallback_url", ""),
+            # ── New anchor system fields ─────────────────────────────────────
+            "own_anchor_id":     f.get("own_anchor_id"),
+            "attached_anchors":  f.get("attached_anchors", []),
             # ── New fields ──────────────────────────────────────────────────
             "is_favourite":      bool(f.get("is_favourite", False)),
             "folder":            f.get("folder", None),
@@ -1253,6 +1283,7 @@ def update_funnel(funnel_id):
         "anchor_config", "router_survey_ids",
         "quick_settings", "quick_scope", "bulk_settings",
         "screening_spinner_configs",
+        "own_anchor_id", "attached_anchors",
     ]
     update = {k: data[k] for k in allowed_fields if k in data}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
@@ -2822,44 +2853,89 @@ def get_quick_overrides(funnel_id, survey_id):
 @requireAuth
 def get_anchor_questions():
     """
-    Returns all questions tagged as anchor (is_anchor=True) across ALL surveys
-    belonging to the authenticated user. Used to populate the anchor picker
-    in the funnel Quick set-up modal.
+    Combined anchor questions list:
+    1. Questions registered in anchor_questions collection (new system)
+    2. Questions with is_anchor=True on survey documents (old/manual system)
+    Deduplicates by source_question_id.
     """
     if request.method == "OPTIONS":
         return "", 200
 
-    user_id = getattr(request, "user_id", None)
+    search = request.args.get("search", "").strip()
 
-    # Fetch all surveys for this user that have at least one anchor question
-    # Use $elemMatch to filter only surveys with is_anchor questions
-    survey_filter = {"questions": {"$elemMatch": {"is_anchor": True}}}
-    if user_id:
-        survey_filter["user_id"] = user_id
+    # ── Source 1: registered anchor_questions collection ──
+    query: dict = {}
+    if search:
+        query["$or"] = [
+            {"question_text":      {"$regex": search, "$options": "i"}},
+            {"owner_funnel_name":  {"$regex": search, "$options": "i"}},
+            {"source_survey_name": {"$regex": search, "$options": "i"}},
+        ]
+    registered = list(db.anchor_questions.find(query).sort("created_at", -1).limit(200))
+    for a in registered:
+        a["_id"] = str(a["_id"])
+        # Add legacy camelCase fields so old rendering code still works
+        a["questionId"]    = a.get("source_question_id") or a.get("anchor_id", "")
+        a["questionText"]  = a.get("question_text", "")
+        a["surveyName"]    = a.get("source_survey_name", "") or a.get("owner_funnel_name", "")
+        a["surveyType"]    = "screener"
+        a["correctAnswers"] = a.get("correct_answers", [])
+        a["redirectUrl"]   = ""
+
+    registered_source_ids = {a.get("source_question_id", "") for a in registered if a.get("source_question_id")}
+
+    # ── Source 2: is_anchor=True on survey question documents ──
+    survey_filter: dict = {"questions": {"$elemMatch": {"is_anchor": True}}}
+    if search:
+        survey_filter["$or"] = [
+            {"title": {"$regex": search, "$options": "i"}},
+        ]
 
     surveys = list(db.surveys.find(
         survey_filter,
-        {"id": 1, "short_id": 1, "title": 1, "questions": 1, "_id": 0}
+        {"id": 1, "short_id": 1, "title": 1, "questions": 1, "funnel_id": 1, "_id": 0}
     ).limit(200))
 
-    results = []
+    manual = []
+    seen_q_ids: set = set()
     for survey in surveys:
-        survey_id = survey.get("short_id") or survey.get("id", "")
+        survey_id   = survey.get("short_id") or survey.get("id", "")
         survey_name = survey.get("title") or survey_id
+        funnel_id   = survey.get("funnel_id", "")
+        owner_funnel_name = ""
+        if funnel_id:
+            f = db.funnels.find_one({"funnel_id": funnel_id}, {"name": 1})
+            owner_funnel_name = f.get("name", "") if f else ""
+
         for q in survey.get("questions", []):
             if not isinstance(q, dict) or not q.get("is_anchor"):
                 continue
-            results.append({
-                "surveyId": survey_id,
-                "surveyName": survey_name,
-                "surveyType": "standalone",  # not funnel-specific
-                "questionId": q.get("id", ""),
-                "questionText": q.get("question", ""),
-                "options": q.get("options") or [],
+            q_id = q.get("id", "")
+            if q_id in seen_q_ids or q_id in registered_source_ids:
+                continue
+            seen_q_ids.add(q_id)
+            manual.append({
+                "anchor_id":          f"manual_{q_id}",
+                "owner_funnel_id":    funnel_id,
+                "owner_funnel_name":  owner_funnel_name,
+                "question_text":      q.get("question", ""),
+                "options":            q.get("options") or [],
+                "correct_answers":    q.get("anchor_correct_answers") or [],
+                "source_survey_id":   survey_id,
+                "source_survey_name": survey_name,
+                "source_question_id": q_id,
+                "is_manual":          True,
+                # Legacy camelCase fields
+                "questionId":    q_id,
+                "questionText":  q.get("question", ""),
+                "surveyId":      survey_id,
+                "surveyName":    survey_name,
+                "surveyType":    "screener",
                 "correctAnswers": q.get("anchor_correct_answers") or [],
-                "redirectUrl": q.get("anchor_redirect_url") or "",
+                "redirectUrl":   q.get("anchor_redirect_url") or "",
             })
 
+    results = registered + manual
     return jsonify({"anchor_questions": results, "total": len(results)}), 200
 
 

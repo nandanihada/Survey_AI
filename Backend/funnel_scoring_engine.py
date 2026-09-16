@@ -292,70 +292,113 @@ Return ONLY valid JSON, no markdown:
 
 
 # ─────────────────────────────────────────────
-#  ANCHOR QUESTION CHECK
+#  ANCHOR QUESTION CHECK (new system)
 # ─────────────────────────────────────────────
 
-def _try_early_anchor_flag(funnel: dict, funnel_session_id: str, answers: dict):
+def _try_early_anchor_flags(funnel: dict, funnel_session_id: str, answers: dict):
     """
-    Called immediately after each layer is saved.
-    If the anchor question was answered in this set of answers, pre-record qualification
-    so _check_anchor_redirect can use it instantly without re-scanning all layers.
+    Called immediately after each screening layer is saved.
+    Checks current answers against all attached_anchors on this funnel.
+    Uses correct_answers comparison directly against all answer values
+    since anchor question IDs vary per injection.
     """
-    anchor_config = funnel.get("anchor_config")
-    if not anchor_config or not anchor_config.get("enabled"):
+    attached_anchors = funnel.get("attached_anchors", [])
+    if not attached_anchors:
         return
 
-    correct_answers = [str(a).strip().lower() for a in anchor_config.get("correct_answers", [])]
-    redirect_url = anchor_config.get("redirect_url", "").strip()
-    if not correct_answers or not redirect_url:
-        return
+    updates: dict = {}
 
-    source_id = anchor_config.get("question_id", "")
-    injected_id = f"anchor_{source_id}" if source_id else None
+    for anchor_entry in attached_anchors:
+        anchor_id = anchor_entry.get("anchor_id", "")
+        if not anchor_id:
+            continue
 
-    # Check if anchor answer is in this set of answers
-    candidate_keys = [k for k in [injected_id, source_id] if k]
-    for key in candidate_keys:
-        if key in answers:
-            u = str(answers[key]).strip().lower()
-            qualified = any(u == ca or u.startswith(ca) or ca in u for ca in correct_answers)
-            if qualified:
-                print(f"⚓ [Anchor] Early flag: '{u}' qualifies. Pre-recording anchor_qualified=True")
-                db.funnel_sessions.update_one(
-                    {"funnel_session_id": funnel_session_id},
-                    {"$set": {"anchor_pre_qualified": True, "anchor_pre_answer": u}}
-                )
-            return
+        # Load correct_answers — from collection OR embedded in attached entry for manual anchors
+        if anchor_id.startswith("manual_"):
+            correct_answers = [str(a).strip().lower() for a in anchor_entry.get("correct_answers", [])]
+        else:
+            anchor_doc = db.anchor_questions.find_one({"anchor_id": anchor_id})
+            if not anchor_doc:
+                continue
+            correct_answers = [str(a).strip().lower() for a in anchor_doc.get("correct_answers", [])]
+
+        if not correct_answers:
+            continue
+
+        # Strategy 1: check by source_question_id and common injected id patterns
+        source_q_id   = anchor_doc.get("source_question_id", "")
+        question_text = anchor_doc.get("question_text", "").strip().lower()
+
+        # Try all answer keys that might correspond to this anchor question
+        found_answer = None
+        found_key = None
+
+        # Check source_question_id directly
+        if source_q_id and source_q_id in answers:
+            found_answer = str(answers[source_q_id]).strip().lower()
+            found_key = source_q_id
+        else:
+            # Strategy 2: scan all answers — find any key that starts with "anchor_"
+            for key, val in answers.items():
+                if key.startswith("anchor_"):
+                    found_answer = str(val).strip().lower()
+                    found_key = key
+                    break
+
+        if found_answer is not None:
+            qualified = any(
+                found_answer == ca or found_answer.startswith(ca) or ca in found_answer
+                for ca in correct_answers
+            )
+            updates[f"anchor_pre_results.{anchor_id}"] = {
+                "qualified": qualified,
+                "answer": found_answer,
+                "priority": anchor_entry.get("priority", 99),
+            }
+            print(f"⚓ [Anchor] Pre-flag {anchor_id} (key={found_key}): '{found_answer}' → qualified={qualified}")
+
+    if updates:
+        db.funnel_sessions.update_one(
+            {"funnel_session_id": funnel_session_id},
+            {"$set": updates}
+        )
 
 
-def _check_anchor_redirect(funnel: dict, funnel_session_id: str) -> Optional[str]:
+def _check_anchor_redirect(funnel: dict, funnel_session_id: str) -> Optional[dict]:
     """
-    Checks whether the user qualified via the anchor question.
+    New anchor system: checks attached_anchors (from other funnels) by priority.
 
-    Logic:
-    - Funnel must have anchor_config with enabled=True
-    - Load the session's layers_completed to find the user's answer to the anchor question
-    - The anchor question is identified by:
-        1. is_anchor=True on the question document in the survey, OR
-        2. id == "anchor_<question_id>" (runtime-injected questions have this prefix), OR
-        3. id == anchor_config.question_id exactly
-    - Scope is respected: only check layers whose survey_type matches anchor_config.scope
-    - If the user's answer is in anchor_config.correct_answers → return redirect_url
-    - Otherwise return None
+    Returns a dict on match:
+      {
+        "funnel_entry_url": "https://survey.pepperwahl.com/survey/{survey_id}?f={funnel_id}&ly=0&sn=new&inherited=1",
+        "owner_funnel_id":  "fnl_xxx",
+        "anchor_id":        "anc_yyy",
+        "anchor_answer":    "yes",
+        "priority":         1,
+      }
+    Returns None if no attached anchor qualifies.
+
+    Priority order: lower number = higher priority.
+    If multiple qualify, the one with the lowest priority number wins.
     """
-    anchor_config = funnel.get("anchor_config")
-    if not anchor_config or not anchor_config.get("enabled"):
+    attached_anchors = funnel.get("attached_anchors", [])
+    if not attached_anchors:
         return None
 
-    correct_answers = [str(a).strip().lower() for a in anchor_config.get("correct_answers", [])]
-    redirect_url = anchor_config.get("redirect_url", "").strip()
+    # Sort by priority ascending (1 = highest priority)
+    sorted_anchors = sorted(attached_anchors, key=lambda x: x.get("priority", 99))
 
-    if not correct_answers or not redirect_url:
-        print(f"⚓ [Anchor] Config incomplete — correct_answers={correct_answers}, redirect_url='{redirect_url}'")
+    session = db.funnel_sessions.find_one({"funnel_session_id": funnel_session_id})
+    if not session:
         return None
 
-    def _answer_qualifies(user_ans: str) -> bool:
-        """Flexible match: exact, starts-with, or contains any correct answer."""
+    all_answers: dict = {}
+    for layer in session.get("layers_completed", []):
+        all_answers.update(layer.get("answers", {}))
+
+    pre_results: dict = session.get("anchor_pre_results", {})
+
+    def _answer_qualifies(user_ans: str, correct_answers: list) -> bool:
         u = user_ans.strip().lower()
         if not u:
             return False
@@ -364,103 +407,145 @@ def _check_anchor_redirect(funnel: dict, funnel_session_id: str) -> Optional[str
                 return True
         return False
 
-    # Scope: screeners / tore / all
-    anchor_scope = anchor_config.get("scope", "screeners")
-    source_question_id = anchor_config.get("question_id", "")
-    injected_question_id = f"anchor_{source_question_id}" if source_question_id else None
+    # Collect all qualifying anchors first (to handle priority correctly)
+    qualifying = []
 
-    # Load the session to get all collected answers across all layers
-    session = db.funnel_sessions.find_one({"funnel_session_id": funnel_session_id})
-    if not session:
-        return None
+    for anchor_entry in sorted_anchors:
+        anchor_id = anchor_entry.get("anchor_id", "")
+        if not anchor_id:
+            continue
 
-    # Fast path: if early flag was set, return redirect immediately
-    if session.get("anchor_pre_qualified"):
-        print(f"⚓ [Anchor] Fast path: anchor_pre_qualified=True for session {funnel_session_id}")
+        owner_funnel_id = anchor_entry.get("owner_funnel_id", "")
+        priority        = anchor_entry.get("priority", 99)
+
+        # Guard: skip if this anchor owns the current funnel (self-loop)
+        if owner_funnel_id == funnel.get("funnel_id", ""):
+            print(f"⚓ [Anchor] Skipping self-referencing anchor {anchor_id} for funnel {funnel.get('funnel_id')}")
+            continue
+
+        # Fast path — check pre-recorded results from layer saves
+        pre = pre_results.get(anchor_id)
+        if pre is not None:
+            if pre.get("qualified"):
+                qualifying.append({
+                    "anchor_id":        anchor_id,
+                    "owner_funnel_id":  owner_funnel_id,
+                    "anchor_answer":    pre.get("answer", ""),
+                    "priority":         priority,
+                })
+            continue
+
+        # Slow path — load anchor doc OR use embedded correct_answers from attached entry
+        if anchor_id.startswith("manual_"):
+            # Manual anchor — correct_answers are in the attached_anchors entry itself
+            correct_answers = [str(a).strip().lower() for a in anchor_entry.get("correct_answers", [])]
+            anchor_doc = None
+        else:
+            anchor_doc = db.anchor_questions.find_one({"anchor_id": anchor_id})
+            if not anchor_doc:
+                continue
+            correct_answers = [str(a).strip().lower() for a in anchor_doc.get("correct_answers", [])]
+        source_q_id     = anchor_doc.get("source_question_id", "")
+
+        user_answer = None
+
+        # Strategy 1: direct source_question_id match
+        if source_q_id and source_q_id in all_answers:
+            user_answer = str(all_answers[source_q_id]).strip().lower()
+
+        # Strategy 2: any answer key starting with "anchor_"
+        if user_answer is None:
+            for key, val in all_answers.items():
+                if key.startswith("anchor_"):
+                    user_answer = str(val).strip().lower()
+                    break
+
+        # Strategy 3: scan survey docs for is_anchor=True questions
+        if user_answer is None:
+            for layer in session.get("layers_completed", []):
+                sid = layer.get("survey_id", "")
+                if not sid:
+                    continue
+                survey_doc = db.surveys.find_one(
+                    {"$or": [{"id": sid}, {"short_id": sid}]},
+                    {"questions": 1}
+                )
+                if survey_doc:
+                    for q in survey_doc.get("questions", []):
+                        if isinstance(q, dict) and q.get("is_anchor"):
+                            q_id = q.get("id", "")
+                            ans = layer.get("answers", {}).get(q_id, "")
+                            if ans:
+                                user_answer = str(ans).strip().lower()
+                                break
+                if user_answer is not None:
+                    break
+
+        if user_answer and _answer_qualifies(user_answer, correct_answers):
+            qualifying.append({
+                "anchor_id":       anchor_id,
+                "owner_funnel_id": owner_funnel_id,
+                "anchor_answer":   user_answer,
+                "priority":        priority,
+            })
+
+    if not qualifying:
+        print(f"⚓ [Anchor] No attached anchor qualified for session {funnel_session_id}")
         db.funnel_sessions.update_one(
             {"funnel_session_id": funnel_session_id},
-            {"$set": {"anchor_qualified": True}}
+            {"$set": {"anchor_qualified": False}}
         )
-        return _ensure_https(redirect_url)
+        return None
 
-    # Walk all completed layers to find the anchor question answer
-    for layer in session.get("layers_completed", []):
-        layer_answers: dict = layer.get("answers", {})
-        survey_id = layer.get("survey_id", "")
-        layer_phase = layer.get("phase", "screening")  # "screening" or "job_surveys"
+    # Pick the highest priority (lowest number)
+    winner = min(qualifying, key=lambda x: x["priority"])
+    owner_funnel_id = winner["owner_funnel_id"]
 
-        # Scope check — only look at layers that match the anchor scope
-        if anchor_scope == "screeners" and layer_phase != "screening":
-            continue
-        if anchor_scope == "tore" and layer_phase != "job_surveys":
-            continue
-        # anchor_scope == "all" passes through
+    # Resolve entry URL for the owner funnel
+    owner_funnel = db.funnels.find_one({"funnel_id": owner_funnel_id})
+    entry_survey_id = ""
+    if owner_funnel:
+        screening = owner_funnel.get("screening_surveys", [])
+        if screening:
+            # Find the first screening survey (index 0)
+            first = min(screening, key=lambda s: s.get("index", 99))
+            entry_survey_id = first.get("survey_id", "")
 
-        # Strategy 1: check for injected anchor question id directly in answers
-        # (frontend injects with id = "anchor_<original_id>")
-        if injected_question_id and injected_question_id in layer_answers:
-            user_answer = str(layer_answers[injected_question_id]).strip().lower()
-            if _answer_qualifies(user_answer):
-                print(f"⚓ [Anchor] Qualified via injected id '{injected_question_id}'. Answer: '{user_answer}'")
-                db.funnel_sessions.update_one(
-                    {"funnel_session_id": funnel_session_id},
-                    {"$set": {"anchor_qualified": True, "anchor_answer": user_answer}}
-                )
-                return _ensure_https(redirect_url)
-            else:
-                print(f"⚓ [Anchor] Not qualified via injected id. Answer '{user_answer}' not in {correct_answers}")
-                db.funnel_sessions.update_one(
-                    {"funnel_session_id": funnel_session_id},
-                    {"$set": {"anchor_qualified": False, "anchor_answer": user_answer}}
-                )
-                return None
+    is_local = False  # server-side — use production base
+    # Support localhost testing via request headers
+    try:
+        from flask import request as _req
+        host = _req.headers.get("Origin", "") or _req.headers.get("Referer", "")
+        is_local = "localhost" in host or "127.0.0.1" in host
+    except Exception:
+        pass
+    frontend_base = "http://localhost:5173" if is_local else "https://survey.pepperwahl.com"
 
-        # Strategy 2: check original question_id directly in answers
-        if source_question_id and source_question_id in layer_answers:
-            user_answer = str(layer_answers[source_question_id]).strip().lower()
-            if _answer_qualifies(user_answer):
-                print(f"⚓ [Anchor] Qualified via source id '{source_question_id}'. Answer: '{user_answer}'")
-                db.funnel_sessions.update_one(
-                    {"funnel_session_id": funnel_session_id},
-                    {"$set": {"anchor_qualified": True, "anchor_answer": user_answer}}
-                )
-                return _ensure_https(redirect_url)
-            else:
-                print(f"⚓ [Anchor] Not qualified via source id. Answer '{user_answer}' not in {correct_answers}")
-                db.funnel_sessions.update_one(
-                    {"funnel_session_id": funnel_session_id},
-                    {"$set": {"anchor_qualified": False, "anchor_answer": user_answer}}
-                )
-                return None
+    entry_url = (
+        f"{frontend_base}/survey/{entry_survey_id}"
+        f"?f={owner_funnel_id}&ly=0&sn=new&inherited=1"
+        f"&from_session={funnel_session_id}"
+    ) if entry_survey_id else ""
 
-        # Strategy 3: fallback — look up the survey doc and find is_anchor question
-        if survey_id:
-            survey_doc = db.surveys.find_one(
-                {"$or": [{"id": survey_id}, {"short_id": survey_id}]},
-                {"questions": 1}
-            )
-            if survey_doc:
-                for q in survey_doc.get("questions", []):
-                    if isinstance(q, dict) and q.get("is_anchor"):
-                        q_id = q.get("id", "")
-                        user_answer = str(layer_answers.get(q_id, "")).strip().lower()
-                        if _answer_qualifies(user_answer):
-                            print(f"⚓ [Anchor] Qualified via survey scan. Answer: '{user_answer}'")
-                            db.funnel_sessions.update_one(
-                                {"funnel_session_id": funnel_session_id},
-                                {"$set": {"anchor_qualified": True, "anchor_answer": user_answer}}
-                            )
-                            return _ensure_https(redirect_url)
-                        elif user_answer:
-                            print(f"⚓ [Anchor] Not qualified via survey scan. Answer '{user_answer}' not in {correct_answers}")
-                            db.funnel_sessions.update_one(
-                                {"funnel_session_id": funnel_session_id},
-                                {"$set": {"anchor_qualified": False, "anchor_answer": user_answer}}
-                            )
-                            return None
+    print(f"⚓ [Anchor] Winner: anchor={winner['anchor_id']} → funnel={owner_funnel_id} (priority {winner['priority']})")
 
-    print(f"⚓ [Anchor] Anchor question not found in any completed layer for session {funnel_session_id}")
-    return None
+    db.funnel_sessions.update_one(
+        {"funnel_session_id": funnel_session_id},
+        {"$set": {
+            "anchor_qualified":       True,
+            "anchor_answer":          winner["anchor_answer"],
+            "anchor_winner_id":       winner["anchor_id"],
+            "anchor_dest_funnel_id":  owner_funnel_id,
+        }}
+    )
+
+    return {
+        "funnel_entry_url": entry_url,
+        "owner_funnel_id":  owner_funnel_id,
+        "anchor_id":        winner["anchor_id"],
+        "anchor_answer":    winner["anchor_answer"],
+        "priority":         winner["priority"],
+    }
 
 
 
@@ -537,14 +622,15 @@ def process_screening_survey_submission(
                 "anchor_qualified": False,
             }
         # Non-security termination — check anchor redirect
-        _try_early_anchor_flag(funnel, funnel_session_id, answers)
-        anchor_redirect = _check_anchor_redirect(funnel, funnel_session_id)
-        final_url = anchor_redirect if anchor_redirect else _ensure_https(fallback_url)
+        _try_early_anchor_flags(funnel, funnel_session_id, answers)
+        anchor_result = _check_anchor_redirect(funnel, funnel_session_id)
+        final_url = anchor_result["funnel_entry_url"] if anchor_result else _ensure_https(fallback_url)
         return {
             "action": "terminate",
             "reason": screen_result["reason"],
             "redirect_url": final_url,
-            "anchor_qualified": bool(anchor_redirect),
+            "anchor_qualified": bool(anchor_result),
+            "anchor_dest_funnel_id": anchor_result["owner_funnel_id"] if anchor_result else None,
         }
 
     # Step 2: Calculate scores
@@ -579,8 +665,8 @@ def process_screening_survey_submission(
         upsert=True
     )
 
-    # Early anchor flag — if the anchor question was answered in this layer, record qualification now
-    _try_early_anchor_flag(funnel, funnel_session_id, answers)
+    # Early anchor flags — record per-anchor qualification for this layer
+    _try_early_anchor_flags(funnel, funnel_session_id, answers)
 
     # Step 5: Check if more screening surveys
     screening_surveys = funnel.get("screening_surveys", [])
@@ -602,9 +688,9 @@ def process_screening_survey_submission(
 
     if not job_queue:
         fallback_url = funnel.get("fallback_url", "")
-        # ── Check anchor flag before sending to fallback ──
-        anchor_redirect = _check_anchor_redirect(funnel, funnel_session_id)
-        final_url = anchor_redirect if anchor_redirect else _ensure_https(fallback_url)
+        # ── Check attached anchors before sending to fallback ──
+        anchor_result = _check_anchor_redirect(funnel, funnel_session_id)
+        final_url = anchor_result["funnel_entry_url"] if anchor_result else _ensure_https(fallback_url)
 
         db.funnel_sessions.update_one(
             {"funnel_session_id": funnel_session_id},
@@ -613,7 +699,8 @@ def process_screening_survey_submission(
         return {
             "action": "no_match",
             "redirect_url": final_url,
-            "anchor_qualified": bool(anchor_redirect),
+            "anchor_qualified": bool(anchor_result),
+            "anchor_dest_funnel_id": anchor_result["owner_funnel_id"] if anchor_result else None,
             "cumulative_scores": cumulative
         }
 
@@ -783,10 +870,33 @@ def process_job_survey_submission(
     )
 
     if next_pos >= len(queue):
-        # All jobs exhausted — check anchor flag before final fallback
+        # All jobs exhausted — check attached anchors by priority
         fallback_url = funnel.get("fallback_url", "")
-        anchor_redirect = _check_anchor_redirect(funnel, funnel_session_id)
-        final_url = anchor_redirect if anchor_redirect else _ensure_https(fallback_url)
+        anchor_result = _check_anchor_redirect(funnel, funnel_session_id)
+
+        if anchor_result:
+            # Carry forward: save cumulative scores + answers into a transfer record
+            # so the destination funnel session can inherit them
+            session_snap = db.funnel_sessions.find_one({"funnel_session_id": funnel_session_id})
+            transfer_payload = {
+                "from_funnel_id":       funnel_id,
+                "from_session_id":      funnel_session_id,
+                "cumulative_scores":    session_snap.get("cumulative_scores", {}) if session_snap else {},
+                "layers_completed":     session_snap.get("layers_completed", []) if session_snap else [],
+                "anchor_id":            anchor_result["anchor_id"],
+                "anchor_answer":        anchor_result["anchor_answer"],
+            }
+            transfer_id = f"xfr_{uuid.uuid4().hex[:10]}"
+            db.funnel_session_transfers.insert_one({
+                "transfer_id":    transfer_id,
+                "created_at":     datetime.now(timezone.utc).isoformat(),
+                **transfer_payload
+            })
+            final_url = anchor_result["funnel_entry_url"].replace(
+                "inherited=1", f"inherited=1&xfr={transfer_id}"
+            )
+        else:
+            final_url = _ensure_https(fallback_url)
 
         db.funnel_sessions.update_one(
             {"funnel_session_id": funnel_session_id},
@@ -796,7 +906,8 @@ def process_job_survey_submission(
             "action": "all_failed",
             "redirect_url": final_url,
             "failed_jobs": failed_jobs,
-            "anchor_qualified": bool(anchor_redirect),
+            "anchor_qualified": bool(anchor_result),
+            "anchor_dest_funnel_id": anchor_result["owner_funnel_id"] if anchor_result else None,
             "ai_reason": eval_result["reason"]
         }
 

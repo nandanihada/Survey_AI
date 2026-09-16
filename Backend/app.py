@@ -436,6 +436,7 @@ try:
     from referral_api import referral_bp, setup_referral_indexes
     from branch_flow_api import branch_flow_bp, parse_branching_instructions_from_prompt, apply_prompt_branching_rules
     from funnel_api import funnel_bp
+    from anchor_api import anchor_bp
     from survey_invite_api import survey_invite_bp
     from survey_sharing_api import survey_sharing_bp, setup_sharing_indexes
     from location_control_api import location_bp    # Location control admin API
@@ -481,6 +482,7 @@ try:
     app.register_blueprint(referral_bp)
     app.register_blueprint(branch_flow_bp)  # Branch flow API routes
     app.register_blueprint(funnel_bp)        # Funnel survey API routes
+    app.register_blueprint(anchor_bp)        # Anchor question API routes
     app.register_blueprint(survey_invite_bp)  # Survey invite via email
     app.register_blueprint(survey_sharing_bp)  # Survey sharing earnings
     app.register_blueprint(location_bp)          # Location control at /api/admin/location
@@ -3492,6 +3494,91 @@ def get_all_responses():
 # edit survey
 
 
+def _sync_anchor_questions_from_save(survey_id: str, survey_doc: dict, questions: list):
+    """
+    Called after a survey save. Syncs is_anchor questions to the global anchor_questions collection.
+    - If a question now has is_anchor=True → upsert into anchor_questions owned by this survey's funnel
+    - If no question has is_anchor=True but the collection has an entry from this survey → remove it
+    """
+    try:
+        from datetime import datetime, timezone as _tz
+        import uuid as _uuid
+
+        survey_title = survey_doc.get("title", survey_id)
+        funnel_id    = survey_doc.get("funnel_id", "")
+
+        owner_funnel_name = ""
+        if funnel_id:
+            funnel = db["funnels"].find_one({"funnel_id": funnel_id}, {"name": 1})
+            owner_funnel_name = funnel.get("name", funnel_id) if funnel else funnel_id
+
+        anchor_questions_in_save = [
+            q for q in questions
+            if isinstance(q, dict) and q.get("is_anchor")
+        ]
+
+        if anchor_questions_in_save:
+            # Use the first anchor question found (only one per funnel makes sense)
+            aq = anchor_questions_in_save[0]
+            q_id           = aq.get("id", "")
+            question_text  = aq.get("question", "")
+            options        = aq.get("options", [])
+            correct_answers = aq.get("anchor_correct_answers", [])
+
+            existing = db["anchor_questions"].find_one({"owner_funnel_id": funnel_id}) if funnel_id else None
+
+            if existing:
+                db["anchor_questions"].update_one(
+                    {"anchor_id": existing["anchor_id"]},
+                    {"$set": {
+                        "question_text":       question_text,
+                        "options":             options,
+                        "correct_answers":     correct_answers,
+                        "source_question_id":  q_id,
+                        "source_survey_id":    survey_id,
+                        "source_survey_name":  survey_title,
+                        "owner_funnel_name":   owner_funnel_name,
+                        "updated_at":          datetime.now(_tz.utc).isoformat(),
+                    }}
+                )
+                anchor_id = existing["anchor_id"]
+            else:
+                anchor_id = f"anc_{_uuid.uuid4().hex[:12]}"
+                db["anchor_questions"].insert_one({
+                    "anchor_id":           anchor_id,
+                    "owner_funnel_id":     funnel_id or None,
+                    "owner_funnel_name":   owner_funnel_name,
+                    "question_text":       question_text,
+                    "options":             options,
+                    "correct_answers":     correct_answers,
+                    "source_survey_id":    survey_id,
+                    "source_survey_name":  survey_title,
+                    "source_question_id":  q_id,
+                    "created_at":          datetime.now(_tz.utc).isoformat(),
+                    "updated_at":          datetime.now(_tz.utc).isoformat(),
+                })
+
+            # Update own_anchor_id on the funnel if this survey belongs to one
+            if funnel_id:
+                db["funnels"].update_one(
+                    {"funnel_id": funnel_id},
+                    {"$set": {"own_anchor_id": anchor_id}}
+                )
+            print(f"⚓ [AnchorSync] Upserted anchor {anchor_id} from survey {survey_id}")
+
+        else:
+            # No anchor question in this save — clean up stale entry if it pointed to this survey
+            if funnel_id:
+                db["anchor_questions"].delete_one({
+                    "owner_funnel_id": funnel_id,
+                    "source_survey_id": survey_id,
+                })
+                print(f"⚓ [AnchorSync] Removed anchor for funnel {funnel_id} (no is_anchor question found)")
+
+    except Exception as e:
+        print(f"⚠️ [AnchorSync] Non-fatal error: {e}")
+
+
 @app.route("/survey/<survey_id>/edit", methods=["PUT"])
 def edit_survey(survey_id):
 
@@ -3550,6 +3637,12 @@ def edit_survey(survey_id):
         if result.matched_count == 0:
 
             return jsonify({"error": "Survey not found"}), 404
+
+        # ── Anchor question registration ──────────────────────────────────
+        # After saving, sync any is_anchor questions to the global anchor_questions collection.
+        # This handles the case where a user marks/unmarks a question as anchor in the editor.
+        if "questions" in update_data and isinstance(update_data["questions"], list):
+            _sync_anchor_questions_from_save(survey_id, survey, update_data["questions"])
 
         return jsonify(
             {

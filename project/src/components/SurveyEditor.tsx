@@ -3417,22 +3417,11 @@ const SurveyEditor: React.FC = () => {
                         )}
                       </div>
 
-                      {/* Redirect URL */}
-                      <div>
-                        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Redirect URL</p>
-                        <input
-                          type="url"
-                          value={(activeQ as any).anchor_redirect_url || ''}
-                          onChange={(e) => {
-                            const updated = { ...survey };
-                            updated.questions = [...updated.questions];
-                            (updated.questions[activeQuestionIndex] as any).anchor_redirect_url = e.target.value;
-                            setSurvey(updated);
-                          }}
-                          placeholder="https://partner.com/offer"
-                          className="w-full text-xs rounded-lg px-2.5 py-1.5 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-400 text-gray-800 placeholder-gray-400"
-                        />
-                        <p className="text-[10px] text-gray-400 mt-1">Where to send respondents who gave a qualifying answer but failed the funnel.</p>
+                      {/* Destination info */}
+                      <div className="rounded-lg bg-blue-50 border border-blue-100 p-2">
+                        <p className="text-[10px] text-blue-700">
+                          ℹ Destination is this question's funnel. Qualifying respondents who fail all destination surveys will be routed into it — no URL needed.
+                        </p>
                       </div>
                     </div>
                   )}

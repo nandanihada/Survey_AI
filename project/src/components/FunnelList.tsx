@@ -10,11 +10,12 @@ import {
   Settings, BarChart3, Copy, Loader2, AlertCircle, ChevronLeft,
   Filter, Target, GitBranch, Edit3, Check, X, Trash2,
   ArrowRight, RefreshCw, Eye, Link2, Zap, Info, Sparkles,
-  Star, Tag, Folder, Copy as CopyIcon, GitFork, Shuffle, Shield
+  Star, Tag, Folder, Copy as CopyIcon, GitFork, Shuffle, Shield, Anchor
 } from 'lucide-react';
 import { getApiBaseUrl } from '../utils/deploymentFix';
 import { useAuth } from '../contexts/AuthContext';
 import FunnelCreator from './FunnelCreator';
+import AnchorSettingsModal from './AnchorSettingsModal';
 
 // ─── Types ────────────────────────────────────────────────
 
@@ -80,6 +81,15 @@ interface Funnel {
     redirect_url: string;
   } | null;
   router_survey_ids?: string[];
+  own_anchor_id?: string | null;
+  attached_anchors?: Array<{
+    anchor_id: string;
+    priority: number;
+    owner_funnel_id: string;
+    owner_funnel_name: string;
+    question_text: string;
+    correct_answers: string[];
+  }>;
   job_surveys: Record<string, {
     survey_id: string;
     display_name: string;
@@ -769,122 +779,125 @@ const RouterSurveysPanel: React.FC<{ funnel: Funnel; isDarkMode: boolean; apiBas
 }) => {
   const textMuted = isDarkMode ? 'text-gray-400' : 'text-gray-500';
   const textMain  = isDarkMode ? 'text-gray-100' : 'text-gray-900';
-  const inputClass = `w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-2 focus:ring-amber-500 ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'}`;
 
-  const anchor = funnel.anchor_config;
+  const [ownAnchor,       setOwnAnchor]       = useState<any>(null);
+  const [loadingOwn,      setLoadingOwn]      = useState(true);
+  const [attachedAnchors, setAttachedAnchors] = useState<any[]>(funnel.attached_anchors || []);
+  const [showModal,       setShowModal]       = useState(false);
+  const [injecting,       setInjecting]       = useState(false);
+  const [injectMsg,       setInjectMsg]       = useState('');
+
   const routerIds: string[] = funnel.router_survey_ids || [];
-
-  // router surveys = screening surveys that are marked is_router
   const routerSurveys = funnel.generated_surveys.filter(s =>
     s.type === 'screening' && ((s as any).is_router || routerIds.includes(s.survey_id))
   );
 
-  // Local state for editing anchor redirect URL
-  const [editingRedirect, setEditingRedirect] = useState(false);
-  const [redirectUrl, setRedirectUrl] = useState((anchor?.redirect_url) || '');
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  // Fetch own anchor question
+  useEffect(() => {
+    if (!funnel.own_anchor_id) { setLoadingOwn(false); return; }
+    fetch(`${apiBase}/api/anchor-questions/${funnel.own_anchor_id}`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { setOwnAnchor(data); setLoadingOwn(false); })
+      .catch(() => setLoadingOwn(false));
+  }, [funnel.own_anchor_id, apiBase]);
 
-  const saveRedirectUrl = async () => {
-    setSaving(true);
+  const hasOwnAnchor = !!funnel.own_anchor_id;
+  const alreadyInjected = routerSurveys.length > 0;
+
+  const handleInject = async () => {
+    setInjecting(true);
+    setInjectMsg('');
     try {
-      const newAnchor = { ...(anchor || {}), redirect_url: redirectUrl };
-      await fetch(`${apiBase}/api/funnels/${funnel.funnel_id}`, {
-        method: 'PUT',
+      const res = await fetch(`${apiBase}/api/funnels/${funnel.funnel_id}/inject-anchor`, {
+        method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ anchor_config: newAnchor })
       });
-      setSaved(true);
-      setEditingRedirect(false);
-      setTimeout(() => setSaved(false), 2000);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Injection failed');
+      setInjectMsg(data.message);
       onRefresh();
+    } catch (e: any) {
+      setInjectMsg(e.message || 'Failed');
     } finally {
-      setSaving(false);
+      setInjecting(false);
     }
   };
 
-  if (!anchor || !anchor.enabled) {
-    return (
-      <div className={`rounded-xl border border-dashed px-5 py-8 text-center ${isDarkMode ? 'border-gray-600' : 'border-gray-300'}`}>
-        <div className="text-3xl mb-2">⚓</div>
-        <p className={`text-sm font-medium ${textMain}`}>No anchor question configured</p>
-        <p className={`text-xs mt-1 ${textMuted}`}>
-          An anchor question can be added when creating a new funnel. It lets you redirect users who fail all surveys but qualify on a key question.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-5">
-      {/* Anchor question summary card */}
-      <div className={`rounded-xl border p-4 space-y-3 ${isDarkMode ? 'border-amber-700/50 bg-amber-950/20' : 'border-amber-200 bg-amber-50'}`}>
-        <div className="flex items-center gap-2">
-          <span className="text-lg">⚓</span>
-          <p className={`text-sm font-semibold ${isDarkMode ? 'text-amber-300' : 'text-amber-800'}`}>Anchor Question</p>
-          <span className={`ml-auto text-xs px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-green-900/50 text-green-400' : 'bg-green-100 text-green-700'}`}>Active</span>
-        </div>
 
-        <div className={`rounded-lg p-3 ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
-          <p className={`text-sm font-medium ${textMain}`}>{anchor.question_text}</p>
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {(anchor.options || []).map((opt: string) => {
-              const isCorrect = (anchor.correct_answers || []).includes(opt);
-              return (
-                <span key={opt} className={`text-xs px-2 py-0.5 rounded-full border ${
-                  isCorrect
-                    ? isDarkMode ? 'bg-green-900/50 border-green-700 text-green-300' : 'bg-green-100 border-green-300 text-green-700'
-                    : isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-400' : 'bg-gray-100 border-gray-200 text-gray-600'
-                }`}>
-                  {isCorrect && '✓ '}{opt}
-                </span>
-              );
-            })}
-          </div>
-          <p className={`text-xs mt-2 ${textMuted}`}>
-            Qualifying answers: <span className={`font-medium ${isDarkMode ? 'text-green-400' : 'text-green-700'}`}>{(anchor.correct_answers || []).join(', ') || '(none set)'}</span>
-          </p>
-        </div>
-
-        {/* Redirect URL */}
-        <div>
-          <p className={`text-xs font-semibold mb-1 ${textMuted}`}>Redirect URL for qualified users</p>
-          {editingRedirect ? (
-            <div className="flex gap-2">
-              <input value={redirectUrl} onChange={e => setRedirectUrl(e.target.value)} placeholder="https://yoursite.com/special-offer" className={inputClass} />
-              <button onClick={saveRedirectUrl} disabled={saving} className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs rounded-lg font-medium disabled:opacity-50">
-                {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-              </button>
-              <button onClick={() => setEditingRedirect(false)} className={`px-2 py-1.5 text-xs rounded-lg ${isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600'}`}><X size={12} /></button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <p className={`flex-1 text-xs truncate ${anchor.redirect_url ? (isDarkMode ? 'text-amber-300' : 'text-amber-700') : textMuted}`}>
-                {anchor.redirect_url || '(not set)'}
-              </p>
-              {saved && <span className="text-xs text-green-500">Saved ✓</span>}
-              <button onClick={() => { setEditingRedirect(true); setRedirectUrl(anchor.redirect_url || ''); }} className={`text-xs ${textMuted} hover:text-amber-500`}>
-                <Edit3 size={12} />
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Router surveys list */}
+      {/* ── Own Anchor (the gate this funnel exposes to others) ── */}
       <div>
         <p className={`text-xs font-semibold uppercase tracking-wide mb-2 flex items-center gap-2 ${textMuted}`}>
-          <span>⚓</span> Router Surveys (contain the anchor question)
+          <Anchor size={11} /> This Funnel's Gate (owned anchor)
         </p>
-        {routerSurveys.length === 0 ? (
-          <div className={`rounded-xl border border-dashed px-4 py-3 text-center ${isDarkMode ? 'border-gray-600 text-gray-500' : 'border-gray-300 text-gray-400'}`}>
-            <p className="text-xs">No router surveys found. The anchor question is injected into all screening surveys at creation time.</p>
+        {loadingOwn ? (
+          <div className="flex justify-center py-4"><Loader2 size={16} className={`animate-spin ${textMuted}`} /></div>
+        ) : hasOwnAnchor && ownAnchor ? (
+          <div className={`rounded-xl border p-3 ${isDarkMode ? 'border-amber-700/50 bg-amber-950/20' : 'border-amber-200 bg-amber-50'}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <Anchor size={13} className="text-amber-500" />
+              <p className={`text-sm font-semibold ${isDarkMode ? 'text-amber-300' : 'text-amber-800'}`}>{ownAnchor.question_text}</p>
+            </div>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {(ownAnchor.options || []).map((opt: string) => {
+                const isCorrect = (ownAnchor.correct_answers || []).includes(opt);
+                return (
+                  <span key={opt} className={`text-xs px-2 py-0.5 rounded-full border ${
+                    isCorrect
+                      ? isDarkMode ? 'bg-green-900/50 border-green-700 text-green-300' : 'bg-green-100 border-green-300 text-green-700'
+                      : isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-400' : 'bg-gray-100 border-gray-200 text-gray-600'
+                  }`}>
+                    {isCorrect && '✓ '}{opt}
+                  </span>
+                );
+              })}
+            </div>
+            <p className={`text-xs ${textMuted}`}>Source: {ownAnchor.source_survey_name}</p>
+            <p className={`text-xs mt-1 ${isDarkMode ? 'text-amber-400/70' : 'text-amber-600/80'}`}>
+              Other funnels can attach this as a gate — when their users fail everything and answered this correctly, they enter this funnel.
+            </p>
+            {/* Inject button for existing funnels */}
+            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-amber-200/50">
+              {alreadyInjected ? (
+                <p className={`text-xs ${isDarkMode ? 'text-green-400' : 'text-green-700'}`}>
+                  ✓ Injected into {routerSurveys.length} survey(s)
+                </p>
+              ) : (
+                <p className={`text-xs ${textMuted}`}>Not yet injected into surveys</p>
+              )}
+              <button
+                onClick={handleInject}
+                disabled={injecting}
+                className={`ml-auto flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition ${isDarkMode ? 'border-amber-700 text-amber-400 hover:bg-amber-900/30' : 'border-amber-300 text-amber-700 hover:bg-amber-100'} disabled:opacity-50`}
+              >
+                {injecting ? <Loader2 size={11} className="animate-spin" /> : <Anchor size={11} />}
+                {injecting ? 'Injecting…' : alreadyInjected ? 'Re-inject' : 'Inject into surveys'}
+              </button>
+            </div>
+            {injectMsg && (
+              <p className={`text-xs mt-1 ${injectMsg.includes('already') || injectMsg.includes('success') || injectMsg.includes('injected') ? (isDarkMode ? 'text-green-400' : 'text-green-700') : 'text-red-500'}`}>
+                {injectMsg}
+              </p>
+            )}
           </div>
         ) : (
+          <div className={`rounded-xl border border-dashed px-4 py-3 text-center ${isDarkMode ? 'border-gray-600 text-gray-500' : 'border-gray-300 text-gray-400'}`}>
+            <p className="text-xs">No anchor question generated for this funnel yet. Add one when creating the funnel, or mark a question as anchor in the Survey Editor.</p>
+          </div>
+        )}
+      </div>
+
+      {/* ── Router Surveys (contain injected anchor question) ── */}
+      {routerSurveys.length > 0 && (
+        <div>
+          <p className={`text-xs font-semibold uppercase tracking-wide mb-2 flex items-center gap-2 ${textMuted}`}>
+            <span>⚓</span> Surveys containing anchor question
+          </p>
           <div className="space-y-2">
             {routerSurveys.map(s => (
               <div key={s.survey_id} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${isDarkMode ? 'border-amber-700/40 bg-amber-950/10' : 'border-amber-200 bg-amber-50/50'}`}>
-                <span className="text-base">⚓</span>
+                <Anchor size={13} className="text-amber-500 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className={`text-sm font-medium truncate ${textMain}`}>{s.name}</p>
                   <p className={`text-xs ${textMuted}`}>{(s as any).question_count || 0} questions (includes anchor)</p>
@@ -896,17 +909,71 @@ const RouterSurveysPanel: React.FC<{ funnel: Funnel; isDarkMode: boolean; apiBas
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ── Attached Anchors (gates from OTHER funnels) ── */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className={`text-xs font-semibold uppercase tracking-wide flex items-center gap-2 ${textMuted}`}>
+            <Layers size={11} /> Attached Anchors (other funnels' gates)
+          </p>
+          <button
+            onClick={() => setShowModal(true)}
+            className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border transition ${isDarkMode ? 'border-amber-700 text-amber-400 hover:bg-amber-900/30' : 'border-amber-300 text-amber-700 hover:bg-amber-50'}`}
+          >
+            <Anchor size={11} /> Configure
+          </button>
+        </div>
+
+        {attachedAnchors.length === 0 ? (
+          <div className={`rounded-xl border border-dashed px-4 py-3 text-center ${isDarkMode ? 'border-gray-600 text-gray-500' : 'border-gray-300 text-gray-400'}`}>
+            <p className="text-xs">No anchors attached. Click Configure to attach gates from other funnels — users who fail here but qualify on an attached anchor will enter that funnel.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {[...attachedAnchors].sort((a, b) => a.priority - b.priority).map((att, idx) => (
+              <div key={att.anchor_id} className={`rounded-xl border px-3 py-2.5 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full ${isDarkMode ? 'bg-amber-900 text-amber-300' : 'bg-amber-100 text-amber-700'}`}>
+                    {att.priority}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium truncate ${textMain}`}>{att.question_text}</p>
+                    <p className={`text-xs ${textMuted}`}>→ {att.owner_funnel_name}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
-      {/* How it works explainer */}
+      {/* ── Explainer ── */}
       <div className={`rounded-xl border p-3 text-xs space-y-1.5 ${isDarkMode ? 'bg-gray-800 border-gray-700 text-gray-400' : 'bg-gray-50 border-gray-200 text-gray-500'}`}>
         <p className={`font-semibold ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>How anchor routing works</p>
-        <p>1. The anchor question is embedded in every router survey and shown to all respondents.</p>
-        <p>2. The answer is captured alongside all other answers during screening.</p>
-        <p>3. If the user fails all destination surveys (or scores no match), the system checks their anchor answer.</p>
-        <p>4. If the answer matches a qualifying answer → redirect to the anchor URL instead of the fallback.</p>
+        <p>1. Each funnel has one owned anchor question (its gate). Other funnels can attach it.</p>
+        <p>2. The attached anchor questions are injected randomly into this funnel's screening surveys.</p>
+        <p>3. When a user fails all destination surveys, the system checks their answers against all attached anchors.</p>
+        <p>4. The first qualifying anchor (by priority) wins — user enters that anchor's funnel, carrying their previous answers and scores.</p>
       </div>
+
+      {/* ── Anchor Settings Modal ── */}
+      {showModal && (
+        <AnchorSettingsModal
+          funnelId={funnel.funnel_id}
+          funnelName={funnel.name}
+          ownAnchorId={funnel.own_anchor_id}
+          initialAttached={attachedAnchors}
+          isDarkMode={isDarkMode}
+          onClose={() => setShowModal(false)}
+          onSaved={(newAttached) => {
+            setAttachedAnchors(newAttached);
+            setShowModal(false);
+            onRefresh();
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -1150,22 +1217,48 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
 
   const saveAnchorModal = () => {
     if (!selectedAnchorQId) return;
-    const aq = anchorQuestions.find(q => q.questionId === selectedAnchorQId);
+    // selectedAnchorQId is now anchor_id (from new endpoint)
+    const aq = anchorQuestions.find((q: any) => (q.anchor_id || q.questionId) === selectedAnchorQId);
     if (!aq) return;
-    const newAnchorConfig = {
-      enabled: true,
-      question_id: aq.questionId,
-      question_text: aq.questionText,
-      options: aq.options,
-      correct_answers: aq.correctAnswers,
-      redirect_url: anchorRedirectUrl || aq.redirectUrl,
-      scope: anchorScope,
-      source_survey_id: aq.surveyId,
+
+    // Build the attached_anchors entry for the new scoring system
+    const newAttachedAnchor = {
+      anchor_id:         aq.anchor_id || aq.questionId,
+      priority:          1,
+      owner_funnel_id:   aq.owner_funnel_id || '',
+      owner_funnel_name: aq.owner_funnel_name || aq.surveyName || '',
+      question_text:     aq.question_text || aq.questionText || '',
+      correct_answers:   aq.correct_answers || aq.correctAnswers || [],
     };
-    fetch(`${apiBase}/api/funnels/${funnel.funnel_id}`, {
+
+    // GUARD: don't attach this funnel's own anchor to itself — that creates a loop
+    if (newAttachedAnchor.owner_funnel_id === funnel.funnel_id) {
+      alert('You cannot attach this funnel\'s own anchor to itself. Attach it to a different funnel instead.');
+      return;
+    }
+
+    // Get existing attached anchors and replace/add this one
+    const existingAttached: any[] = funnel.attached_anchors || [];
+    const filteredAttached = existingAttached.filter((a: any) => a.anchor_id !== newAttachedAnchor.anchor_id);
+    const newAttached = [...filteredAttached, newAttachedAnchor];
+
+    // Keep anchor_config for backward compat + write to attached_anchors for new system
+    const newAnchorConfig = {
+      enabled:           true,
+      question_id:       aq.anchor_id || aq.questionId,
+      question_text:     aq.question_text || aq.questionText || '',
+      options:           aq.options || [],
+      correct_answers:   aq.correct_answers || aq.correctAnswers || [],
+      redirect_url:      '',
+      scope:             anchorScope,
+      source_survey_id:  aq.source_survey_id || aq.surveyId || '',
+    };
+
+    fetch(`${apiBase}/api/funnels/${funnel.funnel_id}/attached-anchors`, {
       method: 'PUT', headers: authHeaders(),
-      body: JSON.stringify({ anchor_config: newAnchorConfig }),
+      body: JSON.stringify({ attached_anchors: newAttached }),
     }).catch(() => {});
+
     setDetailModalIcon(null);
   };
 
@@ -2787,13 +2880,18 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
                         </div>
                       ) : (
                         <div className="space-y-2">
-                          {anchorQuestions.map(aq => {
-                            const isSelected = selectedAnchorQId === aq.questionId;
+                          {anchorQuestions.map((aq: any) => {
+                            const aqId = aq.anchor_id || aq.questionId || '';
+                            const isSelected = selectedAnchorQId === aqId;
+                            const qText = aq.question_text || aq.questionText || '';
+                            const surveyLabel = aq.source_survey_name || aq.surveyName || '';
+                            const ownerLabel = aq.owner_funnel_name || '';
+                            const opts: string[] = aq.options || [];
+                            const corrects: string[] = aq.correct_answers || aq.correctAnswers || [];
                             return (
-                              <button key={aq.questionId}
+                              <button key={aqId}
                                 onClick={() => {
-                                  setSelectedAnchorQId(isSelected ? '' : aq.questionId);
-                                  if (!isSelected && !anchorRedirectUrl) setAnchorRedirectUrl(aq.redirectUrl);
+                                  setSelectedAnchorQId(isSelected ? '' : aqId);
                                 }}
                                 className={`w-full p-3 rounded-xl border text-left transition-all ${
                                   isSelected
@@ -2804,14 +2902,14 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
                                 <div className="flex items-start gap-2">
                                   <span className="text-base mt-0.5">⚓</span>
                                   <div className="flex-1 min-w-0">
-                                    <p className={`text-xs font-semibold truncate ${textMain}`}>{aq.questionText}</p>
+                                    <p className={`text-xs font-semibold truncate ${textMain}`}>{qText}</p>
                                     <p className={`text-[10px] mt-0.5 ${textMuted}`}>
-                                      {aq.surveyName} · {aq.surveyType === 'job' ? 'Tore' : 'Screener'}
+                                      {surveyLabel}{ownerLabel ? ` · ${ownerLabel}` : ''}
                                     </p>
-                                    {aq.correctAnswers.length > 0 && (
+                                    {corrects.length > 0 && (
                                       <div className="flex flex-wrap gap-1 mt-1.5">
-                                        {aq.options.map(opt => {
-                                          const isCorrect = aq.correctAnswers.includes(opt);
+                                        {opts.map(opt => {
+                                          const isCorrect = corrects.includes(opt);
                                           return (
                                             <span key={opt} className={`text-[10px] px-1.5 py-0.5 rounded-full ${
                                               isCorrect
@@ -2834,28 +2932,16 @@ const FunnelRow: React.FC<{ funnel: Funnel; isDarkMode: boolean; onRefresh: () =
                       )}
                     </div>
 
-                    {/* Redirect URL override */}
+                    {/* Destination note — no redirect URL needed in new system */}
                     {selectedAnchorQId && (
-                      <div>
-                        <p className={`text-[10px] font-bold tracking-widest uppercase mb-1.5 ${textMuted}`}>Redirect URL (on qualify)</p>
-                        <input
-                          type="url"
-                          value={anchorRedirectUrl}
-                          onChange={e => setAnchorRedirectUrl(e.target.value)}
-                          placeholder="https://partner.com/fallback-offer"
-                          className={`w-full text-xs rounded-lg px-3 py-2 border focus:outline-none focus:ring-2 focus:ring-amber-400 ${
-                            isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-200 text-gray-800 placeholder-gray-400'
-                          }`}
-                        />
-                        <p className={`text-[10px] mt-1 ${textMuted}`}>
-                          Overrides the URL set on the question. Leave blank to use the question's own redirect URL.
-                        </p>
+                      <div className={`rounded-lg p-3 text-[11px] leading-relaxed ${isDarkMode ? 'bg-blue-900/20 text-blue-300 border border-blue-800/40' : 'bg-blue-50 text-blue-700 border border-blue-100'}`}>
+                        ℹ Destination is this funnel itself. When a respondent fails all destination surveys and answered this question correctly, they will be routed into this funnel — no redirect URL needed.
                       </div>
                     )}
 
                     {/* Info note */}
                     <div className={`rounded-lg p-3 text-[11px] leading-relaxed ${isDarkMode ? 'bg-amber-900/20 text-amber-300 border border-amber-800/40' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
-                      💡 The anchor question is injected (as a copy) into the selected surveys. When a respondent fails all Tore surveys, their answer is checked — if it matches a qualifying answer, they get redirected to the anchor URL instead of screen-out.
+                      💡 The anchor question is injected into the selected surveys. When a respondent fails all destination surveys, their answer is checked — if it matches a qualifying answer, they enter this funnel (carrying their previous answers and scores).
                     </div>
                   </div>
                 ) : sections ? (

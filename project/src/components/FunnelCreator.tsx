@@ -168,7 +168,7 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
 
   const handleAnalyze = async () => {
     if (!prompt.trim() || prompt.trim().length < 30) {
-      setError('Please provide a more detailed description of your funnel (at least 30 characters).');
+      setError('Please provide a more detailed description (at least 30 characters).');
       return;
     }
     setError('');
@@ -311,29 +311,28 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
   // ─── Render: Prompt step ─────────────────────────────────
 
   const renderPromptStep = () => (
-    <div className="space-y-6">
-      {/* What is a Funnel Survey — behind ? icon */}
+    <div className="space-y-4">
       <div className="flex items-center gap-2">
         <p className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-          Describe your funnel
+          Describe what you want to build
         </p>
         <div className="relative group">
-          <button className={`w-5 h-5 rounded-full flex items-center justify-center border text-xs font-bold transition ${isDarkMode ? 'border-gray-600 text-gray-400 hover:border-blue-400 hover:text-blue-400' : 'border-gray-300 text-gray-400 hover:border-blue-500 hover:text-blue-500'}`}>
+          <button className={`w-5 h-5 rounded-full flex items-center justify-center border text-xs font-bold transition ${isDarkMode ? 'border-gray-600 text-gray-400 hover:border-slate-400 hover:text-slate-300' : 'border-gray-300 text-gray-400 hover:border-slate-500 hover:text-slate-500'}`}>
             ?
           </button>
           <div className={`absolute left-0 top-7 z-50 w-72 rounded-xl border p-3 shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-150 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-            <p className={`font-semibold text-xs mb-1 ${isDarkMode ? 'text-blue-300' : 'text-blue-800'}`}>What is a Funnel Survey?</p>
+            <p className={`font-semibold text-xs mb-1 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>Multi-Stage Survey Builder</p>
             <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              A series of connected surveys that screen, score, and route respondents automatically. You describe the goal — AI builds all surveys, scoring logic, and routing rules.
+              Build a connected sequence of surveys that screen, score, and route respondents automatically. Describe your goal — AI designs all the surveys, scoring logic, and routing rules.
             </p>
             <div className="flex flex-wrap gap-2 mt-2">
               {[
-                { icon: <Filter size={10} />, text: 'Auto screening' },
-                { icon: <BarChart3 size={10} />, text: 'Job scoring' },
-                { icon: <GitBranch size={10} />, text: 'Smart routing' },
-                { icon: <Target size={10} />, text: 'Cascade on fail' }
+                { icon: <Filter size={10} />, text: 'Smart screening' },
+                { icon: <BarChart3 size={10} />, text: 'Auto scoring' },
+                { icon: <GitBranch size={10} />, text: 'Adaptive routing' },
+                { icon: <Target size={10} />, text: 'Fallback logic' }
               ].map((item, i) => (
-                <span key={i} className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full ${isDarkMode ? 'bg-blue-900/50 text-blue-300' : 'bg-blue-100 text-blue-700'}`}>
+                <span key={i} className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full ${isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
                   {item.icon} {item.text}
                 </span>
               ))}
@@ -346,7 +345,7 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
           ref={textareaRef}
           value={prompt}
           onChange={e => setPrompt(e.target.value)}
-          rows={8}
+          rows={4}
           placeholder="E.g. I want to screen candidates for 4 CSR job roles. First collect general background (age, education, experience, sector). Then check job interests. Route each person to the best-fit job survey based on their answers. HDFC needs senior M&E experience, Give Grants needs consulting background, HCL needs sports program experience, Avaada needs B.Ed + teaching..."
           className={`w-full rounded-xl border px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
             isDarkMode
@@ -403,7 +402,7 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
           className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-sm font-medium transition"
         >
           {loading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-          {loading ? 'Analyzing...' : 'Analyze & Plan Funnel'}
+          {loading ? 'Analyzing...' : 'Analyze & Build Plan'}
           {!loading && <ChevronRight size={16} />}
         </button>
       </div>
@@ -417,7 +416,7 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
       <div className={`flex items-start gap-3 rounded-xl p-4 ${isDarkMode ? 'bg-yellow-950/30 border border-yellow-800/40' : 'bg-yellow-50 border border-yellow-200'}`}>
         <Info size={18} className="text-yellow-500 shrink-0 mt-0.5" />
         <p className={`text-sm ${isDarkMode ? 'text-yellow-300' : 'text-yellow-800'}`}>
-          I have a few quick questions before I build your funnel plan. This helps me get it right.
+          I have a few quick questions before I build your survey plan. This helps me get it right.
         </p>
       </div>
 
@@ -523,7 +522,7 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
               {anchorConfig.enabled && <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${isDarkMode ? 'bg-amber-800/50 text-amber-300' : 'bg-amber-200 text-amber-800'}`}>Enabled</span>}
             </p>
             <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-              If a user fails all surveys in the funnel, check this question and redirect qualified users to a special link
+              If a respondent doesn't qualify in any survey stage, check this question and redirect qualifying users to a special link
             </p>
           </div>
           {anchorConfig.enabled ? (
@@ -706,15 +705,11 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
 
             {/* Redirect URL */}
             <div>
-              <p className={`text-xs font-semibold mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Redirect URL for qualified users</p>
-              <input
-                value={ac.redirect_url}
-                onChange={e => setAc({ redirect_url: e.target.value })}
-                placeholder="https://yoursite.com/special-offer"
-                className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 ${isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'}`}
-              />
-              <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                Users who fail all surveys but answered this question correctly will be sent here instead of the fallback.
+              <p className={`text-xs font-semibold mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                Destination
+              </p>
+              <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                Users who fail all surveys but answered this question correctly will be redirected into this funnel automatically — no URL needed.
               </p>
             </div>
 
@@ -728,8 +723,8 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
                 <p className={ac.correct_answers.length > 0 ? (isDarkMode ? 'text-green-400' : 'text-green-700') : (isDarkMode ? 'text-red-400' : 'text-red-600')}>
                   {ac.correct_answers.length > 0 ? `✓ Qualifying answers: ${ac.correct_answers.join(', ')}` : '✗ No qualifying answers selected'}
                 </p>
-                <p className={ac.redirect_url ? (isDarkMode ? 'text-green-400' : 'text-green-700') : (isDarkMode ? 'text-amber-400' : 'text-amber-600')}>
-                  {ac.redirect_url ? `✓ Redirect: ${ac.redirect_url.slice(0, 50)}${ac.redirect_url.length > 50 ? '...' : ''}` : '⚠ Redirect URL not set (will use funnel fallback)'}
+                <p className={`${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                  ℹ Destination: this funnel (users are routed here on anchor qualification)
                 </p>
               </div>
             )}
@@ -858,7 +853,7 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
             onChange={e => setFunnelPlan(p => p ? { ...p, funnel_name: e.target.value } : p)}
             className={`w-full text-lg font-bold bg-transparent border-0 outline-none border-b-2 pb-0.5 mb-1
               ${isDarkMode ? 'text-white border-gray-700 focus:border-blue-400' : 'text-gray-900 border-gray-200 focus:border-blue-400'}`}
-            placeholder="Funnel name"
+            placeholder="Survey plan name"
           />
           <input
             value={funnelPlan.goal}
@@ -1226,23 +1221,29 @@ const FunnelCreator: React.FC<Props> = ({ onFunnelCreated, onCancel, isDarkMode 
     <div className={`max-w-2xl mx-auto ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
       {/* Step indicator */}
       {step !== 'generating' && step !== 'done' && (
-        <div className="flex items-center gap-2 mb-6">
+        <div className="flex items-center gap-2 mb-5">
           {(['prompt', 'clarifying', 'plan'] as Step[]).map((s, i) => {
             const steps: Step[] = ['prompt', 'clarifying', 'plan'];
+            const stepLabels = ['Describe', 'Refine', 'Review'];
             const currentIdx = steps.indexOf(step);
             const thisIdx = steps.indexOf(s);
             const isActive = s === step;
             const isDone = thisIdx < currentIdx;
             return (
               <React.Fragment key={s}>
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition ${
-                  isDone ? 'bg-green-500 text-white' :
-                  isActive ? 'bg-blue-600 text-white' :
-                  isDarkMode ? 'bg-gray-700 text-gray-500' : 'bg-gray-200 text-gray-400'
-                }`}>
-                  {isDone ? <Check size={12} /> : i + 1}
+                <div className="flex flex-col items-center gap-1">
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition ${
+                    isDone ? 'bg-green-500 text-white' :
+                    isActive ? 'bg-slate-900 text-white' :
+                    isDarkMode ? 'bg-gray-700 text-gray-500' : 'bg-gray-100 text-gray-400'
+                  }`}>
+                    {isDone ? <Check size={12} /> : i + 1}
+                  </div>
+                  <span className={`text-[10px] font-medium ${isActive ? (isDarkMode ? 'text-white' : 'text-slate-700') : (isDarkMode ? 'text-gray-600' : 'text-gray-400')}`}>
+                    {stepLabels[i]}
+                  </span>
                 </div>
-                {i < 2 && <div className={`flex-1 h-0.5 ${isDone || isActive ? 'bg-blue-400' : isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`} />}
+                {i < 2 && <div className={`flex-1 h-0.5 mb-3 ${isDone ? 'bg-green-400' : isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`} />}
               </React.Fragment>
             );
           })}
