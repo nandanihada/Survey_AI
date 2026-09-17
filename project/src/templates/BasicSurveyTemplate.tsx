@@ -362,7 +362,7 @@ const BasicSurveyTemplate: React.FC<Props> = ({
       if (fjob) setFunnelJobId(fjob);
     }
 
-    let extractedClickId = params.get('click_id');
+    let extractedClickId = params.get('click_id') || params.get('uid');
     if (!extractedClickId) {
       extractedClickId = `auto_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     }

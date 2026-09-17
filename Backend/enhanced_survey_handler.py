@@ -798,7 +798,11 @@ class EnhancedSurveyHandler:
             'CURRENCY': "USD",  # Default currency
             'OFFER_ID': response_data.get("survey_id", ""),
             'CONVERSION_STATUS': "confirmed" if evaluation_result.get("status") == "pass" else "rejected",
+            'STATUS': evaluation_result.get("status", "pass"),
             'TRANSACTION_ID': response_data.get("_id", ""),
+            'SURVEY_ID': response_data.get("survey_id", ""),
+            'USERNAME': response_data.get("user_info", {}).get("username", ""),
+            'EMAIL': response_data.get("user_info", {}).get("email", ""),
             'SUB1': response_data.get("user_info", {}).get("click_id", ""),  # Use click_id as sub1
             'SUB2': response_data.get("session_id", ""),  # Use session_id as sub2
             'EVENT_NAME': "survey_conversion",
